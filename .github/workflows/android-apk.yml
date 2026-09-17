@@ -8,10 +8,19 @@ name: Android APK
 #
 # Auslöser:
 #   - ein Tag wie v1.0.0  -> baut und hängt die APK an ein Release
-#   - "Run workflow"      -> baut und legt die APK als Artefakt ab
+#   - "Run workflow"      -> baut eine APK als Artefakt; wird dabei ein Tag
+#     eingetragen, legt der Workflow das Release selbst an (samt Tag)
+#
+# Der zweite Weg ist der bequemere: Er braucht keinen Git-Tag von Hand, und
+# GitHub setzt den Tag beim Anlegen des Releases auf den gebauten Stand.
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag für ein Release, z. B. v1.0.0 - leer lassen für einen reinen Testbau"
+        required: false
+        default: ""
   push:
     tags:
       - "v*"
@@ -95,14 +104,36 @@ jobs:
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
 
-      - name: An das Release hängen
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Release veröffentlichen
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
+          APK: ${{ steps.apk.outputs.path }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "Koop-Arena-Shooter ${GITHUB_REF_NAME}" \
-            --notes "Android-App zum Herunterladen. Zum Installieren muss auf dem Handy einmalig „Installation aus unbekannten Quellen“ für den Browser erlaubt werden." \
-            --repo "${GITHUB_REPOSITORY}" \
-            "${{ steps.apk.outputs.path }}" \
-          || gh release upload "${GITHUB_REF_NAME}" "${{ steps.apk.outputs.path }}" --clobber --repo "${GITHUB_REPOSITORY}"
+          set -euo pipefail
+
+          notes=$(cat <<'TEXT'
+          Android-App zum Herunterladen.
+
+          **Installieren:** Die Datei `koop-arena-shooter.apk` auf dem Handy öffnen.
+          Android fragt einmalig nach der Erlaubnis, Apps aus dieser Quelle zu
+          installieren - bestätigen, fertig.
+
+          **iPhone:** Für iOS gibt es keine App-Datei. Dort die Website öffnen und
+          über „Teilen → Zum Home-Bildschirm" installieren.
+          TEXT
+          )
+
+          # Gibt es das Release schon, wird die Datei nur ersetzt. Sonst wird es
+          # angelegt - dabei setzt GitHub den Tag gleich mit auf diesen Stand.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Koop-Arena-Shooter $TAG" \
+              --notes "$notes" \
+              --repo "$GITHUB_REPOSITORY" \
+              "$APK"
+          fi
