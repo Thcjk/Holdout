@@ -49,35 +49,109 @@
         display: block;
       }
 
-      /* Hinweis, quer zu halten - bewusst OHNE das Spiel auszublenden.
-         Eine Sperre im Hochformat war eine Sackgasse: Wer die Rotationssperre
-         an hat, kam nie wieder heraus. Der Hinweis legt sich nur darüber. */
-      #turn-hint {
+      /* Startbildschirm: "Bitte quer halten".
+
+         Er steht bewusst direkt im HTML und nicht im Spielcode. Damit ist er
+         sofort da - noch bevor Phaser geladen ist. Waere er Teil des Spiels,
+         saehe man beim Start erst eine leere Flaeche und dann den Hinweis.
+
+         WARUM ES IHN GIBT: Das Spiel misst beim Start den Bildschirm, um seine
+         Flaeche darauf zuzuschneiden. Startet es hochkant und wird danach
+         gedreht, war die Messung fuer das falsche Format - und es blieben
+         Balken links und rechts. Der Startbildschirm haelt das Spiel auf, bis
+         das Handy quer ist. Dann stimmt die Messung beim ersten Mal. */
+      #rotate-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        padding: 24px;
+        box-sizing: border-box;
+        background: #11161f;
+        color: #dce8f7;
+        text-align: center;
+      }
+
+      /* Ist das Spiel einmal gelaufen, blendet JavaScript ihn aus. */
+      #rotate-gate[hidden] {
         display: none;
       }
 
-      @media (orientation: portrait) and (pointer: coarse) {
-        #turn-hint {
-          display: block;
-          position: fixed;
-          top: 10px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 5;
-          padding: 6px 14px;
-          border-radius: 999px;
-          background: rgba(30, 39, 52, 0.92);
-          color: #dce8f7;
-          font-size: 13px;
-          white-space: nowrap;
-          pointer-events: none;
+      #rotate-gate .gate-title {
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+      }
+
+      #rotate-gate .gate-text {
+        font-size: 15px;
+        color: #8ea6c4;
+        max-width: 420px;
+        line-height: 1.5;
+      }
+
+      /* Ein Handy, das sich einmal dreht und dann liegen bleibt. */
+      #rotate-gate .gate-phone {
+        width: 54px;
+        height: 92px;
+        border: 3px solid #4aa3ff;
+        border-radius: 10px;
+        animation: gate-turn 2.4s ease-in-out infinite;
+      }
+
+      @keyframes gate-turn {
+        0%,
+        30% {
+          transform: rotate(0deg);
+        }
+        55%,
+        85% {
+          transform: rotate(-90deg);
+        }
+        100% {
+          transform: rotate(0deg);
+        }
+      }
+
+      /* Notausgang fuer alle mit aktiver Rotationssperre: Dann meldet das
+         Handy nie "quer", und ohne diesen Knopf kaeme man nie ins Spiel.
+         Er erscheint erst nach ein paar Sekunden - wer einfach dreht, sieht
+         ihn gar nicht. */
+      #rotate-gate .gate-anyway {
+        display: none;
+        margin-top: 4px;
+        padding: 10px 18px;
+        border: 1px solid rgba(220, 232, 247, 0.35);
+        border-radius: 8px;
+        background: rgba(30, 39, 52, 0.9);
+        color: #dce8f7;
+        font: inherit;
+        font-size: 14px;
+      }
+
+      /* Bewegung reduzieren, wenn das Geraet danach fragt. */
+      @media (prefers-reduced-motion: reduce) {
+        #rotate-gate .gate-phone {
+          animation: none;
+          transform: rotate(-90deg);
         }
       }
     </style>
   </head>
   <body>
     <div id="game-root"></div>
-    <div id="turn-hint">Quer halten für das volle Bild</div>
+    <div id="rotate-gate">
+      <div class="gate-title">Holdout</div>
+      <div class="gate-phone"></div>
+      <div class="gate-text">
+        Bitte das Handy quer halten.<br />Das Spiel startet dann von selbst.
+      </div>
+      <button type="button" class="gate-anyway">Trotzdem starten</button>
+    </div>
     <script>
       /* Wächter für den Fall, dass die Spieldateien gar nicht erst ankommen.
 

@@ -55,8 +55,14 @@ Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
   links und rechts je rund 75 Pixel schwarz, das Spiel sass in einem
   Briefkasten. Jetzt bleibt die **Höhe** fest bei 540 und die **Breite folgt dem
   Gerät** (`fitViewportToScreen` in `config/constants.ts`), begrenzt auf 960 bis
-  1280. Gemessen auf dem iPhone 13 quer: vorher 693×390 mit 151 px Balken,
+  1600. Gemessen auf dem iPhone 13 quer: vorher 693×390 mit 151 px Balken,
   jetzt 844×390 ohne.
+
+  Die Obergrenze ist eine Notbremse gegen absurde Werte, kein enges Korsett –
+  zu eng, und es entstünden genau wieder die Balken, die der Umbau beseitigen
+  soll. 1600 entspricht 2,96:1, breiter ist kein Handy. Zum Vergleich: 16:9
+  ergibt 960, das übliche 19,5:9 ergibt 1170, und Safari im Querformat mit
+  eingeblendeter Adressleiste (rund 2,6:1) bleibt mit 1424 darunter.
 
   **Warum `FIT` und nicht `ENVELOP` oder `RESIZE`** (beides erwogen):
   - `ENVELOP` skaliert formatfüllend und schneidet den Überstand ab. Genau an
@@ -73,27 +79,51 @@ Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
   startet. Wer sie beim Laden einer Datei ausliest (eine Konstante auf
   Modulebene), bekommt die alte 960 – genau das war bei den Mitten der
   Touch-Knöpfe der Fall, sie sind jetzt Funktionen.
-- **Querformat, soweit das Gerät es zulässt** (`src/platform/orientation.ts`).
+- **Das Spiel startet erst im Querformat** (`src/platform/rotateGate.ts` plus
+  `#rotate-gate` in `index.html`). Vorher lief es auch hochkant an.
+
+  **Der Fehler, den das behebt:** Das Spiel misst beim Start den Bildschirm, um
+  seine Zeichenfläche darauf zuzuschneiden. Wird die App **hochkant geöffnet
+  und erst danach gedreht** – der normale Ablauf auf dem Handy –, war diese
+  Messung für das falsche Format. Übrig blieben Balken links und rechts. Genau
+  das war auf dem iPhone zu sehen, und genau diesen Fall hatte ich beim Testen
+  übersprungen: Ich habe immer direkt im Querformat gestartet.
+
+  Statt die Fläche nachträglich umzubauen – was jede Szene, jeden Knopf und
+  jede HUD-Position neu setzen müsste, mitten im Spiel – wartet der Start
+  einfach. Reihenfolge in `main.ts`: **erst quer, dann messen, dann Phaser
+  bauen.** Danach gibt es nichts nachzubessern.
+
+  Der Startbildschirm steht **direkt im HTML**, nicht im Spielcode: So ist er
+  sofort da, noch bevor Phaser geladen ist.
+
+  **Der Notausgang.** Wer die Rotationssperre eingeschaltet hat – auf dem
+  iPhone der Normalfall –, bei dem meldet der Browser nie „quer", egal wie man
+  das Gerät hält. Ohne Ausweg wäre das eine Sackgasse, und genau eine solche
+  hat dieses Projekt schon einmal lahmgelegt. Deshalb erscheint nach vier
+  Sekunden ein Knopf **„Trotzdem starten"**. Wer einfach dreht, sieht ihn nie.
+  Die Wahl merkt sich das Modul (`forcedStart`) – sonst würde derselbe
+  Bildschirm beim nächsten Grössenwechsel wieder aufhalten.
+
+  Während des Spiels hochkant gehalten, kommt der Startbildschirm zurück. Das
+  Spiel läuft dahinter **weiter** und wird nicht angehalten: Im Koop rechnet
+  der Host für alle weiter, ein angehaltener Client geriete nur aus dem Takt.
+- **Querformat wird zusätzlich verlangt, wo es geht** (`src/platform/orientation.ts`).
   `screen.orientation.lock` greift auf Android in der installierten App;
   **iOS Safari kann es nicht**, weder im Browser noch auf dem Startbildschirm.
-  Wo es nicht geht, bleibt im Hochformat der Hinweisstreifen „Quer halten für
-  das volle Bild" stehen – er **blendet das Spiel nicht aus**. Eine Sperre im
-  Hochformat war die alte Sackgasse für alle mit aktivierter Rotationssperre.
-  Im PWA-Manifest steht `orientation: landscape`; Android beachtet das, iOS
-  ignoriert es.
+  Dort übernimmt der Startbildschirm oben. Im PWA-Manifest steht
+  `orientation: landscape`; Android beachtet das, iOS ignoriert es.
 
   **Die CSS-Drehung um 90 Grad ist bewusst nicht zurückgekommen.** Sie
   funktionierte im Emulator, hatte aber zwei Fallen: CSS dreht das Bild, nicht
   die Finger (Phasers `transformPointer` musste ersetzt werden), und gedreht
   werden darf nur die Zeichenfläche, nicht ihr Rahmen (Phaser misst den Rahmen
-  zum Einpassen und bekäme sonst die hochkanten Masse). Beides war reparabel,
-  aber fragil. Nach dem Umbau oben ist das Querformat ohnehin das einzige
-  Format, in dem etwas fehlt – und das sagt der Hinweis.
-- **Auf Drehen und Grössenänderung wird reagiert.** `main.ts` hängt sich an
-  `resize` und `orientationchange` und ruft `game.scale.refresh()`. Nach einer
-  Drehung meldet der Browser die neuen Masse erst ein paar Bilder später,
-  deshalb wird zweimal gemessen (nach 120 und 400 ms). Ohne das bleibt die alte
-  Zeichenflächengrösse stehen und Berührungen landen daneben.
+  zum Einpassen und bekäme sonst die hochkanten Masse).
+- **Auf Grössenänderung wird reagiert**, aber nur mit `game.scale.refresh()`.
+  Die **Entwurfsauflösung wird dabei nicht neu berechnet**: Sie steckt in den
+  Positionen aller Knöpfe, Texte und Anzeigen; sie mitten im Spiel zu ändern
+  hiesse, jede Szene neu aufzubauen. Da das Spiel nur quer startet, ändert sich
+  das Verhältnis danach ohnehin kaum noch.
 - **Die installierte App aktualisiert sich selbst** (`src/platform/update.ts`).
   Ein Service Worker haelt die App offline verfuegbar - und liefert deshalb von
   sich aus weiter die gespeicherte Fassung. Das Modul fragt regelmaessig nach
@@ -415,9 +445,10 @@ Zwei Konsequenzen, beide im Code:
 
 ## Bekannte offene Punkte
 
-- **Querformat lässt sich auf dem iPhone nicht erzwingen.** `screen.orientation.lock`
-  gibt es in iOS Safari nicht. Bleibt der Hinweisstreifen im Hochformat. Eine
-  CSS-Drehung wäre technisch möglich, war aber fragil – siehe „Nur Handy".
+- **Querformat lässt sich auf dem iPhone nicht technisch erzwingen.**
+  `screen.orientation.lock` gibt es in iOS Safari nicht. Gelöst über den
+  Startbildschirm, der auf das Drehen wartet – inklusive Notausgang für alle
+  mit Rotationssperre. Siehe „Nur Handy".
 - **Version 1.1.0 ist ein kaputter Stand** (falscher Basispfad, weisse bzw.
   blaue Seite). Heruntergeladen hat sie niemand (0 Downloads). Ab 1.1.1 ist es
   behoben; ob das alte Release gelöscht wird, entscheidet der Nutzer.

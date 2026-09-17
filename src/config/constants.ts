@@ -32,10 +32,12 @@ export const VIEWPORT = {
  * Die Hoehe bleibt fest bei 540, die Breite folgt dem Bildschirm. Damit passt
  * FIT genau auf, ohne Balken - und ohne etwas abzuschneiden.
  *
- * Die Grenzen sind Absicht: Ohne sie saehe ein Spieler auf einem sehr breiten
- * Handy deutlich mehr von der Arena als einer auf einem schmalen, und im Koop
- * waere das ein echter Vorteil. Zwischen 960 und 1280 ist der Unterschied
- * hoechstens ein Drittel mehr Breite.
+ * Die Grenzen sind eine Notbremse gegen absurde Werte, kein enges Korsett:
+ * Waeren sie zu eng, entstuenden genau wieder die Balken, die der ganze Umbau
+ * beseitigen soll. 1600 entspricht 2,96:1 - breiter ist kein Handy. Zum
+ * Vergleich: 16:9 ergibt 960, das uebliche 19,5:9 ergibt 1170, und selbst
+ * Safari im Querformat mit eingeblendeter Adressleiste (rund 2,6:1) bleibt mit
+ * 1424 darunter.
  *
  * MUSS VOR DEM ERSTEN `new Phaser.Game` LAUFEN: Szenen und Bedienelemente
  * lesen diese Werte, wenn sie gebaut werden.
@@ -54,7 +56,7 @@ export function fitViewportToScreen(screenWidth: number, screenHeight: number): 
 
   const aspect = screenWidth / screenHeight;
   const width = Math.round(VIEWPORT.height * aspect);
-  VIEWPORT.width = Math.min(1280, Math.max(960, width));
+  VIEWPORT.width = Math.min(1600, Math.max(960, width));
 }
 
 /**
