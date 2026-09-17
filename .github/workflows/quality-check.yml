@@ -16,6 +16,15 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+
+      - name: Basispfad bestimmen
+        id: base
+        # Aus dem Repo-Namen abgeleitet statt fest eingetragen: Beim Umbenennen
+        # des Repositorys aendert sich die Pages-Adresse mit, und ein fest
+        # verdrahteter Pfad laesst danach jede Spieldatei ins Leere zeigen -
+        # die Seite laedt dann nur noch den Hintergrund.
+        run: echo "path=/${GITHUB_REPOSITORY#*/}/" >> "$GITHUB_OUTPUT"
+
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
@@ -25,4 +34,4 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_BASE_PATH: /thistle-and-crown/
+          VITE_BASE_PATH: ${{ steps.base.outputs.path }}

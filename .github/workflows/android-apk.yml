@@ -50,7 +50,7 @@ jobs:
 
       - name: Web-Spiel bauen
         # Basispfad "/" - in der App liegen die Dateien im Wurzelverzeichnis
-        # der WebView, nicht unter /thistle-and-crown/ wie auf GitHub Pages.
+        # der WebView, nicht unter /Holdout/ wie auf GitHub Pages.
         run: npm run build
         env:
           VITE_BASE_PATH: /

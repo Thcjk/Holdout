@@ -50,20 +50,20 @@ Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
   Desktop-Fallback wäre Code, den niemand mehr benutzen kann.
   **Folge fürs Entwickeln:** Entweder auf dem Handy testen oder in den
   Entwicklerwerkzeugen die Geräteansicht einschalten (F12, dann Strg+Umschalt+M).
-- **Querformat wird erzwungen, nicht erbeten.** Früher stand im Hochformat nur
-  „Bitte das Handy quer halten" und das Spiel war per CSS ausgeblendet. Wer die
-  Rotationssperre an hat - auf dem iPhone der Normalfall - sass damit in der
-  Sackgasse. Jetzt dreht sich das Spiel selbst (`src/platform/orientation.ts`):
-  erst `screen.orientation.lock`, und wo das fehlt (iOS), eine CSS-Drehung um
-  90 Grad. **Dabei zwei Fallen, die beide zugeschlagen haben:**
-  1. CSS dreht nur das Bild, nicht die Finger. Phasers Umrechnung von
-     Berührungen wird deshalb mitgedreht (`transformPointer` wird ersetzt).
-  2. Gedreht wird nur die Zeichenfläche, **nicht ihr Rahmen**. Phaser misst den
-     Rahmen, um einzupassen - und ein gedrehtes Element meldet die Masse, die es
-     auf dem Bildschirm einnimmt, also wieder die hochkanten. Aus demselben
-     Grund wird der Massstab aus `canvas.offsetWidth` selbst gerechnet statt aus
-     Phasers `displayScale`: Das leitet sich aus dem gedrehten Rechteck ab und
-     ist um Faktor zwei daneben.
+- **Querformat: vorerst zurückgebaut.** Es gab einen Versuch, das Bild selbst
+  zu drehen (`src/platform/orientation.ts`, per CSS um 90 Grad plus einem
+  Ersatz für Phasers `transformPointer`, damit die Finger mitdrehen). Der
+  Versuch funktionierte im Emulator, fiel aber mit dem kaputten Basispfad
+  (siehe „Die Lehre vom 2026-09-17") in dieselbe Version - und weil auf dem
+  iPhone dann gar nichts mehr ging, war nicht zu trennen, was woran lag.
+  Deshalb ist die Drehung entfernt, bis bestätigt ist, dass das Spiel wieder
+  lädt. Im Hochformat steht jetzt nur ein Hinweisstreifen „Quer halten für das
+  volle Bild"; **er blendet das Spiel nicht aus** - genau das war die frühere
+  Sackgasse für alle mit aktiver Rotationssperre. Die Drehung kommt danach
+  zurück; die beiden Fallen von damals sind dokumentiert: CSS dreht nur das
+  Bild, nicht die Finger, und gedreht werden darf nur die Zeichenfläche, nicht
+  ihr Rahmen (Phaser misst den Rahmen zum Einpassen und bekäme sonst die
+  hochkanten Masse).
 - **Zwei Wege zur Installation.** Android bekommt eine echte APK über Capacitor
   (`android/`, Workflow `android-apk.yml`). Android und iPhone können die Seite
   zusätzlich als PWA installieren (`src/platform/install.ts`). Eine iOS-App ist
@@ -138,7 +138,7 @@ zu zeichnen?_ Wenn ja, gehört es nach `systems/`.
 | HUD und Touch         | Eigene Szene (`HudScene`)                                                 | Die Spielkamera zoomt je nach Spielerabstand, und alles in ihrer Kamera zoomt mit - auch Text und Joysticks, die fest am Bildschirmrand kleben sollen. Eine zweite Szene hat ihre eigene Kamera ohne Zoom.                                                                                                                             |
 | Spielerform           | Kreis statt Rechteck                                                      | Ein Kreis gleitet an Wänden und Ecken entlang, ein Rechteck verhakt sich. Genau dieses Verhaken lässt Top-down-Steuerung zäh wirken.                                                                                                                                                                                                   |
 | Rundenablauf          | Vorbereitung nur vor Welle 1, danach Welle → Pause → Welle                | Die Pause kündigt laut Briefing selbst die nächste Welle an. Eine zusätzliche Vorbereitung dazwischen wären 15 Sekunden Warten zwischen zwei Wellen.                                                                                                                                                                                   |
-| Repo                  | Ersetzt den früheren Inhalt von `thistle-and-crown` (ein Babylon.js-MOBA) | So entschieden am 2026-09-17. Der alte Stand ist über die Git-Historie auf `main` erreichbar. Der Repo-Name bleibt, deshalb bleibt `base: /thistle-and-crown/`.                                                                                                                                                                        |
+| Repo                  | Ersetzt den früheren Inhalt von `thistle-and-crown` (ein Babylon.js-MOBA) | So entschieden am 2026-09-17. Der alte Stand ist über die Git-Historie auf `main` erreichbar. Das Repo heisst inzwischen `Holdout`; der Basispfad wird deshalb aus dem Repo-Namen abgeleitet statt eingetragen.                                                                                                                                                                        |
 
 ## Projektstruktur
 
@@ -182,7 +182,7 @@ src/
   audio/                  synthetisierte Klänge und Musik
   assets/textures.ts      Texture Atlas
   storage/highscore.ts    lokaler Rekord
-  platform/               Geräte-Erkennung, Desktop-Sperre, Querformat, Installation
+  platform/               Geräte-Erkennung, Desktop-Sperre, Absturzanzeige, Installation
 android/                  Capacitor-Projekt für die Android-App
 tools/                    Hilfsskripte (App-Icons erzeugen)
 tests/
@@ -247,13 +247,45 @@ Genau das prüft auch `quality-check.yml`.
 ## Deployment
 
 - Push auf `main` startet `.github/workflows/deploy-pages.yml`
-- Der Workflow setzt `VITE_BASE_PATH=/thistle-and-crown/`; ohne diesen Basispfad
-  findet der Browser auf GitHub Pages die Dateien nicht
-- Ergebnis: `https://thcjk.github.io/thistle-and-crown/`
+- Der Workflow liest den Basispfad aus dem Repo-Namen
+  (`VITE_BASE_PATH=/${GITHUB_REPOSITORY#*/}/`) statt ihn fest einzutragen.
+  Ohne den richtigen Basispfad zeigen alle Dateipfade ins Leere und man sieht
+  nur die Hintergrundfarbe
+- Ergebnis: `https://thcjk.github.io/Holdout/`
 - Einmalig nötig: **Settings → Pages → Source: GitHub Actions**
+
+### Die Lehre vom 2026-09-17: Umbenennen bricht den Basispfad
+
+Das Repo hiess `thistle-and-crown` und heisst jetzt `Holdout`. Damit änderte
+sich die Pages-Adresse von `/thistle-and-crown/` auf `/Holdout/` - aber im
+Workflow stand der alte Pfad fest verdrahtet. Ergebnis auf dem iPhone: Die
+Seite lud, jede Spieldatei darin zeigte auf `/thistle-and-crown/...` und war
+dort nicht mehr da. Zu sehen war nur die Hintergrundfarbe - ein blaues Bild,
+ohne Fehlermeldung.
+
+Zwei Konsequenzen, beide im Code:
+
+1. **Der Pfad wird abgeleitet, nicht eingetragen.** Beide Pages-Workflows
+   bestimmen ihn aus `$GITHUB_REPOSITORY`. Das nächste Umbenennen tut nichts
+   mehr weh.
+2. **Stilles Scheitern gibt es nicht mehr.** `index.html` enthält einen
+   Wächter in einfachem JavaScript (kein Modul, kein Import - er läuft
+   also auch dann, wenn genau das Laden von Modulen kaputt ist): Ist nach
+   8 Sekunden weder `window.__holdoutBooted` gesetzt noch ein Canvas da,
+   erscheint eine deutsche Meldung mit der Adresse der Seite und einem Knopf,
+   der Service Worker und Zwischenspeicher leert. Dazu fängt
+   `src/platform/crashScreen.ts` Ausnahmen ab und zeigt sie samt Version an.
+   Die Version steht ausserdem unten rechts im Menü - damit sieht man am
+   Handy, welcher Stand wirklich installiert ist.
 
 ## Bekannte offene Punkte
 
+- **Querformat muss wieder rein.** Vom Nutzer gewünscht, hier bewusst
+  zurückgestellt, bis bestätigt ist, dass das Spiel auf seinem iPhone wieder
+  startet. Erst eine Sache reparieren, dann die nächste bauen.
+- **Version 1.1.0 ist ein kaputter Stand** (falscher Basispfad, weisse bzw.
+  blaue Seite). Heruntergeladen hat sie niemand (0 Downloads). 1.1.1 ersetzt
+  sie; ob das alte Release gelöscht wird, entscheidet der Nutzer.
 - **Echtes WebRTC ist ungetestet.** Der Signalisierungsserver war aus der
   Entwicklungsumgebung nicht erreichbar. Reihenfolge zum Prüfen (aus dem
   Briefing): zwei Tabs (geht bereits über „Lokaler Test"), dann zwei Geräte im

@@ -61,7 +61,25 @@ export class MenuScene extends Phaser.Scene {
     this.createCards();
     this.createActions();
     this.createUtilityRow();
+    this.createVersionLabel();
     this.highlightSelection();
+  }
+
+  /**
+   * Versionsnummer klein in der Ecke.
+   *
+   * Klingt nach Kosmetik, ist aber Diagnose: Wenn jemand meldet „geht nicht",
+   * ist die erste Frage, welcher Stand auf dem Geraet ueberhaupt laeuft - ein
+   * Service Worker kann noch eine aeltere Fassung ausliefern.
+   */
+  private createVersionLabel(): void {
+    this.add
+      .text(VIEWPORT.width - 10, VIEWPORT.height - 8, `v${__APP_VERSION__}`, {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "11px",
+        color: "#4a5a70",
+      })
+      .setOrigin(1, 1);
   }
 
   private createHeader(): void {

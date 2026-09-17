@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from "vite";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { VitePWA } from "vite-plugin-pwa";
 
@@ -7,16 +8,21 @@ import { VitePWA } from "vite-plugin-pwa";
 // findet der Browser die Dateien nicht. Lokal bleibt es "/".
 const base = process.env.VITE_BASE_PATH ?? "/";
 
+// Die Versionsnummer wandert ins Spiel: Sie steht im Menue und auf dem
+// Fehlerbildschirm. Nur so laesst sich aus der Ferne sagen, welcher Stand
+// auf einem Geraet tatsaechlich laeuft - gerade wenn ein Service Worker
+// noch eine aeltere Fassung ausliefert.
+const version = JSON.parse(readFileSync("./package.json", "utf-8")).version;
+
 export default defineConfig({
   base,
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   plugins: [
     VitePWA({
       // Eine neue Version wird im Hintergrund geladen und beim naechsten Start aktiv.
       registerType: "autoUpdate",
-      // Die Registrierung uebernimmt main.ts selbst. Grund: In der Android-App
-      // gibt es keinen Service Worker - dort liegen die Dateien ohnehin auf dem
-      // Geraet. Automatisch eingehaengter Code wuerde dort nur Fehler werfen.
-      injectRegister: null,
       includeAssets: ["favicon.svg", "icons/*.png"],
       manifest: {
         name: "Holdout",

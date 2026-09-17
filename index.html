@@ -48,52 +48,120 @@
         display: block;
       }
 
-      /* Querformat erzwingen, ohne den Spieler darum zu bitten.
-
-         Das Spiel ist für Querformat gebaut. Hält jemand das Handy hochkant -
-         oder hat die Rotationssperre an, was auf dem iPhone der Normalfall ist -
-         wird die Zeichenfläche um 90 Grad gedreht. Die Klasse setzt
-         src/platform/orientation.ts; dort wird auch die Umrechnung der
-         Berührungen mitgedreht, denn CSS dreht nur das Bild, nicht die Finger.
-
-         Wichtig: Gedreht wird NUR die Zeichenfläche, nicht ihr Rahmen. Phaser
-         misst den Rahmen, um die Zeichenfläche einzupassen - und ein gedrehtes
-         Element meldet die Masse, die es auf dem Bildschirm einnimmt, also
-         wieder die hochkante. Der Rahmen bleibt deshalb ungedreht und bekommt
-         nur die vertauschten Masse. */
-      html.rotate-to-landscape #game-root {
-        position: fixed;
-        top: 0;
-        left: 0;
-        /* vh/vw als Rückfall für iOS vor 16.4, das dvh/dvw noch nicht kennt. */
-        width: 100vh;
-        width: 100dvh;
-        height: 100vw;
-        height: 100dvw;
-        display: block;
+      /* Hinweis, quer zu halten - bewusst OHNE das Spiel auszublenden.
+         Eine Sperre im Hochformat war eine Sackgasse: Wer die Rotationssperre
+         an hat, kam nie wieder heraus. Der Hinweis legt sich nur darüber. */
+      #turn-hint {
+        display: none;
       }
 
-      /* Die Drehung selbst: an der linken oberen Ecke um 90 Grad, dann um die
-         Bildschirmbreite nach rechts. Danach liegt die Zeichenfläche genau auf
-         dem hochkanten Bildschirm - und aus einem Punkt (x, y) darauf wird
-         (Bildschirmbreite - y, x), was orientation.ts wieder zurückrechnet. */
-      html.rotate-to-landscape #game-root > canvas {
-        position: absolute;
-        top: 0;
-        left: 0;
-        /* Phaser zentriert die Zeichenfläche über Ränder, die es direkt ins
-           style-Attribut schreibt. Die würden den Drehpunkt verschieben und
-           die Umrechnung der Berührungen verfälschen - deshalb hier hart auf
-           null, damit die Ecke oben links wirklich bei (0, 0) liegt. */
-        margin: 0 !important;
-        transform-origin: top left;
-        transform: translateX(100vw) rotate(90deg);
-        transform: translateX(100dvw) rotate(90deg);
+      @media (orientation: portrait) and (pointer: coarse) {
+        #turn-hint {
+          display: block;
+          position: fixed;
+          top: 10px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 5;
+          padding: 6px 14px;
+          border-radius: 999px;
+          background: rgba(30, 39, 52, 0.92);
+          color: #dce8f7;
+          font-size: 13px;
+          white-space: nowrap;
+          pointer-events: none;
+        }
       }
     </style>
   </head>
   <body>
     <div id="game-root"></div>
+    <div id="turn-hint">Quer halten für das volle Bild</div>
+    <script>
+      /* Wächter für den Fall, dass die Spieldateien gar nicht erst ankommen.
+
+         Genau das ist passiert, als das Repository umbenannt wurde: Die Seite
+         lud, aber jede Datei zeigte auf die alte Adresse. Ergebnis war ein
+         leeres, blaues Bild - ohne jeden Hinweis, weil noch kein Skript lief,
+         das einen hätte geben können.
+
+         Deshalb steht dieser Wächter direkt im HTML, in einfachem JavaScript
+         ohne Module: Er läuft auch dann, wenn alles andere fehlschlägt. */
+      (function () {
+        var TIMEOUT_MS = 8000;
+
+        window.__holdoutBooted = false;
+
+        setTimeout(function () {
+          if (window.__holdoutBooted) return;
+          if (document.querySelector("#game-root canvas")) return;
+          if (document.querySelector("[data-holdout-message]")) return;
+
+          var page = document.createElement("div");
+          page.setAttribute("data-holdout-message", "");
+          page.style.cssText =
+            "position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;" +
+            "align-items:center;justify-content:center;gap:16px;padding:24px;" +
+            "box-sizing:border-box;background:#11161f;color:#dce8f7;text-align:center;" +
+            "font-family:system-ui,sans-serif";
+
+          var title = document.createElement("div");
+          title.textContent = "Die Spieldateien konnten nicht geladen werden.";
+          title.style.cssText = "font-size:18px;font-weight:700;color:#ff5470;max-width:520px";
+          page.appendChild(title);
+
+          var hint = document.createElement("div");
+          hint.textContent =
+            "Meistens hilft der Knopf unten. Bleibt es dabei, ist die Adresse " +
+            "dieser Seite falsch - dann liegt es am Spiel, nicht an dir.";
+          hint.style.cssText = "font-size:14px;color:#8ea6c4;max-width:520px;line-height:1.5";
+          page.appendChild(hint);
+
+          var where = document.createElement("div");
+          where.textContent = location.href;
+          where.style.cssText = "font-size:12px;color:#8ea6c4;word-break:break-all;max-width:520px";
+          page.appendChild(where);
+
+          var button = document.createElement("button");
+          button.textContent = "Zwischenspeicher leeren und neu laden";
+          button.style.cssText =
+            "padding:12px 20px;border:none;border-radius:10px;background:#4cc2ff;" +
+            "color:#11161f;font:600 15px system-ui,sans-serif";
+          button.onclick = function () {
+            var done = function () {
+              location.reload();
+            };
+            try {
+              navigator.serviceWorker
+                .getRegistrations()
+                .then(function (list) {
+                  return Promise.all(
+                    list.map(function (r) {
+                      return r.unregister();
+                    }),
+                  );
+                })
+                .then(function () {
+                  return caches.keys();
+                })
+                .then(function (keys) {
+                  return Promise.all(
+                    keys.map(function (k) {
+                      return caches.delete(k);
+                    }),
+                  );
+                })
+                .then(done, done);
+            } catch (e) {
+              done();
+            }
+          };
+          page.appendChild(button);
+
+          document.body.appendChild(page);
+        }, TIMEOUT_MS);
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

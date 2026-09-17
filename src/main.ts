@@ -2,9 +2,15 @@
  * Einstiegspunkt: baut die Phaser-Instanz und startet die erste Szene.
  */
 
+// Zuerst der Auffangschirm fuer Fehler: Er muss haengen, bevor irgendetwas
+// anderes schiefgehen kann - sonst faengt er genau den Fehler nicht, der ihn
+// selbst verhindert haette.
+import { installCrashScreen } from "./platform/crashScreen";
+
+installCrashScreen(__APP_VERSION__);
+
 import Phaser from "phaser";
-import { isNativeApp, isSupportedDevice } from "./platform/device";
-import { enforceLandscape } from "./platform/orientation";
+import { isSupportedDevice } from "./platform/device";
 import { showDesktopNotice } from "./platform/DesktopNotice";
 // Nur importiert, damit der Empfaenger fuer `beforeinstallprompt` frueh genug
 // haengt - das Ereignis kommt einmal und sehr frueh.
@@ -54,23 +60,14 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [BootScene, MenuScene, LobbyScene, GameScene, HudScene, GameOverScene],
 };
 
-// Service Worker nur im Browser: Er macht die Website offline spielbar. In der
-// Android-App liegen alle Dateien schon auf dem Geraet.
-if (!isNativeApp()) {
-  void import("virtual:pwa-register").then(({ registerSW }) => {
-    registerSW({ immediate: true });
-  });
-}
-
 // Alles, was kein Touchgeraet ist, bekommt die Sperrseite statt des Spiels.
 // Wichtig: Phaser wird dann nie gestartet - der Desktop laedt kein Spiel.
-if (isSupportedDevice()) {
-  const game = new Phaser.Game(config);
+// Dem Wächter in index.html melden, dass der Start geklappt hat - sonst
+// blendet er nach acht Sekunden seine Fehlermeldung ein.
+(window as unknown as { __holdoutBooted: boolean }).__holdoutBooted = true;
 
-  // Das Spiel ist fuer Querformat gebaut. Statt den Spieler zu bitten, das
-  // Handy zu drehen, dreht es sich selbst - sonst sitzt man mit aktivierter
-  // Rotationssperre in der Sackgasse.
-  enforceLandscape(game);
+if (isSupportedDevice()) {
+  new Phaser.Game(config);
 } else {
   void showDesktopNotice();
 }

@@ -12,7 +12,7 @@ stärkere Gegnerwellen durch.
 
 **Android – App herunterladen**
 
-1. [Releases](https://github.com/Thcjk/thistle-and-crown/releases) öffnen und
+1. [Releases](https://github.com/Thcjk/Holdout/releases) öffnen und
    die Datei `holdout.apk` auf dem Handy herunterladen
 2. Beim Öffnen fragt Android einmalig nach der Erlaubnis, Apps aus dieser
    Quelle zu installieren – bestätigen
@@ -20,7 +20,7 @@ stärkere Gegnerwellen durch.
 
 **Android und iPhone – ohne Store, direkt aus dem Browser**
 
-1. https://thcjk.github.io/thistle-and-crown/ auf dem Handy öffnen
+1. https://thcjk.github.io/Holdout/ auf dem Handy öffnen
 2. Android: im Menü auf **App installieren** tippen.
    iPhone: **Teilen → Zum Home-Bildschirm**
 3. Danach startet das Spiel ohne Browserleisten und auch ohne Internet
@@ -185,9 +185,11 @@ Zwei Workflows:
   installierbare Website
 - **Android APK** – ein Tag `v*` baut die App und hängt sie an ein Release
 
-Der Pages-Workflow läuft über `.github/workflows/deploy-pages.yml`. Der Workflow setzt dabei
-`VITE_BASE_PATH=/thistle-and-crown/` – ohne diesen Basispfad findet der Browser
-die Dateien auf Pages nicht.
+Der Pages-Workflow läuft über `.github/workflows/deploy-pages.yml`. Er liest den
+Basispfad aus dem Repo-Namen (`VITE_BASE_PATH=/<reponame>/`) statt ihn fest
+einzutragen. Ohne den richtigen Basispfad zeigen alle Dateipfade ins Leere und
+die Seite bleibt leer – genau das passierte beim Umbenennen des Repos von
+`thistle-and-crown` auf `Holdout`.
 
 Einmalig nötig: **Settings → Pages → Source: GitHub Actions**.
 

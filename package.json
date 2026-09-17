@@ -1,6 +1,6 @@
 {
-  "name": "thistle-and-crown",
-  "version": "1.1.0",
+  "name": "holdout",
+  "version": "1.1.1",
   "private": true,
   "description": "Holdout – Top-down-Koop-Survival fürs Handy (Phaser 3 + TypeScript + Vite)",
   "type": "module",
