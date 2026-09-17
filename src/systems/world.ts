@@ -3,11 +3,20 @@
  *
  * Das ist das Herz der Architektur-Grundregel: Alles, was passiert, passiert hier
  * auf reinen Datenobjekten. Die Szene liest diesen Zustand nur aus und zeichnet ihn.
+ *
+ * Die Reihenfolge der Schritte ist bewusst gewaehlt: erst bewegen sich die
+ * Spieler, dann schiessen sie, dann handeln die Gegner, dann fliegen die
+ * Projektile. So trifft ein Schuss die Gegnerposition dieses Ticks und nicht die
+ * des letzten.
  */
 
 import { ARENA_BOUNDS, SPAWN_POINT, createArenaBushes, createArenaWalls } from "../config/arena";
 import { CHARACTERS, PLAYER } from "../config/balance";
+import { stepReload, stepRevive, tryShoot } from "./combat";
+import { stepEnemies } from "./enemies";
 import { stepPlayerMovement } from "./movement";
+import { stepProjectiles } from "./projectiles";
+import { keepSandboxEnemiesAlive } from "./sandbox";
 import { emptyInput } from "./types";
 import type { CharacterId, InputState, PlayerState, Vec2, WorldState } from "./types";
 
@@ -65,7 +74,7 @@ export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldStat
     tick: 0,
     phase: "wave",
     phaseTime: 0,
-    wave: 0,
+    wave: 1,
     score: 0,
     players: setups.map((setup, index) => createPlayer(setup, index, setups.length)),
     enemies: [],
@@ -110,10 +119,20 @@ export function stepWorld(
 
   for (const player of state.players) {
     const input = inputs.get(player.id) ?? emptyInput();
+
+    stepReload(player, dt);
     stepPlayerMovement(player, input, state.walls, dt);
     updateFacing(player, input);
     player.inBush = isInBush(state, player.position);
+    tryShoot(state, player, input);
   }
+
+  stepEnemies(state, dt);
+  stepProjectiles(state, dt);
+  stepRevive(state, dt);
+
+  // Uebergangsloesung der Phase 3, wird in Phase 4 durch die Wellen ersetzt.
+  keepSandboxEnemiesAlive(state);
 
   state.tick += 1;
 }

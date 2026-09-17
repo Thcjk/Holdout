@@ -2,12 +2,11 @@
  * Erste Szene. "Scene" ist in Phaser ein abgeschlossener Abschnitt des Spiels -
  * Menue, Spiel, Game Over sind je eine eigene Szene mit eigenem `create()` und `update()`.
  *
- * Phase 1 laedt noch nichts: Alles wird als farbige Form direkt gezeichnet
- * (Briefing, Abschnitt 7: erst ab Phase 5 echte Sprites). Diese Szene existiert
- * trotzdem schon, weil spaeter hier der Ladebalken und die Texture Atlanten liegen.
+ * Hier werden die Texturen erzeugt und anschliessend ins Spiel gewechselt.
  */
 
 import Phaser from "phaser";
+import { createTextures } from "../assets/textures";
 import { COLORS } from "../config/constants";
 
 export class BootScene extends Phaser.Scene {
@@ -20,6 +19,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    createTextures(this);
     this.scene.start("Game");
   }
 }
