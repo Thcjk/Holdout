@@ -1,6 +1,6 @@
 {
   "name": "thistle-and-crown",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Koop-Arena-Shooter – Top-down-Survival für den Handy-Browser (Phaser 3 + TypeScript + Vite)",
   "type": "module",
