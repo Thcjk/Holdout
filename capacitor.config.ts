@@ -12,7 +12,7 @@ const config: CapacitorConfig = {
   // Umgekehrte Domain, so verlangt es Android. Sie muss eindeutig sein und
   // darf sich nach der ersten Veroeffentlichung nicht mehr aendern.
   appId: "ch.thcjk.arenashooter",
-  appName: "Koop-Arena-Shooter",
+  appName: "Holdout",
   webDir: "dist",
   android: {
     // Der Hintergrund, der waehrend des Ladens zu sehen ist. Ohne ihn blitzt

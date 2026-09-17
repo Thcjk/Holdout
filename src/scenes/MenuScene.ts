@@ -65,7 +65,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private createHeader(): void {
-    this.centeredText(40, "Koop-Arena-Shooter", 34, "#dce8f7", "bold");
+    this.centeredText(40, "Holdout", 42, "#dce8f7", "bold");
 
     const best = loadHighscore();
     this.centeredText(

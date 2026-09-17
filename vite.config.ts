@@ -19,9 +19,9 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: ["favicon.svg", "icons/*.png"],
       manifest: {
-        name: "Koop-Arena-Shooter",
-        short_name: "Arena",
-        description: "Top-down-Koop-Survival: haltet gemeinsam gegen immer staerkere Wellen durch.",
+        name: "Holdout",
+        short_name: "Holdout",
+        description: "Holdout: Haltet gemeinsam gegen immer stärkere Wellen durch.",
         lang: "de",
         start_url: base,
         scope: base,

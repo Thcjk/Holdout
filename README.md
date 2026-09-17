@@ -1,4 +1,4 @@
-# Koop-Arena-Shooter
+# Holdout
 
 Top-down-Arena-Shooter fürs Handy: 1–4 Spieler halten gemeinsam gegen immer
 stärkere Gegnerwellen durch.
@@ -13,7 +13,7 @@ stärkere Gegnerwellen durch.
 **Android – App herunterladen**
 
 1. [Releases](https://github.com/Thcjk/thistle-and-crown/releases) öffnen und
-   die Datei `koop-arena-shooter.apk` auf dem Handy herunterladen
+   die Datei `holdout.apk` auf dem Handy herunterladen
 2. Beim Öffnen fragt Android einmalig nach der Erlaubnis, Apps aus dieser
    Quelle zu installieren – bestätigen
 3. Installieren, fertig

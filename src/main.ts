@@ -4,6 +4,7 @@
 
 import Phaser from "phaser";
 import { isNativeApp, isSupportedDevice } from "./platform/device";
+import { enforceLandscape } from "./platform/orientation";
 import { showDesktopNotice } from "./platform/DesktopNotice";
 // Nur importiert, damit der Empfaenger fuer `beforeinstallprompt` frueh genug
 // haengt - das Ereignis kommt einmal und sehr frueh.
@@ -64,7 +65,12 @@ if (!isNativeApp()) {
 // Alles, was kein Touchgeraet ist, bekommt die Sperrseite statt des Spiels.
 // Wichtig: Phaser wird dann nie gestartet - der Desktop laedt kein Spiel.
 if (isSupportedDevice()) {
-  new Phaser.Game(config);
+  const game = new Phaser.Game(config);
+
+  // Das Spiel ist fuer Querformat gebaut. Statt den Spieler zu bitten, das
+  // Handy zu drehen, dreht es sich selbst - sonst sitzt man mit aktivierter
+  // Rotationssperre in der Sackgasse.
+  enforceLandscape(game);
 } else {
   void showDesktopNotice();
 }

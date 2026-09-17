@@ -6,13 +6,13 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="description" content="Koop-Arena-Shooter – Top-down-Survival im Browser." />
+    <meta name="description" content="Holdout – Top-down-Koop-Survival fürs Handy." />
     <meta name="theme-color" content="#11161f" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <title>Koop-Arena-Shooter</title>
+    <title>Holdout</title>
     <style>
       :root {
         color-scheme: dark;
@@ -48,56 +48,52 @@
         display: block;
       }
 
-      /* Hinweis, das Handy zu drehen. Das Spiel ist fuer Querformat gebaut:
-         Im Hochformat waere der Daumenbereich groesser als das Spielfeld.
-         `pointer: coarse` grenzt die Regel auf Touchgeraete ein - ein schmales
-         Desktop-Fenster soll nicht ploetzlich diesen Hinweis zeigen. */
-      #rotate-hint {
-        display: none;
+      /* Querformat erzwingen, ohne den Spieler darum zu bitten.
+
+         Das Spiel ist für Querformat gebaut. Hält jemand das Handy hochkant -
+         oder hat die Rotationssperre an, was auf dem iPhone der Normalfall ist -
+         wird die Zeichenfläche um 90 Grad gedreht. Die Klasse setzt
+         src/platform/orientation.ts; dort wird auch die Umrechnung der
+         Berührungen mitgedreht, denn CSS dreht nur das Bild, nicht die Finger.
+
+         Wichtig: Gedreht wird NUR die Zeichenfläche, nicht ihr Rahmen. Phaser
+         misst den Rahmen, um die Zeichenfläche einzupassen - und ein gedrehtes
+         Element meldet die Masse, die es auf dem Bildschirm einnimmt, also
+         wieder die hochkante. Der Rahmen bleibt deshalb ungedreht und bekommt
+         nur die vertauschten Masse. */
+      html.rotate-to-landscape #game-root {
+        position: fixed;
+        top: 0;
+        left: 0;
+        /* vh/vw als Rückfall für iOS vor 16.4, das dvh/dvw noch nicht kennt. */
+        width: 100vh;
+        width: 100dvh;
+        height: 100vw;
+        height: 100dvw;
+        display: block;
       }
 
-      @media (orientation: portrait) and (pointer: coarse) {
-        #game-root {
-          display: none;
-        }
-
-        #rotate-hint {
-          display: flex;
-          position: fixed;
-          inset: 0;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 18px;
-          color: #dce8f7;
-          text-align: center;
-          padding: 24px;
-        }
-
-        #rotate-hint .icon {
-          font-size: 56px;
-          animation: tilt 1.8s ease-in-out infinite;
-        }
-      }
-
-      @keyframes tilt {
-        0%,
-        60%,
-        100% {
-          transform: rotate(0deg);
-        }
-        30% {
-          transform: rotate(90deg);
-        }
+      /* Die Drehung selbst: an der linken oberen Ecke um 90 Grad, dann um die
+         Bildschirmbreite nach rechts. Danach liegt die Zeichenfläche genau auf
+         dem hochkanten Bildschirm - und aus einem Punkt (x, y) darauf wird
+         (Bildschirmbreite - y, x), was orientation.ts wieder zurückrechnet. */
+      html.rotate-to-landscape #game-root > canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        /* Phaser zentriert die Zeichenfläche über Ränder, die es direkt ins
+           style-Attribut schreibt. Die würden den Drehpunkt verschieben und
+           die Umrechnung der Berührungen verfälschen - deshalb hier hart auf
+           null, damit die Ecke oben links wirklich bei (0, 0) liegt. */
+        margin: 0 !important;
+        transform-origin: top left;
+        transform: translateX(100vw) rotate(90deg);
+        transform: translateX(100dvw) rotate(90deg);
       }
     </style>
   </head>
   <body>
     <div id="game-root"></div>
-    <div id="rotate-hint">
-      <div class="icon">📱</div>
-      <div>Bitte das Handy quer halten.</div>
-    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

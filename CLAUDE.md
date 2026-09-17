@@ -11,7 +11,7 @@ sondern ergänzt ihn um den aktuellen Stand.
 
 ## Was das hier ist
 
-Koop-Arena-Shooter im Stil von Brawl Stars: Top-down, 1–4 Spieler halten gemeinsam
+Holdout, ein Koop-Arena-Shooter im Stil von Brawl Stars: Top-down, 1–4 Spieler halten gemeinsam
 gegen immer stärkere Gegnerwellen durch. Läuft im Handy-Browser, gehostet als
 statische PWA auf GitHub Pages.
 
@@ -50,6 +50,20 @@ Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
   Desktop-Fallback wäre Code, den niemand mehr benutzen kann.
   **Folge fürs Entwickeln:** Entweder auf dem Handy testen oder in den
   Entwicklerwerkzeugen die Geräteansicht einschalten (F12, dann Strg+Umschalt+M).
+- **Querformat wird erzwungen, nicht erbeten.** Früher stand im Hochformat nur
+  „Bitte das Handy quer halten" und das Spiel war per CSS ausgeblendet. Wer die
+  Rotationssperre an hat - auf dem iPhone der Normalfall - sass damit in der
+  Sackgasse. Jetzt dreht sich das Spiel selbst (`src/platform/orientation.ts`):
+  erst `screen.orientation.lock`, und wo das fehlt (iOS), eine CSS-Drehung um
+  90 Grad. **Dabei zwei Fallen, die beide zugeschlagen haben:**
+  1. CSS dreht nur das Bild, nicht die Finger. Phasers Umrechnung von
+     Berührungen wird deshalb mitgedreht (`transformPointer` wird ersetzt).
+  2. Gedreht wird nur die Zeichenfläche, **nicht ihr Rahmen**. Phaser misst den
+     Rahmen, um einzupassen - und ein gedrehtes Element meldet die Masse, die es
+     auf dem Bildschirm einnimmt, also wieder die hochkanten. Aus demselben
+     Grund wird der Massstab aus `canvas.offsetWidth` selbst gerechnet statt aus
+     Phasers `displayScale`: Das leitet sich aus dem gedrehten Rechteck ab und
+     ist um Faktor zwei daneben.
 - **Zwei Wege zur Installation.** Android bekommt eine echte APK über Capacitor
   (`android/`, Workflow `android-apk.yml`). Android und iPhone können die Seite
   zusätzlich als PWA installieren (`src/platform/install.ts`). Eine iOS-App ist
@@ -78,6 +92,19 @@ Zwei Änderungen nach dem ersten Spieltest, beide über das Briefing hinaus:
   Stufen werden **nicht** in die Grundwerte hineingerechnet, sondern bei jeder
   Benutzung frisch angewendet. Sonst summieren sich Rundungsfehler, und Host
   und Client laufen auseinander.
+
+## Der Name
+
+Das Spiel heisst **Holdout**. Umbenannt wurde alles Sichtbare: Browser-Titel,
+PWA-Manifest, Menü, Sperrseite, Android-App, APK-Dateiname, Release-Titel.
+
+Drei Dinge behalten bewusst den alten Namen:
+
+| Was                       | Wert                                             | Warum                                                                                                                                                |
+| ------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android-`applicationId`   | `ch.thcjk.arenashooter`                          | Ändert man sie, ist es für Android eine andere App - Updates über die installierte Version gehen dann nicht mehr.                                    |
+| Speicherschlüssel         | `arena-shooter.highscore`, `arena-shooter.muted` | Ein neuer Schlüssel bedeutet: Rekord weg, Ton-Einstellung weg.                                                                                       |
+| Peer-Präfix und Kanalname | `koop-arena-`                                    | Sichtbar ist davon nichts. Eine Änderung würde nur bewirken, dass zwei Geräte mit unterschiedlichen Versionen sich nicht mehr im selben Raum finden. |
 
 ## Die Architektur-Grundregel
 
@@ -155,7 +182,7 @@ src/
   audio/                  synthetisierte Klänge und Musik
   assets/textures.ts      Texture Atlas
   storage/highscore.ts    lokaler Rekord
-  platform/               Geräte-Erkennung, Desktop-Sperre, PWA-Installation
+  platform/               Geräte-Erkennung, Desktop-Sperre, Querformat, Installation
 android/                  Capacitor-Projekt für die Android-App
 tools/                    Hilfsskripte (App-Icons erzeugen)
 tests/

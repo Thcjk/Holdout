@@ -94,13 +94,13 @@ jobs:
             echo "Keine APK gefunden." >&2
             exit 1
           fi
-          cp "$path" koop-arena-shooter.apk
-          echo "path=koop-arena-shooter.apk" >> "$GITHUB_OUTPUT"
-          ls -lh koop-arena-shooter.apk
+          cp "$path" holdout.apk
+          echo "path=holdout.apk" >> "$GITHUB_OUTPUT"
+          ls -lh holdout.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: koop-arena-shooter-apk
+          name: holdout-apk
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
 
@@ -116,7 +116,7 @@ jobs:
           notes=$(cat <<'TEXT'
           Android-App zum Herunterladen.
 
-          **Installieren:** Die Datei `koop-arena-shooter.apk` auf dem Handy öffnen.
+          **Installieren:** Die Datei `holdout.apk` auf dem Handy öffnen.
           Android fragt einmalig nach der Erlaubnis, Apps aus dieser Quelle zu
           installieren - bestätigen, fertig.
 
@@ -132,7 +132,7 @@ jobs:
           else
             gh release create "$TAG" \
               --target "$GITHUB_SHA" \
-              --title "Koop-Arena-Shooter $TAG" \
+              --title "Holdout $TAG" \
               --notes "$notes" \
               --repo "$GITHUB_REPOSITORY" \
               "$APK"

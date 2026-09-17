@@ -26,7 +26,7 @@ export async function showDesktopNotice(): Promise<void> {
      color:${TEXT};font-family:system-ui,sans-serif;text-align:center;`,
   );
 
-  page.appendChild(heading("Koop-Arena-Shooter", "34px", "700", TEXT));
+  page.appendChild(heading("Holdout", "34px", "700", TEXT));
   page.appendChild(heading("Dieses Spiel läuft nur auf dem Handy.", "19px", "400", ACCENT));
   page.appendChild(
     paragraph(
