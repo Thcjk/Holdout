@@ -17,6 +17,7 @@ import { stepEnemies } from "./enemies";
 import { clampToArena, stepPlayerMovement } from "./movement";
 import { stepProjectiles } from "./projectiles";
 import { applyLevelUp, emptySkills } from "./skills";
+import { stepAbilities, tryAbility } from "./abilities";
 import { stepDashDamage, trySuper } from "./supers";
 import { stepRound } from "./waves";
 import { emptyInput } from "./types";
@@ -69,6 +70,7 @@ export function createPlayer(setup: PlayerSetup, index: number, total: number): 
     dashHits: [],
     inBush: false,
     shootCooldown: 0,
+    abilityCooldown: 0,
     skillPoints: 0,
     skills: emptySkills(),
   };
@@ -88,11 +90,13 @@ export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldStat
     pendingSpawns: [],
     walls: createArenaWalls(),
     bushes: createArenaBushes(),
+    barriers: [],
     bounds: { ...ARENA_BOUNDS },
     events: [],
     rngState: seed | 0,
     nextEnemyId: 1,
     nextProjectileId: 1,
+    nextBarrierId: 1,
   };
 }
 
@@ -144,10 +148,12 @@ export function stepWorld(
     updateFacing(player, input);
     player.inBush = isInBush(state, player.position);
     trySuper(state, player, input);
+    tryAbility(state, player, input);
     stepDashDamage(state, player);
     tryShoot(state, player, input);
   }
 
+  stepAbilities(state, dt);
   stepEnemies(state, dt);
   stepProjectiles(state, dt);
   stepRevive(state, dt);

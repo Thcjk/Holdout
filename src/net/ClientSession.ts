@@ -9,7 +9,7 @@ import { INPUT_RATE } from "./protocol";
 import type { NetMessage } from "./protocol";
 import { ClientView } from "./ClientView";
 import type { GameSession, WorldView } from "./GameSession";
-import type { InputState, SkillId } from "../systems/types";
+import type { InputState, SkillId, Vec2 } from "../systems/types";
 import type { PlayerSetup } from "../systems/world";
 import type { Transport } from "./Transport";
 
@@ -24,6 +24,8 @@ export class ClientSession implements GameSession {
   private sequence = 0;
   /** Gesammelte einmalige Wuensche, bis sie tatsaechlich verschickt wurden. */
   private pendingSuper = false;
+  private pendingAbility = false;
+  private pendingAbilityAim: Vec2 | null = null;
   private pendingLevelUp: SkillId | null = null;
 
   constructor(
@@ -49,6 +51,13 @@ export class ClientSession implements GameSession {
 
   update(deltaMs: number, input: InputState): boolean {
     this.pendingSuper = this.pendingSuper || input.useSuper;
+    // Die zweite Faehigkeit wird genauso gemerkt wie der Super: Sie wird
+    // seltener gesendet als gezeichnet, und ein Druck darf zwischen zwei
+    // Paketen nicht verlorengehen.
+    if (input.useAbility) {
+      this.pendingAbility = true;
+      this.pendingAbilityAim = input.abilityAim;
+    }
     this.pendingLevelUp = input.levelUp ?? this.pendingLevelUp;
 
     this.sinceLastInput += deltaMs;
@@ -66,9 +75,13 @@ export class ClientSession implements GameSession {
         // ist. Der Super dagegen darf zwischen zwei Paketen nicht verlorengehen.
         fire: input.fire,
         super: this.pendingSuper,
+        ability: this.pendingAbility,
+        abilityAim: this.pendingAbilityAim,
         levelUp: this.pendingLevelUp,
       });
       this.pendingSuper = false;
+      this.pendingAbility = false;
+      this.pendingAbilityAim = null;
       this.pendingLevelUp = null;
       sent = true;
     }

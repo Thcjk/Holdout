@@ -188,31 +188,50 @@ export const TOUCH = {
    */
   responseCurve: 2,
 
-  /** Fester Schussknopf unten rechts: Halten feuert, Ziehen zielt. */
+  /**
+   * Die drei Knoepfe unten rechts, im Bogen angeordnet - wie in Wild Rift.
+   *
+   * FEUER liegt innen in der Ecke und ist der groesste: Er wird am haeufigsten
+   * gebraucht und muss blind zu treffen sein. FAEHIGKEIT und SUPER liegen auf
+   * demselben Bogen weiter aussen, links davon und darueber. Der Daumen
+   * schwenkt so auf einem Kreisbogen, statt zwischen weit auseinander
+   * liegenden Punkten zu springen.
+   *
+   * `hitRadius` ist grosszuegiger als der sichtbare Radius - Daumen sind
+   * ungenau, und ein knapp verfehlter Knopf kostet im Gefecht eine Runde.
+   */
   fireButton: {
     /** Abstand des Mittelpunkts von der rechten unteren Ecke. */
-    marginX: 112,
-    marginY: 112,
-    /** Sichtbarer Radius. */
-    radius: 66,
-    /** Trefferbereich - grosszuegiger als das Bild, Daumen sind ungenau. */
-    hitRadius: 92,
-    /** Ab dieser Zugstrecke gilt die Beruehrung als Zielen statt als Halten. */
-    aimDeadZone: 14,
-    /** Zugstrecke, ab der die Reichweitenanzeige voll ausschlaegt. */
-    aimRange: 92,
-    /** Bis zu dieser Dauer gilt eine Beruehrung als Antippen, nicht als Halten. */
-    tapMaxMs: 150,
-    /** Bis zu dieser Strecke gilt sie als Antippen, nicht als Ziehen. */
-    tapMaxMove: 15,
+    marginX: 104,
+    marginY: 100,
+    radius: 60,
+    hitRadius: 82,
   },
 
-  /** Super-Knopf, ebenfalls fest, links neben dem Schussknopf. */
+  /** Zweite aktive Faehigkeit - links vom Schussknopf auf dem Bogen. */
+  abilityButton: {
+    marginX: 232,
+    marginY: 86,
+    radius: 40,
+    hitRadius: 58,
+  },
+
+  /** Super - ueber dem Schussknopf, groesser als die Faehigkeit. */
   superButton: {
-    marginX: 246,
-    marginY: 64,
-    radius: 44,
-    hitRadius: 60,
+    marginX: 96,
+    marginY: 228,
+    radius: 46,
+    hitRadius: 64,
+  },
+
+  /** Gemeinsam fuer Faehigkeit und Super: Ziehen richtet aus. */
+  aim: {
+    /** Ab dieser Zugstrecke gilt die Beruehrung als Zielen statt als Antippen. */
+    deadZone: 14,
+    /** Bis zu dieser Dauer gilt sie als Antippen. */
+    tapMaxMs: 150,
+    /** Bis zu dieser Strecke gilt sie als Antippen. */
+    tapMaxMove: 15,
   },
 } as const;
 

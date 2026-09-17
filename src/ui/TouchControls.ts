@@ -1,16 +1,25 @@
 /**
- * Twin-Stick-Steuerung fuer Touch.
+ * Twin-Stick-Steuerung fuer Touch, mit Faehigkeiten-Knoepfen im Bogen.
  *
  * Links: ein schwebender Joystick zum Laufen. Er erscheint dort, wo der Daumen
- * die linke Bildschirmhaelfte beruehrt - das ist laut Briefing der Unterschied
- * zwischen "geht" und "fuehlt sich gut an".
+ * die linke Bildschirmhaelfte beruehrt.
  *
- * Rechts: ein Schussknopf an FESTER Stelle. Halten feuert dauerhaft (so schnell,
- * wie Munition und Schusstakt es zulassen), Ziehen zielt mit einer Linie,
- * blosses Antippen ueberlaesst der Simulation die Zielsuche. Fest deshalb, weil
- * ein Schussknopf blind zu finden sein muss - im Gefecht schaut niemand hin.
+ * Rechts: drei feste Knoepfe auf einem Bogen, wie in Wild Rift.
  *
- * Diese Klasse verteilt die Finger ("Zeiger") auf die drei Bedienelemente. Ohne
+ *   FEUER       innen in der Ecke, der groesste. Antippen feuert SOFORT auf den
+ *               naechsten Gegner in Reichweite - ohne jedes Zielen. Halten
+ *               feuert weiter, so schnell wie Munition und Schusstakt es
+ *               zulassen. Hier wird bewusst NICHT mehr von Hand gezielt: Genau
+ *               das war die Ursache fuer "Zielen ist unpraezise".
+ *   FAEHIGKEIT  links davon. Halten zeigt den Zielhinweis, Ziehen richtet aus,
+ *               Loslassen loest aus. Kurzes Antippen ohne Ziehen loest in
+ *               Blickrichtung aus.
+ *   SUPER       darueber, groesser als die Faehigkeit. Gleiches Prinzip.
+ *
+ * Alle drei zeigen einen Abklingring und sind ausgegraut, solange sie nicht
+ * einsatzbereit sind.
+ *
+ * Diese Klasse verteilt die Finger ("Zeiger") auf die Bedienelemente. Ohne
  * diese Verteilung wuerde ein zweiter Finger den ersten Joystick uebernehmen.
  */
 
@@ -21,82 +30,101 @@ import { VirtualJoystick } from "./VirtualJoystick";
 
 export interface TouchOutput {
   move: Vec2;
-  /** Zielrichtung, solange der Daumen vom Schussknopf weg zieht. */
+  /**
+   * Zielrichtung, solange an Faehigkeit oder Super gezogen wird.
+   *
+   * Der Schussknopf setzt das NICHT mehr - er zielt automatisch. Solange man
+   * eine Faehigkeit ausrichtet, schaut die Figur aber dorthin, und gleichzeitig
+   * abgegebene Schuesse folgen derselben Richtung.
+   */
   aim: Vec2 | null;
-  /** Zugstaerke, 0 bis 1 - daraus entsteht die Reichweitenanzeige. */
+  /** Zugstaerke, 0 bis 1 - daraus entsteht die Laenge der Zielanzeige. */
   aimStrength: number;
   /** Wird gerade gefeuert? Gehaltener Zustand, kein einmaliger Wunsch. */
   fire: boolean;
   /** Einmaliger Wunsch, die Super-Faehigkeit auszuloesen. */
   useSuper: boolean;
+  /** Einmaliger Wunsch, die zweite Faehigkeit auszuloesen. */
+  useAbility: boolean;
+  /** Richtung dafuer, oder null fuer "in Blickrichtung". */
+  abilityAim: Vec2 | null;
+  /** Welcher Knopf gerade ausgerichtet wird - fuer die Anzeige in der Welt. */
+  aiming: "ability" | "super" | null;
+}
+
+/** Was die Knoepfe ueber den Spielzustand wissen muessen. */
+export interface TouchStatus {
+  /** Volle Munitionsladungen und wie viele es insgesamt sind. */
+  ammo: number;
+  ammoMax: number;
+  /** Restliche Abklingzeit der Faehigkeit in Sekunden, und die volle Dauer. */
+  abilityCooldown: number;
+  abilityCooldownMax: number;
+  /** Aufladung des Supers, 0 bis 100. */
+  superCharge: number;
+  /** Kurzname der Faehigkeit fuer die Beschriftung des Knopfs. */
+  abilityLabel: string;
 }
 
 /**
- * Die Mitten der festen Knoepfe.
+ * Mitten der drei Knoepfe.
  *
- * Bewusst Funktionen statt Konstanten: Die Entwurfsbreite haengt seit
- * `fitViewportToScreen` am Geraet und steht erst fest, wenn das Spiel startet -
- * eine Konstante hier wuerde beim Laden der Datei berechnet und waere dann die
- * alte 960er Breite. Die Knoepfe saessen auf einem breiten Handy mitten im Bild.
+ * Bewusst Funktionen statt Konstanten: Entwurfsbreite und Sicherheitsabstaende
+ * stehen erst fest, wenn das Spiel startet. Eine Konstante hier waere beim
+ * Laden der Datei berechnet - die Knoepfe saessen dann mitten im Bild.
  */
-function fireCenter(): Vec2 {
+function centerFor(margin: { marginX: number; marginY: number }): Vec2 {
   return {
-    x: VIEWPORT.width - SAFE.right - TOUCH.fireButton.marginX,
-    y: VIEWPORT.height - SAFE.bottom - TOUCH.fireButton.marginY,
+    x: VIEWPORT.width - SAFE.right - margin.marginX,
+    y: VIEWPORT.height - SAFE.bottom - margin.marginY,
   };
 }
 
-function superCenter(): Vec2 {
-  return {
-    x: VIEWPORT.width - SAFE.right - TOUCH.superButton.marginX,
-    y: VIEWPORT.height - SAFE.bottom - TOUCH.superButton.marginY,
-  };
+/** Ein gehaltener Knopf, der beim Loslassen in eine Richtung ausloest. */
+interface AimedButton {
+  center: Vec2;
+  spec: { radius: number; hitRadius: number };
+  pointerId: number | null;
+  drag: Vec2;
+  downAt: number;
+  /** Ausgeloest und noch nicht von der Simulation gesehen. */
+  latched: boolean;
+  /** Richtung des ausgeloesten Einsatzes, null = Blickrichtung. */
+  latchedAim: Vec2 | null;
+  ready: boolean;
+  /** 0 bis 1 - wie voll der Abklingring ist. */
+  progress: number;
+  graphics: Phaser.GameObjects.Graphics;
+  label: Phaser.GameObjects.Text;
 }
 
 export class TouchControls {
   private readonly moveStick: VirtualJoystick;
+
+  private readonly fireCenter: Vec2 = centerFor(TOUCH.fireButton);
   private readonly fireGraphics: Phaser.GameObjects.Graphics;
   private readonly fireLabel: Phaser.GameObjects.Text;
-  private readonly superGraphics: Phaser.GameObjects.Graphics;
-  private readonly superLabel: Phaser.GameObjects.Text;
-  private readonly fireAt: Vec2 = fireCenter();
-  private readonly superAt: Vec2 = superCenter();
-
   private firePointerId: number | null = null;
-  private fireDrag: Vec2 = { x: 0, y: 0 };
+  /** Siehe `pendingShot` unten - ein gemerkter Schuss geht nie verloren. */
+  private pendingShot = false;
+  private ammo = 0;
+  private ammoMax = 1;
 
-  /**
-   * Ein gemerkter Schuss, der noch auf einen Simulationsschritt wartet.
-   *
-   * WARUM: `fire` wird jedes Bild frisch vom Finger abgelesen, aber nicht jedes
-   * Bild rechnet einen Tick - bei 60 Bildern und 30 Ticks pro Sekunde ist es
-   * nur jedes zweite. Ein kurzes Antippen, das genau zwischen zwei Ticks
-   * beginnt und endet, wurde deshalb bisher stillschweigend verschluckt. Genau
-   * das fuehlt sich an wie "das Schiessen geht nur ab und zu".
-   *
-   * Jeder Druck auf den Knopf hinterlegt hier einen Schuss. Er bleibt liegen,
-   * bis die Simulation ihn wirklich gesehen hat (`clearOneShots`) - und geht
-   * damit nie mehr verloren. Genau einer pro Druck, kein Doppelschuss.
-   */
-  private pendingShot: { aim: Vec2 | null } | null = null;
-
-  /** Wann und wo der Schussfinger aufgesetzt hat - fuer Antippen gegen Ziehen. */
-  private fireDownAt = 0;
-  private superPointerId: number | null = null;
-  private superLatched = false;
-  private superReady = false;
+  private readonly ability: AimedButton;
+  private readonly superButton: AimedButton;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.moveStick = new VirtualJoystick(scene, COLORS.player);
 
     this.fireGraphics = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
-    this.fireLabel = label(scene, this.fireAt, "FEUER", 15);
+    this.fireLabel = label(scene, this.fireCenter, "FEUER", 15);
 
-    this.superGraphics = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
-    this.superLabel = label(scene, this.superAt, "SUPER", 13);
+    this.ability = this.makeButton(scene, TOUCH.abilityButton, "");
+    this.superButton = this.makeButton(scene, TOUCH.superButton, "SUPER");
 
     this.drawFireButton();
-    this.drawSuperButton();
+    this.drawAimedButton(this.ability, COLORS.playerBullet);
+    this.drawAimedButton(this.superButton, COLORS.superReady);
 
     scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.onDown, this);
     scene.input.on(Phaser.Input.Events.POINTER_MOVE, this.onMove, this);
@@ -104,45 +132,86 @@ export class TouchControls {
     scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.onUp, this);
   }
 
-  /** Der Super-Knopf ist ausgegraut, solange die Faehigkeit nicht geladen ist. */
-  setSuperReady(ready: boolean): void {
-    if (ready !== this.superReady) {
-      this.superReady = ready;
-      this.drawSuperButton();
+  private makeButton(
+    scene: Phaser.Scene,
+    spec: { marginX: number; marginY: number; radius: number; hitRadius: number },
+    text: string,
+  ): AimedButton {
+    const center = centerFor(spec);
+    return {
+      center,
+      spec,
+      pointerId: null,
+      drag: { x: 0, y: 0 },
+      downAt: 0,
+      latched: false,
+      latchedAim: null,
+      ready: false,
+      progress: 1,
+      graphics: scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud),
+      label: label(scene, center, text, 12),
+    };
+  }
+
+  /** Aktualisiert Bereitschaft und Abklingringe aus dem Spielzustand. */
+  setStatus(status: TouchStatus): void {
+    // Der Knopf traegt den Namen der Faehigkeit, nicht das Wort "Faehigkeit".
+    // Im Gefecht zaehlt, WAS passiert, nicht in welche Kategorie es faellt.
+    if (this.ability.label.text !== status.abilityLabel) {
+      this.ability.label.setText(status.abilityLabel);
+    }
+
+    const ammoChanged = status.ammo !== this.ammo;
+    this.ammo = status.ammo;
+    this.ammoMax = Math.max(1, status.ammoMax);
+    if (ammoChanged) {
+      this.drawFireButton();
+    }
+
+    const abilityReady = status.abilityCooldown <= 0;
+    const abilityProgress =
+      status.abilityCooldownMax > 0
+        ? 1 - status.abilityCooldown / status.abilityCooldownMax
+        : 1;
+    if (abilityReady !== this.ability.ready || Math.abs(abilityProgress - this.ability.progress) > 0.02) {
+      this.ability.ready = abilityReady;
+      this.ability.progress = abilityProgress;
+      this.drawAimedButton(this.ability, COLORS.playerBullet);
+    }
+
+    const superReady = status.superCharge >= 100;
+    const superProgress = Math.min(1, status.superCharge / 100);
+    if (superReady !== this.superButton.ready || Math.abs(superProgress - this.superButton.progress) > 0.02) {
+      this.superButton.ready = superReady;
+      this.superButton.progress = superProgress;
+      this.drawAimedButton(this.superButton, COLORS.superReady);
     }
   }
 
   read(): TouchOutput {
-    const dragLength = Math.hypot(this.fireDrag.x, this.fireDrag.y);
-    const aiming = this.firePointerId !== null && dragLength > TOUCH.fireButton.aimDeadZone;
-
-    // Solange gezogen wird, zaehlt die Zugrichtung. Liegt nur noch ein
-    // gemerkter Schuss an (Finger schon weg), zaehlt dessen Richtung.
-    const aim = aiming
-      ? { x: this.fireDrag.x / dragLength, y: this.fireDrag.y / dragLength }
-      : (this.pendingShot?.aim ?? null);
+    const aimingButton = this.activeAimButton();
+    const aim = aimingButton ? this.dragDirection(aimingButton) : null;
 
     return {
       move: this.moveStick.vector,
       aim,
-      aimStrength: aiming
-        ? Math.min(
-            1,
-            (dragLength - TOUCH.fireButton.aimDeadZone) /
-              (TOUCH.fireButton.aimRange - TOUCH.fireButton.aimDeadZone),
-          )
-        : 0,
+      aimStrength: aimingButton ? this.dragStrength(aimingButton) : 0,
       // Gehalten wird dauerhaft gefeuert; ein gemerkter Schuss feuert genau
       // einmal, auch wenn der Finger laengst wieder weg ist.
-      fire: this.firePointerId !== null || this.pendingShot !== null,
-      useSuper: this.superLatched,
+      fire: this.firePointerId !== null || this.pendingShot,
+      useSuper: this.superButton.latched,
+      useAbility: this.ability.latched,
+      abilityAim: this.ability.latchedAim,
+      aiming: aimingButton === this.ability ? "ability" : aimingButton ? "super" : null,
     };
   }
 
   /** Einmalige Wuensche loeschen, sobald die Simulation sie verarbeitet hat. */
   clearOneShots(): void {
-    this.superLatched = false;
-    this.pendingShot = null;
+    this.pendingShot = false;
+    this.superButton.latched = false;
+    this.ability.latched = false;
+    this.ability.latchedAim = null;
   }
 
   destroy(): void {
@@ -153,8 +222,37 @@ export class TouchControls {
     this.moveStick.destroy();
     this.fireGraphics.destroy();
     this.fireLabel.destroy();
-    this.superGraphics.destroy();
-    this.superLabel.destroy();
+    for (const button of [this.ability, this.superButton]) {
+      button.graphics.destroy();
+      button.label.destroy();
+    }
+  }
+
+  private activeAimButton(): AimedButton | null {
+    if (this.ability.pointerId !== null) {
+      return this.ability;
+    }
+    if (this.superButton.pointerId !== null) {
+      return this.superButton;
+    }
+    return null;
+  }
+
+  private dragDirection(button: AimedButton): Vec2 | null {
+    const length = Math.hypot(button.drag.x, button.drag.y);
+    if (length <= TOUCH.aim.deadZone) {
+      return null;
+    }
+    return { x: button.drag.x / length, y: button.drag.y / length };
+  }
+
+  private dragStrength(button: AimedButton): number {
+    const length = Math.hypot(button.drag.x, button.drag.y);
+    if (length <= TOUCH.aim.deadZone) {
+      return 0;
+    }
+    const span = Math.max(1, button.spec.hitRadius * 1.6 - TOUCH.aim.deadZone);
+    return Math.min(1, (length - TOUCH.aim.deadZone) / span);
   }
 
   private onDown(pointer: Phaser.Input.Pointer): void {
@@ -163,23 +261,33 @@ export class TouchControls {
     }
 
     // Reihenfolge zaehlt: Die festen Knoepfe liegen in der rechten Haelfte und
-    // muessen zuerst gepruefte werden, sonst schluckt der Zielstick sie.
-    if (
-      this.superPointerId === null &&
-      within(pointer, this.superAt, TOUCH.superButton.hitRadius)
-    ) {
-      this.superPointerId = pointer.id;
-      return;
+    // muessen zuerst geprueft werden, sonst schluckt der Joystick sie. Die
+    // kleineren zuerst, damit der grosse FEUER-Knopf sie nicht ueberdeckt.
+    for (const button of [this.ability, this.superButton]) {
+      if (button.pointerId === null && within(pointer, button.center, button.spec.hitRadius)) {
+        button.pointerId = pointer.id;
+        button.drag = { x: 0, y: 0 };
+        button.downAt = this.scene.time.now;
+        this.drawAimedButton(button, button === this.ability ? COLORS.playerBullet : COLORS.superReady);
+        return;
+      }
     }
 
-    if (this.firePointerId === null && within(pointer, this.fireAt, TOUCH.fireButton.hitRadius)) {
+    if (
+      this.firePointerId === null &&
+      within(pointer, this.fireCenter, TOUCH.fireButton.hitRadius)
+    ) {
       this.firePointerId = pointer.id;
-      this.fireDrag = { x: 0, y: 0 };
-      this.fireDownAt = this.scene.time.now;
-      // Sofort einen Schuss hinterlegen: Damit feuert auch das kuerzeste
-      // Antippen, ohne Zielen - die Simulation sucht sich dann den naechsten
-      // Gegner. Die Richtung kann beim Loslassen noch nachgereicht werden.
-      this.pendingShot = { aim: null };
+      /*
+       * Sofort einen Schuss hinterlegen.
+       *
+       * `fire` wird jedes Bild frisch vom Finger abgelesen, aber nicht jedes
+       * Bild rechnet einen Tick - bei 60 Bildern und 30 Ticks je Sekunde nur
+       * jedes zweite. Ein kurzes Antippen, das genau dazwischen beginnt und
+       * endet, ginge sonst verloren. Der gemerkte Schuss bleibt liegen, bis die
+       * Simulation ihn gesehen hat.
+       */
+      this.pendingShot = true;
       this.drawFireButton();
       return;
     }
@@ -199,9 +307,15 @@ export class TouchControls {
       return;
     }
 
-    if (this.firePointerId === pointer.id) {
-      this.fireDrag = { x: pointer.x - this.fireAt.x, y: pointer.y - this.fireAt.y };
-      this.drawFireButton();
+    for (const button of [this.ability, this.superButton]) {
+      if (button.pointerId === pointer.id) {
+        button.drag = { x: pointer.x - button.center.x, y: pointer.y - button.center.y };
+        this.drawAimedButton(
+          button,
+          button === this.ability ? COLORS.playerBullet : COLORS.superReady,
+        );
+        return;
+      }
     }
   }
 
@@ -210,33 +324,32 @@ export class TouchControls {
       return;
     }
 
-    if (this.superPointerId === pointer.id) {
-      this.superPointerId = null;
-      if (this.superReady) {
-        this.superLatched = true;
+    for (const button of [this.ability, this.superButton]) {
+      if (button.pointerId !== pointer.id) {
+        continue;
       }
+
+      const moved = Math.hypot(button.drag.x, button.drag.y);
+      const wasTap = moved <= TOUCH.aim.tapMaxMove;
+      // Ausloesen nur, wenn die Faehigkeit ueberhaupt bereit ist - sonst waere
+      // der Wunsch beim Loslassen weg, obwohl nichts passiert ist.
+      if (button.ready) {
+        button.latched = true;
+        if (button === this.ability) {
+          // Antippen ohne Ziehen: Richtung offen lassen, die Simulation nimmt
+          // dann die Blickrichtung der Figur.
+          this.ability.latchedAim = wasTap ? null : this.dragDirection(button);
+        }
+      }
+
+      button.pointerId = null;
+      button.drag = { x: 0, y: 0 };
+      this.drawAimedButton(button, button === this.ability ? COLORS.playerBullet : COLORS.superReady);
       return;
     }
 
     if (this.firePointerId === pointer.id) {
-      const dragLength = Math.hypot(this.fireDrag.x, this.fireDrag.y);
-      const wasDrag = dragLength > TOUCH.fireButton.tapMaxMove;
-      const heldMs = this.scene.time.now - this.fireDownAt;
-
-      // Wurde gezogen und wartet der Schuss dieses Drucks noch, bekommt er die
-      // gezogene Richtung mit - so feuert auch ein schnelles Wischen dorthin,
-      // wohin gezielt wurde, statt auf den naechstbesten Gegner.
-      if (wasDrag && this.pendingShot) {
-        this.pendingShot.aim = { x: this.fireDrag.x / dragLength, y: this.fireDrag.y / dragLength };
-      }
-      // Ein langes Halten ohne Ziehen hat bereits dauerhaft gefeuert; ein
-      // liegengebliebener Schuss waere dann ein Schuss zu viel.
-      if (!wasDrag && heldMs > TOUCH.fireButton.tapMaxMs) {
-        this.pendingShot = null;
-      }
-
       this.firePointerId = null;
-      this.fireDrag = { x: 0, y: 0 };
       this.drawFireButton();
       return;
     }
@@ -246,47 +359,93 @@ export class TouchControls {
     }
   }
 
-  /** Der Knopf leuchtet, solange er gehalten wird, und zeigt die Zugrichtung. */
+  /** Der Schussknopf leuchtet beim Halten und zeigt die Munition als Ring. */
   private drawFireButton(): void {
     const held = this.firePointerId !== null;
+    const ready = this.ammo > 0;
     const graphics = this.fireGraphics;
     const { radius } = TOUCH.fireButton;
 
     graphics.clear();
-    graphics.fillStyle(COLORS.playerBullet, held ? 0.34 : 0.16);
-    graphics.fillCircle(this.fireAt.x, this.fireAt.y, radius);
-    graphics.lineStyle(4, COLORS.playerBullet, held ? 0.95 : 0.55);
-    graphics.strokeCircle(this.fireAt.x, this.fireAt.y, radius);
+    graphics.fillStyle(COLORS.playerBullet, ready ? (held ? 0.34 : 0.16) : 0.08);
+    graphics.fillCircle(this.fireCenter.x, this.fireCenter.y, radius);
+    graphics.lineStyle(4, COLORS.playerBullet, ready ? (held ? 0.95 : 0.55) : 0.2);
+    graphics.strokeCircle(this.fireCenter.x, this.fireCenter.y, radius);
+
+    // Munition als Ringstuecke - so sieht man blind, ob noch etwas da ist.
+    drawSegmentedRing(graphics, this.fireCenter, radius + 9, this.ammo, this.ammoMax, COLORS.playerBullet);
+
+    this.fireLabel.setAlpha(ready ? (held ? 0.35 : 0.9) : 0.3);
+  }
+
+  /**
+   * Faehigkeit und Super: Fuellung, Abklingring, Zugpunkt.
+   *
+   * Der Abklingring ist ein Kreisbogen, der sich fuellt - nicht ein Balken.
+   * Rund passt zum runden Knopf und ist mit einem Blick zu erfassen.
+   */
+  private drawAimedButton(button: AimedButton, color: number): void {
+    const held = button.pointerId !== null;
+    const graphics = button.graphics;
+    const { radius } = button.spec;
+
+    graphics.clear();
+    graphics.fillStyle(button.ready ? color : COLORS.playerDown, button.ready ? (held ? 0.5 : 0.28) : 0.22);
+    graphics.fillCircle(button.center.x, button.center.y, radius);
+    graphics.lineStyle(3, button.ready ? color : COLORS.playerOutline, button.ready ? 0.95 : 0.3);
+    graphics.strokeCircle(button.center.x, button.center.y, radius);
+
+    if (!button.ready && button.progress < 1) {
+      // Abklingring: faengt oben an und laeuft im Uhrzeigersinn zu.
+      graphics.lineStyle(5, color, 0.75);
+      graphics.beginPath();
+      graphics.arc(
+        button.center.x,
+        button.center.y,
+        radius + 7,
+        -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * button.progress,
+        false,
+      );
+      graphics.strokePath();
+    }
 
     if (held) {
-      const length = Math.hypot(this.fireDrag.x, this.fireDrag.y);
-      if (length > TOUCH.fireButton.aimDeadZone) {
-        // Der Daumenpunkt bleibt im Knopf, auch wenn der Finger weiter zieht.
+      const length = Math.hypot(button.drag.x, button.drag.y);
+      if (length > TOUCH.aim.deadZone) {
         const clamped = Math.min(length, radius);
         graphics.fillStyle(COLORS.playerOutline, 0.9);
         graphics.fillCircle(
-          this.fireAt.x + (this.fireDrag.x / length) * clamped,
-          this.fireAt.y + (this.fireDrag.y / length) * clamped,
-          16,
+          button.center.x + (button.drag.x / length) * clamped,
+          button.center.y + (button.drag.y / length) * clamped,
+          14,
         );
       }
     }
 
-    this.fireLabel.setAlpha(held ? 0.35 : 0.9);
+    button.label.setAlpha(button.ready ? (held ? 0.4 : 1) : 0.45);
+    button.label.setColor(button.ready ? "#11161f" : "#dce8f7");
   }
+}
 
-  private drawSuperButton(): void {
-    const ready = this.superReady;
-    const graphics = this.superGraphics;
-
-    graphics.clear();
-    graphics.fillStyle(ready ? COLORS.superReady : COLORS.playerDown, ready ? 0.9 : 0.35);
-    graphics.fillCircle(this.superAt.x, this.superAt.y, TOUCH.superButton.radius);
-    graphics.lineStyle(3, COLORS.playerOutline, ready ? 0.9 : 0.3);
-    graphics.strokeCircle(this.superAt.x, this.superAt.y, TOUCH.superButton.radius);
-
-    this.superLabel.setAlpha(ready ? 1 : 0.4);
-    this.superLabel.setColor(ready ? "#11161f" : "#dce8f7");
+/** Ein Ring aus `total` Stuecken, von denen `filled` leuchten. */
+function drawSegmentedRing(
+  graphics: Phaser.GameObjects.Graphics,
+  center: Vec2,
+  radius: number,
+  filled: number,
+  total: number,
+  color: number,
+): void {
+  const gap = 0.16;
+  const span = (Math.PI * 2) / total;
+  for (let i = 0; i < total; i += 1) {
+    const start = -Math.PI / 2 + i * span + gap / 2;
+    const end = start + span - gap;
+    graphics.lineStyle(5, color, i < filled ? 0.9 : 0.16);
+    graphics.beginPath();
+    graphics.arc(center.x, center.y, radius, start, end, false);
+    graphics.strokePath();
   }
 }
 

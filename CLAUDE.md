@@ -202,6 +202,77 @@ Zwei Änderungen nach dem ersten Spieltest, beide über das Briefing hinaus:
   Benutzung frisch angewendet. Sonst summieren sich Rundungsfehler, und Host
   und Client laufen auseinander.
 
+### Die Knöpfe liegen im Bogen – und der Basisangriff zielt nicht mehr von Hand
+
+Unten rechts liegen jetzt **drei** feste Knöpfe auf einem Bogen, nach dem
+Vorbild von Wild Rift:
+
+| Knopf | Lage | Verhalten |
+| ----- | ---- | --------- |
+| **FEUER** | innen in der Ecke, der grösste | Antippen feuert **sofort** auf den nächsten Gegner in Reichweite. Halten feuert weiter, so schnell wie Munition und Schusstakt es zulassen. |
+| **Fähigkeit** (Name der Fähigkeit) | links davon | Halten zeigt den Zielhinweis, Ziehen richtet aus, Loslassen löst aus. Kurzes Antippen ohne Ziehen löst in Blickrichtung aus. |
+| **SUPER** | darüber, grösser als die Fähigkeit | Gleiches Prinzip. |
+
+Alle drei sind ausgegraut und zeigen einen **Abklingring**, solange sie nicht
+einsatzbereit sind. Beim FEUER-Knopf ist das die Munition als Ringstücke – so
+sieht man blind, ob noch etwas da ist. Der Bewegungs-Joystick links bleibt, wie
+er war.
+
+**Der Basisangriff zielt nicht mehr von Hand.** Bisher konnte man am
+FEUER-Knopf ziehen, um selbst zu zielen. Genau das war die Ursache für
+„Zielen ist unpräzise": Man musste mit dem Daumen eine Richtung treffen,
+während beide Figuren in Bewegung waren. Jetzt sucht die Simulation das Ziel.
+Von Hand gezielt wird nur noch dort, wo es eine echte Entscheidung ist – bei
+Fähigkeit und Super.
+
+**Der Zielhinweis zeigt die echten Zahlen, nicht ungefähre.** Jede Länge und
+jeder Radius in `drawAbilityAim` kommt aus derselben Stelle, mit der die
+Simulation rechnet (`ABILITIES` beziehungsweise `SUPERS`). Eine Anzeige, die
+eine andere Reichweite zeigt als die, die wirkt, wäre schlimmer als gar keine:
+Man würde ihr glauben und danebenzielen. Der Kreis der Blendgranate ist ihr
+echter Explosionsradius, die Strecke der Schildwand liegt genau so, wie die
+Wand nachher steht.
+
+### Die zweite aktive Fähigkeit
+
+Zusätzlich zum Super hat jeder Charakter eine zweite Fähigkeit mit fester
+Abklingzeit. Unterschied zum Super: Der lädt sich über ausgeteilten Schaden auf
+und ist der grosse Moment; diese hier soll laufend eingesetzt werden.
+
+| Charakter | Fähigkeit | Wirkung | Abklingzeit |
+| --------- | --------- | ------- | ----------- |
+| Scout | **Blendgranate** | Wurf bis 400 px, Explosionsradius 150 px. Getroffene Gegner greifen 1,5 s nicht an – weder im Nahkampf noch mit Schüssen. Die Granate selbst macht keinen Schaden. | 8 s |
+| Tank | **Schildwand** | 120 px breite Barriere, 90 px vor dem Spieler, quer zur Blickrichtung, 4 s lang. Blockt **gegnerische** Schüsse, lässt eigene durch. | 10 s |
+| Sniper | **Lähmschuss** | Langsames Geschoss (300 px/s), 200 Schaden statt 900, wurzelt den Getroffenen 1,5 s fest. | 9 s |
+
+Drei Entscheidungen dahinter, die im Code stehen:
+
+- **Die Schildwand ist eine Strecke, kein Rechteck.** Sie steht quer zur
+  Blickrichtung, also schräg im Raum. Ein achsenparalleles Rechteck kann das
+  nicht abbilden, ein gedrehtes wäre deutlich mehr Rechnerei. Der Schnitt
+  zweier Strecken ist exakt und braucht kein Abtasten – auch ein schnelles
+  Projektil kann nicht hindurchspringen.
+- **Sie blockt nur gegnerische Schüsse.** Würde sie auch die eigenen halten,
+  wäre sie keine Deckung, sondern ein Käfig.
+- **Die Blendgranate läuft über den normalen Projektilweg**, nicht als
+  Sonderfall. So gelten dieselbe Flugbahnprüfung und dieselben Wände wie für
+  alles andere, und ein Wurf hinter eine Deckung ist unmöglich. Sie wirkt auch
+  dort, wo sie auf eine Wand trifft oder ihre Wurfweite aufbraucht – sonst wäre
+  ein Wurf ins Leere wirkungslos, obwohl Gegner danebenstehen.
+
+**Blendung und Wurzelung sind verschieden**, und das ist Absicht: Geblendet
+heisst „läuft weiter, greift nicht an", gewurzelt heisst „steht fest, greift
+weiter an". Betäubt (Tank-Super) heisst „tut gar nichts". In der Darstellung
+sind sie an der Farbe zu unterscheiden – geblendet hell, gewurzelt kalt blau.
+
+Im Netzwerkprotokoll ist die Fähigkeit ein eigenes Feld (`ability` plus
+`abilityAim`), genau wie der Super: einmaliger Wunsch, der zwischen zwei
+Paketen nicht verlorengehen darf. Eigene Zielrichtung deshalb, weil man die
+Fähigkeit oft woandershin zielt als den Schuss.
+
+`tests/systems/abilities.test.ts` prüft die Wirkung, nicht die Darstellung –
+darunter, dass die Schildwand gegnerische Schüsse hält **und** eigene durchlässt.
+
 ### Bewegung: Kennlinie statt Schwelle, Achsen getrennt
 
 Zwei Änderungen am Steuerungsgefühl, beide gemessen statt geschätzt.

@@ -62,6 +62,8 @@ export function createEnemy(
     scale,
     stunned: 0,
     marked: 0,
+    blinded: 0,
+    rooted: 0,
     shootCooldown: 0,
     contactCooldown: 0,
     stuckTime: 0,
@@ -103,6 +105,8 @@ export function stepEnemies(state: WorldState, dt: number): void {
 function tickTimers(enemy: EnemyState, dt: number): void {
   enemy.stunned = Math.max(0, enemy.stunned - dt);
   enemy.marked = Math.max(0, enemy.marked - dt);
+  enemy.blinded = Math.max(0, enemy.blinded - dt);
+  enemy.rooted = Math.max(0, enemy.rooted - dt);
   enemy.shootCooldown = Math.max(0, enemy.shootCooldown - dt);
   enemy.contactCooldown = Math.max(0, enemy.contactCooldown - dt);
 }
@@ -152,7 +156,9 @@ function trackProgress(
 }
 
 function desiredVelocity(state: WorldState, enemy: EnemyState, target: PlayerState | null): Vec2 {
-  if (enemy.stunned > 0 || !target) {
+  // Gewurzelt (Sniper-Laehmschuss) heisst: steht fest, greift aber weiter an.
+  // Betaeubt (Tank-Super) heisst: tut gar nichts.
+  if (enemy.stunned > 0 || enemy.rooted > 0 || !target) {
     return { x: 0, y: 0 };
   }
 
@@ -269,7 +275,8 @@ export function hasLineOfSight(walls: readonly Rect[], from: Vec2, to: Vec2): bo
 }
 
 function tryEnemyShot(state: WorldState, enemy: EnemyState, target: PlayerState): void {
-  if (enemy.stunned > 0 || enemy.shootCooldown > 0) {
+  // Geblendet (Scout-Blendgranate) heisst: sieht nichts, schiesst nicht.
+  if (enemy.stunned > 0 || enemy.blinded > 0 || enemy.shootCooldown > 0) {
     return;
   }
   if (!hasLineOfSight(state.walls, enemy.position, target.position)) {
@@ -317,7 +324,13 @@ function damageScale(enemy: EnemyState): number {
 }
 
 function applyContactDamage(state: WorldState, enemy: EnemyState): void {
-  if (enemy.contactDamage <= 0 || enemy.contactCooldown > 0 || enemy.stunned > 0) {
+  // Geblendet trifft auch im Nahkampf nicht.
+  if (
+    enemy.contactDamage <= 0 ||
+    enemy.contactCooldown > 0 ||
+    enemy.stunned > 0 ||
+    enemy.blinded > 0
+  ) {
     return;
   }
 

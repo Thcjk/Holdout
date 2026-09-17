@@ -50,6 +50,14 @@ export interface InputMessage {
   aim: Vec2 | null;
   fire: boolean;
   super: boolean;
+  /** Einmaliger Wunsch, die zweite Faehigkeit auszuloesen. */
+  ability: boolean;
+  /**
+   * Zielrichtung NUR fuer die zweite Faehigkeit, oder null fuer
+   * "in Blickrichtung". Eigenes Feld, weil man die Faehigkeit oft woandershin
+   * zielt als den Schuss.
+   */
+  abilityAim: Vec2 | null;
   /** Gewuenschte Aufwertung, sonst null. */
   levelUp: SkillId | null;
 }

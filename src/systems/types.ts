@@ -41,12 +41,30 @@ export interface InputState {
   fire: boolean;
   /** Einmaliger Wunsch, die Super-Faehigkeit auszuloesen. */
   useSuper: boolean;
+  /** Einmaliger Wunsch, die zweite Faehigkeit auszuloesen. */
+  useAbility: boolean;
+  /**
+   * Zielrichtung NUR fuer die zweite Faehigkeit, als Einheitsvektor.
+   *
+   * Eigenes Feld statt `aim`: Man zielt die Faehigkeit oft woandershin, als man
+   * gerade schiesst. `null` heisst "in Blickrichtung" - das ist der Fall beim
+   * kurzen Antippen ohne Ziehen.
+   */
+  abilityAim: Vec2 | null;
   /** Einmaliger Wunsch, einen Skillpunkt in diese Faehigkeit zu stecken. */
   levelUp: SkillId | null;
 }
 
 export function emptyInput(): InputState {
-  return { move: { x: 0, y: 0 }, aim: null, fire: false, useSuper: false, levelUp: null };
+  return {
+    move: { x: 0, y: 0 },
+    aim: null,
+    fire: false,
+    useSuper: false,
+    useAbility: false,
+    abilityAim: null,
+    levelUp: null,
+  };
 }
 
 export type CharacterId = "scout" | "tank" | "sniper";
@@ -91,6 +109,8 @@ export interface PlayerState {
   inBush: boolean;
   /** Restlicher Schusstakt in Sekunden - verhindert Dauerfeuer pro Tick. */
   shootCooldown: number;
+  /** Restliche Abklingzeit der zweiten Faehigkeit in Sekunden. 0 = bereit. */
+  abilityCooldown: number;
   /** Noch nicht verteilte Skillpunkte. Einer pro geschaffter Welle. */
   skillPoints: number;
   /** Stufe je Faehigkeit, 0 bis SKILLS[...].maxLevel. */
@@ -115,6 +135,16 @@ export interface EnemyState {
   stunned: number;
   /** Restzeit der Sniper-Markierung in Sekunden: doppelter Schaden. */
   marked: number;
+  /**
+   * Restzeit der Blendung in Sekunden (Scout-Blendgranate).
+   * Ein geblendeter Gegner laeuft weiter, greift aber nicht an.
+   */
+  blinded: number;
+  /**
+   * Restzeit der Wurzelung in Sekunden (Sniper-Laehmschuss).
+   * Ein gewurzelter Gegner kann sich nicht bewegen, greift aber weiter an.
+   */
+  rooted: number;
   /** Restzeit bis zum naechsten Schuss (nur Schuetze). */
   shootCooldown: number;
   /** Restliche Abklingzeit des Beruehrungsschadens in Sekunden. */
@@ -128,6 +158,31 @@ export interface EnemyState {
 }
 
 export type ProjectileOwner = "player" | "enemy";
+
+/** Zusatzwirkung eines Projektils - normale Schuesse haben "none". */
+export type ProjectileEffect = "none" | "blind" | "root";
+
+/**
+ * Eine Schildwand (Tank-Faehigkeit).
+ *
+ * Bewusst als STRECKE gespeichert und nicht als Rechteck: Sie steht quer zur
+ * Blickrichtung, also schraeg im Raum. Ein achsenparalleles Rechteck koennte
+ * das nicht abbilden, und ein gedrehtes Rechteck waere in der Kollision
+ * deutlich mehr Rechnerei als der Schnitt zweier Strecken.
+ */
+export interface BarrierState {
+  id: number;
+  /** Wer sie aufgestellt hat - fuer die Darstellung. */
+  ownerId: string;
+  /** Mittelpunkt der Wand. */
+  position: Vec2;
+  /** Richtung ENTLANG der Wand (Einheitsvektor), quer zur Blickrichtung. */
+  along: Vec2;
+  /** Halbe Breite in Pixeln. */
+  halfWidth: number;
+  /** Restliche Standzeit in Sekunden. */
+  remaining: number;
+}
 
 export interface ProjectileState {
   id: number;
@@ -143,6 +198,13 @@ export interface ProjectileState {
   rangeLeft: number;
   /** Durchdringt Gegner (Sniper). */
   piercing: boolean;
+  /**
+   * Was beim Treffer zusaetzlich passiert.
+   * "blind" explodiert im Umkreis, "root" wurzelt den Getroffenen fest.
+   */
+  effect: ProjectileEffect;
+  /** Wirkradius fuer "blind", sonst 0. */
+  blastRadius: number;
   /** Bereits getroffene Gegner, damit ein Durchschuss nicht mehrfach zaehlt. */
   hitEnemies: number[];
 }
@@ -164,6 +226,9 @@ export type GameEvent =
   | { type: "playerRevived"; playerId: string; x: number; y: number }
   | { type: "superReady"; playerId: string }
   | { type: "superUsed"; playerId: string; character: CharacterId; x: number; y: number }
+  | { type: "abilityUsed"; playerId: string; character: CharacterId; x: number; y: number }
+  | { type: "blast"; x: number; y: number; radius: number }
+  | { type: "barrierUp"; x: number; y: number }
   | { type: "levelUp"; playerId: string; skill: SkillId; level: number }
   | { type: "spawnWarning"; x: number; y: number }
   | { type: "waveStart"; wave: number }
@@ -194,6 +259,8 @@ export interface WorldState {
   walls: Rect[];
   /** Buschfelder: Gegner sehen Spieler darin nicht. */
   bushes: Rect[];
+  /** Aufgestellte Schildwaende (Tank-Faehigkeit). */
+  barriers: BarrierState[];
   bounds: Rect;
   /** Ereignisse dieses Ticks. Die Darstellung leert die Liste nach dem Auswerten. */
   events: GameEvent[];
@@ -201,4 +268,5 @@ export interface WorldState {
   rngState: number;
   nextEnemyId: number;
   nextProjectileId: number;
+  nextBarrierId: number;
 }

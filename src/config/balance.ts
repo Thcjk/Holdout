@@ -131,6 +131,74 @@ export const CHARACTERS: Record<CharacterId, CharacterDefinition> = {
 
 export const CHARACTER_ORDER: CharacterId[] = ["scout", "tank", "sniper"];
 
+/**
+ * Die zweite aktive Faehigkeit je Charakter.
+ *
+ * Unterschied zum Super: Der Super laedt sich ueber ausgeteilten Schaden auf
+ * und ist der grosse Moment. Diese Faehigkeit hat eine feste Abklingzeit und
+ * ist deshalb staendig verfuegbar - sie soll im Gefecht laufend eingesetzt
+ * werden, nicht aufgespart.
+ *
+ * `aimStyle` bestimmt, was beim Halten des Knopfs angezeigt wird: eine Linie
+ * fuer gerichtete Faehigkeiten, ein Kreis fuer Flaecheneffekte. WICHTIG: Die
+ * Zahlen hier sind dieselben, mit denen die Simulation rechnet - die Anzeige
+ * liest sie aus dieser Datei und zeigt deshalb genau die echte Reichweite.
+ * Eine "optische" Reichweite, die von der echten abweicht, waere schlimmer als
+ * gar keine Anzeige.
+ */
+export const ABILITIES = {
+  scout: {
+    name: "Blendgranate",
+    /** Kurzform fuer den Knopf - auf 40 Pixel Radius passt kein ganzes Wort. */
+    short: "BLEND",
+    description: "Wurf: blendet Gegner im Umkreis",
+    aimStyle: "circle",
+    cooldown: 8,
+    /** Wurfweite in Pixeln. Etwas kuerzer als die Schussreichweite (450). */
+    range: 400,
+    /** Fluggeschwindigkeit des Wurfgeschosses. */
+    speed: 700,
+    /** Explosionsradius - hier wird geblendet. */
+    blastRadius: 150,
+    /** So lange greifen getroffene Gegner nicht an. */
+    blindDuration: 1.5,
+  },
+  tank: {
+    name: "Schildwand",
+    short: "SCHILD",
+    description: "Barriere, die gegnerische Schuesse blockt",
+    aimStyle: "line",
+    cooldown: 10,
+    /**
+     * Abstand vor dem Spieler, an dem die Wand entsteht.
+     *
+     * Nicht direkt am Koerper: Sonst steht man selbst in der eigenen Wand und
+     * kann nicht mehr an ihr vorbei schiessen. 90 Pixel sind gut vier
+     * Spielerradien.
+     */
+    range: 90,
+    /** Breite der Barriere, quer zur Blickrichtung. */
+    width: 120,
+    /** Standzeit in Sekunden. */
+    duration: 4,
+  },
+  sniper: {
+    name: "Lähmschuss",
+    short: "LÄHMEN",
+    description: "Langsames Geschoss, wurzelt den Getroffenen fest",
+    aimStyle: "line",
+    cooldown: 9,
+    /** Reichweite wie die eigene Waffe. */
+    range: 900,
+    /** Bewusst langsam - man muss vorhalten. */
+    speed: 300,
+    /** Weniger Schaden als ein normaler Schuss (900), dafuer der Wurzeleffekt. */
+    damage: 200,
+    /** So lange kann der Getroffene sich nicht bewegen. */
+    rootDuration: 1.5,
+  },
+} as const;
+
 /** Werte der drei Super-Faehigkeiten. */
 export const SUPERS = {
   scout: {

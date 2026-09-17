@@ -174,7 +174,15 @@ export class HudScene extends Phaser.Scene {
     this.drawPlayerBars();
     this.updateAnnouncement();
     this.updateSkills();
-    this.inputManager.setSuperReady(this.model.superCharge >= 100);
+    this.inputManager.setStatus({
+      // `ammo` sind Fuellstaende 0 bis 1 - voll ist, was 1 erreicht hat.
+      ammo: this.model.ammo.filter((fraction) => fraction >= 1).length,
+      ammoMax: this.model.ammo.length,
+      abilityCooldown: this.model.abilityCooldown,
+      abilityCooldownMax: this.model.abilityCooldownMax,
+      superCharge: this.model.superCharge,
+      abilityLabel: this.model.abilityLabel,
+    });
   }
 
   /**

@@ -46,6 +46,8 @@ export class EntityRenderer {
   private readonly enemySprites: Phaser.GameObjects.Image[] = [];
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
   private readonly trails: Phaser.GameObjects.Graphics;
+  /** Aufgestellte Schildwaende (Tank-Faehigkeit). */
+  private readonly barriers: Phaser.GameObjects.Graphics;
   private readonly bars: Phaser.GameObjects.Graphics;
   /** Nur mit `?debug=hitbox`: die Trefferradien als Umriss. */
   private readonly hitboxes: Phaser.GameObjects.Graphics | null;
@@ -66,6 +68,7 @@ export class EntityRenderer {
     private readonly selfId: string,
   ) {
     this.trails = scene.add.graphics().setDepth(DEPTH.projectiles - 1);
+    this.barriers = scene.add.graphics().setDepth(DEPTH.walls + 1);
     this.bars = scene.add.graphics().setDepth(DEPTH.enemies + 1);
     // Ueber allem, damit kein Sprite den Umriss verdeckt.
     this.hitboxes = SHOW_HITBOXES ? scene.add.graphics().setDepth(DEPTH.hud - 1) : null;
@@ -84,7 +87,43 @@ export class EntityRenderer {
     this.updatePlayers(state);
     this.updateEnemies(state);
     this.updateProjectiles(state);
+    this.drawBarriers(state);
     this.drawHitboxes(state);
+  }
+
+  /**
+   * Schildwaende: eine dicke Strecke, genau dort, wo die Simulation sie hat.
+   *
+   * Sie blinkt in der letzten Sekunde - so sieht man, dass sie gleich
+   * verschwindet, statt sich ploetzlich ungeschuetzt wiederzufinden.
+   */
+  private drawBarriers(state: WorldState): void {
+    this.barriers.clear();
+    if (state.barriers.length === 0) {
+      return;
+    }
+
+    for (const barrier of state.barriers) {
+      const halfX = barrier.along.x * barrier.halfWidth;
+      const halfY = barrier.along.y * barrier.halfWidth;
+      const blinking = barrier.remaining < 1 && Math.floor(barrier.remaining * 8) % 2 === 0;
+      const alpha = blinking ? 0.3 : 0.9;
+
+      this.barriers.lineStyle(10, COLORS.player, alpha * 0.45);
+      this.barriers.lineBetween(
+        barrier.position.x - halfX,
+        barrier.position.y - halfY,
+        barrier.position.x + halfX,
+        barrier.position.y + halfY,
+      );
+      this.barriers.lineStyle(4, COLORS.playerOutline, alpha);
+      this.barriers.lineBetween(
+        barrier.position.x - halfX,
+        barrier.position.y - halfY,
+        barrier.position.x + halfX,
+        barrier.position.y + halfY,
+      );
+    }
   }
 
   /**
@@ -148,6 +187,7 @@ export class EntityRenderer {
       sprite.destroy();
     }
     this.trails.destroy();
+    this.barriers.destroy();
     this.bars.destroy();
     this.hitboxes?.destroy();
   }
@@ -243,6 +283,12 @@ export class EntityRenderer {
 
       if ((this.flashUntil.get(enemy.id) ?? 0) > now) {
         sprite.setTintFill(0xffffff);
+      } else if (enemy.blinded > 0) {
+        // Geblendet: hell und blass - er laeuft noch, greift aber nicht an.
+        sprite.setTint(0xfff2a8);
+      } else if (enemy.rooted > 0) {
+        // Gewurzelt: kaltes Blau - er steht fest, greift aber weiter an.
+        sprite.setTint(0x6fd3ff);
       } else if (enemy.marked > 0) {
         sprite.setTint(COLORS.marked);
       } else if (enemy.stunned > 0) {

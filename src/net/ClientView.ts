@@ -341,6 +341,8 @@ export class ClientView implements WorldView {
     const created: EnemyState = {
       id: netEnemy.id,
       type: ENEMY_TYPE_ORDER[netEnemy.type] ?? "runner",
+      blinded: 0,
+      rooted: 0,
       position: { x: netEnemy.x, y: netEnemy.y },
       velocity: { x: netEnemy.vx, y: netEnemy.vy },
       radius: netEnemy.radius,
@@ -383,6 +385,8 @@ export class ClientView implements WorldView {
         damage: 0,
         rangeLeft: 1,
         piercing: false,
+        effect: "none" as const,
+        blastRadius: 0,
         hitEnemies: [],
       };
 

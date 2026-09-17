@@ -22,6 +22,12 @@ export interface HudModel {
   /** Je Ladung: 1 = voll, sonst der Nachladefortschritt von 0 bis 1. */
   ammo: number[];
   superCharge: number;
+  /** Restliche Abklingzeit der zweiten Faehigkeit in Sekunden. 0 = bereit. */
+  abilityCooldown: number;
+  /** Volle Abklingzeit dieses Charakters - daraus entsteht der Abklingring. */
+  abilityCooldownMax: number;
+  /** Kurzname der Faehigkeit fuer die Beschriftung des Knopfs. */
+  abilityLabel: string;
   wave: number;
   score: number;
   highscore: number;
@@ -47,6 +53,9 @@ export function createHudModel(): HudModel {
     maxHealth: 1,
     ammo: [],
     superCharge: 0,
+    abilityCooldown: 0,
+    abilityCooldownMax: 1,
+    abilityLabel: "",
     wave: 0,
     score: 0,
     highscore: 0,

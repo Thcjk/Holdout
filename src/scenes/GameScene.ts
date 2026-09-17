@@ -9,7 +9,7 @@
 
 import Phaser from "phaser";
 import { playEventSounds } from "../audio/eventSounds";
-import { CHARACTERS, PLAYER } from "../config/balance";
+import { ABILITIES, CHARACTERS, PLAYER, SUPERS } from "../config/balance";
 import { ARENA, COLORS, DEPTH } from "../config/constants";
 import type { GameSession } from "../net/GameSession";
 import { SoloSession } from "../net/SoloSession";
@@ -208,7 +208,20 @@ export class GameScene extends Phaser.Scene {
    */
   private drawAim(player: PlayerState, input: InputState): void {
     this.aimLine.clear();
-    if (player.down || !this.hud || (!input.aim && !input.fire)) {
+    if (player.down || !this.hud) {
+      return;
+    }
+
+    const aiming = this.hud.inputManager.aiming;
+    if (aiming) {
+      this.drawAbilityAim(player, input, aiming);
+      return;
+    }
+
+    // Kein Knopf wird ausgerichtet: die gewohnte Ziellinie des Basisangriffs,
+    // solange gefeuert wird. Sie zeigt auf den Gegner, den die Simulation
+    // automatisch anvisiert - der Basisangriff zielt nicht mehr von Hand.
+    if (!input.fire) {
       return;
     }
 
@@ -219,18 +232,104 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Beim Ziehen waechst die Linie mit dem Ausschlag, beim blossen Halten
-    // zeigt sie die volle Reichweite.
-    const strength = input.aim ? Math.max(0.3, this.hud.inputManager.aimStrength) : 1;
-    const length = range * strength;
-
-    const endX = position.x + direction.x * length;
-    const endY = position.y + direction.y * length;
+    const endX = position.x + direction.x * range;
+    const endY = position.y + direction.y * range;
 
     this.aimLine.lineStyle(3, COLORS.playerBullet, 0.45);
     this.aimLine.lineBetween(position.x, position.y, endX, endY);
     this.aimLine.lineStyle(2, COLORS.playerBullet, 0.8);
     this.aimLine.strokeCircle(endX, endY, 12);
+  }
+
+  /**
+   * Zielanzeige fuer Faehigkeit und Super.
+   *
+   * GRUNDREGEL: Hier wird NICHTS geschaetzt. Jede Zahl kommt aus derselben
+   * Stelle, mit der die Simulation rechnet - `ABILITIES` beziehungsweise
+   * `SUPERS` in `balance.ts`. Eine Anzeige, die eine andere Reichweite zeigt
+   * als die, die wirkt, waere schlimmer als gar keine: Man wuerde ihr glauben
+   * und danebenzielen.
+   */
+  private drawAbilityAim(
+    player: PlayerState,
+    input: InputState,
+    which: "ability" | "super",
+  ): void {
+    const position = this.session.view.renderPlayerPosition(player.id);
+    const direction = input.aim ?? player.facing;
+    const strength = Math.max(0.35, this.hud?.inputManager.aimStrength ?? 1);
+
+    if (which === "super") {
+      this.drawSuperAim(player, position, direction, strength);
+      return;
+    }
+
+    const ability = ABILITIES[player.character];
+    const reach = ability.range * (ability.aimStyle === "circle" ? strength : 1);
+    const endX = position.x + direction.x * reach;
+    const endY = position.y + direction.y * reach;
+
+    this.aimLine.lineStyle(3, COLORS.superReady, 0.5);
+    this.aimLine.lineBetween(position.x, position.y, endX, endY);
+
+    if (player.character === "scout") {
+      // Blendgranate: der Kreis ist der echte Explosionsradius.
+      this.aimLine.lineStyle(2, COLORS.superReady, 0.9);
+      this.aimLine.strokeCircle(endX, endY, ABILITIES.scout.blastRadius);
+      this.aimLine.fillStyle(COLORS.superReady, 0.12);
+      this.aimLine.fillCircle(endX, endY, ABILITIES.scout.blastRadius);
+      return;
+    }
+
+    if (player.character === "tank") {
+      // Schildwand: die Strecke ist genau so lang und liegt genau so, wie die
+      // Wand nachher steht - quer zur Blickrichtung.
+      const half = ABILITIES.tank.width / 2;
+      const alongX = -direction.y;
+      const alongY = direction.x;
+      this.aimLine.lineStyle(6, COLORS.superReady, 0.85);
+      this.aimLine.lineBetween(
+        endX - alongX * half,
+        endY - alongY * half,
+        endX + alongX * half,
+        endY + alongY * half,
+      );
+      return;
+    }
+
+    // Sniper: Laehmschuss - gerade Linie bis zur vollen Reichweite.
+    this.aimLine.lineStyle(2, COLORS.superReady, 0.9);
+    this.aimLine.strokeCircle(endX, endY, 14);
+  }
+
+  /** Zielanzeige des Supers, ebenfalls mit den echten Werten. */
+  private drawSuperAim(
+    player: PlayerState,
+    position: Vec2,
+    direction: Vec2,
+    strength: number,
+  ): void {
+    if (player.character === "tank") {
+      // Bodenstampfer wirkt rund um den Spieler, nicht in eine Richtung.
+      this.aimLine.lineStyle(3, COLORS.superReady, 0.9);
+      this.aimLine.strokeCircle(position.x, position.y, SUPERS.tank.radius);
+      this.aimLine.fillStyle(COLORS.superReady, 0.12);
+      this.aimLine.fillCircle(position.x, position.y, SUPERS.tank.radius);
+      return;
+    }
+
+    const reach =
+      player.character === "scout"
+        ? SUPERS.scout.speed * SUPERS.scout.duration
+        : SUPERS.sniper.searchRange;
+    const length = player.character === "scout" ? reach : reach * strength;
+    const endX = position.x + direction.x * length;
+    const endY = position.y + direction.y * length;
+
+    this.aimLine.lineStyle(4, COLORS.superReady, 0.55);
+    this.aimLine.lineBetween(position.x, position.y, endX, endY);
+    this.aimLine.lineStyle(2, COLORS.superReady, 0.9);
+    this.aimLine.strokeCircle(endX, endY, 16);
   }
 
   /** Gezogene Richtung, sonst die Richtung zum automatisch gewaehlten Ziel. */
@@ -262,6 +361,9 @@ export class GameScene extends Phaser.Scene {
       timer <= 0 ? 1 : 1 - timer / reloadTime,
     );
     this.hudModel.superCharge = player.superCharge;
+    this.hudModel.abilityCooldown = player.abilityCooldown;
+    this.hudModel.abilityCooldownMax = ABILITIES[player.character].cooldown;
+    this.hudModel.abilityLabel = ABILITIES[player.character].short;
     this.hudModel.wave = state.wave;
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;

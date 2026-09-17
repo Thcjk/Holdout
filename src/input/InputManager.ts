@@ -14,6 +14,7 @@
 import Phaser from "phaser";
 import type { InputState, SkillId } from "../systems/types";
 import { TouchControls } from "../ui/TouchControls";
+import type { TouchStatus } from "../ui/TouchControls";
 
 export class InputManager {
   private readonly touch: TouchControls;
@@ -24,9 +25,12 @@ export class InputManager {
     this.touch = new TouchControls(scene);
   }
 
-  /** Ist der Super bereit? Faerbt den Knopf ein. */
-  setSuperReady(ready: boolean): void {
-    this.touch.setSuperReady(ready);
+  /**
+   * Meldet den Knoepfen, was gerade geht: Munition, Abklingzeit der Faehigkeit,
+   * Ladung des Supers. Daraus entstehen Ausgrauung und Abklingringe.
+   */
+  setStatus(status: TouchStatus): void {
+    this.touch.setStatus(status);
   }
 
   /** Vom HUD gerufen, wenn ein Skillpunkt verteilt wird. */
@@ -42,13 +46,20 @@ export class InputManager {
       aim: output.aim,
       fire: output.fire,
       useSuper: output.useSuper,
+      useAbility: output.useAbility,
+      abilityAim: output.abilityAim,
       levelUp: this.pendingLevelUp,
     };
   }
 
-  /** Zugstaerke des Zielsticks, 0 bis 1 - fuer die Reichweitenanzeige. */
+  /** Zugstaerke beim Ausrichten, 0 bis 1 - fuer die Laenge der Zielanzeige. */
   get aimStrength(): number {
     return this.touch.read().aimStrength;
+  }
+
+  /** Welcher Knopf gerade ausgerichtet wird, oder null. */
+  get aiming(): "ability" | "super" | null {
+    return this.touch.read().aiming;
   }
 
   /**

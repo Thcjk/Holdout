@@ -95,14 +95,24 @@ export class HostSession implements GameSession {
       // Der Super ist einmalig und darf nicht verlorengehen, solange ihn kein
       // Tick gesehen hat.
       useSuper: message.super || (existing?.useSuper ?? false),
+      // Die zweite Faehigkeit ist genauso einmalig wie der Super und darf
+      // genauso wenig verlorengehen, solange kein Tick sie gesehen hat.
+      useAbility: message.ability || (existing?.useAbility ?? false),
+      abilityAim: message.abilityAim ?? existing?.abilityAim ?? null,
       levelUp: message.levelUp ?? existing?.levelUp ?? null,
     });
   }
 
   private clearOneShotInputs(): void {
     for (const [id, input] of this.inputs) {
-      if (input.useSuper || input.levelUp) {
-        this.inputs.set(id, { ...input, useSuper: false, levelUp: null });
+      if (input.useSuper || input.useAbility || input.levelUp) {
+        this.inputs.set(id, {
+          ...input,
+          useSuper: false,
+          useAbility: false,
+          abilityAim: null,
+          levelUp: null,
+        });
       }
     }
   }
