@@ -240,9 +240,15 @@ Genau das prüft auch `quality-check.yml`.
   mit Hinweis - so im Briefing vorgesehen.
 - **Bundle ist gross** (~1,6 MB, gzip ~370 kB), weil Phaser komplett eingebunden
   ist. Ein massgeschneiderter Phaser-Build wäre der nächste Hebel.
-- **Die APK ist hier nie gebaut worden.** Das Android-SDK fehlt in der
-  Entwicklungsumgebung, und `dl.google.com` ist gesperrt. Gebaut wird sie auf
-  GitHub Actions - der erste Lauf des Workflows ist der eigentliche Test.
+- **Die APK baut, ist aber nur debug-signiert.** Der Workflow lief am
+  2026-09-17 auf Anhieb durch (rund 2 Minuten, 6,7 MB). Lokal ist sie nicht
+  baubar: Das Android-SDK fehlt in der Entwicklungsumgebung und
+  `dl.google.com` ist gesperrt. Ohne hinterlegten Keystore wechselt der
+  Signaturschlüssel bei jedem Lauf - eine neue Version lässt sich dann nicht
+  über die alte installieren, sondern erst nach dem Deinstallieren. Die vier
+  Secrets dafür stehen im README.
+- **Die APK ist auf keinem echten Gerät installiert worden.** Dass sie baut,
+  heisst noch nicht, dass sie startet - das zeigt erst das Handy.
 - **Arena ist keine Tilemap**, sondern eine Liste von Rechtecken in
   `config/arena.ts`. Die Schnittstelle zur Simulation bleibt dieselbe, eine
   Tilemap kann sie später füllen.
