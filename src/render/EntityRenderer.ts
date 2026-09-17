@@ -13,10 +13,13 @@ import Phaser from "phaser";
 import { ATLAS_KEY, BODY_RADIUS, FRAMES } from "../assets/textures";
 import { COLORS, DEPTH } from "../config/constants";
 import type { WorldView } from "../net/GameSession";
+import { SHOW_HITBOXES } from "../platform/debugFlags";
 import type { CharacterId, EnemyState, EnemyType, PlayerState, WorldState } from "../systems/types";
 
 /** Wie lange ein getroffener Gegner weiss aufblitzt, in Millisekunden. */
-const HIT_FLASH_MS = 110;
+// 130 statt 110 Millisekunden: Bei 60 Bildern je Sekunde sind das acht
+// Bilder statt sechs - der Unterschied zwischen "war da was?" und "getroffen".
+const HIT_FLASH_MS = 130;
 
 const ENEMY_FRAMES: Record<EnemyType, string> = {
   runner: FRAMES.runner,
@@ -44,6 +47,8 @@ export class EntityRenderer {
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
   private readonly trails: Phaser.GameObjects.Graphics;
   private readonly bars: Phaser.GameObjects.Graphics;
+  /** Nur mit `?debug=hitbox`: die Trefferradien als Umriss. */
+  private readonly hitboxes: Phaser.GameObjects.Graphics | null;
   private readonly flashUntil = new Map<number, number>();
   /**
    * Welcher Atlas-Ausschnitt in einem Sprite gerade steckt.
@@ -62,6 +67,8 @@ export class EntityRenderer {
   ) {
     this.trails = scene.add.graphics().setDepth(DEPTH.projectiles - 1);
     this.bars = scene.add.graphics().setDepth(DEPTH.enemies + 1);
+    // Ueber allem, damit kein Sprite den Umriss verdeckt.
+    this.hitboxes = SHOW_HITBOXES ? scene.add.graphics().setDepth(DEPTH.hud - 1) : null;
   }
 
   /** Meldet einen Treffer, damit der Gegner kurz weiss aufblitzt. */
@@ -77,6 +84,56 @@ export class EntityRenderer {
     this.updatePlayers(state);
     this.updateEnemies(state);
     this.updateProjectiles(state);
+    this.drawHitboxes(state);
+  }
+
+  /**
+   * Die Kreise, mit denen die Simulation wirklich rechnet.
+   *
+   * Wichtig ist, dass hier dieselben Zahlen stehen wie in `systems/` - der
+   * Radius wird aus dem Weltzustand gelesen, nicht noch einmal aufgeschrieben.
+   * Sonst zeigt der Umriss etwas anderes an, als getroffen wird, und die
+   * Anzeige wuerde luegen statt zu helfen.
+   */
+  private drawHitboxes(state: WorldState): void {
+    const graphics = this.hitboxes;
+    if (!graphics) {
+      return;
+    }
+
+    graphics.clear();
+
+    graphics.lineStyle(2, 0x66ff9f, 0.85);
+    for (const player of state.players) {
+      const position = this.simulation.renderPlayerPosition(player.id);
+      graphics.strokeCircle(position.x, position.y, player.radius);
+    }
+
+    graphics.lineStyle(2, 0xff5a70, 0.85);
+    for (const enemy of state.enemies) {
+      const position = this.simulation.renderEnemyPosition(enemy.id, enemy.position);
+      graphics.strokeCircle(position.x, position.y, enemy.radius);
+    }
+
+    graphics.lineStyle(2, 0xffe066, 0.9);
+    for (const projectile of state.projectiles) {
+      if (!projectile.active) {
+        continue;
+      }
+      const position = this.simulation.renderProjectilePosition(
+        projectile.position,
+        projectile.velocity,
+      );
+      graphics.strokeCircle(position.x, position.y, projectile.radius);
+      // Die Strecke, die es im naechsten Tick zuruecklegt - genau auf ihr wird
+      // seit dem Umbau geprueft. Wer sie sieht, versteht die Trefferpruefung.
+      graphics.lineBetween(
+        position.x,
+        position.y,
+        position.x + projectile.velocity.x / 30,
+        position.y + projectile.velocity.y / 30,
+      );
+    }
   }
 
   destroy(): void {
@@ -92,6 +149,7 @@ export class EntityRenderer {
     }
     this.trails.destroy();
     this.bars.destroy();
+    this.hitboxes?.destroy();
   }
 
   private updatePlayers(state: WorldState): void {

@@ -50,6 +50,24 @@ export class TouchControls {
 
   private firePointerId: number | null = null;
   private fireDrag: Vec2 = { x: 0, y: 0 };
+
+  /**
+   * Ein gemerkter Schuss, der noch auf einen Simulationsschritt wartet.
+   *
+   * WARUM: `fire` wird jedes Bild frisch vom Finger abgelesen, aber nicht jedes
+   * Bild rechnet einen Tick - bei 60 Bildern und 30 Ticks pro Sekunde ist es
+   * nur jedes zweite. Ein kurzes Antippen, das genau zwischen zwei Ticks
+   * beginnt und endet, wurde deshalb bisher stillschweigend verschluckt. Genau
+   * das fuehlt sich an wie "das Schiessen geht nur ab und zu".
+   *
+   * Jeder Druck auf den Knopf hinterlegt hier einen Schuss. Er bleibt liegen,
+   * bis die Simulation ihn wirklich gesehen hat (`clearOneShots`) - und geht
+   * damit nie mehr verloren. Genau einer pro Druck, kein Doppelschuss.
+   */
+  private pendingShot: { aim: Vec2 | null } | null = null;
+
+  /** Wann und wo der Schussfinger aufgesetzt hat - fuer Antippen gegen Ziehen. */
+  private fireDownAt = 0;
   private superPointerId: number | null = null;
   private superLatched = false;
   private superReady = false;
@@ -84,9 +102,15 @@ export class TouchControls {
     const dragLength = Math.hypot(this.fireDrag.x, this.fireDrag.y);
     const aiming = this.firePointerId !== null && dragLength > TOUCH.fireButton.aimDeadZone;
 
+    // Solange gezogen wird, zaehlt die Zugrichtung. Liegt nur noch ein
+    // gemerkter Schuss an (Finger schon weg), zaehlt dessen Richtung.
+    const aim = aiming
+      ? { x: this.fireDrag.x / dragLength, y: this.fireDrag.y / dragLength }
+      : (this.pendingShot?.aim ?? null);
+
     return {
       move: this.moveStick.vector,
-      aim: aiming ? { x: this.fireDrag.x / dragLength, y: this.fireDrag.y / dragLength } : null,
+      aim,
       aimStrength: aiming
         ? Math.min(
             1,
@@ -94,7 +118,9 @@ export class TouchControls {
               (TOUCH.fireButton.aimRange - TOUCH.fireButton.aimDeadZone),
           )
         : 0,
-      fire: this.firePointerId !== null,
+      // Gehalten wird dauerhaft gefeuert; ein gemerkter Schuss feuert genau
+      // einmal, auch wenn der Finger laengst wieder weg ist.
+      fire: this.firePointerId !== null || this.pendingShot !== null,
       useSuper: this.superLatched,
     };
   }
@@ -102,6 +128,7 @@ export class TouchControls {
   /** Einmalige Wuensche loeschen, sobald die Simulation sie verarbeitet hat. */
   clearOneShots(): void {
     this.superLatched = false;
+    this.pendingShot = null;
   }
 
   destroy(): void {
@@ -134,6 +161,11 @@ export class TouchControls {
     if (this.firePointerId === null && within(pointer, FIRE_CENTER, TOUCH.fireButton.hitRadius)) {
       this.firePointerId = pointer.id;
       this.fireDrag = { x: 0, y: 0 };
+      this.fireDownAt = this.scene.time.now;
+      // Sofort einen Schuss hinterlegen: Damit feuert auch das kuerzeste
+      // Antippen, ohne Zielen - die Simulation sucht sich dann den naechsten
+      // Gegner. Die Richtung kann beim Loslassen noch nachgereicht werden.
+      this.pendingShot = { aim: null };
       this.drawFireButton();
       return;
     }
@@ -173,6 +205,22 @@ export class TouchControls {
     }
 
     if (this.firePointerId === pointer.id) {
+      const dragLength = Math.hypot(this.fireDrag.x, this.fireDrag.y);
+      const wasDrag = dragLength > TOUCH.fireButton.tapMaxMove;
+      const heldMs = this.scene.time.now - this.fireDownAt;
+
+      // Wurde gezogen und wartet der Schuss dieses Drucks noch, bekommt er die
+      // gezogene Richtung mit - so feuert auch ein schnelles Wischen dorthin,
+      // wohin gezielt wurde, statt auf den naechstbesten Gegner.
+      if (wasDrag && this.pendingShot) {
+        this.pendingShot.aim = { x: this.fireDrag.x / dragLength, y: this.fireDrag.y / dragLength };
+      }
+      // Ein langes Halten ohne Ziehen hat bereits dauerhaft gefeuert; ein
+      // liegengebliebener Schuss waere dann ein Schuss zu viel.
+      if (!wasDrag && heldMs > TOUCH.fireButton.tapMaxMs) {
+        this.pendingShot = null;
+      }
+
       this.firePointerId = null;
       this.fireDrag = { x: 0, y: 0 };
       this.drawFireButton();

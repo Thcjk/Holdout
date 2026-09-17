@@ -96,6 +96,10 @@ export const TOUCH = {
     aimDeadZone: 14,
     /** Zugstrecke, ab der die Reichweitenanzeige voll ausschlaegt. */
     aimRange: 92,
+    /** Bis zu dieser Dauer gilt eine Beruehrung als Antippen, nicht als Halten. */
+    tapMaxMs: 150,
+    /** Bis zu dieser Strecke gilt sie als Antippen, nicht als Ziehen. */
+    tapMaxMove: 15,
   },
 
   /** Super-Knopf, ebenfalls fest, links neben dem Schussknopf. */

@@ -27,6 +27,15 @@ export class Juice {
   private timeScale = 1;
   private hitstopRemaining = 0;
 
+  /**
+   * Wann zuletzt wegen eines eigenen Treffers gewackelt wurde.
+   *
+   * Der Scout feuert drei Kugeln fuenfmal pro Sekunde - ungebremst waeren das
+   * bis zu fuenfzehn Stoesse je Sekunde, und aus einem Treffergefuehl wuerde
+   * Seekrankheit. Deshalb hoechstens alle 90 Millisekunden einer.
+   */
+  private lastHitShake = -1000;
+
   constructor(private readonly scene: Phaser.Scene) {
     // Textobjekte sind teuer. Sie werden - wie die Projektile - gepoolt.
     for (let i = 0; i < DAMAGE_TEXT_POOL_SIZE; i += 1) {
@@ -92,6 +101,7 @@ export class Juice {
         case "hit":
           this.damageNumber(event.x, event.y, event.damage);
           this.hitParticles.emitParticleAt(event.x, event.y, 3);
+          this.hitShake();
           break;
         case "enemyDied":
           this.shake(event.isBoss ? 0.006 : 0.003, event.isBoss ? 220 : 110);
@@ -134,6 +144,20 @@ export class Juice {
       ease: "Quad.easeOut",
       onComplete: () => marker.destroy(),
     });
+  }
+
+  /**
+   * Der Stoss beim eigenen Treffer: rund 3 Pixel auf 960 Pixel Breite, 70
+   * Millisekunden kurz - laut Briefing der Bereich, der sich nach Wucht
+   * anfuehlt, ohne zu stoeren.
+   */
+  private hitShake(): void {
+    const now = this.scene.time.now;
+    if (now - this.lastHitShake < 90) {
+      return;
+    }
+    this.lastHitShake = now;
+    this.shake(0.0032, 70);
   }
 
   /** Dezentes Wackeln. `intensity` ist ein Bruchteil der Bildschirmbreite. */

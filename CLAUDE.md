@@ -94,6 +94,15 @@ Zwei Änderungen nach dem ersten Spieltest, beide über das Briefing hinaus:
   blosses Halten überlässt der Simulation die Zielsuche. `InputState.fire` ist
   deshalb ein **gehaltener Zustand**, kein einmaliger Wunsch - auch im
   Netzwerkprotokoll. Einmalig sind nur noch Super und Aufwertung.
+- **Antippen geht nicht mehr verloren.** `InputState.fire` wird jedes Bild frisch
+  vom Finger abgelesen, aber nicht jedes Bild rechnet einen Tick: Bei 60 Bildern
+  und 30 Ticks je Sekunde ist es nur jedes zweite. Ein kurzes Antippen, das
+  genau dazwischen begann und endete, wurde deshalb stillschweigend verschluckt
+  - das war die Ursache für „Schiessen geht nur ab und zu". `TouchControls`
+  hinterlegt jetzt bei jedem Druck einen **gemerkten Schuss**, der liegen bleibt,
+  bis die Simulation ihn gesehen hat. Genau einer pro Druck, kein Doppelschuss.
+  Wird gezogen, bekommt er beim Loslassen noch die gezogene Richtung mit - so
+  trifft auch ein schnelles Wischen dorthin, wohin gezielt wurde.
 - **Fähigkeiten lassen sich aufwerten** (`src/systems/skills.ts`,
   `src/ui/SkillPanel.ts`): ein Punkt je geschaffter Welle, verteilbar auf Waffe,
   Panzerung, Tempo und Super, je fünf Stufen. Die Auswahl erscheint nur in der
@@ -101,6 +110,40 @@ Zwei Änderungen nach dem ersten Spieltest, beide über das Briefing hinaus:
   Stufen werden **nicht** in die Grundwerte hineingerechnet, sondern bei jeder
   Benutzung frisch angewendet. Sonst summieren sich Rundungsfehler, und Host
   und Client laufen auseinander.
+
+### Treffer werden auf der ganzen Flugstrecke geprüft
+
+Der grösste Fund beim Überarbeiten des Schiessens, und er stand in keiner
+Fehlermeldung: Ein Projektil fliegt 600 Pixel je Sekunde, ein Tick dauert eine
+dreissigstel Sekunde - pro Schritt springt es also **20 Pixel** weit. Geprüft
+wurde bisher nur der Endpunkt dieses Sprungs. Ein Läufer hat mit Projektil
+zusammen 23 Pixel Trefferradius; alles, was den Rand streift, wurde damit rund
+jedes fünfte Mal übersprungen. Der Schuss sass, gezählt wurde er nicht - und es
+fühlte sich an wie „danebengezielt".
+
+`systems/projectiles.ts` rechnet jetzt die Strecke als Linie gegen den Gegner
+als Kreis (`sweepHitTime`, eine quadratische Gleichung, exakt und ohne
+Abtasten). Wände werden abgetastet, in Schritten von höchstens einem
+Projektilradius. Wer zuerst auf der Strecke liegt, wird zuerst getroffen -
+sonst schösse man durch Deckung hindurch oder träfe den hinteren von zwei
+Gegnern. `tests/systems/projectileSweep.test.ts` hält das fest; der erste Test
+fällt auf dem alten Code durch.
+
+**Nebenwirkung, die man kennen muss:** Auch Gegnerprojektile treffen jetzt
+zuverlässig. Das Spiel ist dadurch messbar schwerer geworden - die
+Balancing-Messung fiel beim Tank von 8,4 auf 6,6 Wellen.
+
+### Sehen, womit gerechnet wird
+
+`?debug=hitbox` an die Adresse gehängt zeichnet die Trefferradien als Umriss:
+Spieler grün, Gegner rot, Projektile gelb samt der Strecke, die sie im nächsten
+Tick zurücklegen. `?debug=werte` blendet Zahlen ein, `?debug=all` beides. Die
+Radien werden aus dem Weltzustand gelesen, nicht noch einmal aufgeschrieben -
+sonst zeigte die Anzeige etwas anderes an, als getroffen wird, und würde lügen
+statt zu helfen. Ohne `?debug=` kostet das nichts (`platform/debugFlags.ts`).
+
+Auf dem Handy gibt es keine Entwicklerwerkzeuge - die Adresszeile ist der
+einzige Weg, im echten Spiel auf dem echten Gerät etwas sichtbar zu machen.
 
 ## Der Name
 
