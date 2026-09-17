@@ -92,10 +92,16 @@ Weil das Spiel am Desktop nicht startet, gibt es zwei Wege zum Ausprobieren:
 
 ## Android-App bauen
 
-Am einfachsten über GitHub: Ein Tag `v1.0.0` oder ein Klick auf _Run workflow_
-bei **Android APK** baut die App und hängt sie an ein Release. Auf den
-GitHub-Runnern ist das Android-SDK vorinstalliert, lokal braucht es dafür
-Android Studio.
+Am einfachsten über GitHub, ohne einen Git-Befehl: **Actions → Android APK →
+Run workflow**. Trägst du dort einen Tag wie `v1.0.1` ein, legt der Workflow das
+Release samt Tag an und hängt die APK daran. Lässt du das Feld leer, entsteht
+nur eine APK als Artefakt zum Ausprobieren. Ein gepushter Tag `v*` löst dasselbe
+aus. Auf den GitHub-Runnern ist das Android-SDK vorinstalliert, lokal braucht es
+dafür Android Studio.
+
+**Vor jedem neuen Release:** `versionCode` in `android/app/build.gradle`
+hochzählen. Android vergleicht Versionen über diese Zahl, nicht über den Namen -
+bleibt sie gleich, verweigert das Handy die Aktualisierung.
 
 Lokal, wenn Android Studio da ist:
 
