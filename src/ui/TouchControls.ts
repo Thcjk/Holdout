@@ -31,15 +31,27 @@ export interface TouchOutput {
   useSuper: boolean;
 }
 
-const FIRE_CENTER: Vec2 = {
-  x: VIEWPORT.width - TOUCH.fireButton.marginX,
-  y: VIEWPORT.height - TOUCH.fireButton.marginY,
-};
+/**
+ * Die Mitten der festen Knoepfe.
+ *
+ * Bewusst Funktionen statt Konstanten: Die Entwurfsbreite haengt seit
+ * `fitViewportToScreen` am Geraet und steht erst fest, wenn das Spiel startet -
+ * eine Konstante hier wuerde beim Laden der Datei berechnet und waere dann die
+ * alte 960er Breite. Die Knoepfe saessen auf einem breiten Handy mitten im Bild.
+ */
+function fireCenter(): Vec2 {
+  return {
+    x: VIEWPORT.width - TOUCH.fireButton.marginX,
+    y: VIEWPORT.height - TOUCH.fireButton.marginY,
+  };
+}
 
-const SUPER_CENTER: Vec2 = {
-  x: VIEWPORT.width - TOUCH.superButton.marginX,
-  y: VIEWPORT.height - TOUCH.superButton.marginY,
-};
+function superCenter(): Vec2 {
+  return {
+    x: VIEWPORT.width - TOUCH.superButton.marginX,
+    y: VIEWPORT.height - TOUCH.superButton.marginY,
+  };
+}
 
 export class TouchControls {
   private readonly moveStick: VirtualJoystick;
@@ -47,6 +59,8 @@ export class TouchControls {
   private readonly fireLabel: Phaser.GameObjects.Text;
   private readonly superGraphics: Phaser.GameObjects.Graphics;
   private readonly superLabel: Phaser.GameObjects.Text;
+  private readonly fireAt: Vec2 = fireCenter();
+  private readonly superAt: Vec2 = superCenter();
 
   private firePointerId: number | null = null;
   private fireDrag: Vec2 = { x: 0, y: 0 };
@@ -76,10 +90,10 @@ export class TouchControls {
     this.moveStick = new VirtualJoystick(scene, COLORS.player);
 
     this.fireGraphics = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
-    this.fireLabel = label(scene, FIRE_CENTER, "FEUER", 15);
+    this.fireLabel = label(scene, this.fireAt, "FEUER", 15);
 
     this.superGraphics = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
-    this.superLabel = label(scene, SUPER_CENTER, "SUPER", 13);
+    this.superLabel = label(scene, this.superAt, "SUPER", 13);
 
     this.drawFireButton();
     this.drawSuperButton();
@@ -152,13 +166,13 @@ export class TouchControls {
     // muessen zuerst gepruefte werden, sonst schluckt der Zielstick sie.
     if (
       this.superPointerId === null &&
-      within(pointer, SUPER_CENTER, TOUCH.superButton.hitRadius)
+      within(pointer, this.superAt, TOUCH.superButton.hitRadius)
     ) {
       this.superPointerId = pointer.id;
       return;
     }
 
-    if (this.firePointerId === null && within(pointer, FIRE_CENTER, TOUCH.fireButton.hitRadius)) {
+    if (this.firePointerId === null && within(pointer, this.fireAt, TOUCH.fireButton.hitRadius)) {
       this.firePointerId = pointer.id;
       this.fireDrag = { x: 0, y: 0 };
       this.fireDownAt = this.scene.time.now;
@@ -186,7 +200,7 @@ export class TouchControls {
     }
 
     if (this.firePointerId === pointer.id) {
-      this.fireDrag = { x: pointer.x - FIRE_CENTER.x, y: pointer.y - FIRE_CENTER.y };
+      this.fireDrag = { x: pointer.x - this.fireAt.x, y: pointer.y - this.fireAt.y };
       this.drawFireButton();
     }
   }
@@ -240,9 +254,9 @@ export class TouchControls {
 
     graphics.clear();
     graphics.fillStyle(COLORS.playerBullet, held ? 0.34 : 0.16);
-    graphics.fillCircle(FIRE_CENTER.x, FIRE_CENTER.y, radius);
+    graphics.fillCircle(this.fireAt.x, this.fireAt.y, radius);
     graphics.lineStyle(4, COLORS.playerBullet, held ? 0.95 : 0.55);
-    graphics.strokeCircle(FIRE_CENTER.x, FIRE_CENTER.y, radius);
+    graphics.strokeCircle(this.fireAt.x, this.fireAt.y, radius);
 
     if (held) {
       const length = Math.hypot(this.fireDrag.x, this.fireDrag.y);
@@ -251,8 +265,8 @@ export class TouchControls {
         const clamped = Math.min(length, radius);
         graphics.fillStyle(COLORS.playerOutline, 0.9);
         graphics.fillCircle(
-          FIRE_CENTER.x + (this.fireDrag.x / length) * clamped,
-          FIRE_CENTER.y + (this.fireDrag.y / length) * clamped,
+          this.fireAt.x + (this.fireDrag.x / length) * clamped,
+          this.fireAt.y + (this.fireDrag.y / length) * clamped,
           16,
         );
       }
@@ -267,9 +281,9 @@ export class TouchControls {
 
     graphics.clear();
     graphics.fillStyle(ready ? COLORS.superReady : COLORS.playerDown, ready ? 0.9 : 0.35);
-    graphics.fillCircle(SUPER_CENTER.x, SUPER_CENTER.y, TOUCH.superButton.radius);
+    graphics.fillCircle(this.superAt.x, this.superAt.y, TOUCH.superButton.radius);
     graphics.lineStyle(3, COLORS.playerOutline, ready ? 0.9 : 0.3);
-    graphics.strokeCircle(SUPER_CENTER.x, SUPER_CENTER.y, TOUCH.superButton.radius);
+    graphics.strokeCircle(this.superAt.x, this.superAt.y, TOUCH.superButton.radius);
 
     this.superLabel.setAlpha(ready ? 1 : 0.4);
     this.superLabel.setColor(ready ? "#11161f" : "#dce8f7");

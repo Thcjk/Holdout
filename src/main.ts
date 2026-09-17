@@ -17,7 +17,8 @@ import { showDesktopNotice } from "./platform/DesktopNotice";
 import "./platform/install";
 import { startUpdateWatch } from "./platform/update";
 import { applyTuningFromUrl } from "./config/tuning";
-import { COLORS, VIEWPORT } from "./config/constants";
+import { lockLandscape } from "./platform/orientation";
+import { COLORS, VIEWPORT, fitViewportToScreen } from "./config/constants";
 import { BootScene } from "./scenes/BootScene";
 import { GameOverScene } from "./scenes/GameOverScene";
 import { GameScene } from "./scenes/GameScene";
@@ -25,14 +26,33 @@ import { HudScene } from "./scenes/HudScene";
 import { LobbyScene } from "./scenes/LobbyScene";
 import { MenuScene } from "./scenes/MenuScene";
 
+// Entwurfsaufloesung an den Bildschirm anpassen, BEVOR die Konfiguration
+// gebaut wird - sonst bleibt es bei 16:9 und das Spiel sitzt in einem
+// Briefkasten. Siehe fitViewportToScreen in config/constants.ts.
+fitViewportToScreen(window.innerWidth, window.innerHeight);
+
 const config: Phaser.Types.Core.GameConfig = {
   // AUTO nimmt WebGL, wenn das Geraet es kann, sonst Canvas.
   type: Phaser.AUTO,
   parent: "game-root",
   backgroundColor: COLORS.background,
   scale: {
-    // FIT skaliert die feste Aufloesung auf den Bildschirm und behaelt das
-    // Seitenverhaeltnis - dadurch sehen alle Geraete denselben Ausschnitt.
+    /*
+     * FIT, aber mit einer Aufloesung, die zum Geraet passt.
+     *
+     * Warum nicht ENVELOP: Der wuerde formatfuellend skalieren und den
+     * Ueberstand abschneiden. Genau an den Raendern sitzen hier aber FEUER,
+     * SUPER, Punktzahl und Wellenanzeige - abgeschnitten wuerde also die
+     * Bedienung.
+     *
+     * Warum nicht RESIZE: Der gibt jedem Geraet seine eigene Weltansicht. Auf
+     * einem breiten Handy saehe man deutlich mehr Arena als auf einem schmalen,
+     * und im Koop waere das ein echter Vorteil.
+     *
+     * FIT auf einer abgeleiteten Aufloesung hat beides nicht: nichts wird
+     * abgeschnitten, und der Unterschied zwischen Geraeten ist auf ein Drittel
+     * Breite begrenzt.
+     */
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: VIEWPORT.width,
@@ -73,7 +93,26 @@ const config: Phaser.Types.Core.GameConfig = {
 applyTuningFromUrl();
 
 if (isSupportedDevice()) {
-  new Phaser.Game(config);
+  const game = new Phaser.Game(config);
+
+  // Querformat verlangen, wo das Geraet es zulaesst (Android als App). Wo nicht
+  // (iOS), bleibt der Hinweisstreifen aus index.html stehen.
+  lockLandscape();
+
+  // Auf Drehung und Groessenaenderung reagieren: Phaser passt den Modus FIT von
+  // selbst an die neue Fenstergroesse an, braucht dafuer aber den Anstoss.
+  // `refresh` misst neu - ohne das bleibt die alte Zeichenflaechengroesse
+  // stehen, und Beruehrungen landen daneben.
+  const refit = (): void => {
+    game.scale.refresh();
+  };
+  window.addEventListener("resize", refit);
+  window.addEventListener("orientationchange", () => {
+    // Nach einer Drehung meldet der Browser die neuen Masse erst ein paar
+    // Bilder spaeter. Sofort messen ergaebe die alten Werte.
+    window.setTimeout(refit, 120);
+    window.setTimeout(refit, 400);
+  });
   // Haelt die installierte App von selbst aktuell - niemand soll sie loeschen
   // und neu hinzufuegen muessen. Siehe platform/update.ts.
   startUpdateWatch();

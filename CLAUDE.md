@@ -50,20 +50,50 @@ Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
   Desktop-Fallback wäre Code, den niemand mehr benutzen kann.
   **Folge fürs Entwickeln:** Entweder auf dem Handy testen oder in den
   Entwicklerwerkzeugen die Geräteansicht einschalten (F12, dann Strg+Umschalt+M).
-- **Querformat: vorerst zurückgebaut.** Es gab einen Versuch, das Bild selbst
-  zu drehen (`src/platform/orientation.ts`, per CSS um 90 Grad plus einem
-  Ersatz für Phasers `transformPointer`, damit die Finger mitdrehen). Der
-  Versuch funktionierte im Emulator, fiel aber mit dem kaputten Basispfad
-  (siehe „Die Lehre vom 2026-09-17") in dieselbe Version - und weil auf dem
-  iPhone dann gar nichts mehr ging, war nicht zu trennen, was woran lag.
-  Deshalb ist die Drehung entfernt, bis bestätigt ist, dass das Spiel wieder
-  lädt. Im Hochformat steht jetzt nur ein Hinweisstreifen „Quer halten für das
-  volle Bild"; **er blendet das Spiel nicht aus** - genau das war die frühere
-  Sackgasse für alle mit aktiver Rotationssperre. Die Drehung kommt danach
-  zurück; die beiden Fallen von damals sind dokumentiert: CSS dreht nur das
-  Bild, nicht die Finger, und gedreht werden darf nur die Zeichenfläche, nicht
-  ihr Rahmen (Phaser misst den Rahmen zum Einpassen und bekäme sonst die
-  hochkanten Masse).
+- **Das Bild füllt den Bildschirm.** Die Entwurfsauflösung war fest 960×540,
+  also 16:9. Ein iPhone im Querformat ist eher 19,5:9 – im Modus `FIT` blieben
+  links und rechts je rund 75 Pixel schwarz, das Spiel sass in einem
+  Briefkasten. Jetzt bleibt die **Höhe** fest bei 540 und die **Breite folgt dem
+  Gerät** (`fitViewportToScreen` in `config/constants.ts`), begrenzt auf 960 bis
+  1280. Gemessen auf dem iPhone 13 quer: vorher 693×390 mit 151 px Balken,
+  jetzt 844×390 ohne.
+
+  **Warum `FIT` und nicht `ENVELOP` oder `RESIZE`** (beides erwogen):
+  - `ENVELOP` skaliert formatfüllend und schneidet den Überstand ab. Genau an
+    den Rändern sitzen hier aber FEUER, SUPER, Punktzahl und Wellenanzeige –
+    abgeschnitten würde also die Bedienung.
+  - `RESIZE` gibt jedem Gerät seine eigene Weltansicht. Auf einem breiten Handy
+    sähe man deutlich mehr Arena als auf einem schmalen; im Koop wäre das ein
+    echter Vorteil.
+  - `FIT` auf einer abgeleiteten Auflösung hat beides nicht: nichts wird
+    abgeschnitten, und die Grenze 960–1280 hält den Unterschied zwischen
+    Geräten bei höchstens einem Drittel Breite.
+
+  **Folge fürs Weiterbauen:** `VIEWPORT.width` steht erst fest, wenn das Spiel
+  startet. Wer sie beim Laden einer Datei ausliest (eine Konstante auf
+  Modulebene), bekommt die alte 960 – genau das war bei den Mitten der
+  Touch-Knöpfe der Fall, sie sind jetzt Funktionen.
+- **Querformat, soweit das Gerät es zulässt** (`src/platform/orientation.ts`).
+  `screen.orientation.lock` greift auf Android in der installierten App;
+  **iOS Safari kann es nicht**, weder im Browser noch auf dem Startbildschirm.
+  Wo es nicht geht, bleibt im Hochformat der Hinweisstreifen „Quer halten für
+  das volle Bild" stehen – er **blendet das Spiel nicht aus**. Eine Sperre im
+  Hochformat war die alte Sackgasse für alle mit aktivierter Rotationssperre.
+  Im PWA-Manifest steht `orientation: landscape`; Android beachtet das, iOS
+  ignoriert es.
+
+  **Die CSS-Drehung um 90 Grad ist bewusst nicht zurückgekommen.** Sie
+  funktionierte im Emulator, hatte aber zwei Fallen: CSS dreht das Bild, nicht
+  die Finger (Phasers `transformPointer` musste ersetzt werden), und gedreht
+  werden darf nur die Zeichenfläche, nicht ihr Rahmen (Phaser misst den Rahmen
+  zum Einpassen und bekäme sonst die hochkanten Masse). Beides war reparabel,
+  aber fragil. Nach dem Umbau oben ist das Querformat ohnehin das einzige
+  Format, in dem etwas fehlt – und das sagt der Hinweis.
+- **Auf Drehen und Grössenänderung wird reagiert.** `main.ts` hängt sich an
+  `resize` und `orientationchange` und ruft `game.scale.refresh()`. Nach einer
+  Drehung meldet der Browser die neuen Masse erst ein paar Bilder später,
+  deshalb wird zweimal gemessen (nach 120 und 400 ms). Ohne das bleibt die alte
+  Zeichenflächengrösse stehen und Berührungen landen daneben.
 - **Die installierte App aktualisiert sich selbst** (`src/platform/update.ts`).
   Ein Service Worker haelt die App offline verfuegbar - und liefert deshalb von
   sich aus weiter die gespeicherte Fassung. Das Modul fragt regelmaessig nach
@@ -385,12 +415,15 @@ Zwei Konsequenzen, beide im Code:
 
 ## Bekannte offene Punkte
 
-- **Querformat muss wieder rein.** Vom Nutzer gewünscht, hier bewusst
-  zurückgestellt, bis bestätigt ist, dass das Spiel auf seinem iPhone wieder
-  startet. Erst eine Sache reparieren, dann die nächste bauen.
+- **Querformat lässt sich auf dem iPhone nicht erzwingen.** `screen.orientation.lock`
+  gibt es in iOS Safari nicht. Bleibt der Hinweisstreifen im Hochformat. Eine
+  CSS-Drehung wäre technisch möglich, war aber fragil – siehe „Nur Handy".
 - **Version 1.1.0 ist ein kaputter Stand** (falscher Basispfad, weisse bzw.
-  blaue Seite). Heruntergeladen hat sie niemand (0 Downloads). 1.1.1 ersetzt
-  sie; ob das alte Release gelöscht wird, entscheidet der Nutzer.
+  blaue Seite). Heruntergeladen hat sie niemand (0 Downloads). Ab 1.1.1 ist es
+  behoben; ob das alte Release gelöscht wird, entscheidet der Nutzer.
+- **Die Balance ist am Bot gemessen, nicht am Menschen.** Scout 10,8 · Tank
+  10,0 · Sniper 9,0 Wellen. Der Bot nutzt keine Deckung und keine Büsche – das
+  sind Untergrenzen. Ob 8–15 Wellen stimmen, zeigt erst eigenes Spielen.
 - **Echtes WebRTC ist ungetestet.** Der Signalisierungsserver war aus der
   Entwicklungsumgebung nicht erreichbar. Reihenfolge zum Prüfen (aus dem
   Briefing): zwei Tabs (geht bereits über „Lokaler Test"), dann zwei Geräte im

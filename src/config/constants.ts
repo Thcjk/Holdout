@@ -19,7 +19,43 @@ export const ARENA = {
 export const VIEWPORT = {
   width: 960,
   height: 540,
-} as const;
+};
+
+/**
+ * Passt die Entwurfsaufloesung an das Seitenverhaeltnis des Geraets an.
+ *
+ * WARUM UEBERHAUPT: Die feste Aufloesung 960x540 ist 16:9. Ein iPhone im
+ * Querformat ist eher 19,5:9 - im Modus FIT blieben links und rechts je rund
+ * 75 Pixel schwarz. Das Spiel sass in einem Briefkasten mitten auf dem
+ * Bildschirm.
+ *
+ * Die Hoehe bleibt fest bei 540, die Breite folgt dem Bildschirm. Damit passt
+ * FIT genau auf, ohne Balken - und ohne etwas abzuschneiden.
+ *
+ * Die Grenzen sind Absicht: Ohne sie saehe ein Spieler auf einem sehr breiten
+ * Handy deutlich mehr von der Arena als einer auf einem schmalen, und im Koop
+ * waere das ein echter Vorteil. Zwischen 960 und 1280 ist der Unterschied
+ * hoechstens ein Drittel mehr Breite.
+ *
+ * MUSS VOR DEM ERSTEN `new Phaser.Game` LAUFEN: Szenen und Bedienelemente
+ * lesen diese Werte, wenn sie gebaut werden.
+ */
+export function fitViewportToScreen(screenWidth: number, screenHeight: number): void {
+  if (screenWidth <= 0 || screenHeight <= 0) {
+    return;
+  }
+
+  // Im Hochformat nicht umstellen: Dort waere die abgeleitete Breite winzig und
+  // das Spiel unspielbar schmal. Das Hochformat zeigt ohnehin nur den Hinweis,
+  // das Handy quer zu halten.
+  if (screenHeight > screenWidth) {
+    return;
+  }
+
+  const aspect = screenWidth / screenHeight;
+  const width = Math.round(VIEWPORT.height * aspect);
+  VIEWPORT.width = Math.min(1280, Math.max(960, width));
+}
 
 /**
  * Fester Zeitschritt der Simulation: 30 Ticks pro Sekunde.
