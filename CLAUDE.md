@@ -79,6 +79,37 @@ Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
   startet. Wer sie beim Laden einer Datei ausliest (eine Konstante auf
   Modulebene), bekommt die alte 960 – genau das war bei den Mitten der
   Touch-Knöpfe der Fall, sie sind jetzt Funktionen.
+- **Die Ränder gehören dem Gerät, nicht dem Spiel** (`src/platform/safeArea.ts`).
+  Seit `viewport-fit=cover` zeichnet die Seite bis in die letzte Ecke. Das ist
+  gewollt – sonst bleiben Balken –, hat aber eine Kehrseite: Auf einem iPhone
+  liegt im Querformat auf einer Seite die Notch, unten der Home-Indikator, und
+  alle vier Ecken sind rund. Punktzahl, Lebensbalken und die Knöpfe standen
+  genau dort und wurden angeschnitten.
+
+  Diese Abstände darf man **nicht raten**. Jedes Gerät hat andere: ein iPhone
+  quer meldet auf einer Seite rund 47 Pixel, ein Handy ohne Notch überall null.
+  Deshalb wird gefragt statt geschätzt – der Browser gibt sie über
+  `env(safe-area-inset-*)` heraus. Gemessen wird über ein unsichtbares
+  Hilfselement: Ein `env()`-Wert lässt sich nicht direkt auslesen, das daraus
+  berechnete Polster schon.
+
+  **Umgerechnet wird in Entwurfseinheiten** (`setSafeAreaFromScreen`), nicht in
+  Bildschirmpixeln: Gezeichnet wird auf einer Fläche von 540 Einheiten Höhe,
+  die auf den Bildschirm skaliert wird. Ohne Umrechnung wäre derselbe Abstand
+  auf einem grossen Gerät zu klein und auf einem kleinen zu gross. Alles, was
+  am Rand klebt, rechnet `SAFE` auf seinen Randabstand drauf – HUD,
+  FEUER/SUPER, Versionsschild, Zurück-Knopf.
+
+  **Reihenfolge in `main.ts`:** quer warten → Bildschirm messen → Sicherheits­-
+  abstände messen → Phaser bauen. Der Umrechnungsfaktor hängt an der Breite aus
+  Schritt 2.
+
+  **Zum Prüfen:** `?safe=oben,rechts,unten,links` in Bildschirmpixeln gibt die
+  Werte vor, statt sie zu messen (Beispiel iPhone quer: `?safe=0,47,21,47`).
+  Nötig, weil Emulatoren am Rechner immer null melden – sonst liesse sich ein
+  Layout für ein Gerät mit Notch nur auf dem Gerät selbst prüfen. `?debug=werte`
+  zeigt ausserdem Fläche, Bildschirmgrösse und die gemeldeten Ränder an; stehen
+  dort überall Nullen, meldet das Gerät keine, und es liegt nicht am Spiel.
 - **Das Spiel startet erst im Querformat** (`src/platform/rotateGate.ts` plus
   `#rotate-gate` in `index.html`). Vorher lief es auch hochkant an.
 

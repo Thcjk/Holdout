@@ -42,6 +42,47 @@ export const VIEWPORT = {
  * MUSS VOR DEM ERSTEN `new Phaser.Game` LAUFEN: Szenen und Bedienelemente
  * lesen diese Werte, wenn sie gebaut werden.
  */
+/**
+ * Sicherheitsabstaende in ENTWURFSEINHEITEN, nicht in Bildschirmpixeln.
+ *
+ * Das ist der Unterschied, auf den es ankommt: Das Geraet meldet seine
+ * Abstaende in echten Pixeln (iPhone 13 quer: rund 47 an der Notch-Seite),
+ * gezeichnet wird aber auf einer Flaeche von 540 Einheiten Hoehe, die auf den
+ * Bildschirm skaliert wird. Ohne Umrechnung waere der Abstand auf einem
+ * grossen Geraet zu klein und auf einem kleinen zu gross.
+ *
+ * Alles, was am Bildschirmrand klebt - Punktzahl, Lebensbalken, FEUER, SUPER -
+ * rechnet diese Werte auf seinen Randabstand drauf.
+ */
+export const SAFE = {
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+};
+
+/**
+ * Uebernimmt die gemessenen Abstaende und rechnet sie in Entwurfseinheiten um.
+ *
+ * MUSS NACH `fitViewportToScreen` LAUFEN: Der Umrechnungsfaktor haengt an der
+ * Entwurfsbreite, die dort erst festgelegt wird.
+ */
+export function setSafeAreaFromScreen(
+  insets: { top: number; right: number; bottom: number; left: number },
+  screenWidth: number,
+): void {
+  if (screenWidth <= 0) {
+    return;
+  }
+  // Die Flaeche wird gleichmaessig skaliert (Modus FIT), deshalb genuegt ein
+  // Faktor fuer beide Richtungen.
+  const scale = VIEWPORT.width / screenWidth;
+  SAFE.top = Math.round(insets.top * scale);
+  SAFE.right = Math.round(insets.right * scale);
+  SAFE.bottom = Math.round(insets.bottom * scale);
+  SAFE.left = Math.round(insets.left * scale);
+}
+
 export function fitViewportToScreen(screenWidth: number, screenHeight: number): void {
   if (screenWidth <= 0 || screenHeight <= 0) {
     return;

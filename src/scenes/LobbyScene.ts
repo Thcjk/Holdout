@@ -8,7 +8,7 @@
 
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
-import { COLORS, VIEWPORT } from "../config/constants";
+import { COLORS, SAFE, VIEWPORT } from "../config/constants";
 import { ClientSession } from "../net/ClientSession";
 import { HostSession } from "../net/HostSession";
 import { LocalTransport } from "../net/LocalTransport";
@@ -97,12 +97,19 @@ export class LobbyScene extends Phaser.Scene {
 
     this.buildChoices();
 
-    new Button(this, 92, VIEWPORT.height - 34, "Zurück", () => this.leave(), {
-      width: 140,
-      height: 40,
-      fontSize: 16,
-      color: COLORS.hudDim,
-    });
+    new Button(
+      this,
+      SAFE.left + 92,
+      VIEWPORT.height - SAFE.bottom - 34,
+      "Zurück",
+      () => this.leave(),
+      {
+        width: 140,
+        height: 40,
+        fontSize: 16,
+        color: COLORS.hudDim,
+      },
+    );
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.lobby?.destroy();

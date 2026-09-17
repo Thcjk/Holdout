@@ -15,7 +15,7 @@ import Phaser from "phaser";
 import { ATLAS_KEY, BODY_RADIUS } from "../assets/textures";
 import { audio } from "../audio/AudioEngine";
 import { CHARACTERS, CHARACTER_ORDER } from "../config/balance";
-import { COLORS, VIEWPORT } from "../config/constants";
+import { COLORS, SAFE, VIEWPORT } from "../config/constants";
 import { isInstalledApp } from "../platform/device";
 import {
   canPromptInstall,
@@ -77,11 +77,16 @@ export class MenuScene extends Phaser.Scene {
    */
   private createVersionLabel(): void {
     this.add
-      .text(VIEWPORT.width - 10, VIEWPORT.height - 8, `v${__APP_VERSION__}`, {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "11px",
-        color: "#4a5a70",
-      })
+      .text(
+        VIEWPORT.width - SAFE.right - 10,
+        VIEWPORT.height - SAFE.bottom - 8,
+        `v${__APP_VERSION__}`,
+        {
+          fontFamily: "system-ui, sans-serif",
+          fontSize: "11px",
+          color: "#4a5a70",
+        },
+      )
       .setOrigin(1, 1);
   }
 

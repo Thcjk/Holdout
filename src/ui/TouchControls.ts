@@ -15,7 +15,7 @@
  */
 
 import Phaser from "phaser";
-import { COLORS, DEPTH, TOUCH, VIEWPORT } from "../config/constants";
+import { COLORS, DEPTH, SAFE, TOUCH, VIEWPORT } from "../config/constants";
 import type { Vec2 } from "../systems/types";
 import { VirtualJoystick } from "./VirtualJoystick";
 
@@ -41,15 +41,15 @@ export interface TouchOutput {
  */
 function fireCenter(): Vec2 {
   return {
-    x: VIEWPORT.width - TOUCH.fireButton.marginX,
-    y: VIEWPORT.height - TOUCH.fireButton.marginY,
+    x: VIEWPORT.width - SAFE.right - TOUCH.fireButton.marginX,
+    y: VIEWPORT.height - SAFE.bottom - TOUCH.fireButton.marginY,
   };
 }
 
 function superCenter(): Vec2 {
   return {
-    x: VIEWPORT.width - TOUCH.superButton.marginX,
-    y: VIEWPORT.height - TOUCH.superButton.marginY,
+    x: VIEWPORT.width - SAFE.right - TOUCH.superButton.marginX,
+    y: VIEWPORT.height - SAFE.bottom - TOUCH.superButton.marginY,
   };
 }
 

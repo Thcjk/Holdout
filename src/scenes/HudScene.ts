@@ -10,7 +10,7 @@
  */
 
 import Phaser from "phaser";
-import { COLORS, DEPTH, VIEWPORT } from "../config/constants";
+import { COLORS, DEPTH, SAFE, VIEWPORT } from "../config/constants";
 import { audio } from "../audio/AudioEngine";
 import { InputManager } from "../input/InputManager";
 import { Button } from "../ui/Button";
@@ -48,10 +48,16 @@ export class HudScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Randabstaende: Grundabstand plus das, was das Geraet selbst als verdeckt
+    // meldet (Notch, Home-Indikator, runde Ecken). Siehe platform/safeArea.ts.
+    const leftEdge = SAFE.left + 14;
+    const rightEdge = VIEWPORT.width - SAFE.right - 14;
+    const topEdge = SAFE.top + 12;
+
     this.bars = this.add.graphics().setDepth(DEPTH.hud);
 
     this.waveText = this.add
-      .text(14, 12, "", {
+      .text(leftEdge, topEdge, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "18px",
         color: "#dce8f7",
@@ -60,7 +66,7 @@ export class HudScene extends Phaser.Scene {
       .setDepth(DEPTH.hud);
 
     this.scoreText = this.add
-      .text(VIEWPORT.width - 14, 12, "", {
+      .text(rightEdge, topEdge, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "16px",
         color: "#dce8f7",
@@ -70,7 +76,7 @@ export class HudScene extends Phaser.Scene {
       .setDepth(DEPTH.hud);
 
     this.mateText = this.add
-      .text(14, 40, "", {
+      .text(leftEdge, topEdge + 28, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "13px",
         color: "#8ea6c4",
@@ -91,8 +97,8 @@ export class HudScene extends Phaser.Scene {
     // Stummschalten muss im Spiel erreichbar sein (Briefing, Abschnitt 7).
     this.muteButton = new Button(
       this,
-      VIEWPORT.width - 58,
-      100,
+      rightEdge - 44,
+      topEdge + 88,
       audio.isMuted ? "Ton aus" : "Ton an",
       () => {
         const muted = audio.toggleMuted();
@@ -107,8 +113,8 @@ export class HudScene extends Phaser.Scene {
     // Rueckweg ins Menue auch ohne Tastatur - auf dem Handy gibt es kein Esc.
     new Button(
       this,
-      VIEWPORT.width - 160,
-      100,
+      rightEdge - 146,
+      topEdge + 88,
       "Menü",
       () => {
         this.scene.stop("Game");
@@ -130,7 +136,7 @@ export class HudScene extends Phaser.Scene {
     this.skillPanel = new SkillPanel(this, (skill) => this.inputManager.requestLevelUp(skill));
 
     this.skillHint = this.add
-      .text(14, 62, "", {
+      .text(leftEdge, topEdge + 50, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "14px",
         color: "#ffd166",
@@ -192,8 +198,8 @@ export class HudScene extends Phaser.Scene {
 
   /** Leben, Munition und Super unten links - der Blick geht im Spiel nach unten. */
   private drawPlayerBars(): void {
-    const left = 16;
-    const bottom = VIEWPORT.height - 18;
+    const left = SAFE.left + 16;
+    const bottom = VIEWPORT.height - SAFE.bottom - 18;
 
     this.bars.clear();
 

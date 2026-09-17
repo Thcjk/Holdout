@@ -6,6 +6,7 @@
  * und es kann die Spieldarstellung nicht durcheinanderbringen.
  */
 
+import { SAFE, VIEWPORT } from "../config/constants";
 import { appliedTuning, rejectedTuning } from "../config/tuning";
 import { SHOW_VALUES } from "./debugFlags";
 
@@ -66,6 +67,12 @@ export function updateValuesOverlay(values: OverlayValues, now: number): void {
   lastUpdate = now;
 
   const lines = [
+    // Damit sich aus der Ferne klaeren laesst, was ein Geraet ueberhaupt
+    // meldet: Flaeche, Bildschirm und die verdeckten Raender (Notch,
+    // Home-Indikator). Sind die Raender ueberall 0, meldet das Geraet keine -
+    // dann liegt es nicht am Spiel.
+    `Flaeche ${VIEWPORT.width}x${VIEWPORT.height}  Schirm ${window.innerWidth}x${window.innerHeight}`,
+    `Rand o${SAFE.top} r${SAFE.right} u${SAFE.bottom} l${SAFE.left}`,
     `fps ${values.fps.toFixed(0).padStart(3)}   Welle ${values.wave}`,
     `Gegner ${String(values.enemies).padStart(2)}  Projektile ${String(values.projectiles).padStart(2)}`,
     `Leben ${Math.round(values.health)}/${values.maxHealth}  Munition ${values.ammo}`,

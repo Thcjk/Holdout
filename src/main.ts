@@ -19,7 +19,8 @@ import { startUpdateWatch } from "./platform/update";
 import { applyTuningFromUrl } from "./config/tuning";
 import { lockLandscape } from "./platform/orientation";
 import { waitForLandscape, watchOrientation } from "./platform/rotateGate";
-import { COLORS, VIEWPORT, fitViewportToScreen } from "./config/constants";
+import { readSafeArea } from "./platform/safeArea";
+import { COLORS, VIEWPORT, fitViewportToScreen, setSafeAreaFromScreen } from "./config/constants";
 import { BootScene } from "./scenes/BootScene";
 import { GameOverScene } from "./scenes/GameOverScene";
 import { GameScene } from "./scenes/GameScene";
@@ -123,6 +124,13 @@ async function startWhenLandscape(): Promise<void> {
   await waitForLandscape();
 
   fitViewportToScreen(window.innerWidth, window.innerHeight);
+
+  // Das Geraet nach seinen verdeckten Raendern fragen (Notch, Home-Indikator,
+  // runde Ecken) und in Entwurfseinheiten umrechnen. Reihenfolge zaehlt: Der
+  // Umrechnungsfaktor haengt an der Breite, die eine Zeile darueber festgelegt
+  // wird.
+  setSafeAreaFromScreen(readSafeArea(), window.innerWidth);
+
   const game = new Phaser.Game(buildConfig());
 
   // Haelt die installierte App von selbst aktuell - niemand soll sie loeschen
