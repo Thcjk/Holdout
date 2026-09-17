@@ -18,6 +18,7 @@ import { createRoomCode, isValidRoomCode, normalizeRoomCode } from "../net/roomC
 import type { Transport } from "../net/Transport";
 import type { CharacterId } from "../systems/types";
 import { Button } from "../ui/Button";
+import { setReloadSafe } from "../platform/update";
 
 /** Fester Code fuer den lokalen Zwei-Tab-Test - der muss niemand abtippen. */
 const LOCAL_ROOM_CODE = "LOCAL1";
@@ -52,6 +53,8 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Hier nicht neu laden: Das wuerde diesen Bildschirm wegwischen.
+    setReloadSafe(false);
     this.cameras.main.setBackgroundColor(COLORS.background);
 
     this.add

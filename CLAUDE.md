@@ -64,6 +64,15 @@ Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
   Bild, nicht die Finger, und gedreht werden darf nur die Zeichenfläche, nicht
   ihr Rahmen (Phaser misst den Rahmen zum Einpassen und bekäme sonst die
   hochkanten Masse).
+- **Die installierte App aktualisiert sich selbst** (`src/platform/update.ts`).
+  Ein Service Worker haelt die App offline verfuegbar - und liefert deshalb von
+  sich aus weiter die gespeicherte Fassung. Das Modul fragt regelmaessig nach
+  (jede Minute im Vordergrund, zusaetzlich bei jeder Rueckkehr in den
+  Vordergrund und sobald wieder Netz da ist), laedt Geaendertes im Hintergrund
+  und startet erst dann neu, wenn es nicht stoert: **nur im Hauptmenue**. Jede
+  Szene meldet das selbst (`setReloadSafe`) - Menue `true`, Spiel, Lobby und
+  Ergebnisbildschirm `false`. Sonst waere ein Neustart der Verlust der Runde
+  oder der Punktzahl. Niemand muss die App loeschen und neu hinzufuegen.
 - **Zwei Wege zur Installation.** Android bekommt eine echte APK über Capacitor
   (`android/`, Workflow `android-apk.yml`). Android und iPhone können die Seite
   zusätzlich als PWA installieren (`src/platform/install.ts`). Eine iOS-App ist
@@ -182,7 +191,8 @@ src/
   audio/                  synthetisierte Klänge und Musik
   assets/textures.ts      Texture Atlas
   storage/highscore.ts    lokaler Rekord
-  platform/               Geräte-Erkennung, Desktop-Sperre, Absturzanzeige, Installation
+  platform/               Geräte-Erkennung, Desktop-Sperre, Absturzanzeige,
+                          Selbst-Aktualisierung, Installation
 android/                  Capacitor-Projekt für die Android-App
 tools/                    Hilfsskripte (App-Icons erzeugen)
 tests/

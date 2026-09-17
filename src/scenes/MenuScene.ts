@@ -26,6 +26,7 @@ import {
 import { loadHighscore } from "../storage/highscore";
 import type { CharacterId } from "../systems/types";
 import { Button } from "../ui/Button";
+import { setReloadSafe } from "../platform/update";
 
 const CARD_WIDTH = 268;
 const CARD_HEIGHT = 236;
@@ -48,6 +49,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Im Menue darf eine wartende neue Version sofort greifen.
+    setReloadSafe(true);
     this.cameras.main.setBackgroundColor(COLORS.background);
 
     // Ton darf erst nach einer Nutzerinteraktion starten - deshalb hier und

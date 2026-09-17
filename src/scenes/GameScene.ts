@@ -17,6 +17,7 @@ import { ArenaRenderer } from "../render/ArenaRenderer";
 import { CameraController } from "../render/CameraController";
 import { EntityRenderer } from "../render/EntityRenderer";
 import { Juice } from "../render/Juice";
+import { setReloadSafe } from "../platform/update";
 import { loadHighscore } from "../storage/highscore";
 import { nearestEnemy } from "../systems/targeting";
 import type { CharacterId, InputState, PlayerState, Vec2 } from "../systems/types";
@@ -66,6 +67,10 @@ export class GameScene extends Phaser.Scene {
 
     this.scene.launch("Hud", { model: this.hudModel });
     this.hud = this.scene.get("Hud") as HudScene;
+
+    // Ab jetzt laeuft eine Runde: Eine neue Version darf erst im Menue greifen,
+    // sonst reisst ein Neustart die Runde mitten im Gefecht ab.
+    setReloadSafe(false);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scene.stop("Hud");

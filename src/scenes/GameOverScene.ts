@@ -11,6 +11,7 @@ import { COLORS, VIEWPORT } from "../config/constants";
 import { loadHighscore, saveHighscore } from "../storage/highscore";
 import type { CharacterId } from "../systems/types";
 import { Button } from "../ui/Button";
+import { setReloadSafe } from "../platform/update";
 
 export interface GameOverData {
   score: number;
@@ -30,6 +31,8 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Hier nicht neu laden: Das wuerde diesen Bildschirm wegwischen.
+    setReloadSafe(false);
     const isRecord = saveHighscore(this.result.score, this.result.wave);
     const best = loadHighscore();
 
