@@ -47,10 +47,57 @@
       #game-root canvas {
         display: block;
       }
+
+      /* Hinweis, das Handy zu drehen. Das Spiel ist fuer Querformat gebaut:
+         Im Hochformat waere der Daumenbereich groesser als das Spielfeld.
+         `pointer: coarse` grenzt die Regel auf Touchgeraete ein - ein schmales
+         Desktop-Fenster soll nicht ploetzlich diesen Hinweis zeigen. */
+      #rotate-hint {
+        display: none;
+      }
+
+      @media (orientation: portrait) and (pointer: coarse) {
+        #game-root {
+          display: none;
+        }
+
+        #rotate-hint {
+          display: flex;
+          position: fixed;
+          inset: 0;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 18px;
+          color: #dce8f7;
+          text-align: center;
+          padding: 24px;
+        }
+
+        #rotate-hint .icon {
+          font-size: 56px;
+          animation: tilt 1.8s ease-in-out infinite;
+        }
+      }
+
+      @keyframes tilt {
+        0%,
+        60%,
+        100% {
+          transform: rotate(0deg);
+        }
+        30% {
+          transform: rotate(90deg);
+        }
+      }
     </style>
   </head>
   <body>
     <div id="game-root"></div>
+    <div id="rotate-hint">
+      <div class="icon">📱</div>
+      <div>Bitte das Handy quer halten.</div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

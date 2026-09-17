@@ -166,10 +166,12 @@ function desiredVelocity(state: WorldState, enemy: EnemyState, target: PlayerSta
   if (enemy.type === "shooter") {
     // Der Schuetze haelt Abstand: zu weit weg -> naeher ran, zu nah -> zurueck.
     const preferred = ENEMIES.shooter.preferredRange;
-    if (distance < preferred * 0.85) {
+    // Erst zurueckweichen, wenn es wirklich eng wird. Wer schon bei kleinen
+    // Annaeherungen flieht, ist fuer Nahkaempfer unerreichbar.
+    if (distance < preferred * 0.6) {
       dirX = -dirX;
       dirY = -dirY;
-    } else if (distance < preferred * 1.1) {
+    } else if (distance < preferred * 1.15) {
       return { x: 0, y: 0 };
     }
   }

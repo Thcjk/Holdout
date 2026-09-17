@@ -26,9 +26,9 @@ export const PLAYER = {
   /** Aufladung der Super-Faehigkeit pro Treffer, in Prozent. */
   superChargePerHit: 17,
   /** Mindestabstand zwischen zwei Schuessen in Sekunden. */
-  shootCooldown: 0.25,
+  shootCooldown: 0.18,
   /** Anteil des Lebens, der in der Pause zwischen zwei Wellen zurueckkommt. */
-  breakHealFraction: 0.45,
+  breakHealFraction: 0.6,
 } as const;
 
 /** Startwerte fuer Projektile. */
@@ -70,7 +70,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDefinition> = {
     health: 2400,
     speed: 250,
     reloadTime: 1.3,
-    shot: { bullets: 3, damage: 220, range: 450, spread: 18, piercing: false },
+    shot: { bullets: 3, damage: 220, range: 450, spread: 9, piercing: false },
     super: { name: "Dash", description: "Kurzer Sprint, der Gegner auf dem Weg zurückstösst" },
   },
   tank: {
@@ -153,13 +153,20 @@ export const ENEMIES = {
     radius: 18,
     shotDamage: 250,
     shotInterval: 2.0,
-    /** Wunschabstand zum Spieler: naeher laufen, weiter weg ausweichen. */
-    preferredRange: 420,
+    /**
+     * Wunschabstand zum Spieler.
+     *
+     * Bewusst kleiner als die Reichweite von Scout (450) und Sniper (900): Ein
+     * Gegner, der zurueckweicht und dabei weiter schiesst, als man selbst
+     * reicht, laesst sich nie stellen - die Welle endet dann nie, und das
+     * Balancing-Protokoll in Phase 7 hat genau das gezeigt.
+     */
+    preferredRange: 340,
   },
 } as const;
 
 /** Wie oft ein Gegner durch Beruehrung Schaden macht (Sekunden). */
-export const ENEMY_CONTACT_INTERVAL = 0.6;
+export const ENEMY_CONTACT_INTERVAL = 1.0;
 
 /** Wellenformel aus dem Briefing, Abschnitt 4. */
 export const WAVES = {
@@ -182,7 +189,7 @@ export const WAVES = {
   /** Vorwarnzeit der Spawnmarkierung in Sekunden. */
   spawnWarningSeconds: 1,
   /** Abstand zwischen zwei Gegnern derselben Welle in Sekunden. */
-  spawnIntervalSeconds: 0.35,
+  spawnIntervalSeconds: 0.6,
 } as const;
 
 /** Harte Obergrenzen fuer die Handy-Leistung (Briefing, Abschnitt 7). */

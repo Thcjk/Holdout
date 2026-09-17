@@ -66,6 +66,13 @@ export class GameScene extends Phaser.Scene {
     this.scene.launch("Hud", { model: this.hudModel, gameCamera: this.cameras.main });
     this.hud = this.scene.get("Hud") as HudScene;
 
+    // Rueckweg aus einer laufenden Runde. Ohne ihn kommt man am Handy nur
+    // ueber das Neuladen der Seite wieder ins Menue.
+    this.input.keyboard?.on("keydown-ESC", () => {
+      this.scene.stop("Hud");
+      this.scene.start("Menu");
+    });
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scene.stop("Hud");
       this.session.destroy();

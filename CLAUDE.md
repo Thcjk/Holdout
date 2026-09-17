@@ -21,102 +21,145 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
-**Phase 1 (Fundament) ist abgeschlossen.** Als Nächstes kommt Phase 2 (Steuerung).
+**Phase 1 bis 7 sind umgesetzt.** Der V1-Umfang aus dem Briefing steht damit
+vollständig im Code. Was aussteht, ist kein Code, sondern dein Urteil:
 
-Was läuft:
-
-- Vite + Phaser 3 + TypeScript, Build und Deployment über GitHub Actions
-- PWA-Grundgerüst (Manifest, Service Worker, Icons) über `vite-plugin-pwa`
-- Arena 1600 × 1200 px mit Aussenmauern und acht Deckungsblöcken
-- Steuerbare Spielfigur mit Tastatur (WASD / Pfeiltasten), Beschleunigung, Wandkollision
-- Simulation mit festem Zeitschritt (30 Hz) und Interpolation beim Zeichnen
-- Kamera folgt dem Spieler und bleibt in der Arena
-- 21 Tests über die Simulation (`npm run test`)
+- **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut
+  anfühlt, lässt sich nicht messen. Fühlt sie sich zäh an: Werte in
+  `src/config/balance.ts` (`speed`, `accelerationTime`) und
+  `src/config/constants.ts` (`TOUCH`) anpassen.
+- **Phase 6 ist erst auf zwei echten Geräten in verschiedenen Netzen bestanden.**
+  Geprüft ist bisher: zwei Browser-Tabs über den lokalen Transport, und Host plus
+  Client im Test mit 30 % künstlichem Paketverlust. Echtes WebRTC konnte hier
+  nicht geprüft werden, weil der PeerJS-Signalisierungsserver aus der
+  Entwicklungsumgebung nicht erreichbar ist.
+- **Balancing ist ein Vorschlag, kein Ergebnis.** Siehe unten.
 
 ## Die Architektur-Grundregel
 
 **Spiellogik und Darstellung sind strikt getrennt.** Das ist die eine Entscheidung,
 die man später nicht mehr billig nachholen kann.
 
-- Alles unter `src/systems/` ist **reine Logik auf Datenobjekten** und darf
-  **nichts aus Phaser importieren**. Diese Dateien müssen ohne Bildschirm laufen –
-  weil ab Phase 6 der Host die Simulation für alle Spieler rechnet, und weil sich
-  reine Logik testen lässt.
-- `src/scenes/` zeichnet nur. Eine Szene liest den Zustand und stellt ihn dar;
-  sie entscheidet nichts über Positionen, Leben oder Schaden.
-- `src/input/` übersetzt Geräte-Eingaben (Tastatur, ab Phase 2 Touch, ab Phase 6
-  Netzwerk) in einen einheitlichen `InputState`. Die Simulation weiss nicht,
-  woher eine Eingabe kommt.
+- Alles unter `src/systems/` ist **reine Logik auf Datenobjekten** und
+  **importiert nichts aus Phaser**. Der Host rechnet damit die Runde für alle,
+  und Tests spielen damit ganze Runden ohne Browser durch
+  (`tests/systems/round.test.ts`).
+- `src/render/` und `src/scenes/` zeichnen nur. Sie lesen den Zustand und stellen
+  ihn dar; sie entscheiden nichts über Positionen, Leben oder Schaden.
+- `src/input/` und `src/ui/` übersetzen Geräte-Eingaben in einen einheitlichen
+  `InputState`. Die Simulation weiss nicht, ob eine Eingabe von Tastatur, Daumen
+  oder aus dem Netz kommt - erst dadurch war Phase 6 überhaupt machbar.
+- `src/net/` verbindet beides: `GameSession` ist die einzige Schnittstelle, die
+  die Spielszene kennt. Ob solo, als Host oder als Client gespielt wird, sieht
+  sie nicht.
 
 Vor jedem neuen Modul die Frage stellen: _Muss der Host das rechnen können, ohne
 zu zeichnen?_ Wenn ja, gehört es nach `systems/`.
 
 ## Entscheidungen und Abweichungen vom Briefing
 
-| Thema                     | Entscheidung                                                              | Warum                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phaser-Version            | Phaser 3 (3.90), nicht Phaser 4                                           | Briefing gibt Phaser 3 vor. Für Einsteiger zählt vor allem, dass Tutorials, Forenantworten und Beispiele passen – dieses Material gibt es fast ausschliesslich für Phaser 3.                                                                                                                                                                                                                                                                         |
-| Phaser Arcade Physics     | Wird **nicht** benutzt                                                    | Das Briefing nennt Arcade Physics für die Gegner-KI (Abschnitt 4), aber die Architektur-Grundregel (Abschnitt 5) ist stärker: Die Simulation muss ohne Phaser laufen. Kollision Kreis gegen Rechteck steht deshalb selbst in `systems/collision.ts` – rund 60 Zeilen, testbar, für dieses Spiel ausreichend. Falls die Hindernisvermeidung der Gegner ab Phase 3 zu aufwendig wird, ist das die Stelle, an der diese Entscheidung neu zu prüfen ist. |
-| Spielerform               | Kreis statt Rechteck                                                      | Ein Kreis gleitet an Wänden und Ecken entlang, ein Rechteck verhakt sich dort. Genau dieses Verhaken ist der häufigste Grund, warum sich Top-down-Steuerung zäh anfühlt. Als Platzhaltergrafik sind Kreise laut Briefing (Abschnitt 7) ohnehin vorgesehen.                                                                                                                                                                                           |
-| `InputManager`            | Liegt unter `src/input/`, nicht unter `src/systems/`                      | Er liest Phaser-Tasten und darf deshalb nicht in den Phaser-freien Ordner. Der Rest der Struktur folgt dem Briefing.                                                                                                                                                                                                                                                                                                                                 |
-| Deckungsblöcke in Phase 1 | Schon vorhanden                                                           | Phase 1 verlangt "eine leere Arena mit Wänden". Die acht Blöcke benutzen dieselbe Kollision wie die Aussenmauern und machen den Abnahmetest ("stoppt an Wänden") erst aussagekräftig.                                                                                                                                                                                                                                                                |
-| Repo                      | Ersetzt den früheren Inhalt von `thistle-and-crown` (ein Babylon.js-MOBA) | So entschieden am 2026-09-17. Der alte Stand ist über die Git-Historie auf `main` weiter erreichbar. Der Repo-Name bleibt, deshalb bleibt auch `base: /thistle-and-crown/` für GitHub Pages.                                                                                                                                                                                                                                                         |
+| Thema                 | Entscheidung                                                              | Warum                                                                                                                                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phaser-Version        | Phaser 3 (3.90), nicht Phaser 4                                           | Briefing gibt Phaser 3 vor. Für Einsteiger zählt vor allem, dass Tutorials, Forenantworten und Beispiele passen - dieses Material gibt es fast ausschliesslich für Phaser 3.                                                                                                                                                           |
+| Phaser Arcade Physics | Wird **nicht** benutzt                                                    | Das Briefing nennt Arcade Physics für die Gegner-KI (Abschnitt 4), aber die Architektur-Grundregel (Abschnitt 5) ist stärker: Die Simulation muss ohne Phaser laufen. Kollision Kreis gegen Rechteck steht deshalb selbst in `systems/collision.ts` - rund 60 Zeilen, testbar.                                                         |
+| Sprites               | Werden beim Start gezeichnet statt von Kenney geladen                     | kenney.nl und itch.io sind aus dieser Entwicklungsumgebung nicht erreichbar. Entscheidend ist, dass die Schnittstelle stimmt: Im Spielcode steht nur `FRAMES.runner`. Auf echte Sprites zu wechseln heisst, `buildAtlas` in `src/assets/textures.ts` durch ein `scene.load.atlas` zu ersetzen - eine Datei, nicht fünfzig Fundstellen. |
+| Ton                   | Wird mit der Web-Audio-API synthetisiert statt als .ogg geladen           | Gleicher Grund. Gleiche Schnittstelle: Im Spielcode steht nur `audio.play("hit")`, siehe `src/audio/`.                                                                                                                                                                                                                                 |
+| HUD und Touch         | Eigene Szene (`HudScene`)                                                 | Die Spielkamera zoomt je nach Spielerabstand, und alles in ihrer Kamera zoomt mit - auch Text und Joysticks, die fest am Bildschirmrand kleben sollen. Eine zweite Szene hat ihre eigene Kamera ohne Zoom.                                                                                                                             |
+| Spielerform           | Kreis statt Rechteck                                                      | Ein Kreis gleitet an Wänden und Ecken entlang, ein Rechteck verhakt sich. Genau dieses Verhaken lässt Top-down-Steuerung zäh wirken.                                                                                                                                                                                                   |
+| Rundenablauf          | Vorbereitung nur vor Welle 1, danach Welle → Pause → Welle                | Die Pause kündigt laut Briefing selbst die nächste Welle an. Eine zusätzliche Vorbereitung dazwischen wären 15 Sekunden Warten zwischen zwei Wellen.                                                                                                                                                                                   |
+| Repo                  | Ersetzt den früheren Inhalt von `thistle-and-crown` (ein Babylon.js-MOBA) | So entschieden am 2026-09-17. Der alte Stand ist über die Git-Historie auf `main` erreichbar. Der Repo-Name bleibt, deshalb bleibt `base: /thistle-and-crown/`.                                                                                                                                                                        |
 
 ## Projektstruktur
 
 ```
 src/
-  main.ts                 Phaser-Konfiguration, startet das Spiel
+  main.ts                 Phaser-Konfiguration, Szenenliste
   config/
-    balance.ts            ALLE Spielwerte (Tempo, Leben, Schaden, Wellenformel)
-    constants.ts          Arena- und Bildschirmgrösse, Tickrate, Ebenen, Farben
-    arena.ts              Aufbau der Arena als reine Daten (Wandrechtecke)
-  scenes/
-    BootScene.ts          Startszene, später Ladebalken und Assets
-    GameScene.ts          zeichnet die Arena und den Spieler, sammelt Eingaben
-  input/
-    InputManager.ts       Tastatur -> InputState (Touch kommt in Phase 2)
-  systems/                PHASER-FREI
-    types.ts              Datentypen der Simulation
+    balance.ts            ALLE Spielwerte
+    constants.ts          Arena, Bildschirm, Tickrate, Kamera, Touch, Farben
+    arena.ts              Arena als reine Daten: Wände, Büsche, Spawnzonen
+  systems/                PHASER-FREI - die Simulation
+    types.ts              Datentypen und Ereignisse
     world.ts              Weltzustand, ein Tick
-    movement.ts           Beschleunigung und Bewegung eines Spielers
-    collision.ts          Kreis gegen Rechteck, Gleiten an Wänden
     Simulation.ts         fester Zeitschritt + Interpolation
-tests/systems/            Tests der reinen Logik
-public/
-  icons/                  PWA-Icons
-  favicon.svg
-BRIEFING.md               der vollständige Auftrag
+    movement.ts           Beschleunigung, Dash
+    collision.ts          Kreis gegen Rechteck, Gleiten
+    combat.ts             Schüsse, Munition, Schaden, Wiederbelebung
+    projectiles.ts        Projektile mit Object Pooling
+    enemies.ts            Gegner-KI, Sichtlinie
+    supers.ts             die drei Super-Fähigkeiten
+    waves.ts              Wellenformel und Rundenablauf
+    targeting.ts          wer sieht wen
+    rng.ts                wiederholbarer Zufall (Mulberry32)
+  net/                    Koop
+    protocol.ts           Nachrichten zwischen Host und Clients
+    Transport.ts          Verbindungsschnittstelle
+    PeerTransport.ts      WebRTC über PeerJS
+    LocalTransport.ts     zwei Tabs desselben Browsers (ohne Server)
+    Lobby.ts              Raum, Spielerliste, Start
+    HostSession.ts        autoritative Simulation
+    ClientSession.ts      Eingaben senden
+    ClientView.ts         Interpolation und Vorhersage
+    SoloSession.ts        Einzelspieler
+    GameSession.ts        die Schnittstelle, die die Spielszene kennt
+  render/                 Darstellung
+    ArenaRenderer, EntityRenderer, CameraController, Juice
+  scenes/                 Boot, Menu, Lobby, Game, Hud, GameOver
+  input/InputManager.ts   Tastatur, Maus und Touch -> InputState
+  ui/                     VirtualJoystick, TouchControls, Button, HudModel
+  audio/                  synthetisierte Klänge und Musik
+  assets/textures.ts      Texture Atlas
+  storage/highscore.ts    lokaler Rekord
+tests/
+  systems/                Simulation, inklusive ganzer Runden ohne Browser
+  net/                    Protokoll, Raumcodes, Host und Client im selben Prozess
 ```
 
-Die im Briefing aufgeführten Ordner `entities/`, `net/` und `ui/` gibt es noch
-nicht. Sie entstehen in den Phasen, die sie brauchen – leere Platzhalterdateien
-anzulegen wäre toter Code.
+## Balancing
 
-## Wichtige Zahlen und wo sie stehen
+**Alle Spielwerte stehen in `src/config/balance.ts`.** Kein anderes Modul
+verdrahtet Spielwerte fest.
 
-**Alle Spielwerte stehen in `src/config/balance.ts`.** Kein anderes Modul verdrahtet
-Spielwerte fest. Dort stehen auch schon die Werte für spätere Phasen (Charaktere,
-Gegner, Wellenformel), damit sie nicht später verstreut neu erfunden werden.
+`npm run test` gibt bei jedem Lauf eine Messung aus
+(`tests/systems/balanceProbe.test.ts`): Ein einfacher Bot spielt jeden Charakter
+fünfmal durch und meldet, wie weit er kommt. Stand jetzt:
 
-`src/config/constants.ts` enthält dagegen nur Technisches: Arenagrösse, Auflösung,
-Tickrate, Zeichenebenen, Farben.
+| Charakter | Erreichte Wellen (Bot) |
+| --------- | ---------------------- |
+| Scout     | ~5                     |
+| Tank      | ~6                     |
+| Sniper    | ~8                     |
 
-Die Werte sind Startwerte. Sie zu ändern ist der Sinn der Sache.
+Der Bot ist **schlechter als ein Mensch**: Er nutzt keine Deckung, keine Büsche
+(in denen Gegner ihn gar nicht sehen) und weicht Projektilen nicht aus. Seine
+Zahlen sind eine Untergrenze. Das Briefing nennt 8–15 Wellen als realistische
+Runde - ob das stimmt, zeigt erst dein eigenes Spielen.
+
+In Phase 7 wurden nur Werte angepasst, die **nicht** im Briefing stehen:
+`ENEMY_CONTACT_INTERVAL` (0,6 → 1,0 s), `PLAYER.shootCooldown` (0,25 → 0,18 s),
+`WAVES.spawnIntervalSeconds` (0,35 → 0,6 s), `PLAYER.breakHealFraction`
+(45 → 60 %), `ENEMIES.shooter.preferredRange` (420 → 340 px) und der
+Streuwinkel des Scouts (18 → 9 Grad). Alle Zahlen, die das Briefing nennt -
+Leben, Schaden, Tempo, Nachladezeiten, Wellenformel - sind unverändert.
+
+Der wichtigste Fund dabei: Ein Schütze, der zurückweicht und dabei weiter
+schiesst, als der Spieler reicht, ist für Nahkämpfer unerreichbar - die Welle
+endet dann nie. Deshalb ist sein Wunschabstand jetzt kleiner als jede
+Spielerreichweite, und er weicht erst bei echter Nähe zurück.
 
 ## Befehle
 
 | Befehl              | Zweck                                                              |
 | ------------------- | ------------------------------------------------------------------ |
-| `npm run dev`       | Entwicklungsserver, erreichbar auch im WLAN (`--host` ist gesetzt) |
-| `npm run test`      | Tests der Simulation                                               |
+| `npm run dev`       | Entwicklungsserver, auch im WLAN erreichbar (`--host` ist gesetzt) |
+| `npm run test`      | Tests der Simulation und des Netzwerks, plus Balancing-Messung     |
 | `npm run typecheck` | TypeScript prüfen                                                  |
 | `npm run lint`      | ESLint                                                             |
 | `npm run build`     | Produktionsbuild nach `dist/`                                      |
 | `npm run preview`   | Produktionsbuild lokal ansehen                                     |
 
 Vor jedem Commit: `npm run typecheck && npm run lint && npm run test && npm run build`.
-Genau das prüft auch der Workflow `quality-check.yml`.
+Genau das prüft auch `quality-check.yml`.
 
 ## Deployment
 
@@ -124,18 +167,26 @@ Genau das prüft auch der Workflow `quality-check.yml`.
 - Der Workflow setzt `VITE_BASE_PATH=/thistle-and-crown/`; ohne diesen Basispfad
   findet der Browser auf GitHub Pages die Dateien nicht
 - Ergebnis: `https://thcjk.github.io/thistle-and-crown/`
-- Einmalig in den Repo-Einstellungen nötig: **Settings → Pages → Source: GitHub Actions**
+- Einmalig nötig: **Settings → Pages → Source: GitHub Actions**
 
 ## Bekannte offene Punkte
 
-- **Keine Touch-Steuerung.** Auf dem Handy bewegt sich derzeit nichts – das ist
-  Phase 2. Getestet wird bis dahin mit Tastatur.
-- **Bundle ist gross** (~1,5 MB, gzip ~340 kB), weil Phaser komplett eingebunden
-  ist. Erst in Phase 7 relevant; dann über einen massgeschneiderten Phaser-Build lösen.
-- **Kein Ladebildschirm.** `BootScene` lädt noch nichts, weil alles gezeichnet wird.
-- **Arena ist noch keine Tilemap**, sondern eine Liste von Rechtecken in
-  `config/arena.ts`. Laut Briefing wird daraus in Phase 5 eine Tilemap. Die
-  Schnittstelle zur Simulation (eine Liste von Rechtecken) bleibt dabei gleich.
+- **Echtes WebRTC ist ungetestet.** Der Signalisierungsserver war aus der
+  Entwicklungsumgebung nicht erreichbar. Reihenfolge zum Prüfen (aus dem
+  Briefing): zwei Tabs (geht bereits über „Lokaler Test"), dann zwei Geräte im
+  WLAN, dann Mobilfunk. In manchen Mobilfunknetzen scheitert WebRTC
+  grundsätzlich - dafür bräuchte es einen TURN-Server. Die Antwort darauf ist
+  laut Briefing die Fehlermeldung plus der Solo-Modus, nicht ein eigener Server.
+- **Bildrate auf echtem Gerät ungeprüft.** Im Container laufen selbst fast leere
+  Szenen nur mit ~50 fps (Software-Rendering ohne GPU), das Spiel mit ~32 fps.
+  Diese Zahlen sagen nichts über ein Handy aus. Auf einem echten Gerät messen.
+- **Kein TURN-Server, keine Host-Migration.** Verlässt der Host, endet die Runde
+  mit Hinweis - so im Briefing vorgesehen.
+- **Bundle ist gross** (~1,6 MB, gzip ~370 kB), weil Phaser komplett eingebunden
+  ist. Ein massgeschneiderter Phaser-Build wäre der nächste Hebel.
+- **Arena ist keine Tilemap**, sondern eine Liste von Rechtecken in
+  `config/arena.ts`. Die Schnittstelle zur Simulation bleibt dieselbe, eine
+  Tilemap kann sie später füllen.
 
 ## Was bewusst NICHT gebaut wird (V1)
 
@@ -148,23 +199,8 @@ auch dann nicht, wenn es "schnell noch" machbar wäre.
 
 ## Arbeitsweise
 
-- **Eine Phase pro Sitzung.** Keine Vorgriffe auf spätere Phasen.
-- Nach jeder Phase selbst spielen und deployen, bevor es weitergeht.
+- Nach jeder Änderung selbst spielen und deployen, bevor es weitergeht.
 - Vor grösseren Änderungen den Plan zeigen, dann erst Code schreiben.
 - Erklären, was gebaut wurde und warum – besonders bei Phaser-Begriffen wie
   Scenes, Groups oder dem Scale Manager.
 - Am Ende der Sitzung diese Datei aktualisieren.
-
-## Nächste Phase: Phase 2 – Steuerung
-
-Umfang laut Briefing: Twin-Stick-Joysticks für Touch (links laufen, rechts zielen),
-Ziellinie mit Reichweitenanzeige, Kamerafolge mit dynamischem Zoom, tote Zone von
-etwa 10 px, Desktop-Fallback mit Maus.
-
-**Fertig, wenn** sich die Steuerung auf dem Handy gut anfühlt – das ist ein
-Gefühlstest, kein technischer. Fühlt sie sich zäh an, wird in Phase 2 nachjustiert
-statt weitergebaut.
-
-Vorbereitet ist dafür: `InputState` liefert bereits einen normalisierten
-Richtungsvektor, Teilausschläge (halb gedrückter Joystick) werden schon korrekt
-durchgereicht. Der Touch-Joystick muss also nur diesen Vektor füllen.

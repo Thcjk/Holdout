@@ -45,6 +45,15 @@ export class EntityRenderer {
   private readonly trails: Phaser.GameObjects.Graphics;
   private readonly bars: Phaser.GameObjects.Graphics;
   private readonly flashUntil = new Map<number, number>();
+  /**
+   * Welcher Atlas-Ausschnitt in einem Sprite gerade steckt.
+   *
+   * Phaser markiert ein Sprite bei jedem `setTexture` als veraendert, auch wenn
+   * sich nichts geaendert hat. Bei 40 Gegnern in jedem Bild ist das messbare
+   * Arbeit fuer nichts - deshalb wird der Wechsel hier gemerkt.
+   */
+  private readonly enemyFrames: string[] = [];
+  private readonly projectileFrames: string[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -159,7 +168,11 @@ export class EntityRenderer {
       const sprite = this.enemySprite(i);
       const position = this.simulation.renderEnemyPosition(enemy.id, enemy.position);
 
-      sprite.setTexture(ATLAS_KEY, ENEMY_FRAMES[enemy.type]);
+      const frame = ENEMY_FRAMES[enemy.type];
+      if (this.enemyFrames[i] !== frame) {
+        sprite.setTexture(ATLAS_KEY, frame);
+        this.enemyFrames[i] = frame;
+      }
       sprite.setPosition(position.x, position.y);
       sprite.setScale(enemy.radius / BODY_RADIUS);
       sprite.setVisible(true);
@@ -205,13 +218,16 @@ export class EntityRenderer {
 
   private updateProjectiles(state: WorldState): void {
     let used = 0;
+    const playerTrails: number[] = [];
+    const enemyTrails: number[] = [];
 
     for (const projectile of state.projectiles) {
       if (!projectile.active) {
         continue;
       }
 
-      const sprite = this.projectileSprite(used);
+      const index = used;
+      const sprite = this.projectileSprite(index);
       used += 1;
 
       const position = this.simulation.renderProjectilePosition(
@@ -219,20 +235,24 @@ export class EntityRenderer {
         projectile.velocity,
       );
       const isPlayerShot = projectile.owner === "player";
-      const color = isPlayerShot ? COLORS.playerBullet : COLORS.enemyBullet;
 
-      sprite.setTexture(ATLAS_KEY, isPlayerShot ? FRAMES.bulletPlayer : FRAMES.bulletEnemy);
+      const frame = isPlayerShot ? FRAMES.bulletPlayer : FRAMES.bulletEnemy;
+      if (this.projectileFrames[index] !== frame) {
+        sprite.setTexture(ATLAS_KEY, frame);
+        this.projectileFrames[index] = frame;
+      }
       sprite.setPosition(position.x, position.y);
       sprite.setScale(projectile.radius / BULLET_RADIUS_IN_CELL);
       sprite.setVisible(true);
 
       // Spuranzeige: eine kurze Linie entgegen der Flugrichtung. Ohne sie wirken
-      // schnelle Projektile wie einzelne Punkte, die springen.
+      // schnelle Projektile wie einzelne Punkte, die springen. Erst sammeln,
+      // dann in zwei Zuegen zeichnen - jeder Stilwechsel ist ein eigener
+      // Zeichenaufruf, und davon will man nicht sechzig pro Bild.
       const speed = Math.hypot(projectile.velocity.x, projectile.velocity.y);
       if (speed > 1) {
         const length = Math.min(34, speed * 0.05);
-        this.trails.lineStyle(projectile.radius * 1.1, color, 0.32);
-        this.trails.lineBetween(
+        (isPlayerShot ? playerTrails : enemyTrails).push(
           position.x,
           position.y,
           position.x - (projectile.velocity.x / speed) * length,
@@ -240,6 +260,9 @@ export class EntityRenderer {
         );
       }
     }
+
+    this.drawTrails(playerTrails, COLORS.playerBullet);
+    this.drawTrails(enemyTrails, COLORS.enemyBullet);
 
     for (let i = used; i < this.projectileSprites.length; i += 1) {
       this.projectileSprites[i]?.setVisible(false);
@@ -256,6 +279,22 @@ export class EntityRenderer {
     sprite.setDepth(DEPTH.projectiles);
     this.projectileSprites[index] = sprite;
     return sprite;
+  }
+
+  /** Alle Spuren einer Farbe in einem Zug. */
+  private drawTrails(points: readonly number[], color: number): void {
+    if (points.length === 0) {
+      return;
+    }
+    this.trails.lineStyle(8, color, 0.32);
+    for (let i = 0; i < points.length; i += 4) {
+      this.trails.lineBetween(
+        points[i] ?? 0,
+        points[i + 1] ?? 0,
+        points[i + 2] ?? 0,
+        points[i + 3] ?? 0,
+      );
+    }
   }
 
   private drawEnemyHealthBar(x: number, y: number, enemy: EnemyState): void {

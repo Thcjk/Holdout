@@ -92,7 +92,7 @@ export class HudScene extends Phaser.Scene {
     this.muteButton = new Button(
       this,
       VIEWPORT.width - 58,
-      VIEWPORT.height - 24,
+      100,
       audio.isMuted ? "Ton aus" : "Ton an",
       () => {
         const muted = audio.toggleMuted();
@@ -101,6 +101,21 @@ export class HudScene extends Phaser.Scene {
       { width: 96, height: 30, fontSize: 13, color: COLORS.hudDim },
     );
     this.muteButton.setDepth(DEPTH.hud);
+
+    // Menü und Ton liegen oben rechts unter der Punkteanzeige: Unten rechts
+    // sitzt der Super-Knopf, und dort wuerde der Daumen sie staendig streifen.
+    // Rueckweg ins Menue auch ohne Tastatur - auf dem Handy gibt es kein Esc.
+    new Button(
+      this,
+      VIEWPORT.width - 160,
+      100,
+      "Menü",
+      () => {
+        this.scene.stop("Game");
+        this.scene.start("Menu");
+      },
+      { width: 80, height: 30, fontSize: 13, color: COLORS.hudDim },
+    ).setDepth(DEPTH.hud);
 
     // Falls das Spiel direkt gestartet wurde: Ton beim ersten Antippen freigeben.
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {

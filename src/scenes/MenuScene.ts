@@ -109,6 +109,35 @@ export class MenuScene extends Phaser.Scene {
       { width: 116, height: 38, fontSize: 15, color: COLORS.hudDim },
     );
 
+    // Vollbild lohnt sich auf dem Handy: Ohne Browserleisten ist der
+    // Spielbereich spuerbar groesser.
+    if (this.scale.fullscreenTarget !== null || this.sys.game.device.fullscreen.available) {
+      const fullscreenButton = new Button(
+        this,
+        VIEWPORT.width - 74,
+        92,
+        this.scale.isFullscreen ? "Fenster" : "Vollbild",
+        () => {
+          if (this.scale.isFullscreen) {
+            this.scale.stopFullscreen();
+            fullscreenButton.setText("Vollbild");
+          } else {
+            this.scale.startFullscreen();
+            fullscreenButton.setText("Fenster");
+          }
+        },
+        { width: 116, height: 38, fontSize: 15, color: COLORS.hudDim },
+      );
+    }
+
+    this.add
+      .text(VIEWPORT.width / 2, VIEWPORT.height - 76, "Esc bringt dich im Spiel zurück ins Menü", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "12px",
+        color: "#8ea6c4",
+      })
+      .setOrigin(0.5);
+
     this.highlightSelection();
   }
 
@@ -122,6 +151,40 @@ export class MenuScene extends Phaser.Scene {
       this.selected = id;
       audio.unlock();
       audio.play("superReady");
+      // Vollbild lohnt sich auf dem Handy: Ohne Browserleisten ist der
+      // Spielbereich spuerbar groesser.
+      if (this.scale.fullscreenTarget !== null || this.sys.game.device.fullscreen.available) {
+        const fullscreenButton = new Button(
+          this,
+          VIEWPORT.width - 74,
+          92,
+          this.scale.isFullscreen ? "Fenster" : "Vollbild",
+          () => {
+            if (this.scale.isFullscreen) {
+              this.scale.stopFullscreen();
+              fullscreenButton.setText("Vollbild");
+            } else {
+              this.scale.startFullscreen();
+              fullscreenButton.setText("Fenster");
+            }
+          },
+          { width: 116, height: 38, fontSize: 15, color: COLORS.hudDim },
+        );
+      }
+
+      this.add
+        .text(
+          VIEWPORT.width / 2,
+          VIEWPORT.height - 76,
+          "Esc bringt dich im Spiel zurück ins Menü",
+          {
+            fontFamily: "system-ui, sans-serif",
+            fontSize: "12px",
+            color: "#8ea6c4",
+          },
+        )
+        .setOrigin(0.5);
+
       this.highlightSelection();
     });
     this.cards.set(id, card);
