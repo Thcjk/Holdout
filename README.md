@@ -1,121 +1,122 @@
-# Thistle & Crown
+# Koop-Arena-Shooter
 
-A stylized medieval fantasy MOBA for the browser. Two factions — **The Highland Covenant** and **The Iron Crown** — clash over the **Heartstone** in a misted highland vale.
+Top-down-Arena-Shooter für den Handy-Browser: 1–4 Spieler halten gemeinsam gegen
+immer stärkere Gegnerwellen durch. Statische PWA, gehostet auf GitHub Pages.
 
-This repository contains the foundation and a **local playable prototype** (player + bots). Online multiplayer is architected for later, not shipped yet.
+**Live:** https://thcjk.github.io/thistle-and-crown/
 
-## Current status
+## Was drin ist
 
-Phase 2 MOBA core (in progress):
+- Drei Charaktere, die sich grundlegend anders spielen: **Scout** (beweglich,
+  Fächerschuss), **Tank** (Schrotschuss, hält aus), **Sniper** (Reichweite,
+  Durchschuss) – jeder mit eigener Super-Fähigkeit
+- Wellensystem mit steigender Schwierigkeit, drei Gegnertypen, Boss alle fünf
+  Wellen, Score und lokaler Rekord
+- Twin-Stick-Touchsteuerung: schwebender Joystick links, Zielen und Schiessen
+  rechts, Super-Knopf – plus Tastatur und Maus zum Entwickeln
+- Koop über WebRTC mit sechsstelligem Raumcode, bis zu vier Spieler
+- Als PWA installierbar, Solo-Modus läuft offline
 
-- Boot → Main Menu → Hero Select → Match → Results
-- Playable hero: **Brenna Stonehand**
-- Enemy bot: **Sir Aldric Vale** (state-machine AI)
-- Three-lane waves, towers, cores, jungle camps
-- Attack-move, stop, camera lock/edge pan, minimap pan
-- Last-hit gold, assists, CS, spawn protection, fountain pressure
-- HTML/CSS HUD over Babylon.js canvas
+## Steuerung
 
-## Tech
+| Eingabe                  | Wirkung                                                      |
+| ------------------------ | ------------------------------------------------------------ |
+| Linker Daumen            | Laufen (Joystick erscheint, wo du hintippst)                 |
+| Rechter Daumen           | Ziehen zielt, Loslassen feuert; nur Tippen zielt automatisch |
+| Super-Knopf unten rechts | Super-Fähigkeit (leuchtet, wenn geladen)                     |
+| `W` `A` `S` `D`          | Laufen                                                       |
+| Maus                     | Zielen, Linksklick feuert                                    |
+| Leertaste                | Super                                                        |
+| `Esc`                    | zurück ins Menü                                              |
 
-TypeScript · Vite · Babylon.js · HTML/CSS · Vitest · ESLint · Prettier · GitHub Actions / Pages
+## Technik
 
-## Prerequisites
+TypeScript · Vite · Phaser 3 · PeerJS · vite-plugin-pwa · Vitest · ESLint ·
+Prettier · GitHub Actions / Pages
 
-- Node.js 20+
-- npm 10+
-- Project path **must not** contain `&` on Windows (npm script shims break). Use `thistle-and-crown` as the folder name.
+Die Simulation läuft mit festem Takt (30 Ticks pro Sekunde) und ist strikt von
+der Darstellung getrennt: Alles unter `src/systems/` ist reine Logik ohne Phaser.
+Deshalb kann im Koop ein Gerät die Runde für alle rechnen, und deshalb spielen
+die Tests ganze Runden ohne Browser durch. Warum das die wichtigste Entscheidung
+im Projekt ist, steht in `CLAUDE.md`.
 
-## Install
+## Voraussetzungen
+
+- Node.js 20 oder neuer
+- npm 10 oder neuer
+
+## Loslegen
 
 ```bash
 npm install
-```
-
-## Development
-
-```bash
 npm run dev
 ```
 
-Open the printed local URL (default `http://localhost:5173`).
+Der Entwicklungsserver ist auch im lokalen Netz erreichbar (`--host` ist gesetzt),
+damit sich das Spiel direkt auf dem Handy testen lässt: Die zweite Adresse in der
+Ausgabe von `npm run dev` im Handy-Browser öffnen.
 
-## Test / lint / build
+## Koop testen
 
-```bash
-npm run test
-npm run lint
-npm run build
-npm run preview
+In dieser Reihenfolge, so schlägt es das Briefing vor:
+
+1. **Zwei Tabs, ein Rechner:** Menü → _Zusammen spielen_ → im ersten Tab
+   _Lokaler Test: Raum_, im zweiten _Lokaler Test: beitreten_. Läuft über
+   `BroadcastChannel`, ganz ohne Internet.
+2. **Zwei Geräte im WLAN:** _Raum erstellen_ zeigt einen Raumcode, das zweite
+   Gerät gibt ihn unter _Beitreten_ ein. Ein Link mit `?room=CODE` füllt ihn
+   automatisch aus.
+3. **Über Mobilfunk:** gleicher Weg. In manchen Netzen scheitert WebRTC
+   grundsätzlich – dann kommt eine Fehlermeldung, und der Solo-Modus geht immer.
+
+## Befehle
+
+| Befehl              | Zweck                                                                   |
+| ------------------- | ----------------------------------------------------------------------- |
+| `npm run dev`       | Entwicklungsserver mit Hot Reload                                       |
+| `npm run test`      | Tests – und eine Balancing-Messung, die ausgibt, wie weit ein Bot kommt |
+| `npm run typecheck` | TypeScript prüfen                                                       |
+| `npm run lint`      | ESLint                                                                  |
+| `npm run format`    | Prettier über das Projekt laufen lassen                                 |
+| `npm run build`     | Produktionsbuild nach `dist/`                                           |
+| `npm run preview`   | Produktionsbuild lokal ansehen                                          |
+
+## Balancing
+
+Alle Spielwerte stehen in `src/config/balance.ts` – Leben, Schaden, Tempo,
+Nachladezeiten, Wellenformel. Diese Zahlen zu ändern ist der Sinn der Datei,
+nicht ein Zeichen, dass etwas falsch war. `npm run test` zeigt nach jeder
+Änderung, wie weit ein einfacher Bot damit kommt.
+
+## Projektstruktur
+
+```
+src/
+  config/     Spielwerte, Technisches, Arena
+  systems/    reine Spiellogik, ohne Phaser
+  net/        Koop: Transport, Lobby, Host und Client
+  render/     Arena, Figuren, Kamera, Effekte
+  scenes/     Boot, Menü, Lobby, Spiel, HUD, Game Over
+  input/ ui/  Eingaben und Bedienelemente
+  audio/      synthetisierte Klänge
+  assets/     Texture Atlas
+tests/        Simulation und Netzwerk, ohne Browser
 ```
 
-For GitHub Pages builds, set:
+## Deployment
 
-```bash
-VITE_BASE_PATH=/thistle-and-crown/ npm run build
-```
+Jeder Push auf `main` baut und veröffentlicht über
+`.github/workflows/deploy-pages.yml` auf GitHub Pages. Der Workflow setzt dabei
+`VITE_BASE_PATH=/thistle-and-crown/` – ohne diesen Basispfad findet der Browser
+die Dateien auf Pages nicht.
 
-## Controls
+Einmalig nötig: **Settings → Pages → Source: GitHub Actions**.
 
-| Input | Action |
-| --- | --- |
-| Right-click ground | Move (cancels skill targeting) |
-| Right-click enemy | Attack |
-| Left-click enemy | Select + attack |
-| A then left-click | Attack-move |
-| S | Stop / hold |
-| Q W E R | Abilities (self-cast or aim with left-click) |
-| D F | Reserved |
-| B | Recall channel |
-| Y | Toggle camera lock |
-| Tab | Scoreboard |
-| Space | Center + lock camera on hero |
-| Mouse wheel | Zoom |
-| Minimap click | Pan camera (unlocks follow) |
-| Screen edges | Pan camera when unlocked |
-| Esc | Cancel targeting / pause menu |
+## Dokumentation
 
-Shop purchases require standing in your base heal zone.
+- `BRIEFING.md` – der vollständige Auftrag: Spielkonzept, Werte, Architektur, Phasenplan
+- `CLAUDE.md` – aktueller Stand, Architekturentscheide, offene Punkte
 
-## Project structure
+## Lizenz
 
-```text
-src/app        Bootstrapping
-src/engine     Loop, scenes, input, events
-src/match      Match simulation
-src/entities   Logical entities
-src/combat     Damage / abilities
-src/progression Gold / XP / items
-src/ai         Bots and lane AI
-src/world      Map and collision
-src/camera     MOBA camera
-src/ui         DOM HUD
-src/data       Balance & definitions
-docs/          Design & pipeline docs
-```
-
-## Meshy workflow
-
-See [`docs/MESHY_ASSET_PIPELINE.md`](docs/MESHY_ASSET_PIPELINE.md). Register GLBs in `src/data/assets/modelManifest.ts`; gameplay uses asset IDs only.
-
-## GitHub Pages
-
-Workflow: `.github/workflows/deploy-pages.yml`  
-Enable Pages (GitHub Actions) on the repository after it is public or Pages-enabled. Private repos may need a paid plan for Pages.
-
-## Known limitations
-
-- Single playable hero; one bot opponent
-- Waves fully simulated on mid lane only
-- Procedural placeholder art (no Meshy models yet)
-- No networking
-- Fog of war not gameplay-enforced
-- HP bars use simplified screen mapping
-
-## Next step
-
-Phase 2: full three-lane wave combat, stronger bots, richer ability VFX, and first Meshy hero integration.
-
-## License
-
-MIT — see `LICENSE`.
+MIT, siehe `LICENSE`.

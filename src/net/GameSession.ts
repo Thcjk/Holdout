@@ -1,0 +1,42 @@
+/**
+ * Eine Runde spielen - egal ob allein, als Host oder als Client.
+ *
+ * Die Spielszene soll nicht wissen, in welchem Modus sie laeuft. Sie fragt jedes
+ * Bild "hier ist meine Eingabe, gib mir den Zustand zum Zeichnen" - und ob dieser
+ * Zustand lokal gerechnet oder ueber das Netz empfangen wurde, ist ihre Sache nicht.
+ */
+
+import type { GameEvent, InputState, Vec2, WorldState } from "../systems/types";
+
+/** Alles, was die Darstellung braucht. `Simulation` und `ClientView` erfuellen das. */
+export interface WorldView {
+  readonly state: WorldState;
+  /**
+   * Noch nicht erschienene Gegner der laufenden Welle. Eigener Wert statt
+   * `state.pendingSpawns.length`, weil der Client die Spawnliste nicht kennt -
+   * er bekommt nur die Zahl vom Host.
+   */
+  readonly pendingCount: number;
+  readonly events: readonly GameEvent[];
+  readonly alpha: number;
+  renderPlayerPosition(playerId: string): Vec2;
+  renderEnemyPosition(enemyId: number, current: Vec2): Vec2;
+  renderProjectilePosition(position: Vec2, velocity: Vec2): Vec2;
+}
+
+export interface GameSession {
+  readonly selfId: string;
+  readonly view: WorldView;
+  /** Gesetzt, sobald die Verbindung abgerissen ist - mit Text fuer den Spieler. */
+  readonly connectionLost: string | null;
+
+  /**
+   * Ein Bild weiterdrehen.
+   *
+   * @returns true, wenn die Eingabe verarbeitet wurde und einmalige Wuensche
+   *          (Schuss, Super) geloescht werden duerfen.
+   */
+  update(deltaMs: number, input: InputState): boolean;
+
+  destroy(): void;
+}

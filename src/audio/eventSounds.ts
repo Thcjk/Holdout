@@ -1,0 +1,55 @@
+/**
+ * Uebersetzt Spielereignisse in Klaenge.
+ *
+ * Eigene Datei, damit weder die Simulation noch die Darstellung etwas ueber Ton
+ * wissen muss: Die Simulation meldet "Gegner gestorben", hier steht, wie das klingt.
+ */
+
+import type { GameEvent } from "../systems/types";
+import type { SoundName } from "./AudioEngine";
+import { audio } from "./AudioEngine";
+
+function soundFor(event: GameEvent): SoundName | null {
+  switch (event.type) {
+    case "shot":
+      return event.owner === "player" ? "shoot" : "enemyShoot";
+    case "hit":
+      return "hit";
+    case "enemyDied":
+      return "enemyDied";
+    case "playerHit":
+      return "playerHit";
+    case "playerDown":
+      return "playerDown";
+    case "playerRevived":
+      return "revive";
+    case "superReady":
+      return "superReady";
+    case "superUsed":
+      return "superUsed";
+    case "waveStart":
+      return "waveStart";
+    case "gameOver":
+      return "gameOver";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Spielt die Klaenge eines Bildes.
+ *
+ * Gleiche Klaenge werden zusammengefasst: Sterben in einem Tick fuenf Gegner,
+ * wuerde fuenffacher identischer Ton nur uebersteuern statt lauter zu wirken.
+ */
+export function playEventSounds(events: readonly GameEvent[]): void {
+  const played = new Set<SoundName>();
+
+  for (const event of events) {
+    const sound = soundFor(event);
+    if (sound && !played.has(sound)) {
+      played.add(sound);
+      audio.play(sound);
+    }
+  }
+}

@@ -1,19 +1,102 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
-      name="description"
-      content="Thistle & Crown – a stylized medieval fantasy MOBA set in the Scottish highlands."
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Thistle &amp; Crown</title>
+    <meta name="description" content="Koop-Arena-Shooter – Top-down-Survival im Browser." />
+    <meta name="theme-color" content="#11161f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <title>Koop-Arena-Shooter</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #11161f;
+        font-family: system-ui, sans-serif;
+      }
+
+      /* Verhindert, dass ein Wisch ueber den Bildschirm die Seite scrollt
+         oder auf iOS das "Pull to refresh" ausloest. */
+      body {
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      #game-root {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+      }
+
+      #game-root canvas {
+        display: block;
+      }
+
+      /* Hinweis, das Handy zu drehen. Das Spiel ist fuer Querformat gebaut:
+         Im Hochformat waere der Daumenbereich groesser als das Spielfeld.
+         `pointer: coarse` grenzt die Regel auf Touchgeraete ein - ein schmales
+         Desktop-Fenster soll nicht ploetzlich diesen Hinweis zeigen. */
+      #rotate-hint {
+        display: none;
+      }
+
+      @media (orientation: portrait) and (pointer: coarse) {
+        #game-root {
+          display: none;
+        }
+
+        #rotate-hint {
+          display: flex;
+          position: fixed;
+          inset: 0;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 18px;
+          color: #dce8f7;
+          text-align: center;
+          padding: 24px;
+        }
+
+        #rotate-hint .icon {
+          font-size: 56px;
+          animation: tilt 1.8s ease-in-out infinite;
+        }
+      }
+
+      @keyframes tilt {
+        0%,
+        60%,
+        100% {
+          transform: rotate(0deg);
+        }
+        30% {
+          transform: rotate(90deg);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="app">
-      <canvas id="renderCanvas" tabindex="0"></canvas>
-      <div id="ui-root"></div>
+    <div id="game-root"></div>
+    <div id="rotate-hint">
+      <div class="icon">📱</div>
+      <div>Bitte das Handy quer halten.</div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
