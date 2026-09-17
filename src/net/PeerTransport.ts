@@ -17,11 +17,59 @@ import Peer from "peerjs";
 import type { DataConnection } from "peerjs";
 import type { NetMessage } from "./protocol";
 import { describeString, netLog } from "./netLog";
+import { SIGNAL_SERVERS, peerOptions } from "./peerConfig";
+import type { SignalServer } from "./peerConfig";
 import { peerIdForRoom } from "./roomCode";
 import { BaseTransport } from "./Transport";
 
-/** Wie lange auf eine Verbindung gewartet wird, bevor aufgegeben wird. */
-const CONNECT_TIMEOUT_MS = 12000;
+/** Wie lange je Signalisierungsserver auf die Anmeldung gewartet wird. */
+const OPEN_TIMEOUT_MS = 9000;
+
+/** Wie lange danach auf den Datenkanal zum Host gewartet wird. */
+const CHANNEL_TIMEOUT_MS = 14000;
+
+/**
+ * Wie oft ein Beitritt wiederholt wird, wenn der Raum "nicht gefunden" wird.
+ *
+ * Die Anmeldung des Hosts braucht beim Server einen Moment. Wer sofort nach
+ * dem Vorlesen des Codes tippt, kann in genau dieses Fenster geraten - und
+ * bekommt "Raum gibt es nicht", obwohl es ihn eine halbe Sekunde spaeter gibt.
+ */
+const JOIN_RETRIES = 3;
+const JOIN_RETRY_DELAY_MS = 600;
+
+/** Ein Fehler, der sagt, WORAN es lag - nicht nur, dass es nicht ging. */
+export type ConnectFailure =
+  | "signal-unreachable"
+  | "room-not-found"
+  | "no-direct-connection"
+  | "room-code-taken"
+  | "unsupported";
+
+export class ConnectError extends Error {
+  constructor(
+    readonly reason: ConnectFailure,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ConnectError";
+  }
+}
+
+function describeFailure(reason: ConnectFailure): string {
+  switch (reason) {
+    case "signal-unreachable":
+      return "Der Verbindungsdienst ist nicht erreichbar. Das liegt nicht an dir und nicht am Raumcode - versuch es in ein paar Minuten noch einmal.";
+    case "room-not-found":
+      return "Kein Raum mit diesem Code. Tippfehler? Oder der Host hat den Raum inzwischen geschlossen.";
+    case "no-direct-connection":
+      return "Der Raum wurde gefunden, aber es kommt keine Verbindung zwischen euren Geräten zustande. Das liegt meist am Mobilfunknetz - im WLAN klappt es oft.";
+    case "room-code-taken":
+      return "Dieser Raumcode ist gerade belegt. Erstelle einen neuen Raum.";
+    case "unsupported":
+      return "Dieser Browser unterstützt WebRTC nicht.";
+  }
+}
 
 export class PeerTransport extends BaseTransport {
   readonly roomCode: string;
@@ -33,8 +81,6 @@ export class PeerTransport extends BaseTransport {
   private openResolved = false;
   /** Regelmaessige Statusmeldung des Hosts, nur fuer die Fehlersuche. */
   private heartbeat: number | null = null;
-  /** Wann der Client `connect()` gerufen hat - fuer die Dauer bis zum Fehler. */
-  private connectStartedAt = 0;
 
   private constructor(roomCode: string, isHost: boolean) {
     super();
@@ -46,24 +92,94 @@ export class PeerTransport extends BaseTransport {
     return this.peer?.id ?? "unknown";
   }
 
-  /** Oeffnet einen Raum. Loest auf, sobald der Raumcode vergeben ist. */
-  static host(roomCode: string): Promise<PeerTransport> {
-    const transport = new PeerTransport(roomCode, true);
+  /**
+   * Oeffnet einen Raum.
+   *
+   * Probiert die Signalisierungsserver der Reihe nach durch: Ist der erste
+   * nicht erreichbar, wird der naechste versucht, statt aufzugeben. Ein
+   * einzelner Gratis-Server ist ein einzelner Ausfallpunkt - und fuer den
+   * Spieler sieht sein Ausfall genauso aus wie ein falscher Raumcode.
+   */
+  static async host(roomCode: string): Promise<PeerTransport> {
     const ownId = peerIdForRoom(roomCode);
     netLog("HOST: Raum wird geoeffnet");
     netLog(`HOST: ${describeString("Raumcode", roomCode)}`);
     netLog(`HOST: ${describeString("Peer-ID angefordert", ownId)}`);
-    return transport.start(ownId, null);
+
+    let lastReason: ConnectFailure = "signal-unreachable";
+    for (const server of SIGNAL_SERVERS) {
+      const transport = new PeerTransport(roomCode, true);
+      try {
+        await transport.openPeer(server, ownId);
+        netLog(`HOST: Raum offen ueber ${server.label}`);
+        return transport;
+      } catch (error) {
+        lastReason = error instanceof ConnectError ? error.reason : "signal-unreachable";
+        netLog(`HOST: ${server.label} hat nicht geklappt (${lastReason})`);
+        transport.close();
+        // Ein belegter Raumcode liegt nicht am Server - den naechsten zu
+        // probieren wuerde nichts aendern.
+        if (lastReason === "room-code-taken" || lastReason === "unsupported") {
+          break;
+        }
+      }
+    }
+
+    throw new ConnectError(lastReason, describeFailure(lastReason));
   }
 
-  /** Tritt einem Raum bei. Loest auf, sobald die Verbindung zum Host steht. */
-  static join(roomCode: string): Promise<PeerTransport> {
-    const transport = new PeerTransport(roomCode, false);
+  /**
+   * Tritt einem Raum bei.
+   *
+   * Zwei Dinge koennen schiefgehen, und sie fuehlen sich fuer den Spieler
+   * gleich an, brauchen aber verschiedene Antworten:
+   *
+   *   Der Raum wird nicht GEFUNDEN  -> falscher Code, oder der Server kennt den
+   *                                    Host nicht (noch nicht oder nicht mehr).
+   *   Der Raum wird gefunden, aber  -> die Geraete kommen nicht aneinander
+   *   der Datenkanal geht nie auf      vorbei. Das ist der Mobilfunk-Fall.
+   */
+  static async join(roomCode: string): Promise<PeerTransport> {
     const target = peerIdForRoom(roomCode);
     netLog("CLIENT: Beitritt wird versucht");
     netLog(`CLIENT: ${describeString("Raumcode eingetippt", roomCode)}`);
     netLog(`CLIENT: ${describeString("Peer-ID gesucht", target)}`);
-    return transport.start(undefined, target);
+
+    let lastReason: ConnectFailure = "signal-unreachable";
+
+    for (const server of SIGNAL_SERVERS) {
+      for (let attempt = 1; attempt <= JOIN_RETRIES; attempt += 1) {
+        const transport = new PeerTransport(roomCode, false);
+        try {
+          await transport.openPeer(server, undefined);
+          netLog(`CLIENT: beim ${server.label} angemeldet, Versuch ${attempt}`);
+          await transport.connectToHost(target);
+          netLog("CLIENT: Verbindung steht");
+          return transport;
+        } catch (error) {
+          lastReason = error instanceof ConnectError ? error.reason : "signal-unreachable";
+          netLog(`CLIENT: Versuch ${attempt} ueber ${server.label} gescheitert (${lastReason})`);
+          transport.close();
+
+          // Kommt keine direkte Verbindung zustande, hilft ein weiterer Versuch
+          // beim selben Server nicht - der naechste Server hat andere
+          // Hilfsserver und ist einen Versuch wert.
+          if (lastReason === "no-direct-connection") {
+            break;
+          }
+          // "Nicht gefunden" ist der Fall, der sich mit Warten loesen kann:
+          // Die Anmeldung des Hosts braucht beim Server einen Moment.
+          if (lastReason === "room-not-found" && attempt < JOIN_RETRIES) {
+            netLog(`CLIENT: ${JOIN_RETRY_DELAY_MS} ms warten und noch einmal`);
+            await delay(JOIN_RETRY_DELAY_MS);
+            continue;
+          }
+          break;
+        }
+      }
+    }
+
+    throw new ConnectError(lastReason, describeFailure(lastReason));
   }
 
   send(peerId: string, message: NetMessage): void {
@@ -104,11 +220,9 @@ export class PeerTransport extends BaseTransport {
    * Meldet alle fuenf Sekunden, ob der Host beim Signalisierungsserver noch
    * angemeldet ist.
    *
-   * Der wichtigste offene Verdacht: Der Host sieht weiter seinen Raumcode,
-   * waehrend seine Anmeldung beim Server laengst weg ist. Der Code auf dem
-   * Bildschirm sagt darueber nichts aus - er ist nur Text. Erst diese Zeilen
-   * zeigen, ob im Moment des Beitritts ueberhaupt noch jemand da war, den der
-   * Client finden koennte.
+   * Der Raumcode auf dem Bildschirm sagt darueber nichts aus - er ist nur
+   * Text. Faellt der Host still vom Server, sieht er weiter seinen Code,
+   * waehrend jeder Beitritt mit "Raum nicht gefunden" scheitert.
    */
   private startHeartbeat(peer: Peer): void {
     if (this.heartbeat !== null) {
@@ -132,92 +246,66 @@ export class PeerTransport extends BaseTransport {
     }
   }
 
-  private start(ownId: string | undefined, connectTo: string | null): Promise<PeerTransport> {
+  /**
+   * Meldet sich bei einem Signalisierungsserver an.
+   *
+   * Loest auf, sobald `open` gefeuert hat - also sobald der Server die ID
+   * wirklich kennt. Vorher gibt es keinen Raum, egal was auf dem Bildschirm
+   * steht.
+   */
+  private openPeer(server: SignalServer, ownId: string | undefined): Promise<void> {
     return new Promise((resolve, reject) => {
-      const peer = ownId ? new Peer(ownId) : new Peer();
+      const options = peerOptions(server);
+      const peer = ownId
+        ? new Peer(ownId, options as never)
+        : new Peer(undefined as never, options as never);
       this.peer = peer;
 
-      // Welcher Signalisierungsserver wird ueberhaupt benutzt? Wenn Host und
-      // Client hier verschiedene Werte zeigen, kann der eine den anderen
-      // niemals finden - egal wie richtig der Raumcode ist.
-      const options = (peer as unknown as { options?: Record<string, unknown> }).options ?? {};
+      const actual = (peer as unknown as { options?: Record<string, unknown> }).options ?? {};
       netLog(
-        `${this.rolle()}: Server host=${String(options.host)} port=${String(options.port)} ` +
-          `path=${String(options.path)} key=${String(options.key)} secure=${String(options.secure)}`,
+        `${this.rolle()}: Server ${server.label} host=${String(actual.host)} ` +
+          `port=${String(actual.port)} path=${String(actual.path)} secure=${String(actual.secure)}`,
       );
 
+      let settled = false;
       const timeout = window.setTimeout(() => {
-        if (!this.openResolved) {
-          this.close();
-          reject(
-            new Error(
-              "Keine Verbindung zustande gekommen. Im WLAN klappt es meist - sonst geht der Solo-Modus immer.",
-            ),
-          );
-        }
-      }, CONNECT_TIMEOUT_MS);
-
-      peer.on("error", (error: Error & { type?: string }) => {
-        const since =
-          this.connectStartedAt > 0
-            ? ` (${((Date.now() - this.connectStartedAt) / 1000).toFixed(2)}s nach connect)`
-            : "";
-        netLog(
-          `${this.rolle()}: FEHLER type=${String(error.type)} message=${error.message}${since}`,
-        );
-        if (!this.openResolved) {
-          window.clearTimeout(timeout);
-          this.close();
-          reject(new Error(describePeerError(error)));
+        if (settled) {
           return;
         }
-        this.errorHandler(describePeerError(error));
-      });
+        settled = true;
+        netLog(`${this.rolle()}: Anmeldung dauerte zu lange`);
+        reject(new ConnectError("signal-unreachable", describeFailure("signal-unreachable")));
+      }, OPEN_TIMEOUT_MS);
 
       peer.on("open", (assignedId: string) => {
-        netLog(`${this.rolle()}: open gefeuert`);
         netLog(`${this.rolle()}: ${describeString("Peer-ID zugeteilt", assignedId)}`);
-        netLog(`${this.rolle()}: ${describeString("peer.id", peer.id)}`);
         if (ownId !== undefined) {
-          // Der wichtigste Vergleich: Bekommt der Host wirklich die ID, die er
-          // angefordert hat? Weicht sie ab, sucht der Client spaeter eine ID,
-          // die es beim Server nicht gibt.
-          netLog(
-            `HOST: angefordert === zugeteilt ? ${String(ownId === assignedId)} ` +
-              `(und === peer.id ? ${String(ownId === peer.id)})`,
-          );
-        }
-
-        if (connectTo === null) {
-          // Host: ab jetzt koennen Clients beitreten.
-          window.clearTimeout(timeout);
-          this.openResolved = true;
-          netLog("HOST: Raum offen, Code wird jetzt angezeigt");
+          netLog(`HOST: angefordert === zugeteilt ? ${String(ownId === assignedId)}`);
           this.startHeartbeat(peer);
-          resolve(this);
+        }
+        if (settled) {
           return;
         }
+        settled = true;
+        window.clearTimeout(timeout);
+        this.openResolved = true;
+        resolve();
+      });
 
-        netLog(`CLIENT: ${describeString("connect() aufgerufen mit", connectTo)}`);
-        const connectStartedAt = Date.now();
-        this.connectStartedAt = connectStartedAt;
-        const connection = peer.connect(connectTo, {
-          // Bei Spielzustaenden ist die neueste Nachricht wichtiger als die
-          // vollstaendige Reihenfolge (Briefing, Abschnitt 6).
-          reliable: false,
-        });
-
-        connection.on("open", () => {
-          netLog("CLIENT: Datenkanal offen - Verbindung steht");
-          window.clearTimeout(timeout);
-          this.registerConnection(connection);
-          this.openResolved = true;
-          resolve(this);
-        });
-
-        connection.on("error", (error: Error) => {
-          netLog(`CLIENT: Datenkanal-Fehler ${error.message}`);
-        });
+      peer.on("error", (error: Error & { type?: string }) => {
+        netLog(`${this.rolle()}: FEHLER type=${String(error.type)} message=${error.message}`);
+        const reason = reasonFor(error.type);
+        // Nach dem Verbindungsaufbau sind Fehler nur noch Meldungen - die
+        // laufende Runde soll davon nicht sterben.
+        if (settled) {
+          if (this.openResolved) {
+            this.errorHandler(describeFailure(reason));
+          }
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeout);
+        reject(new ConnectError(reason, describeFailure(reason)));
       });
 
       peer.on("connection", (connection: DataConnection) => {
@@ -228,20 +316,105 @@ export class PeerTransport extends BaseTransport {
         });
       });
 
-      peer.on("close", () => {
-        netLog(`${this.rolle()}: peer geschlossen`);
-      });
-
       peer.on("disconnected", () => {
-        // Das ist der stille Killer: Faellt der Host vom Signalisierungsserver,
-        // sieht er weiter seinen Raumcode - der Server kennt ihn aber nicht
-        // mehr, und jeder Beitritt scheitert mit "peer-unavailable".
-        netLog(`${this.rolle()}: VOM SERVER GETRENNT (reconnect wird versucht)`);
-        // Verbindung zum Signalisierungsserver verloren - die laufenden
-        // Direktverbindungen bestehen weiter, ein neuer Beitritt geht nicht mehr.
+        netLog(`${this.rolle()}: vom Server getrennt - reconnect wird versucht`);
         if (!this.closed) {
           peer.reconnect();
         }
+      });
+
+      peer.on("close", () => netLog(`${this.rolle()}: peer geschlossen`));
+    });
+  }
+
+  /**
+   * Baut den Datenkanal zum Host auf.
+   *
+   * Hier trennen sich die beiden Fehlerarten: Meldet PeerJS
+   * "peer-unavailable", kennt der Server den Raum nicht. Geht der Kanal
+   * dagegen einfach nie auf, wurde der Raum gefunden, aber die Geraete kommen
+   * nicht aneinander vorbei - das ist der Mobilfunk-Fall, gegen den TURN hilft.
+   */
+  private connectToHost(target: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const peer = this.peer;
+      if (!peer) {
+        reject(new ConnectError("signal-unreachable", describeFailure("signal-unreachable")));
+        return;
+      }
+
+      netLog(`CLIENT: ${describeString("connect() aufgerufen mit", target)}`);
+      let settled = false;
+      let foundRoom = false;
+
+      const connection = peer.connect(target, {
+        // Bei Spielzustaenden ist die neueste Nachricht wichtiger als die
+        // vollstaendige Reihenfolge (Briefing, Abschnitt 6).
+        reliable: false,
+      });
+
+      const timeout = window.setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        // Kam bis hierher kein "peer-unavailable", kennt der Server den Raum -
+        // es hakt also an der Verbindung selbst.
+        const reason: ConnectFailure = foundRoom ? "no-direct-connection" : "room-not-found";
+        netLog(`CLIENT: Datenkanal kam nicht zustande (${reason})`);
+        reject(new ConnectError(reason, describeFailure(reason)));
+      }, CHANNEL_TIMEOUT_MS);
+
+      // PeerJS meldet "peer-unavailable" ueber den PEER, nicht ueber die
+      // Verbindung. Kommt das nicht, ist der Raum gefunden.
+      const onPeerError = (error: Error & { type?: string }): void => {
+        if (settled) {
+          return;
+        }
+        if (error.type === "peer-unavailable") {
+          settled = true;
+          window.clearTimeout(timeout);
+          netLog("CLIENT: Server kennt diesen Raum nicht");
+          reject(new ConnectError("room-not-found", describeFailure("room-not-found")));
+        }
+      };
+      peer.on("error", onPeerError);
+
+      connection.on("iceStateChanged", (state: string) => {
+        netLog(`CLIENT: ICE-Zustand ${state}`);
+        // "checking" heisst: Der Raum wurde gefunden und die Geraete versuchen
+        // gerade, einen Weg zueinander zu finden. Ab hier ist ein Scheitern
+        // kein falscher Raumcode mehr.
+        if (state === "checking" || state === "connected" || state === "completed") {
+          foundRoom = true;
+        }
+        // "failed" ist endgueltig - darauf noch zwoelf Sekunden zu warten
+        // waere nur Zeitverschwendung.
+        if (state === "failed" && !settled) {
+          settled = true;
+          window.clearTimeout(timeout);
+          peer.off("error", onPeerError);
+          netLog("CLIENT: keine Verbindung zwischen den Geraeten moeglich");
+          reject(
+            new ConnectError("no-direct-connection", describeFailure("no-direct-connection")),
+          );
+        }
+      });
+
+      connection.on("open", () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeout);
+        peer.off("error", onPeerError);
+        netLog("CLIENT: Datenkanal offen");
+        this.registerConnection(connection);
+        resolve();
+      });
+
+      connection.on("error", (error: Error) => {
+        netLog(`CLIENT: Datenkanal-Fehler ${error.message}`);
       });
     });
   }
@@ -268,20 +441,25 @@ export class PeerTransport extends BaseTransport {
   }
 }
 
-/** Verstaendliche Meldungen statt PeerJS-Fehlercodes. */
-function describePeerError(error: Error & { type?: string }): string {
-  switch (error.type) {
+/** Ordnet einen PeerJS-Fehlercode einer der Ursachen zu, die wir unterscheiden. */
+function reasonFor(type: string | undefined): ConnectFailure {
+  switch (type) {
     case "unavailable-id":
-      return "Dieser Raumcode ist gerade belegt. Erstelle einen neuen Raum.";
+      return "room-code-taken";
     case "peer-unavailable":
-      return "Kein Raum mit diesem Code gefunden. Tippfehler? Oder der Host hat den Raum geschlossen.";
+      return "room-not-found";
+    case "browser-incompatible":
+      return "unsupported";
     case "network":
     case "server-error":
     case "socket-error":
-      return "Der Verbindungsdienst ist nicht erreichbar. Prüfe deine Internetverbindung.";
-    case "browser-incompatible":
-      return "Dieser Browser unterstützt WebRTC nicht.";
+    case "ssl-unavailable":
+      return "signal-unreachable";
     default:
-      return "Verbindung fehlgeschlagen. Im WLAN klappt es meist - der Solo-Modus geht immer.";
+      return "signal-unreachable";
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }

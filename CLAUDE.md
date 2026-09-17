@@ -352,6 +352,63 @@ statt zu helfen. Ohne `?debug=` kostet das nichts (`platform/debugFlags.ts`).
 Auf dem Handy gibt es keine Entwicklerwerkzeuge - die Adresszeile ist der
 einzige Weg, im echten Spiel auf dem echten Gerät etwas sichtbar zu machen.
 
+### Koop über zwei verschiedene Netze
+
+Für eine Verbindung übers Internet braucht es **zwei** Dinge. Sie werden oft
+verwechselt, und beide müssen stimmen (`src/net/peerConfig.ts`):
+
+1. **Signalisierung – „wie finden wir uns?"** Ein kleiner Server, bei dem sich
+   der Host unter seinem Raumcode anmeldet. Er vermittelt nur den Kontakt;
+   Spieldaten laufen nie darüber. Fällt er aus, meldet PeerJS
+   `peer-unavailable` – also „diesen Raum gibt es nicht", obwohl der Host
+   danebensitzt.
+2. **NAT-Durchstossung – „wie kommen wir aneinander vorbei?"** Beide Geräte
+   stehen hinter einem Router, im Mobilfunk sogar hinter dem Netz des Anbieters
+   (CGNAT). **STUN** sagt einem Gerät nur, wie es von aussen aussieht; **TURN**
+   leitet die Daten über einen fremden Server weiter, wenn direkt nichts geht.
+
+**Was gefehlt hat:** `new Peer(id)` wurde **ohne jede Konfiguration** aufgerufen.
+Damit galten nur die eingebauten STUN-Server und **kein TURN**. Im selben WLAN
+geht das meistens gut; über zwei verschiedene Netze – genau der Fall „Freund
+kommt von zu Hause dazu" – scheitert es regelmässig, und zwar stumm: Der Raum
+wird gefunden, aber der Datenkanal geht nie auf.
+
+Jetzt sind STUN- und TURN-Server konfiguriert (Open Relay, öffentliche und
+ausdrücklich zum Mitbenutzen gedachte Zugangsdaten – keine Geheimnisse). Drei
+TURN-Einträge mit verschiedenen Ports und Protokollen, weil strenge Firewalls
+oft nur 443 durchlassen und manche nur TCP.
+
+**Zwei Signalisierungsserver statt einem.** Ein einzelner Gratis-Dienst ist ein
+einzelner Ausfallpunkt, und sein Ausfall sieht für den Spieler genauso aus wie
+ein falscher Raumcode. Sie werden der Reihe nach probiert.
+
+**Wiederholversuche beim Beitreten.** Die Anmeldung des Hosts braucht beim
+Server einen Moment. Wer sofort nach dem Vorlesen tippt, kann in genau dieses
+Fenster geraten. Bei „nicht gefunden" wird deshalb bis zu dreimal mit 600 ms
+Pause wiederholt, bevor die Meldung kommt.
+
+**Vier Ursachen, vier Meldungen.** Vorher hiess jeder Fehlschlag sinngemäss
+„Raum nicht gefunden". Jetzt unterscheidet `ConnectError`:
+
+| Ursache | Was der Spieler liest |
+| ------- | --------------------- |
+| `signal-unreachable` | Der Verbindungsdienst ist nicht erreichbar – liegt nicht an dir und nicht am Raumcode |
+| `room-not-found` | Kein Raum mit diesem Code – Tippfehler, oder der Host hat geschlossen |
+| `no-direct-connection` | Raum gefunden, aber keine Verbindung zwischen den Geräten – meist Mobilfunk |
+| `room-code-taken` | Dieser Code ist gerade belegt |
+
+Die dritte Zeile ist die wichtige: Sie unterscheidet „falscher Code" von
+„NAT-Problem", und nur mit dieser Unterscheidung weiss man, ob TURN hilft oder
+ob man sich vertippt hat. Erkannt wird sie am ICE-Zustand: Sobald der auf
+`checking` springt, ist der Raum gefunden. Springt er auf `failed`, wird sofort
+abgebrochen statt zwölf Sekunden zu warten.
+
+**Grenzen, die bleiben:** Der TURN-Dienst ist gratis und im Durchsatz begrenzt –
+für zwei bis vier Spieler reicht das, für viele gleichzeitige Räume bräuchte es
+einen eigenen. Und ein eigener Signalisierungsserver wäre die einzige Lösung,
+die nicht von fremder Verfügbarkeit abhängt; er passt nur nicht zu „statische
+Seite auf GitHub Pages".
+
 ## Der Name
 
 Das Spiel heisst **Holdout**. Umbenannt wurde alles Sichtbare: Browser-Titel,
@@ -602,12 +659,14 @@ Zwei Konsequenzen, beide im Code:
 - **Die Balance ist am Bot gemessen, nicht am Menschen.** Scout 10,8 · Tank
   10,0 · Sniper 9,0 Wellen. Der Bot nutzt keine Deckung und keine Büsche – das
   sind Untergrenzen. Ob 8–15 Wellen stimmen, zeigt erst eigenes Spielen.
-- **Echtes WebRTC ist ungetestet.** Der Signalisierungsserver war aus der
-  Entwicklungsumgebung nicht erreichbar. Reihenfolge zum Prüfen (aus dem
-  Briefing): zwei Tabs (geht bereits über „Lokaler Test"), dann zwei Geräte im
-  WLAN, dann Mobilfunk. In manchen Mobilfunknetzen scheitert WebRTC
-  grundsätzlich - dafür bräuchte es einen TURN-Server. Die Antwort darauf ist
-  laut Briefing die Fehlermeldung plus der Solo-Modus, nicht ein eigener Server.
+- **Echtes WebRTC ist weiterhin ungetestet – der Server ist aus dieser
+  Entwicklungsumgebung gesperrt** (der Proxy antwortet mit 403 auf
+  `0.peerjs.com:443`). Geprüft werden konnte deshalb nur der Ausfallweg, und
+  der stimmt: Beide Signalisierungsserver werden der Reihe nach probiert, und
+  am Ende steht „Der Verbindungsdienst ist nicht erreichbar" statt „Raum nicht
+  gefunden". Ob eine echte Verbindung über zwei Netze zustande kommt, zeigt nur
+  ein Test mit zwei Geräten. `?debug=netz` zeigt dabei alles Nötige.
+
 - **Bildrate auf echtem Gerät ungeprüft.** Im Container laufen selbst fast leere
   Szenen nur mit ~50 fps (Software-Rendering ohne GPU), das Spiel mit ~32 fps.
   Diese Zahlen sagen nichts über ein Handy aus. Auf einem echten Gerät messen.

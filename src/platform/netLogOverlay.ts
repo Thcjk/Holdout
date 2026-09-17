@@ -42,6 +42,15 @@ export function installNetLogOverlay(): void {
     "-webkit-user-select:text",
     "user-select:text",
   ].join(";");
+  // Antippen klappt das Protokoll auf einen Streifen zusammen und wieder auf.
+  // Ohne das verdeckt es bei einer Fehlermeldung genau den Knopf darunter.
+  let collapsed = false;
+  node.addEventListener("click", () => {
+    collapsed = !collapsed;
+    node.style.maxHeight = collapsed ? "18px" : "52vh";
+    node.style.overflow = collapsed ? "hidden" : "auto";
+  });
+
   document.body.appendChild(node);
   element = node;
 
