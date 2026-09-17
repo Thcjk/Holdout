@@ -1,6 +1,14 @@
 /**
- * Twin-Stick-Steuerung fuer Touch: links laufen, rechts zielen und schiessen,
- * dazu der Super-Knopf rechts unten.
+ * Twin-Stick-Steuerung fuer Touch.
+ *
+ * Links: ein schwebender Joystick zum Laufen. Er erscheint dort, wo der Daumen
+ * die linke Bildschirmhaelfte beruehrt - das ist laut Briefing der Unterschied
+ * zwischen "geht" und "fuehlt sich gut an".
+ *
+ * Rechts: ein Schussknopf an FESTER Stelle. Halten feuert dauerhaft (so schnell,
+ * wie Munition und Schusstakt es zulassen), Ziehen zielt mit einer Linie,
+ * blosses Antippen ueberlaesst der Simulation die Zielsuche. Fest deshalb, weil
+ * ein Schussknopf blind zu finden sein muss - im Gefecht schaut niemand hin.
  *
  * Diese Klasse verteilt die Finger ("Zeiger") auf die drei Bedienelemente. Ohne
  * diese Verteilung wuerde ein zweiter Finger den ersten Joystick uebernehmen.
@@ -13,56 +21,50 @@ import { VirtualJoystick } from "./VirtualJoystick";
 
 export interface TouchOutput {
   move: Vec2;
-  /** Zielrichtung, solange der rechte Daumen zieht. */
+  /** Zielrichtung, solange der Daumen vom Schussknopf weg zieht. */
   aim: Vec2 | null;
-  /** Zugstaerke rechts, 0 bis 1 - daraus entsteht die Reichweitenanzeige. */
+  /** Zugstaerke, 0 bis 1 - daraus entsteht die Reichweitenanzeige. */
   aimStrength: number;
-  /** Wurde in diesem Bild ein Schuss ausgeloest? */
+  /** Wird gerade gefeuert? Gehaltener Zustand, kein einmaliger Wunsch. */
   fire: boolean;
-  /** Wurde der Super ausgeloest? */
+  /** Einmaliger Wunsch, die Super-Faehigkeit auszuloesen. */
   useSuper: boolean;
-  /** Ist gerade ueberhaupt ein Finger im Spiel? Steuert die Sichtbarkeit. */
-  active: boolean;
 }
+
+const FIRE_CENTER: Vec2 = {
+  x: VIEWPORT.width - TOUCH.fireButton.marginX,
+  y: VIEWPORT.height - TOUCH.fireButton.marginY,
+};
+
+const SUPER_CENTER: Vec2 = {
+  x: VIEWPORT.width - TOUCH.superButton.marginX,
+  y: VIEWPORT.height - TOUCH.superButton.marginY,
+};
 
 export class TouchControls {
   private readonly moveStick: VirtualJoystick;
-  private readonly aimStick: VirtualJoystick;
-  private readonly superButton: Phaser.GameObjects.Graphics;
+  private readonly fireGraphics: Phaser.GameObjects.Graphics;
+  private readonly fireLabel: Phaser.GameObjects.Text;
+  private readonly superGraphics: Phaser.GameObjects.Graphics;
   private readonly superLabel: Phaser.GameObjects.Text;
 
+  private firePointerId: number | null = null;
+  private fireDrag: Vec2 = { x: 0, y: 0 };
   private superPointerId: number | null = null;
-  private fireLatched = false;
   private superLatched = false;
-  private used = false;
   private superReady = false;
-
-  private readonly superCenter: Vec2;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.moveStick = new VirtualJoystick(scene, COLORS.player);
-    this.aimStick = new VirtualJoystick(scene, COLORS.playerBullet);
 
-    this.superCenter = {
-      x: VIEWPORT.width - TOUCH.superButtonRadius - TOUCH.superButtonMargin,
-      y: VIEWPORT.height - TOUCH.superButtonRadius - TOUCH.superButtonMargin,
-    };
+    this.fireGraphics = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
+    this.fireLabel = label(scene, FIRE_CENTER, "FEUER", 15);
 
-    this.superButton = scene.add.graphics();
-    this.superButton.setScrollFactor(0);
-    this.superButton.setDepth(DEPTH.hud);
-    this.superButton.setVisible(false);
+    this.superGraphics = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
+    this.superLabel = label(scene, SUPER_CENTER, "SUPER", 13);
 
-    this.superLabel = scene.add.text(this.superCenter.x, this.superCenter.y, "SUPER", {
-      fontFamily: "system-ui, sans-serif",
-      fontSize: "14px",
-      color: "#11161f",
-      fontStyle: "bold",
-    });
-    this.superLabel.setOrigin(0.5);
-    this.superLabel.setScrollFactor(0);
-    this.superLabel.setDepth(DEPTH.hud);
-    this.superLabel.setVisible(false);
+    this.drawFireButton();
+    this.drawSuperButton();
 
     scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.onDown, this);
     scene.input.on(Phaser.Input.Events.POINTER_MOVE, this.onMove, this);
@@ -79,24 +81,26 @@ export class TouchControls {
   }
 
   read(): TouchOutput {
-    const aimVector = this.aimStick.vector;
-    const aimLength = Math.hypot(aimVector.x, aimVector.y);
+    const dragLength = Math.hypot(this.fireDrag.x, this.fireDrag.y);
+    const aiming = this.firePointerId !== null && dragLength > TOUCH.fireButton.aimDeadZone;
 
-    const output: TouchOutput = {
+    return {
       move: this.moveStick.vector,
-      aim: aimLength > 1e-6 ? { x: aimVector.x / aimLength, y: aimVector.y / aimLength } : null,
-      aimStrength: Math.min(1, aimLength),
-      fire: this.fireLatched,
+      aim: aiming ? { x: this.fireDrag.x / dragLength, y: this.fireDrag.y / dragLength } : null,
+      aimStrength: aiming
+        ? Math.min(
+            1,
+            (dragLength - TOUCH.fireButton.aimDeadZone) /
+              (TOUCH.fireButton.aimRange - TOUCH.fireButton.aimDeadZone),
+          )
+        : 0,
+      fire: this.firePointerId !== null,
       useSuper: this.superLatched,
-      active: this.used,
     };
-
-    return output;
   }
 
   /** Einmalige Wuensche loeschen, sobald die Simulation sie verarbeitet hat. */
   clearOneShots(): void {
-    this.fireLatched = false;
     this.superLatched = false;
   }
 
@@ -106,8 +110,9 @@ export class TouchControls {
     this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.onUp, this);
     this.scene.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.onUp, this);
     this.moveStick.destroy();
-    this.aimStick.destroy();
-    this.superButton.destroy();
+    this.fireGraphics.destroy();
+    this.fireLabel.destroy();
+    this.superGraphics.destroy();
     this.superLabel.destroy();
   }
 
@@ -115,22 +120,26 @@ export class TouchControls {
     if (!pointer.wasTouch) {
       return;
     }
-    this.markUsed();
 
-    if (this.hitsSuperButton(pointer.x, pointer.y)) {
+    // Reihenfolge zaehlt: Die festen Knoepfe liegen in der rechten Haelfte und
+    // muessen zuerst gepruefte werden, sonst schluckt der Zielstick sie.
+    if (
+      this.superPointerId === null &&
+      within(pointer, SUPER_CENTER, TOUCH.superButton.hitRadius)
+    ) {
       this.superPointerId = pointer.id;
       return;
     }
 
-    if (pointer.x < VIEWPORT.width / 2) {
-      if (!this.moveStick.isActive) {
-        this.moveStick.claim(pointer.id, pointer.x, pointer.y);
-      }
+    if (this.firePointerId === null && within(pointer, FIRE_CENTER, TOUCH.fireButton.hitRadius)) {
+      this.firePointerId = pointer.id;
+      this.fireDrag = { x: 0, y: 0 };
+      this.drawFireButton();
       return;
     }
 
-    if (!this.aimStick.isActive) {
-      this.aimStick.claim(pointer.id, pointer.x, pointer.y);
+    if (pointer.x < VIEWPORT.width / 2 && !this.moveStick.isActive) {
+      this.moveStick.claim(pointer.id, pointer.x, pointer.y);
     }
   }
 
@@ -138,10 +147,15 @@ export class TouchControls {
     if (!pointer.wasTouch) {
       return;
     }
+
     if (this.moveStick.ownedPointer === pointer.id) {
       this.moveStick.move(pointer.x, pointer.y);
-    } else if (this.aimStick.ownedPointer === pointer.id) {
-      this.aimStick.move(pointer.x, pointer.y);
+      return;
+    }
+
+    if (this.firePointerId === pointer.id) {
+      this.fireDrag = { x: pointer.x - FIRE_CENTER.x, y: pointer.y - FIRE_CENTER.y };
+      this.drawFireButton();
     }
   }
 
@@ -158,42 +172,80 @@ export class TouchControls {
       return;
     }
 
+    if (this.firePointerId === pointer.id) {
+      this.firePointerId = null;
+      this.fireDrag = { x: 0, y: 0 };
+      this.drawFireButton();
+      return;
+    }
+
     if (this.moveStick.ownedPointer === pointer.id) {
       this.moveStick.release();
-      return;
-    }
-
-    if (this.aimStick.ownedPointer === pointer.id) {
-      // Ziehen und loslassen feuert in die gezogene Richtung. Nur antippen
-      // feuert ebenfalls - dann sucht die Simulation selbst den naechsten Gegner.
-      this.fireLatched = true;
-      this.aimStick.release();
     }
   }
 
-  private hitsSuperButton(x: number, y: number): boolean {
-    const distance = Math.hypot(x - this.superCenter.x, y - this.superCenter.y);
-    // Grosszuegiger Trefferbereich: Daumen sind ungenau.
-    return distance <= TOUCH.superButtonRadius * 1.25;
-  }
+  /** Der Knopf leuchtet, solange er gehalten wird, und zeigt die Zugrichtung. */
+  private drawFireButton(): void {
+    const held = this.firePointerId !== null;
+    const graphics = this.fireGraphics;
+    const { radius } = TOUCH.fireButton;
 
-  private markUsed(): void {
-    if (this.used) {
-      return;
+    graphics.clear();
+    graphics.fillStyle(COLORS.playerBullet, held ? 0.34 : 0.16);
+    graphics.fillCircle(FIRE_CENTER.x, FIRE_CENTER.y, radius);
+    graphics.lineStyle(4, COLORS.playerBullet, held ? 0.95 : 0.55);
+    graphics.strokeCircle(FIRE_CENTER.x, FIRE_CENTER.y, radius);
+
+    if (held) {
+      const length = Math.hypot(this.fireDrag.x, this.fireDrag.y);
+      if (length > TOUCH.fireButton.aimDeadZone) {
+        // Der Daumenpunkt bleibt im Knopf, auch wenn der Finger weiter zieht.
+        const clamped = Math.min(length, radius);
+        graphics.fillStyle(COLORS.playerOutline, 0.9);
+        graphics.fillCircle(
+          FIRE_CENTER.x + (this.fireDrag.x / length) * clamped,
+          FIRE_CENTER.y + (this.fireDrag.y / length) * clamped,
+          16,
+        );
+      }
     }
-    this.used = true;
-    this.superButton.setVisible(true);
-    this.superLabel.setVisible(true);
-    this.drawSuperButton();
+
+    this.fireLabel.setAlpha(held ? 0.35 : 0.9);
   }
 
   private drawSuperButton(): void {
-    const fill = this.superReady ? COLORS.superReady : COLORS.playerDown;
-    this.superButton.clear();
-    this.superButton.fillStyle(fill, this.superReady ? 0.9 : 0.4);
-    this.superButton.fillCircle(this.superCenter.x, this.superCenter.y, TOUCH.superButtonRadius);
-    this.superButton.lineStyle(3, COLORS.playerOutline, this.superReady ? 0.9 : 0.35);
-    this.superButton.strokeCircle(this.superCenter.x, this.superCenter.y, TOUCH.superButtonRadius);
-    this.superLabel.setAlpha(this.superReady ? 1 : 0.45);
+    const ready = this.superReady;
+    const graphics = this.superGraphics;
+
+    graphics.clear();
+    graphics.fillStyle(ready ? COLORS.superReady : COLORS.playerDown, ready ? 0.9 : 0.35);
+    graphics.fillCircle(SUPER_CENTER.x, SUPER_CENTER.y, TOUCH.superButton.radius);
+    graphics.lineStyle(3, COLORS.playerOutline, ready ? 0.9 : 0.3);
+    graphics.strokeCircle(SUPER_CENTER.x, SUPER_CENTER.y, TOUCH.superButton.radius);
+
+    this.superLabel.setAlpha(ready ? 1 : 0.4);
+    this.superLabel.setColor(ready ? "#11161f" : "#dce8f7");
   }
+}
+
+function within(pointer: Phaser.Input.Pointer, center: Vec2, radius: number): boolean {
+  return Math.hypot(pointer.x - center.x, pointer.y - center.y) <= radius;
+}
+
+function label(
+  scene: Phaser.Scene,
+  center: Vec2,
+  text: string,
+  size: number,
+): Phaser.GameObjects.Text {
+  return scene.add
+    .text(center.x, center.y, text, {
+      fontFamily: "system-ui, sans-serif",
+      fontSize: `${size}px`,
+      color: "#11161f",
+      fontStyle: "bold",
+    })
+    .setOrigin(0.5)
+    .setScrollFactor(0)
+    .setDepth(DEPTH.hud);
 }

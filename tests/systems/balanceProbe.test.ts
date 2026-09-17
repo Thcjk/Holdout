@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHARACTERS } from "../../src/config/balance";
+import { CHARACTERS, SKILL_ORDER } from "../../src/config/balance";
 import { TICK_RATE, TICK_SECONDS } from "../../src/config/constants";
 import { nearestEnemy } from "../../src/systems/targeting";
 import { createWorld, stepWorld } from "../../src/systems/world";
@@ -59,7 +59,13 @@ function botInput(state: ReturnType<typeof createWorld>): Map<string, InputState
   const move =
     fleeLength > 0.05 ? { x: fleeX / fleeLength, y: fleeY / fleeLength } : { x: 0, y: 0 };
   const useSuper = player.superCharge >= 100;
-  return new Map([[player.id, makeInput(move, { aim, fire: true, useSuper })]]);
+  // Punkte reihum verteilen - ein Bot, der Aufwertungen liegen liesse, wuerde
+  // das Spiel schwerer messen, als es ist.
+  const levelUp =
+    player.skillPoints > 0
+      ? (SKILL_ORDER[player.skills.weapon % SKILL_ORDER.length] ?? null)
+      : null;
+  return new Map([[player.id, makeInput(move, { aim, fire: true, useSuper, levelUp })]]);
 }
 
 /**

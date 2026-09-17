@@ -9,7 +9,7 @@
  */
 
 import { SPAWN_ZONES } from "../config/arena";
-import { LIMITS, PLAYER, WAVES } from "../config/balance";
+import { LIMITS, PLAYER, SKILL_POINTS_PER_WAVE, WAVES } from "../config/balance";
 import { TICK_RATE } from "../config/constants";
 import { createEnemy } from "./enemies";
 import { randomIndex, randomRange } from "./rng";
@@ -169,6 +169,10 @@ function startBreak(state: WorldState): void {
   state.phaseTime = WAVES.breakSeconds;
 
   for (const player of state.players) {
+    // Ein Punkt pro geschaffter Welle - auch fuer Gefallene, sonst waere ein
+    // schlechter Moment doppelt bestraft.
+    player.skillPoints += SKILL_POINTS_PER_WAVE;
+
     if (player.down) {
       player.down = false;
       player.reviveProgress = 0;

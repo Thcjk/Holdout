@@ -67,19 +67,44 @@ export const CAMERA = {
   followLerp: 0.12,
 } as const;
 
-/** Touch-Steuerung (Briefing, Abschnitt 3). */
+/**
+ * Touch-Steuerung.
+ *
+ * Links ein schwebender Joystick - er erscheint dort, wo der Daumen die linke
+ * Bildschirmhaelfte beruehrt. Rechts dagegen alles an FESTER Stelle: Der
+ * Schussknopf muss blind zu finden sein, und ein Knopf, der jedes Mal woanders
+ * auftaucht, ist genau das nicht.
+ */
 export const TOUCH = {
-  /** Radius des virtuellen Joysticks in Bildschirmpixeln. */
+  /** Radius des Bewegungs-Joysticks in Bildschirmpixeln. */
   stickRadius: 78,
   /** Radius des Daumenknopfs. */
   knobRadius: 32,
   /** Tote Zone, damit ein zitternder Daumen die Figur nicht ruckeln laesst. */
   deadZone: 10,
-  /** Bis zu dieser Zugstrecke gilt eine Berührung als Tippen (Auto-Ziel). */
-  tapThreshold: 16,
-  /** Groesse des Super-Knopfs rechts unten. */
-  superButtonRadius: 46,
-  superButtonMargin: 26,
+
+  /** Fester Schussknopf unten rechts: Halten feuert, Ziehen zielt. */
+  fireButton: {
+    /** Abstand des Mittelpunkts von der rechten unteren Ecke. */
+    marginX: 112,
+    marginY: 112,
+    /** Sichtbarer Radius. */
+    radius: 66,
+    /** Trefferbereich - grosszuegiger als das Bild, Daumen sind ungenau. */
+    hitRadius: 92,
+    /** Ab dieser Zugstrecke gilt die Beruehrung als Zielen statt als Halten. */
+    aimDeadZone: 14,
+    /** Zugstrecke, ab der die Reichweitenanzeige voll ausschlaegt. */
+    aimRange: 92,
+  },
+
+  /** Super-Knopf, ebenfalls fest, links neben dem Schussknopf. */
+  superButton: {
+    marginX: 246,
+    marginY: 64,
+    radius: 44,
+    hitRadius: 60,
+  },
 } as const;
 
 /** Farbpalette. Lesbarkeit auf kleinem Bildschirm geht vor Schoenheit. */

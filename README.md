@@ -36,6 +36,8 @@ Ergebnis.
   Durchschuss) – jeder mit eigener Super-Fähigkeit
 - Wellensystem mit steigender Schwierigkeit, drei Gegnertypen, Boss alle fünf
   Wellen, Score und lokaler Rekord
+- Fähigkeiten aufwerten: Für jede geschaffte Welle ein Punkt, verteilbar auf
+  Waffe, Panzerung, Tempo oder Super – je fünf Stufen
 - Twin-Stick-Touchsteuerung: schwebender Joystick links, Zielen und Schiessen
   rechts, Super-Knopf
 - Koop über WebRTC mit sechsstelligem Raumcode, bis zu vier Spieler

@@ -18,7 +18,8 @@ import { CameraController } from "../render/CameraController";
 import { EntityRenderer } from "../render/EntityRenderer";
 import { Juice } from "../render/Juice";
 import { loadHighscore } from "../storage/highscore";
-import type { CharacterId, InputState, PlayerState } from "../systems/types";
+import { nearestEnemy } from "../systems/targeting";
+import type { CharacterId, InputState, PlayerState, Vec2 } from "../systems/types";
 import { createHudModel } from "../ui/HudModel";
 import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
@@ -159,27 +160,54 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Ziellinie mit Reichweitenanzeige: Sie zeigt, wie weit die eigene Waffe
-   * reicht, damit man nicht ins Leere schiesst.
+   * Ziellinie mit Reichweitenanzeige.
+   *
+   * Sie zeigt zweierlei: wohin geschossen wird und wie weit die Waffe reicht -
+   * damit niemand ins Leere feuert. Wer nur haelt, ohne zu ziehen, sieht die
+   * Linie zum Gegner, den die Simulation automatisch anvisiert.
    */
   private drawAim(player: PlayerState, input: InputState): void {
     this.aimLine.clear();
-    if (!input.aim || player.down || !this.hud) {
+    if (player.down || !this.hud || (!input.aim && !input.fire)) {
       return;
     }
 
     const position = this.session.view.renderPlayerPosition(player.id);
     const range = CHARACTERS[player.character].shot.range;
-    const strength = Math.max(0.25, this.hud.inputManager.aimStrength);
+    const direction = this.aimDirection(player, input, range);
+    if (!direction) {
+      return;
+    }
+
+    // Beim Ziehen waechst die Linie mit dem Ausschlag, beim blossen Halten
+    // zeigt sie die volle Reichweite.
+    const strength = input.aim ? Math.max(0.3, this.hud.inputManager.aimStrength) : 1;
     const length = range * strength;
 
-    const endX = position.x + input.aim.x * length;
-    const endY = position.y + input.aim.y * length;
+    const endX = position.x + direction.x * length;
+    const endY = position.y + direction.y * length;
 
     this.aimLine.lineStyle(3, COLORS.playerBullet, 0.45);
     this.aimLine.lineBetween(position.x, position.y, endX, endY);
     this.aimLine.lineStyle(2, COLORS.playerBullet, 0.8);
     this.aimLine.strokeCircle(endX, endY, 12);
+  }
+
+  /** Gezogene Richtung, sonst die Richtung zum automatisch gewaehlten Ziel. */
+  private aimDirection(player: PlayerState, input: InputState, range: number): Vec2 | null {
+    if (input.aim) {
+      return input.aim;
+    }
+
+    const target = nearestEnemy(this.session.view.state, player.position, range * 1.15);
+    if (!target) {
+      return null;
+    }
+
+    const dx = target.position.x - player.position.x;
+    const dy = target.position.y - player.position.y;
+    const distance = Math.hypot(dx, dy);
+    return distance > 1e-6 ? { x: dx / distance, y: dy / distance } : null;
   }
 
   /** Fuellt das Objekt, das die HudScene liest. */
@@ -199,6 +227,8 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.phase = state.phase;
     this.hudModel.phaseTime = state.phaseTime;
     this.hudModel.enemiesLeft = state.enemies.length + this.session.view.pendingCount;
+    this.hudModel.skillPoints = player.skillPoints;
+    this.hudModel.skillLevels = player.skills;
     this.hudModel.down = player.down;
     this.hudModel.reviveProgress = player.reviveProgress / PLAYER.reviveTime;
     this.hudModel.mates = state.players

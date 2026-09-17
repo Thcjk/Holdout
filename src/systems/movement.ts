@@ -5,7 +5,8 @@
  * testbar (siehe tests/systems/) und im Koop auf Host und Client identisch.
  */
 
-import { CHARACTERS, PLAYER, SUPERS } from "../config/balance";
+import { PLAYER, SUPERS } from "../config/balance";
+import { speedFor } from "./skills";
 import { resolveAgainstWalls } from "./collision";
 import type { InputState, PlayerState, Rect, Vec2 } from "./types";
 
@@ -57,7 +58,7 @@ export function stepPlayerMovement(
     return;
   }
 
-  const speed = CHARACTERS[player.character].speed;
+  const speed = speedFor(player);
   const direction = normalizeInput(input.move);
 
   // Beschleunigung in Pixel pro Sekunde im Quadrat: In `accelerationTime`
@@ -79,9 +80,9 @@ export function stepPlayerMovement(
  * Eine Wand beendet den Dash sofort, sonst bliebe die Figur daran kleben.
  */
 function stepDash(player: PlayerState, walls: readonly Rect[], dt: number): void {
-  const speed = SUPERS.scout.speed;
-  player.velocity.x = player.dashDirection.x * speed;
-  player.velocity.y = player.dashDirection.y * speed;
+  const dashSpeed = SUPERS.scout.speed;
+  player.velocity.x = player.dashDirection.x * dashSpeed;
+  player.velocity.y = player.dashDirection.y * dashSpeed;
 
   const beforeX = player.position.x;
   const beforeY = player.position.y;
@@ -92,13 +93,14 @@ function stepDash(player: PlayerState, walls: readonly Rect[], dt: number): void
 
   const movedX = player.position.x - beforeX;
   const movedY = player.position.y - beforeY;
-  const blocked = Math.hypot(movedX, movedY) < speed * dt * 0.5;
+  const blocked = Math.hypot(movedX, movedY) < dashSpeed * dt * 0.5;
 
   player.dashTime -= dt;
   if (blocked || player.dashTime <= 0) {
     player.dashTime = 0;
     // Nach dem Dash nicht mit voller Dashgeschwindigkeit weiterschlittern.
-    player.velocity.x = player.dashDirection.x * CHARACTERS[player.character].speed;
-    player.velocity.y = player.dashDirection.y * CHARACTERS[player.character].speed;
+    const speed = speedFor(player);
+    player.velocity.x = player.dashDirection.x * speed;
+    player.velocity.y = player.dashDirection.y * speed;
   }
 }

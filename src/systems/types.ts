@@ -33,17 +33,26 @@ export interface InputState {
    * Bei `null` sucht die Simulation automatisch den naechsten Gegner.
    */
   aim: Vec2 | null;
-  /** Einmaliger Schusswunsch fuer diesen Tick. */
+  /**
+   * Wird gerade gefeuert? Ein GEHALTENER Zustand, kein einmaliger Wunsch: Der
+   * Spieler haelt den Schussknopf, und die Simulation feuert so schnell, wie
+   * Munition und Schusstakt es zulassen.
+   */
   fire: boolean;
   /** Einmaliger Wunsch, die Super-Faehigkeit auszuloesen. */
   useSuper: boolean;
+  /** Einmaliger Wunsch, einen Skillpunkt in diese Faehigkeit zu stecken. */
+  levelUp: SkillId | null;
 }
 
 export function emptyInput(): InputState {
-  return { move: { x: 0, y: 0 }, aim: null, fire: false, useSuper: false };
+  return { move: { x: 0, y: 0 }, aim: null, fire: false, useSuper: false, levelUp: null };
 }
 
 export type CharacterId = "scout" | "tank" | "sniper";
+
+/** Die vier Fähigkeiten, die sich zwischen den Wellen aufwerten lassen. */
+export type SkillId = "weapon" | "armor" | "speed" | "super";
 export type EnemyType = "runner" | "brute" | "shooter";
 
 export interface PlayerState {
@@ -82,6 +91,10 @@ export interface PlayerState {
   inBush: boolean;
   /** Restlicher Schusstakt in Sekunden - verhindert Dauerfeuer pro Tick. */
   shootCooldown: number;
+  /** Noch nicht verteilte Skillpunkte. Einer pro geschaffter Welle. */
+  skillPoints: number;
+  /** Stufe je Faehigkeit, 0 bis SKILLS[...].maxLevel. */
+  skills: Record<SkillId, number>;
 }
 
 export interface EnemyState {
@@ -151,6 +164,7 @@ export type GameEvent =
   | { type: "playerRevived"; playerId: string; x: number; y: number }
   | { type: "superReady"; playerId: string }
   | { type: "superUsed"; playerId: string; character: CharacterId; x: number; y: number }
+  | { type: "levelUp"; playerId: string; skill: SkillId; level: number }
   | { type: "spawnWarning"; x: number; y: number }
   | { type: "waveStart"; wave: number }
   | { type: "gameOver"; score: number; wave: number };

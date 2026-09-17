@@ -90,16 +90,19 @@ export class HostSession implements GameSession {
     this.inputs.set(from, {
       move: message.move,
       aim: message.aim,
-      // Einmalige Wuensche nicht ueberschreiben, solange sie kein Tick gesehen hat.
-      fire: message.fire || (existing?.fire ?? false),
+      // Feuern ist ein gehaltener Zustand und wird direkt uebernommen.
+      fire: message.fire,
+      // Der Super ist einmalig und darf nicht verlorengehen, solange ihn kein
+      // Tick gesehen hat.
       useSuper: message.super || (existing?.useSuper ?? false),
+      levelUp: message.levelUp ?? existing?.levelUp ?? null,
     });
   }
 
   private clearOneShotInputs(): void {
     for (const [id, input] of this.inputs) {
-      if (input.fire || input.useSuper) {
-        this.inputs.set(id, { ...input, fire: false, useSuper: false });
+      if (input.useSuper || input.levelUp) {
+        this.inputs.set(id, { ...input, useSuper: false, levelUp: null });
       }
     }
   }

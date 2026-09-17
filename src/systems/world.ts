@@ -16,6 +16,7 @@ import { stepReload, stepRevive, tryShoot } from "./combat";
 import { stepEnemies } from "./enemies";
 import { stepPlayerMovement } from "./movement";
 import { stepProjectiles } from "./projectiles";
+import { applyLevelUp, emptySkills } from "./skills";
 import { stepDashDamage, trySuper } from "./supers";
 import { stepRound } from "./waves";
 import { emptyInput } from "./types";
@@ -68,6 +69,8 @@ export function createPlayer(setup: PlayerSetup, index: number, total: number): 
     dashHits: [],
     inBush: false,
     shootCooldown: 0,
+    skillPoints: 0,
+    skills: emptySkills(),
   };
 }
 
@@ -129,6 +132,10 @@ export function stepWorld(
 
   for (const player of state.players) {
     const input = inputs.get(player.id) ?? emptyInput();
+
+    if (input.levelUp) {
+      applyLevelUp(state, player, input.levelUp);
+    }
 
     stepReload(player, dt);
     stepPlayerMovement(player, input, state.walls, dt);

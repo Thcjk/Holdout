@@ -14,6 +14,7 @@ import { COLORS, DEPTH, VIEWPORT } from "../config/constants";
 import { audio } from "../audio/AudioEngine";
 import { InputManager } from "../input/InputManager";
 import { Button } from "../ui/Button";
+import { SkillPanel } from "../ui/SkillPanel";
 import type { HudModel } from "../ui/HudModel";
 
 export interface HudSceneData {
@@ -35,6 +36,8 @@ export class HudScene extends Phaser.Scene {
   private announceText!: Phaser.GameObjects.Text;
   private mateText!: Phaser.GameObjects.Text;
   private muteButton!: Button;
+  private skillPanel!: SkillPanel;
+  private skillHint!: Phaser.GameObjects.Text;
 
   constructor() {
     super("Hud");
@@ -75,7 +78,7 @@ export class HudScene extends Phaser.Scene {
       .setDepth(DEPTH.hud);
 
     this.announceText = this.add
-      .text(VIEWPORT.width / 2, VIEWPORT.height / 2 - 60, "", {
+      .text(VIEWPORT.width / 2, 132, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "34px",
         color: "#ffd166",
@@ -121,11 +124,26 @@ export class HudScene extends Phaser.Scene {
     });
 
     this.inputManager = new InputManager(this);
+
+    // Die Auswahl schickt den Wunsch durch denselben Kanal wie jede andere
+    // Eingabe - im Koop entscheidet dann der Host darueber.
+    this.skillPanel = new SkillPanel(this, (skill) => this.inputManager.requestLevelUp(skill));
+
+    this.skillHint = this.add
+      .text(14, 62, "", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "14px",
+        color: "#ffd166",
+        fontStyle: "bold",
+      })
+      .setDepth(DEPTH.hud);
+
     this.ready = true;
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.ready = false;
       this.inputManager.destroy();
+      this.skillPanel.destroy();
     });
   }
 
@@ -149,7 +167,27 @@ export class HudScene extends Phaser.Scene {
 
     this.drawPlayerBars();
     this.updateAnnouncement();
+    this.updateSkills();
     this.inputManager.setSuperReady(this.model.superCharge >= 100);
+  }
+
+  /**
+   * Punkte verteilt man in der Pause. Waehrend einer Welle erinnert nur eine
+   * kleine Zeile daran - ein Menue mitten im Gefecht waere im Weg.
+   */
+  private updateSkills(): void {
+    const inBreak = this.model.phase === "break" || this.model.phase === "preparing";
+    this.skillPanel.update(this.model.skillPoints, this.model.skillLevels, inBreak);
+
+    const showHint = this.model.skillPoints > 0 && !inBreak;
+    this.skillHint.setVisible(showHint);
+    if (showHint) {
+      this.skillHint.setText(
+        this.model.skillPoints === 1
+          ? "1 Punkt frei - in der Pause verteilen"
+          : `${this.model.skillPoints} Punkte frei - in der Pause verteilen`,
+      );
+    }
   }
 
   /** Leben, Munition und Super unten links - der Blick geht im Spiel nach unten. */

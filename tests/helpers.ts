@@ -4,7 +4,7 @@ import type { InputState, Vec2 } from "../src/systems/types";
 import type { PlayerSetup } from "../src/systems/world";
 
 export function makeInput(move: Vec2, extra: Partial<InputState> = {}): InputState {
-  return { move, aim: null, fire: false, useSuper: false, ...extra };
+  return { move, aim: null, fire: false, useSuper: false, levelUp: null, ...extra };
 }
 
 export function soloSetup(id = "p1"): PlayerSetup[] {

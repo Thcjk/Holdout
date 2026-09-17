@@ -11,11 +11,13 @@
  * Unterschied zwischen ein paar KB/s und einem Vielfachen davon.
  */
 
+import { SKILL_ORDER } from "../config/balance";
 import type {
   CharacterId,
   GameEvent,
   PlayerState,
   RoundPhase,
+  SkillId,
   Vec2,
   WorldState,
 } from "../systems/types";
@@ -48,6 +50,8 @@ export interface InputMessage {
   aim: Vec2 | null;
   fire: boolean;
   super: boolean;
+  /** Gewuenschte Aufwertung, sonst null. */
+  levelUp: SkillId | null;
 }
 
 export interface NetPlayer {
@@ -65,6 +69,10 @@ export interface NetPlayer {
   inv: number;
   character: CharacterId;
   name: string;
+  /** Noch nicht verteilte Skillpunkte. */
+  sp: number;
+  /** Stufen der Faehigkeiten in der Reihenfolge von SKILL_ORDER. */
+  sk: number[];
 }
 
 export interface NetEnemy {
@@ -211,5 +219,8 @@ function encodePlayer(player: PlayerState): NetPlayer {
     down: player.down,
     revive: round1(player.reviveProgress),
     inv: round1(player.invulnerable),
+    sp: player.skillPoints,
+    // Als Zahlenliste statt als Objekt: kuerzer, und die Reihenfolge steht fest.
+    sk: SKILL_ORDER.map((skill) => player.skills[skill] ?? 0),
   };
 }

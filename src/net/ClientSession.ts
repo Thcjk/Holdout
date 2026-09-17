@@ -9,7 +9,7 @@ import { INPUT_RATE } from "./protocol";
 import type { NetMessage } from "./protocol";
 import { ClientView } from "./ClientView";
 import type { GameSession, WorldView } from "./GameSession";
-import type { InputState } from "../systems/types";
+import type { InputState, SkillId } from "../systems/types";
 import type { PlayerSetup } from "../systems/world";
 import type { Transport } from "./Transport";
 
@@ -23,8 +23,8 @@ export class ClientSession implements GameSession {
   private sinceLastInput = 0;
   private sequence = 0;
   /** Gesammelte einmalige Wuensche, bis sie tatsaechlich verschickt wurden. */
-  private pendingFire = false;
   private pendingSuper = false;
+  private pendingLevelUp: SkillId | null = null;
 
   constructor(
     private readonly transport: Transport,
@@ -48,8 +48,8 @@ export class ClientSession implements GameSession {
   }
 
   update(deltaMs: number, input: InputState): boolean {
-    this.pendingFire = this.pendingFire || input.fire;
     this.pendingSuper = this.pendingSuper || input.useSuper;
+    this.pendingLevelUp = input.levelUp ?? this.pendingLevelUp;
 
     this.sinceLastInput += deltaMs;
     let sent = false;
@@ -62,11 +62,14 @@ export class ClientSession implements GameSession {
         seq: this.sequence,
         move: input.move,
         aim: input.aim,
-        fire: this.pendingFire,
+        // Feuern ist ein gehaltener Zustand: Es wird gesendet, wie es gerade
+        // ist. Der Super dagegen darf zwischen zwei Paketen nicht verlorengehen.
+        fire: input.fire,
         super: this.pendingSuper,
+        levelUp: this.pendingLevelUp,
       });
-      this.pendingFire = false;
       this.pendingSuper = false;
+      this.pendingLevelUp = null;
       sent = true;
     }
 

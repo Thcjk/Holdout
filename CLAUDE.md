@@ -59,6 +59,26 @@ Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
   dessen Schlüssel bei jedem Lauf wechselt - eine so gebaute App lässt sich nicht
   über die vorherige Version installieren. Die vier Secrets dafür stehen im README.
 
+## Steuerung und Fähigkeiten
+
+Zwei Änderungen nach dem ersten Spieltest, beide über das Briefing hinaus:
+
+- **Der Schussknopf sitzt fest.** Im Briefing war rechts ein zweiter
+  schwebender Joystick vorgesehen, der beim Loslassen feuert. In der Praxis
+  hiess das: Man musste den Gegner treffen, statt einfach zu schiessen. Jetzt
+  liegt unten rechts ein fester **FEUER**-Knopf. Halten feuert dauerhaft (so
+  schnell, wie Munition und Schusstakt es zulassen), Ziehen zielt mit Linie,
+  blosses Halten überlässt der Simulation die Zielsuche. `InputState.fire` ist
+  deshalb ein **gehaltener Zustand**, kein einmaliger Wunsch - auch im
+  Netzwerkprotokoll. Einmalig sind nur noch Super und Aufwertung.
+- **Fähigkeiten lassen sich aufwerten** (`src/systems/skills.ts`,
+  `src/ui/SkillPanel.ts`): ein Punkt je geschaffter Welle, verteilbar auf Waffe,
+  Panzerung, Tempo und Super, je fünf Stufen. Die Auswahl erscheint nur in der
+  Pause - ein Menü mitten im Gefecht wäre im Weg. Wichtig für den Koop: Die
+  Stufen werden **nicht** in die Grundwerte hineingerechnet, sondern bei jeder
+  Benutzung frisch angewendet. Sonst summieren sich Rundungsfehler, und Host
+  und Client laufen auseinander.
+
 ## Die Architektur-Grundregel
 
 **Spiellogik und Darstellung sind strikt getrennt.** Das ist die eine Entscheidung,
@@ -112,6 +132,7 @@ src/
     projectiles.ts        Projektile mit Object Pooling
     enemies.ts            Gegner-KI, Sichtlinie
     supers.ts             die drei Super-Fähigkeiten
+    skills.ts             Aufwertungen zwischen den Wellen
     waves.ts              Wellenformel und Rundenablauf
     targeting.ts          wer sieht wen
     rng.ts                wiederholbarer Zufall (Mulberry32)
@@ -130,7 +151,7 @@ src/
     ArenaRenderer, EntityRenderer, CameraController, Juice
   scenes/                 Boot, Menu, Lobby, Game, Hud, GameOver
   input/InputManager.ts   Touch -> InputState
-  ui/                     VirtualJoystick, TouchControls, Button, HudModel
+  ui/                     VirtualJoystick, TouchControls, SkillPanel, Button, HudModel
   audio/                  synthetisierte Klänge und Musik
   assets/textures.ts      Texture Atlas
   storage/highscore.ts    lokaler Rekord
@@ -154,8 +175,16 @@ fünfmal durch und meldet, wie weit er kommt. Stand jetzt:
 | Charakter | Erreichte Wellen (Bot) |
 | --------- | ---------------------- |
 | Scout     | ~5                     |
-| Tank      | ~6                     |
+| Tank      | ~8                     |
 | Sniper    | ~8                     |
+
+Der Bot verteilt seine Skillpunkte reihum. Ohne Aufwertungen kam er nur auf 5
+bis 7 Wellen - die Fähigkeiten sind also spürbar, nicht Kosmetik.
+
+Der Scout bleibt in der Messung zurück, aber das ist vermutlich ein Artefakt:
+Seine Stärke ist Beweglichkeit, und genau die nutzt ein Bot mit grobem
+Ausweichen am wenigsten. Vor einer Anpassung an seinen Werten lohnt es sich,
+ihn selbst zu spielen.
 
 Der Bot ist **schlechter als ein Mensch**: Er nutzt keine Deckung, keine Büsche
 (in denen Gegner ihn gar nicht sehen) und weicht Projektilen nicht aus. Seine

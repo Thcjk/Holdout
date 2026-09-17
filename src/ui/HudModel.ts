@@ -7,7 +7,7 @@
  * Die Szene fuellt es jedes Bild neu; das HUD liest es nur.
  */
 
-import type { RoundPhase } from "../systems/types";
+import type { RoundPhase, SkillId } from "../systems/types";
 
 export interface HudMate {
   name: string;
@@ -34,6 +34,10 @@ export interface HudModel {
   mates: HudMate[];
   /** Gesetzt, wenn die Verbindung abgerissen ist - wird gross eingeblendet. */
   connectionMessage: string | null;
+  /** Noch nicht verteilte Skillpunkte. */
+  skillPoints: number;
+  /** Stufe je Faehigkeit. */
+  skillLevels: Record<SkillId, number>;
 }
 
 export function createHudModel(): HudModel {
@@ -53,5 +57,7 @@ export function createHudModel(): HudModel {
     reviveProgress: 0,
     mates: [],
     connectionMessage: null,
+    skillPoints: 0,
+    skillLevels: { weapon: 0, armor: 0, speed: 0, super: 0 },
   };
 }

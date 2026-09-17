@@ -12,11 +12,13 @@
  */
 
 import Phaser from "phaser";
-import type { InputState } from "../systems/types";
+import type { InputState, SkillId } from "../systems/types";
 import { TouchControls } from "../ui/TouchControls";
 
 export class InputManager {
   private readonly touch: TouchControls;
+  /** Gewuenschte Aufwertung, bis ein Simulationsschritt sie gesehen hat. */
+  private pendingLevelUp: SkillId | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.touch = new TouchControls(scene);
@@ -27,6 +29,11 @@ export class InputManager {
     this.touch.setSuperReady(ready);
   }
 
+  /** Vom HUD gerufen, wenn ein Skillpunkt verteilt wird. */
+  requestLevelUp(skill: SkillId): void {
+    this.pendingLevelUp = skill;
+  }
+
   /** Der aktuelle Eingabezustand fuer den naechsten Simulationsschritt. */
   getState(): InputState {
     const output = this.touch.read();
@@ -35,6 +42,7 @@ export class InputManager {
       aim: output.aim,
       fire: output.fire,
       useSuper: output.useSuper,
+      levelUp: this.pendingLevelUp,
     };
   }
 
@@ -49,6 +57,7 @@ export class InputManager {
    * Ticks ausgeloest wurde.
    */
   clearOneShots(): void {
+    this.pendingLevelUp = null;
     this.touch.clearOneShots();
   }
 

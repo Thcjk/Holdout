@@ -8,6 +8,7 @@
 
 import { CHARACTERS, PLAYER, PROJECTILE, SUPERS } from "../config/balance";
 import { spawnProjectile } from "./projectiles";
+import { damageFactor, superChargePerHit } from "./skills";
 import { nearestEnemy } from "./targeting";
 import type { EnemyState, InputState, PlayerState, Vec2, WorldState } from "./types";
 
@@ -103,7 +104,7 @@ export function tryShoot(state: WorldState, player: PlayerState, input: InputSta
       position: player.position,
       direction: { x: Math.cos(angle), y: Math.sin(angle) },
       speed: PROJECTILE.speed,
-      damage: definition.shot.damage,
+      damage: Math.round(definition.shot.damage * damageFactor(player)),
       range: definition.shot.range,
       radius: PROJECTILE.radius,
       piercing: definition.shot.piercing,
@@ -173,7 +174,7 @@ function chargeSuper(state: WorldState, playerId: string): void {
   }
 
   const wasReady = isSuperReady(player);
-  player.superCharge = Math.min(100, player.superCharge + PLAYER.superChargePerHit);
+  player.superCharge = Math.min(100, player.superCharge + superChargePerHit(player));
 
   if (!wasReady && isSuperReady(player)) {
     state.events.push({ type: "superReady", playerId: player.id });
