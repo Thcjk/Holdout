@@ -18,7 +18,6 @@ import type { HudModel } from "../ui/HudModel";
 
 export interface HudSceneData {
   model: HudModel;
-  gameCamera: Phaser.Cameras.Scene2D.Camera;
 }
 
 const AMMO_SLOT_WIDTH = 34;
@@ -29,7 +28,6 @@ export class HudScene extends Phaser.Scene {
   inputManager!: InputManager;
 
   private model!: HudModel;
-  private gameCamera!: Phaser.Cameras.Scene2D.Camera;
 
   private bars!: Phaser.GameObjects.Graphics;
   private scoreText!: Phaser.GameObjects.Text;
@@ -44,7 +42,6 @@ export class HudScene extends Phaser.Scene {
 
   init(data: HudSceneData): void {
     this.model = data.model;
-    this.gameCamera = data.gameCamera;
   }
 
   create(): void {
@@ -123,7 +120,7 @@ export class HudScene extends Phaser.Scene {
       audio.startMusic();
     });
 
-    this.inputManager = new InputManager(this, this.gameCamera);
+    this.inputManager = new InputManager(this);
     this.ready = true;
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {

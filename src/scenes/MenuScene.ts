@@ -11,6 +11,13 @@ import { ATLAS_KEY, BODY_RADIUS } from "../assets/textures";
 import { CHARACTERS, CHARACTER_ORDER } from "../config/balance";
 import { COLORS, VIEWPORT } from "../config/constants";
 import { audio } from "../audio/AudioEngine";
+import { isInstalledApp } from "../platform/device";
+import {
+  canPromptInstall,
+  manualInstructions,
+  needsManualInstructions,
+  promptInstall,
+} from "../platform/install";
 import { loadHighscore } from "../storage/highscore";
 import type { CharacterId } from "../systems/types";
 import { Button } from "../ui/Button";
@@ -34,10 +41,6 @@ export class MenuScene extends Phaser.Scene {
     // Ton darf erst nach einer Nutzerinteraktion starten - deshalb hier und
     // nicht beim Laden des Spiels.
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {
-      audio.unlock();
-      audio.startMusic();
-    });
-    this.input.keyboard?.once("keydown", () => {
       audio.unlock();
       audio.startMusic();
     });
@@ -130,15 +133,109 @@ export class MenuScene extends Phaser.Scene {
       );
     }
 
-    this.add
-      .text(VIEWPORT.width / 2, VIEWPORT.height - 76, "Esc bringt dich im Spiel zurück ins Menü", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "12px",
-        color: "#8ea6c4",
-      })
-      .setOrigin(0.5);
-
+    this.createInstallButton();
     this.highlightSelection();
+  }
+
+  /**
+   * Der Weg zum "Herunterladen": Auf Android fragt der Browser direkt, auf dem
+   * iPhone gibt es stattdessen eine Anleitung. Wer das Spiel schon installiert
+   * hat, sieht den Knopf gar nicht.
+   */
+  private createInstallButton(): void {
+    if (isInstalledApp()) {
+      return;
+    }
+    if (!canPromptInstall() && !needsManualInstructions()) {
+      return;
+    }
+
+    const button = new Button(
+      this,
+      108,
+      44,
+      "App installieren",
+      () => {
+        if (canPromptInstall()) {
+          void promptInstall().then((accepted) => {
+            if (accepted) {
+              button.setVisible(false);
+            }
+          });
+          return;
+        }
+        this.showInstallInstructions();
+      },
+      { width: 182, height: 38, fontSize: 15, color: COLORS.mate },
+    );
+  }
+
+  /** Overlay mit der Schritt-fuer-Schritt-Anleitung. */
+  private showInstallInstructions(): void {
+    const backdrop = this.add
+      .rectangle(
+        VIEWPORT.width / 2,
+        VIEWPORT.height / 2,
+        VIEWPORT.width,
+        VIEWPORT.height,
+        0x11161f,
+        0.94,
+      )
+      .setDepth(200)
+      .setInteractive();
+
+    const title = this.add
+      .text(VIEWPORT.width / 2, 150, "Als App installieren", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "28px",
+        color: "#dce8f7",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setDepth(201);
+
+    const steps = this.add
+      .text(VIEWPORT.width / 2, 250, manualInstructions().join("\n"), {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "18px",
+        color: "#dce8f7",
+        align: "center",
+        lineSpacing: 12,
+      })
+      .setOrigin(0.5)
+      .setDepth(201);
+
+    const note = this.add
+      .text(
+        VIEWPORT.width / 2,
+        348,
+        "Danach startet das Spiel ohne Browserleisten und auch ohne Internet.",
+        {
+          fontFamily: "system-ui, sans-serif",
+          fontSize: "14px",
+          color: "#8ea6c4",
+          align: "center",
+          wordWrap: { width: VIEWPORT.width - 160 },
+        },
+      )
+      .setOrigin(0.5)
+      .setDepth(201);
+
+    const close = new Button(
+      this,
+      VIEWPORT.width / 2,
+      440,
+      "Verstanden",
+      () => {
+        backdrop.destroy();
+        title.destroy();
+        steps.destroy();
+        note.destroy();
+        close.setVisible(false);
+      },
+      { width: 220 },
+    );
+    close.setDepth(202);
   }
 
   private createCard(id: CharacterId, centerX: number): void {
@@ -185,6 +282,7 @@ export class MenuScene extends Phaser.Scene {
         )
         .setOrigin(0.5);
 
+      this.createInstallButton();
       this.highlightSelection();
     });
     this.cards.set(id, card);

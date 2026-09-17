@@ -13,6 +13,10 @@ export default defineConfig({
     VitePWA({
       // Eine neue Version wird im Hintergrund geladen und beim naechsten Start aktiv.
       registerType: "autoUpdate",
+      // Die Registrierung uebernimmt main.ts selbst. Grund: In der Android-App
+      // gibt es keinen Service Worker - dort liegen die Dateien ohnehin auf dem
+      // Geraet. Automatisch eingehaengter Code wuerde dort nur Fehler werfen.
+      injectRegister: null,
       includeAssets: ["favicon.svg", "icons/*.png"],
       manifest: {
         name: "Koop-Arena-Shooter",
@@ -22,6 +26,9 @@ export default defineConfig({
         start_url: base,
         scope: base,
         display: "standalone",
+        // Feste Kennung, damit eine neue Version als dieselbe App erkannt wird.
+        id: "koop-arena-shooter",
+        categories: ["games"],
         orientation: "landscape",
         background_color: "#11161f",
         theme_color: "#11161f",
@@ -37,6 +44,11 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Ohne diese Zeile zeigt ein Start ohne Internet eine Fehlerseite statt
+        // des Spiels: Der Service Worker weiss sonst nicht, was er bei einem
+        // Seitenaufruf ausliefern soll.
+        navigateFallback: "index.html",
+        cleanupOutdatedCaches: true,
         // Phaser ist gross - die Voreinstellung von 2 MB wuerde es vom
         // Offline-Zwischenspeicher ausschliessen.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,

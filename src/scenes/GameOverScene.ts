@@ -80,16 +80,6 @@ export class GameOverScene extends Phaser.Scene {
       () => this.scene.start("Menu"),
       { width: 230, fontSize: 18, color: COLORS.hudDim },
     );
-
-    this.add
-      .text(VIEWPORT.width / 2, VIEWPORT.height - 28, "Leertaste startet sofort neu", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "13px",
-        color: "#8ea6c4",
-      })
-      .setOrigin(0.5);
-
-    this.input.keyboard?.once("keydown-SPACE", () => this.restart());
   }
 
   private restart(): void {

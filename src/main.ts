@@ -3,6 +3,11 @@
  */
 
 import Phaser from "phaser";
+import { isNativeApp, isSupportedDevice } from "./platform/device";
+import { showDesktopNotice } from "./platform/DesktopNotice";
+// Nur importiert, damit der Empfaenger fuer `beforeinstallprompt` frueh genug
+// haengt - das Ereignis kommt einmal und sehr frueh.
+import "./platform/install";
 import { COLORS, VIEWPORT } from "./config/constants";
 import { BootScene } from "./scenes/BootScene";
 import { GameOverScene } from "./scenes/GameOverScene";
@@ -31,6 +36,8 @@ const config: Phaser.Types.Core.GameConfig = {
     createContainer: true,
   },
   input: {
+    // Tastatur wird nicht gebraucht: Das Spiel laeuft nur auf Touchgeraeten.
+    keyboard: false,
     // Drei gleichzeitige Finger: linker Stick, rechter Stick, Super-Knopf.
     // Ohne diese Zeile meldet Phaser nur einen Zeiger, und der zweite Daumen
     // wird stillschweigend ignoriert.
@@ -46,4 +53,18 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [BootScene, MenuScene, LobbyScene, GameScene, HudScene, GameOverScene],
 };
 
-new Phaser.Game(config);
+// Service Worker nur im Browser: Er macht die Website offline spielbar. In der
+// Android-App liegen alle Dateien schon auf dem Geraet.
+if (!isNativeApp()) {
+  void import("virtual:pwa-register").then(({ registerSW }) => {
+    registerSW({ immediate: true });
+  });
+}
+
+// Alles, was kein Touchgeraet ist, bekommt die Sperrseite statt des Spiels.
+// Wichtig: Phaser wird dann nie gestartet - der Desktop laedt kein Spiel.
+if (isSupportedDevice()) {
+  new Phaser.Game(config);
+} else {
+  void showDesktopNotice();
+}

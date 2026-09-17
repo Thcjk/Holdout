@@ -63,15 +63,8 @@ export class GameScene extends Phaser.Scene {
     this.cameraController = new CameraController(this, ARENA.width, ARENA.height);
     this.aimLine = this.add.graphics().setDepth(DEPTH.projectiles);
 
-    this.scene.launch("Hud", { model: this.hudModel, gameCamera: this.cameras.main });
+    this.scene.launch("Hud", { model: this.hudModel });
     this.hud = this.scene.get("Hud") as HudScene;
-
-    // Rueckweg aus einer laufenden Runde. Ohne ihn kommt man am Handy nur
-    // ueber das Neuladen der Seite wieder ins Menue.
-    this.input.keyboard?.on("keydown-ESC", () => {
-      this.scene.stop("Hud");
-      this.scene.start("Menu");
-    });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scene.stop("Hud");
@@ -92,7 +85,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const input = this.hud.inputManager.getState(player.position);
+    const input = this.hud.inputManager.getState();
 
     // Beim Super laeuft die Zeit kurz langsamer. Die Simulation merkt davon
     // nichts - sie bekommt einfach weniger Zeit zugeteilt.
