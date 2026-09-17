@@ -16,6 +16,7 @@ import { stepReload, stepRevive, tryShoot } from "./combat";
 import { stepEnemies } from "./enemies";
 import { stepPlayerMovement } from "./movement";
 import { stepProjectiles } from "./projectiles";
+import { stepDashDamage, trySuper } from "./supers";
 import { stepRound } from "./waves";
 import { emptyInput } from "./types";
 import type { CharacterId, InputState, PlayerState, Vec2, WorldState } from "./types";
@@ -64,6 +65,7 @@ export function createPlayer(setup: PlayerSetup, index: number, total: number): 
     invulnerable: 0,
     dashTime: 0,
     dashDirection: { x: 0, y: 0 },
+    dashHits: [],
     inBush: false,
     shootCooldown: 0,
   };
@@ -132,6 +134,8 @@ export function stepWorld(
     stepPlayerMovement(player, input, state.walls, dt);
     updateFacing(player, input);
     player.inBush = isInBush(state, player.position);
+    trySuper(state, player, input);
+    stepDashDamage(state, player);
     tryShoot(state, player, input);
   }
 

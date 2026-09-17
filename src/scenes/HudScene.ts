@@ -11,7 +11,9 @@
 
 import Phaser from "phaser";
 import { COLORS, DEPTH, VIEWPORT } from "../config/constants";
+import { audio } from "../audio/AudioEngine";
 import { InputManager } from "../input/InputManager";
+import { Button } from "../ui/Button";
 import type { HudModel } from "../ui/HudModel";
 
 export interface HudSceneData {
@@ -34,6 +36,7 @@ export class HudScene extends Phaser.Scene {
   private waveText!: Phaser.GameObjects.Text;
   private announceText!: Phaser.GameObjects.Text;
   private mateText!: Phaser.GameObjects.Text;
+  private muteButton!: Button;
 
   constructor() {
     super("Hud");
@@ -84,6 +87,26 @@ export class HudScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(DEPTH.hud);
+
+    // Stummschalten muss im Spiel erreichbar sein (Briefing, Abschnitt 7).
+    this.muteButton = new Button(
+      this,
+      VIEWPORT.width - 58,
+      VIEWPORT.height - 24,
+      audio.isMuted ? "Ton aus" : "Ton an",
+      () => {
+        const muted = audio.toggleMuted();
+        this.muteButton.setText(muted ? "Ton aus" : "Ton an");
+      },
+      { width: 96, height: 30, fontSize: 13, color: COLORS.hudDim },
+    );
+    this.muteButton.setDepth(DEPTH.hud);
+
+    // Falls das Spiel direkt gestartet wurde: Ton beim ersten Antippen freigeben.
+    this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {
+      audio.unlock();
+      audio.startMusic();
+    });
 
     this.inputManager = new InputManager(this, this.gameCamera);
     this.ready = true;

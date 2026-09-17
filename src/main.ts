@@ -8,6 +8,7 @@ import { BootScene } from "./scenes/BootScene";
 import { GameOverScene } from "./scenes/GameOverScene";
 import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
+import { MenuScene } from "./scenes/MenuScene";
 
 const config: Phaser.Types.Core.GameConfig = {
   // AUTO nimmt WebGL, wenn das Geraet es kann, sonst Canvas.
@@ -35,7 +36,7 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser hier
   // keine eigene Physik-Engine (siehe CLAUDE.md, Architektur-Grundregel).
-  scene: [BootScene, GameScene, HudScene, GameOverScene],
+  scene: [BootScene, MenuScene, GameScene, HudScene, GameOverScene],
 };
 
 new Phaser.Game(config);

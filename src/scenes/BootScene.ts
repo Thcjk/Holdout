@@ -6,7 +6,7 @@
  */
 
 import Phaser from "phaser";
-import { createTextures } from "../assets/textures";
+import { buildAtlas } from "../assets/textures";
 import { COLORS } from "../config/constants";
 
 export class BootScene extends Phaser.Scene {
@@ -19,7 +19,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    createTextures(this);
-    this.scene.start("Game");
+    buildAtlas(this);
+    this.scene.start("Menu");
   }
 }

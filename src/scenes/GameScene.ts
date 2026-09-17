@@ -13,6 +13,7 @@
 import Phaser from "phaser";
 import { CHARACTERS, PLAYER } from "../config/balance";
 import { ARENA, COLORS, DEPTH } from "../config/constants";
+import { playEventSounds } from "../audio/eventSounds";
 import { ArenaRenderer } from "../render/ArenaRenderer";
 import { CameraController } from "../render/CameraController";
 import { EntityRenderer } from "../render/EntityRenderer";
@@ -126,12 +127,17 @@ export class GameScene extends Phaser.Scene {
         // Kurz warten, damit der letzte Effekt noch zu sehen ist.
         this.time.delayedCall(900, () => {
           this.scene.stop("Hud");
-          this.scene.start("GameOver", { score: event.score, wave: event.wave });
+          this.scene.start("GameOver", {
+            score: event.score,
+            wave: event.wave,
+            character: this.character,
+          });
         });
       }
     }
 
     this.juice.handle(this.simulation.events);
+    playEventSounds(this.simulation.events);
   }
 
   private localPlayer(): PlayerState | undefined {

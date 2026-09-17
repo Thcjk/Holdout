@@ -76,6 +76,8 @@ export interface PlayerState {
   /** Restdauer des Scout-Dashs in Sekunden (0 = kein Dash). */
   dashTime: number;
   dashDirection: Vec2;
+  /** Gegner, die dieser Dash schon erwischt hat - jeder wird nur einmal getroffen. */
+  dashHits: number[];
   /** Steht der Spieler in einem Busch? Gegner sehen ihn dann nicht. */
   inBush: boolean;
   /** Restlicher Schusstakt in Sekunden - verhindert Dauerfeuer pro Tick. */

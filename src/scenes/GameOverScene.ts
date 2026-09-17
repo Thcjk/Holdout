@@ -6,27 +6,31 @@
  */
 
 import Phaser from "phaser";
+import { audio } from "../audio/AudioEngine";
 import { COLORS, VIEWPORT } from "../config/constants";
 import { loadHighscore, saveHighscore } from "../storage/highscore";
+import type { CharacterId } from "../systems/types";
+import { Button } from "../ui/Button";
 
 export interface GameOverData {
   score: number;
   wave: number;
+  character: CharacterId;
 }
 
 export class GameOverScene extends Phaser.Scene {
-  private data_!: GameOverData;
+  private result!: GameOverData;
 
   constructor() {
     super("GameOver");
   }
 
   init(data: GameOverData): void {
-    this.data_ = data;
+    this.result = data;
   }
 
   create(): void {
-    const isRecord = saveHighscore(this.data_.score, this.data_.wave);
+    const isRecord = saveHighscore(this.result.score, this.result.wave);
     const best = loadHighscore();
 
     this.cameras.main.setBackgroundColor(COLORS.background);
@@ -41,11 +45,12 @@ export class GameOverScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(VIEWPORT.width / 2, 190, `Welle ${this.data_.wave}   ·   ${this.data_.score} Punkte`, {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "26px",
-        color: "#ffd166",
-      })
+      .text(
+        VIEWPORT.width / 2,
+        190,
+        `Welle ${this.result.wave}   ·   ${this.result.score} Punkte`,
+        { fontFamily: "system-ui, sans-serif", fontSize: "26px", color: "#ffd166" },
+      )
       .setOrigin(0.5);
 
     this.add
@@ -63,45 +68,32 @@ export class GameOverScene extends Phaser.Scene {
       )
       .setOrigin(0.5);
 
-    this.createButton(VIEWPORT.height / 2 + 120, "Nochmal", () => {
-      this.scene.start("Game");
+    new Button(this, VIEWPORT.width / 2 - 132, 380, "Nochmal", () => this.restart(), {
+      width: 230,
     });
 
+    new Button(
+      this,
+      VIEWPORT.width / 2 + 132,
+      380,
+      "Charakter wechseln",
+      () => this.scene.start("Menu"),
+      { width: 230, fontSize: 18, color: COLORS.hudDim },
+    );
+
     this.add
-      .text(VIEWPORT.width / 2, VIEWPORT.height - 28, "Tippen oder Leertaste startet neu", {
+      .text(VIEWPORT.width / 2, VIEWPORT.height - 28, "Leertaste startet sofort neu", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "13px",
         color: "#8ea6c4",
       })
       .setOrigin(0.5);
 
-    this.input.keyboard?.once("keydown-SPACE", () => this.scene.start("Game"));
+    this.input.keyboard?.once("keydown-SPACE", () => this.restart());
   }
 
-  private createButton(y: number, label: string, onClick: () => void): void {
-    const width = 240;
-    const height = 58;
-    const x = VIEWPORT.width / 2;
-
-    const background = this.add.rectangle(x, y, width, height, COLORS.player, 0.9);
-    background.setStrokeStyle(3, COLORS.playerOutline);
-    background.setInteractive({ useHandCursor: true });
-
-    this.add
-      .text(x, y, label, {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "24px",
-        color: "#11161f",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
-
-    background.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, onClick);
-    background.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OVER, () =>
-      background.setFillStyle(COLORS.playerOutline, 1),
-    );
-    background.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, () =>
-      background.setFillStyle(COLORS.player, 0.9),
-    );
+  private restart(): void {
+    audio.unlock();
+    this.scene.start("Game", { character: this.result.character });
   }
 }

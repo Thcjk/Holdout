@@ -11,7 +11,7 @@
 
 import Phaser from "phaser";
 import { COLORS, DEPTH } from "../config/constants";
-import { TEXTURES } from "../assets/textures";
+import { ATLAS_KEY, FRAMES } from "../assets/textures";
 import type { GameEvent } from "../systems/types";
 
 /** Wie viele Schadenszahlen gleichzeitig hoechstens sichtbar sind. */
@@ -42,7 +42,8 @@ export class Juice {
       this.damageTexts.push(text);
     }
 
-    this.deathParticles = scene.add.particles(0, 0, TEXTURES.dot, {
+    this.deathParticles = scene.add.particles(0, 0, ATLAS_KEY, {
+      frame: FRAMES.dot,
       lifespan: 420,
       speed: { min: 60, max: 220 },
       scale: { start: 1.1, end: 0 },
@@ -51,7 +52,8 @@ export class Juice {
     });
     this.deathParticles.setDepth(DEPTH.particles);
 
-    this.hitParticles = scene.add.particles(0, 0, TEXTURES.spark, {
+    this.hitParticles = scene.add.particles(0, 0, ATLAS_KEY, {
+      frame: FRAMES.spark,
       lifespan: 200,
       speed: { min: 40, max: 120 },
       scale: { start: 0.8, end: 0 },
