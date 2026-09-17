@@ -75,11 +75,23 @@ export class MenuScene extends Phaser.Scene {
       this.createCard(id, 168 + index * (CARD_WIDTH + 24));
     });
 
-    new Button(this, VIEWPORT.width / 2, VIEWPORT.height - 38, "Solo starten", () => {
+    new Button(this, VIEWPORT.width / 2 - 150, VIEWPORT.height - 38, "Solo starten", () => {
       audio.unlock();
       audio.startMusic();
       this.scene.start("Game", { character: this.selected });
     });
+
+    new Button(
+      this,
+      VIEWPORT.width / 2 + 150,
+      VIEWPORT.height - 38,
+      "Zusammen spielen",
+      () => {
+        audio.unlock();
+        this.scene.start("Lobby", { character: this.selected });
+      },
+      { color: COLORS.mate },
+    );
 
     this.muteButton = new Button(
       this,

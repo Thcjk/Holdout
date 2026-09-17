@@ -32,6 +32,8 @@ export interface HudModel {
   down: boolean;
   reviveProgress: number;
   mates: HudMate[];
+  /** Gesetzt, wenn die Verbindung abgerissen ist - wird gross eingeblendet. */
+  connectionMessage: string | null;
 }
 
 export function createHudModel(): HudModel {
@@ -50,5 +52,6 @@ export function createHudModel(): HudModel {
     down: false,
     reviveProgress: 0,
     mates: [],
+    connectionMessage: null,
   };
 }

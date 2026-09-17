@@ -14,6 +14,7 @@
 import { MAX_TICKS_PER_FRAME, TICK_MS, TICK_SECONDS } from "../config/constants";
 import { createWorld, stepWorld } from "./world";
 import type { PlayerSetup } from "./world";
+import type { WorldView } from "../net/GameSession";
 import type { GameEvent, InputState, Vec2, WorldState } from "./types";
 
 /** Ein Schluessel je Objekt, damit Spieler und Gegner sich nicht in die Quere kommen. */
@@ -25,7 +26,7 @@ function enemyKey(id: number): string {
   return `e:${id}`;
 }
 
-export class Simulation {
+export class Simulation implements WorldView {
   readonly state: WorldState;
 
   /** Noch nicht in Ticks umgesetzte Zeit, in Millisekunden. */
@@ -77,6 +78,10 @@ export class Simulation {
     }
 
     return ticks;
+  }
+
+  get pendingCount(): number {
+    return this.state.pendingSpawns.length;
   }
 
   /** Alle Ereignisse, die seit dem letzten Bild passiert sind. */

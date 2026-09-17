@@ -12,7 +12,7 @@
 import Phaser from "phaser";
 import { ATLAS_KEY, BODY_RADIUS, FRAMES } from "../assets/textures";
 import { COLORS, DEPTH } from "../config/constants";
-import type { Simulation } from "../systems/Simulation";
+import type { WorldView } from "../net/GameSession";
 import type { CharacterId, EnemyState, EnemyType, PlayerState, WorldState } from "../systems/types";
 
 /** Wie lange ein getroffener Gegner weiss aufblitzt, in Millisekunden. */
@@ -48,7 +48,7 @@ export class EntityRenderer {
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly simulation: Simulation,
+    private readonly simulation: WorldView,
     private readonly selfId: string,
   ) {
     this.trails = scene.add.graphics().setDepth(DEPTH.projectiles - 1);

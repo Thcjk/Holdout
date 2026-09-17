@@ -20,6 +20,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "peerjs": "^1.5.5",
     "phaser": "^3.90.0"
   },
   "devDependencies": {

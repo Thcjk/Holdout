@@ -1,38 +1,36 @@
 /**
  * Die Spielszene. Ihre einzige Aufgabe ist Darstellung und Eingabe:
  *
- *   Eingabe einsammeln -> Simulation weiterlaufen lassen -> Zustand zeichnen
+ *   Eingabe einsammeln -> Runde weiterlaufen lassen -> Zustand zeichnen
  *
- * Bewusst keine Spiellogik hier. Wo der Spieler steht, wen er trifft und wie viel
- * Schaden das macht, entscheidet `systems/` (siehe CLAUDE.md, Architektur-Grundregel).
- *
- * Die Bedienelemente liegen in der HudScene, die parallel darueber laeuft - siehe
- * die Begruendung dort.
+ * Bewusst keine Spiellogik hier. Und bewusst kein Wissen darueber, ob die Runde
+ * allein, als Host oder als Client laeuft: Das steckt hinter `GameSession`.
  */
 
 import Phaser from "phaser";
+import { playEventSounds } from "../audio/eventSounds";
 import { CHARACTERS, PLAYER } from "../config/balance";
 import { ARENA, COLORS, DEPTH } from "../config/constants";
-import { playEventSounds } from "../audio/eventSounds";
+import type { GameSession } from "../net/GameSession";
+import { SoloSession } from "../net/SoloSession";
 import { ArenaRenderer } from "../render/ArenaRenderer";
 import { CameraController } from "../render/CameraController";
 import { EntityRenderer } from "../render/EntityRenderer";
 import { Juice } from "../render/Juice";
 import { loadHighscore } from "../storage/highscore";
-import { Simulation } from "../systems/Simulation";
 import type { CharacterId, InputState, PlayerState } from "../systems/types";
 import { createHudModel } from "../ui/HudModel";
 import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
 
-const LOCAL_PLAYER_ID = "local";
-
 export interface GameSceneData {
   character?: CharacterId;
+  /** Gesetzt, wenn die Runde aus der Lobby kommt. Sonst wird solo gespielt. */
+  session?: GameSession;
 }
 
 export class GameScene extends Phaser.Scene {
-  private simulation!: Simulation;
+  private session!: GameSession;
   private cameraController!: CameraController;
   private arena!: ArenaRenderer;
   private entities!: EntityRenderer;
@@ -44,8 +42,6 @@ export class GameScene extends Phaser.Scene {
   private character: CharacterId = "scout";
   private finished = false;
 
-  private readonly inputs = new Map<string, InputState>();
-
   constructor() {
     super("Game");
   }
@@ -55,17 +51,15 @@ export class GameScene extends Phaser.Scene {
     this.finished = false;
     this.hudModel = createHudModel();
     this.hudModel.highscore = loadHighscore()?.score ?? 0;
-    this.inputs.clear();
+
+    this.session =
+      data.session ?? new SoloSession({ id: "local", name: "Du", character: this.character });
   }
 
   create(): void {
-    this.simulation = new Simulation([
-      { id: LOCAL_PLAYER_ID, name: "Du", character: this.character },
-    ]);
-
-    this.arena = new ArenaRenderer(this, this.simulation.state);
+    this.arena = new ArenaRenderer(this, this.session.view.state);
     this.juice = new Juice(this);
-    this.entities = new EntityRenderer(this, this.simulation, LOCAL_PLAYER_ID);
+    this.entities = new EntityRenderer(this, this.session.view, this.session.selfId);
     this.cameraController = new CameraController(this, ARENA.width, ARENA.height);
     this.aimLine = this.add.graphics().setDepth(DEPTH.projectiles);
 
@@ -74,6 +68,7 @@ export class GameScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scene.stop("Hud");
+      this.session.destroy();
       this.cameraController.destroy();
       this.entities.destroy();
       this.juice.destroy();
@@ -82,7 +77,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    const player = this.localPlayer();
+    const player = this.selfPlayer();
     // Die HudScene startet ein Bild spaeter als diese Szene. Solange sie nicht
     // bereit ist, gibt es noch keine Eingabe - ein Bild ohne Steuerung faellt
     // niemandem auf, ein Absturz schon.
@@ -91,34 +86,36 @@ export class GameScene extends Phaser.Scene {
     }
 
     const input = this.hud.inputManager.getState(player.position);
-    this.inputs.set(LOCAL_PLAYER_ID, input);
 
     // Beim Super laeuft die Zeit kurz langsamer. Die Simulation merkt davon
     // nichts - sie bekommt einfach weniger Zeit zugeteilt.
     this.juice.update(delta);
-    const ticks = this.simulation.advance(delta * this.juice.currentTimeScale, this.inputs);
-    if (ticks > 0) {
-      // Einmalige Wuensche (Schuss, Super) erst loeschen, wenn ein Tick sie
-      // gesehen hat - sonst geht ein Klick zwischen zwei Ticks verloren.
+    const consumed = this.session.update(delta * this.juice.currentTimeScale, input);
+    if (consumed) {
+      // Einmalige Wuensche (Schuss, Super) erst loeschen, wenn sie verarbeitet
+      // wurden - sonst geht ein Klick zwischen zwei Ticks verloren.
       this.hud.inputManager.clearOneShots();
     }
 
     this.handleEvents();
+    this.checkConnection();
     this.entities.update();
     this.drawAim(player, input);
     this.updateHudModel(player);
 
     this.cameraController.update(
-      this.simulation.state.players.map((entry) => ({
-        position: this.simulation.renderPlayerPosition(entry.id),
-        isSelf: entry.id === LOCAL_PLAYER_ID,
+      this.session.view.state.players.map((entry) => ({
+        position: this.session.view.renderPlayerPosition(entry.id),
+        isSelf: entry.id === this.session.selfId,
         down: entry.down,
       })),
     );
   }
 
   private handleEvents(): void {
-    for (const event of this.simulation.events) {
+    const events = this.session.view.events;
+
+    for (const event of events) {
       if (event.type === "hit") {
         this.entities.flashEnemy(event.enemyId);
       }
@@ -136,12 +133,29 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.juice.handle(this.simulation.events);
-    playEventSounds(this.simulation.events);
+    this.juice.handle(events);
+    playEventSounds(events);
   }
 
-  private localPlayer(): PlayerState | undefined {
-    return this.simulation.state.players.find((entry) => entry.id === LOCAL_PLAYER_ID);
+  /**
+   * Reisst die Verbindung ab, ist die Runde vorbei - Host-Migration lohnt sich
+   * fuer ein Spiel unter Freunden nicht (Briefing, Abschnitt 6).
+   */
+  private checkConnection(): void {
+    if (this.finished || !this.session.connectionLost) {
+      return;
+    }
+
+    this.finished = true;
+    this.hudModel.connectionMessage = this.session.connectionLost;
+    this.time.delayedCall(2600, () => {
+      this.scene.stop("Hud");
+      this.scene.start("Menu");
+    });
+  }
+
+  private selfPlayer(): PlayerState | undefined {
+    return this.session.view.state.players.find((entry) => entry.id === this.session.selfId);
   }
 
   /**
@@ -154,7 +168,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const position = this.simulation.renderPlayerPosition(player.id);
+    const position = this.session.view.renderPlayerPosition(player.id);
     const range = CHARACTERS[player.character].shot.range;
     const strength = Math.max(0.25, this.hud.inputManager.aimStrength);
     const length = range * strength;
@@ -170,7 +184,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Fuellt das Objekt, das die HudScene liest. */
   private updateHudModel(player: PlayerState): void {
-    const state = this.simulation.state;
+    const state = this.session.view.state;
     const reloadTime = CHARACTERS[player.character].reloadTime;
 
     this.hudModel.characterName = CHARACTERS[player.character].name;
@@ -184,7 +198,7 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
     this.hudModel.phaseTime = state.phaseTime;
-    this.hudModel.enemiesLeft = state.enemies.length + state.pendingSpawns.length;
+    this.hudModel.enemiesLeft = state.enemies.length + this.session.view.pendingCount;
     this.hudModel.down = player.down;
     this.hudModel.reviveProgress = player.reviveProgress / PLAYER.reviveTime;
     this.hudModel.mates = state.players

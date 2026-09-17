@@ -8,6 +8,7 @@ import { BootScene } from "./scenes/BootScene";
 import { GameOverScene } from "./scenes/GameOverScene";
 import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
+import { LobbyScene } from "./scenes/LobbyScene";
 import { MenuScene } from "./scenes/MenuScene";
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -23,6 +24,12 @@ const config: Phaser.Types.Core.GameConfig = {
     width: VIEWPORT.width,
     height: VIEWPORT.height,
   },
+  dom: {
+    // Erlaubt echte HTML-Elemente ueber dem Canvas. Gebraucht wird das nur fuer
+    // das Raumcode-Feld: Nur ein echtes Eingabefeld oeffnet auf dem Handy die
+    // Systemtastatur.
+    createContainer: true,
+  },
   input: {
     // Drei gleichzeitige Finger: linker Stick, rechter Stick, Super-Knopf.
     // Ohne diese Zeile meldet Phaser nur einen Zeiger, und der zweite Daumen
@@ -36,7 +43,7 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser hier
   // keine eigene Physik-Engine (siehe CLAUDE.md, Architektur-Grundregel).
-  scene: [BootScene, MenuScene, GameScene, HudScene, GameOverScene],
+  scene: [BootScene, MenuScene, LobbyScene, GameScene, HudScene, GameOverScene],
 };
 
 new Phaser.Game(config);
