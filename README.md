@@ -1,9 +1,33 @@
 # Koop-Arena-Shooter
 
-Top-down-Arena-Shooter für den Handy-Browser: 1–4 Spieler halten gemeinsam gegen
-immer stärkere Gegnerwellen durch. Statische PWA, gehostet auf GitHub Pages.
+Top-down-Arena-Shooter fürs Handy: 1–4 Spieler halten gemeinsam gegen immer
+stärkere Gegnerwellen durch.
 
-**Live:** https://thcjk.github.io/thistle-and-crown/
+> **Das Spiel läuft nur auf Handys und Tablets.** Am Desktop startet es nicht,
+> sondern zeigt einen QR-Code zum Öffnen auf dem Handy. Die ganze Steuerung
+> besteht aus zwei Daumen – mit Maus und Tastatur wäre sie nicht schlechter,
+> sondern falsch bedienbar.
+
+## Installieren
+
+**Android – App herunterladen**
+
+1. [Releases](https://github.com/Thcjk/thistle-and-crown/releases) öffnen und
+   die Datei `koop-arena-shooter.apk` auf dem Handy herunterladen
+2. Beim Öffnen fragt Android einmalig nach der Erlaubnis, Apps aus dieser
+   Quelle zu installieren – bestätigen
+3. Installieren, fertig
+
+**Android und iPhone – ohne Store, direkt aus dem Browser**
+
+1. https://thcjk.github.io/thistle-and-crown/ auf dem Handy öffnen
+2. Android: im Menü auf **App installieren** tippen.
+   iPhone: **Teilen → Zum Home-Bildschirm**
+3. Danach startet das Spiel ohne Browserleisten und auch ohne Internet
+
+Für iPhones gibt es keine App-Datei: Eine iOS-App braucht einen Mac und ein
+Apple-Entwicklerkonto. Der Weg über den Home-Bildschirm liefert dort dasselbe
+Ergebnis.
 
 ## Was drin ist
 
@@ -13,9 +37,10 @@ immer stärkere Gegnerwellen durch. Statische PWA, gehostet auf GitHub Pages.
 - Wellensystem mit steigender Schwierigkeit, drei Gegnertypen, Boss alle fünf
   Wellen, Score und lokaler Rekord
 - Twin-Stick-Touchsteuerung: schwebender Joystick links, Zielen und Schiessen
-  rechts, Super-Knopf – plus Tastatur und Maus zum Entwickeln
+  rechts, Super-Knopf
 - Koop über WebRTC mit sechsstelligem Raumcode, bis zu vier Spieler
-- Als PWA installierbar, Solo-Modus läuft offline
+- Als Android-App zum Herunterladen und als installierbare Website; solo läuft
+  beides ohne Internet
 
 ## Steuerung
 
@@ -31,8 +56,8 @@ immer stärkere Gegnerwellen durch. Statische PWA, gehostet auf GitHub Pages.
 
 ## Technik
 
-TypeScript · Vite · Phaser 3 · PeerJS · vite-plugin-pwa · Vitest · ESLint ·
-Prettier · GitHub Actions / Pages
+TypeScript · Vite · Phaser 3 · PeerJS · Capacitor · vite-plugin-pwa · Vitest ·
+ESLint · Prettier · GitHub Actions / Pages
 
 Die Simulation läuft mit festem Takt (30 Ticks pro Sekunde) und ist strikt von
 der Darstellung getrennt: Alles unter `src/systems/` ist reine Logik ohne Phaser.
@@ -44,17 +69,55 @@ im Projekt ist, steht in `CLAUDE.md`.
 
 - Node.js 20 oder neuer
 - npm 10 oder neuer
+- Für die APK zusätzlich: Android Studio – oder gar nichts, wenn GitHub sie baut
 
-## Loslegen
+## Entwickeln
 
 ```bash
 npm install
 npm run dev
 ```
 
-Der Entwicklungsserver ist auch im lokalen Netz erreichbar (`--host` ist gesetzt),
-damit sich das Spiel direkt auf dem Handy testen lässt: Die zweite Adresse in der
-Ausgabe von `npm run dev` im Handy-Browser öffnen.
+Der Entwicklungsserver ist auch im lokalen Netz erreichbar (`--host` ist gesetzt).
+Weil das Spiel am Desktop nicht startet, gibt es zwei Wege zum Ausprobieren:
+
+- **Auf dem Handy:** die zweite Adresse aus der Ausgabe von `npm run dev` im
+  Handy-Browser öffnen. Das ist der ehrliche Test – Touch und Leistung sind dort
+  anders als auf dem Rechner.
+- **Am Rechner:** Entwicklerwerkzeuge öffnen (F12) und die Geräteansicht
+  einschalten (Strg+Umschalt+M). Damit meldet der Browser Touch und einen groben
+  Zeiger, und das Spiel startet.
+
+## Android-App bauen
+
+Am einfachsten über GitHub: Ein Tag `v1.0.0` oder ein Klick auf _Run workflow_
+bei **Android APK** baut die App und hängt sie an ein Release. Auf den
+GitHub-Runnern ist das Android-SDK vorinstalliert, lokal braucht es dafür
+Android Studio.
+
+Lokal, wenn Android Studio da ist:
+
+```bash
+npm run android:apk    # baut dist/, kopiert es und erzeugt die APK
+npm run android:open   # öffnet das Projekt in Android Studio
+```
+
+**Aktualisierbare Installation:** Android installiert eine neue Version nur über
+eine alte, wenn beide mit demselben Schlüssel signiert sind. Ohne hinterlegten
+Schlüssel baut der Workflow einen Debug-Build, dessen Schlüssel sich bei jedem
+Lauf ändert – die alte App muss dann vor der neuen deinstalliert werden. Für
+echte Updates einmalig einen Schlüssel anlegen:
+
+```bash
+keytool -genkey -v -keystore release.keystore -alias arena \
+  -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 release.keystore    # Ausgabe kopieren
+```
+
+und als GitHub-Secrets hinterlegen: `ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
+Die Datei `release.keystore` gehört **nicht** ins Repo – geht sie verloren,
+lässt sich die App nie wieder aktualisieren.
 
 ## Koop testen
 
@@ -98,15 +161,23 @@ src/
   render/     Arena, Figuren, Kamera, Effekte
   scenes/     Boot, Menü, Lobby, Spiel, HUD, Game Over
   input/ ui/  Eingaben und Bedienelemente
+  platform/   Geräte-Erkennung, Desktop-Sperre, Installation
   audio/      synthetisierte Klänge
   assets/     Texture Atlas
+android/      Capacitor-Projekt für die Android-App
+tools/        Hilfsskripte (App-Icons erzeugen)
 tests/        Simulation und Netzwerk, ohne Browser
 ```
 
 ## Deployment
 
-Jeder Push auf `main` baut und veröffentlicht über
-`.github/workflows/deploy-pages.yml` auf GitHub Pages. Der Workflow setzt dabei
+Zwei Workflows:
+
+- **Deploy GitHub Pages** – jeder Push auf `main` veröffentlicht die
+  installierbare Website
+- **Android APK** – ein Tag `v*` baut die App und hängt sie an ein Release
+
+Der Pages-Workflow läuft über `.github/workflows/deploy-pages.yml`. Der Workflow setzt dabei
 `VITE_BASE_PATH=/thistle-and-crown/` – ohne diesen Basispfad findet der Browser
 die Dateien auf Pages nicht.
 

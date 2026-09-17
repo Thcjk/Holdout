@@ -21,7 +21,9 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
-**Phase 1 bis 7 sind umgesetzt.** Der V1-Umfang aus dem Briefing steht damit
+**Phase 1 bis 7 sind umgesetzt**, dazu eine Erweiterung nach Phase 7: Das Spiel
+läuft ausschliesslich auf Touchgeräten und wird installiert statt im Browser
+gespielt (siehe „Nur Handy" weiter unten). Der V1-Umfang aus dem Briefing steht
 vollständig im Code. Was aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut
@@ -34,6 +36,28 @@ vollständig im Code. Was aussteht, ist kein Code, sondern dein Urteil:
   nicht geprüft werden, weil der PeerJS-Signalisierungsserver aus der
   Entwicklungsumgebung nicht erreichbar ist.
 - **Balancing ist ein Vorschlag, kein Ergebnis.** Siehe unten.
+
+## Nur Handy, und installiert statt im Browser
+
+Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
+
+- **Am Desktop startet das Spiel nicht.** `src/platform/device.ts` prüft
+  Fähigkeiten (Touchpunkte plus grober Zeiger), nicht den User-Agent-Text: Der
+  lässt sich fälschen und ändert sich mit jeder Browserversion. Wer kein
+  Touchgerät hat, bekommt `DesktopNotice` mit QR-Code – Phaser wird gar nicht
+  erst geladen.
+- **Tastatur und Maus sind entfernt.** Der im Briefing vorgesehene
+  Desktop-Fallback wäre Code, den niemand mehr benutzen kann.
+  **Folge fürs Entwickeln:** Entweder auf dem Handy testen oder in den
+  Entwicklerwerkzeugen die Geräteansicht einschalten (F12, dann Strg+Umschalt+M).
+- **Zwei Wege zur Installation.** Android bekommt eine echte APK über Capacitor
+  (`android/`, Workflow `android-apk.yml`). Android und iPhone können die Seite
+  zusätzlich als PWA installieren (`src/platform/install.ts`). Eine iOS-App ist
+  ohne Mac und Apple-Entwicklerkonto nicht baubar - deshalb bleibt die PWA dort
+  der einzige Weg.
+- **Signatur:** Ohne hinterlegten Schlüssel baut der Workflow einen Debug-Build,
+  dessen Schlüssel bei jedem Lauf wechselt - eine so gebaute App lässt sich nicht
+  über die vorherige Version installieren. Die vier Secrets dafür stehen im README.
 
 ## Die Architektur-Grundregel
 
@@ -105,11 +129,14 @@ src/
   render/                 Darstellung
     ArenaRenderer, EntityRenderer, CameraController, Juice
   scenes/                 Boot, Menu, Lobby, Game, Hud, GameOver
-  input/InputManager.ts   Tastatur, Maus und Touch -> InputState
+  input/InputManager.ts   Touch -> InputState
   ui/                     VirtualJoystick, TouchControls, Button, HudModel
   audio/                  synthetisierte Klänge und Musik
   assets/textures.ts      Texture Atlas
   storage/highscore.ts    lokaler Rekord
+  platform/               Geräte-Erkennung, Desktop-Sperre, PWA-Installation
+android/                  Capacitor-Projekt für die Android-App
+tools/                    Hilfsskripte (App-Icons erzeugen)
 tests/
   systems/                Simulation, inklusive ganzer Runden ohne Browser
   net/                    Protokoll, Raumcodes, Host und Client im selben Prozess
@@ -184,6 +211,9 @@ Genau das prüft auch `quality-check.yml`.
   mit Hinweis - so im Briefing vorgesehen.
 - **Bundle ist gross** (~1,6 MB, gzip ~370 kB), weil Phaser komplett eingebunden
   ist. Ein massgeschneiderter Phaser-Build wäre der nächste Hebel.
+- **Die APK ist hier nie gebaut worden.** Das Android-SDK fehlt in der
+  Entwicklungsumgebung, und `dl.google.com` ist gesperrt. Gebaut wird sie auf
+  GitHub Actions - der erste Lauf des Workflows ist der eigentliche Test.
 - **Arena ist keine Tilemap**, sondern eine Liste von Rechtecken in
   `config/arena.ts`. Die Schnittstelle zur Simulation bleibt dieselbe, eine
   Tilemap kann sie später füllen.

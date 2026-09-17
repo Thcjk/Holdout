@@ -1,0 +1,6 @@
+dist
+coverage
+node_modules
+# Erzeugtes Capacitor-Projekt samt kopiertem Web-Build
+android
+package-lock.json

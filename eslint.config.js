@@ -5,7 +5,9 @@ import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "coverage/**", "node_modules/**"],
+    // "android" enthaelt das erzeugte Capacitor-Projekt samt kopiertem
+    // Web-Build - fertiger Code, den zu pruefen keinen Sinn ergibt.
+    ignores: ["dist/**", "coverage/**", "node_modules/**", "android/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

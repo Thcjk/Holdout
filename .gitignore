@@ -13,3 +13,16 @@ coverage
 *.local
 .idea
 .turbo
+
+# Android-Buildausgaben (Capacitor). Das Projekt selbst gehoert ins Repo,
+# alles Erzeugte nicht.
+android/.gradle
+android/build
+android/app/build
+android/app/src/main/assets/public
+android/app/src/main/assets/capacitor.config.json
+android/capacitor-cordova-android-plugins
+android/local.properties
+*.apk
+*.aab
+*.keystore
