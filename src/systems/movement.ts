@@ -7,7 +7,7 @@
 
 import { PLAYER, SUPERS } from "../config/balance";
 import { speedFor } from "./skills";
-import { resolveAgainstWalls } from "./collision";
+import { moveAndCollide } from "./collision";
 import type { InputState, PlayerState, Rect, Vec2 } from "./types";
 
 /** Laenge eines Vektors auf hoechstens 1 begrenzen (diagonal nicht schneller laufen). */
@@ -69,10 +69,9 @@ export function stepPlayerMovement(
   player.velocity.x = moveTowards(player.velocity.x, direction.x * speed, maxDelta);
   player.velocity.y = moveTowards(player.velocity.y, direction.y * speed, maxDelta);
 
-  player.position.x += player.velocity.x * dt;
-  player.position.y += player.velocity.y * dt;
-
-  resolveAgainstWalls(player.position, player.velocity, player.radius, walls);
+  // Getrennt nach Achsen, damit die Figur an Waenden entlanggleitet, statt
+  // stehenzubleiben - siehe moveAndCollide.
+  moveAndCollide(player.position, player.velocity, player.radius, walls, dt);
 }
 
 /**
@@ -87,9 +86,7 @@ function stepDash(player: PlayerState, walls: readonly Rect[], dt: number): void
   const beforeX = player.position.x;
   const beforeY = player.position.y;
 
-  player.position.x += player.velocity.x * dt;
-  player.position.y += player.velocity.y * dt;
-  resolveAgainstWalls(player.position, player.velocity, player.radius, walls);
+  moveAndCollide(player.position, player.velocity, player.radius, walls, dt);
 
   const movedX = player.position.x - beforeX;
   const movedY = player.position.y - beforeY;

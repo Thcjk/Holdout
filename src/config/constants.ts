@@ -155,12 +155,38 @@ export const CAMERA = {
  * auftaucht, ist genau das nicht.
  */
 export const TOUCH = {
-  /** Radius des Bewegungs-Joysticks in Bildschirmpixeln. */
-  stickRadius: 78,
+  /**
+   * Radius des Bewegungs-Joysticks in Bildschirmpixeln.
+   *
+   * 78 -> 64: Mit der Reaktionskurve unten muss der Daumen bis an den Rand
+   * ziehen, um volles Tempo zu bekommen. Bei 78 war das eine unbequem weite
+   * Strecke; bei 64 liegt der Rand im natuerlichen Schwenkbereich des Daumens.
+   */
+  stickRadius: 64,
   /** Radius des Daumenknopfs. */
   knobRadius: 32,
-  /** Tote Zone, damit ein zitternder Daumen die Figur nicht ruckeln laesst. */
-  deadZone: 10,
+  /**
+   * Tote Zone in Pixeln - 10 -> 6.
+   *
+   * Sie ist nur noch gegen das Zittern eines aufliegenden Daumens da. Die
+   * Feinsteuerung uebernimmt jetzt die Reaktionskurve, nicht mehr ein breiter
+   * toter Bereich.
+   */
+  deadZone: 6,
+  /**
+   * Form der Reaktionskurve des Bewegungs-Joysticks.
+   *
+   * 1 = geradlinig: Halber Ausschlag ist halbes Tempo. Klingt richtig, fuehlt
+   * sich aber grob an - schon eine kleine Bewegung schiebt die Figur spuerbar
+   * los, und langsames Schleichen ist kaum zu treffen.
+   *
+   * 2 = quadratisch: Halber Ausschlag ist ein Viertel Tempo. Der Bereich um die
+   * Mitte wird fein, ohne dass es oben an Tempo fehlt - volles Tempo gibt es
+   * weiterhin am Rand.
+   *
+   * Zum Ausprobieren ohne Neubau: ?tune=touch.responseCurve=1.5
+   */
+  responseCurve: 2,
 
   /** Fester Schussknopf unten rechts: Halten feuert, Ziehen zielt. */
   fireButton: {

@@ -11,8 +11,19 @@ import type { CharacterId, SkillId } from "../systems/types";
 export const PLAYER = {
   /** Grundtempo in Pixel pro Sekunde (je Charakter ueberschrieben). */
   speed: 220,
-  /** Zeit in Sekunden bis Vollgeschwindigkeit - nicht sofort, nicht traege. */
-  accelerationTime: 0.1,
+  /**
+   * Zeit in Sekunden bis Vollgeschwindigkeit - 0,10 -> 0,06.
+   *
+   * Das ist der groesste Einzelposten an der gefuehlten Verzoegerung. Die Kette
+   * vom Finger bis zur Figur ist: Beruehrung -> noch im selben Bild in eine
+   * Richtung umgerechnet -> bis zu ein Simulationsschritt Wartezeit (0 bis
+   * 33 ms) -> Beschleunigung auf Vollgeschwindigkeit. Der letzte Posten war mit
+   * 100 ms laenger als die beiden davor zusammen.
+   *
+   * Nicht auf 0: Ohne jede Beschleunigung springt die Figur zwischen Stillstand
+   * und Vollgas, und Richtungswechsel wirken wie ein Ruck.
+   */
+  accelerationTime: 0.06,
   /** Kollisionsradius in Pixeln. */
   radius: 18,
   /** Unverwundbarkeit nach einem Treffer, in Sekunden (mit Aufblinken). */

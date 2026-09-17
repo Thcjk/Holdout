@@ -117,3 +117,114 @@ export function resolveAgainstWalls(
     }
   }
 }
+
+/**
+ * Bewegt einen Kreis um `velocity * dt` - aber GETRENNT NACH ACHSEN.
+ *
+ * Erst X bewegen und gegen die Waende pruefen, dann Y. Das ist das uebliche
+ * Muster aus Arcade-Physik, und es hat einen konkreten Vorteil gegenueber
+ * "beides auf einmal, danach herausschieben":
+ *
+ *   Wird schraeg gegen eine Wand gedrueckt, ist nur EINE Achse blockiert. Bei
+ *   getrennter Aufloesung kommt die andere Achse im SELBEN Tick durch - die
+ *   Figur gleitet ohne Stocken. Loest man beides zusammen auf, wird zuerst
+ *   diagonal verschoben und danach auf die Wand zurueckgesetzt; der Anteil
+ *   laengs der Wand kann dabei verloren gehen, je nachdem, wo der naechste
+ *   Punkt der Wand liegt.
+ *
+ * Warum nicht Phaser Arcade Physics, wo es das fertig gibt? Weil die Simulation
+ * ohne Phaser laufen muss (CLAUDE.md, Architektur-Grundregel): Der Host rechnet
+ * die Runde fuer alle Mitspieler, und die Tests spielen ganze Runden ohne
+ * Browser durch. Das Muster laesst sich aber genauso hier umsetzen.
+ *
+ * Die Rechnung je Achse ist exakt, nicht geraten: Fuer einen Kreis neben einem
+ * achsenparallelen Rechteck laesst sich der erlaubte Abstand geschlossen
+ * angeben (Satz des Pythagoras, siehe unten).
+ */
+export function moveAndCollide(
+  position: Vec2,
+  velocity: Vec2,
+  radius: number,
+  walls: readonly Rect[],
+  dt: number,
+): void {
+  position.x += velocity.x * dt;
+  if (velocity.x !== 0) {
+    resolveAxisX(position, velocity, radius, walls);
+  }
+
+  position.y += velocity.y * dt;
+  if (velocity.y !== 0) {
+    resolveAxisY(position, velocity, radius, walls);
+  }
+
+  // Nachlauf fuer den Sonderfall, dass die Figur in einer Innenecke zwischen
+  // zwei Waenden steckt: Dort kann die Aufloesung der einen Achse die andere
+  // wieder verletzen.
+  resolveAgainstWalls(position, velocity, radius, walls);
+}
+
+function resolveAxisX(
+  position: Vec2,
+  velocity: Vec2,
+  radius: number,
+  walls: readonly Rect[],
+): void {
+  for (const wall of walls) {
+    const top = wall.y;
+    const bottom = wall.y + wall.height;
+    const nearestY = clamp(position.y, top, bottom);
+    const gapY = position.y - nearestY;
+    const gapYSquared = gapY * gapY;
+    if (gapYSquared >= radius * radius) {
+      // Auf dieser Hoehe kann die Wand gar nicht im Weg sein.
+      continue;
+    }
+
+    // Wie weit der Mittelpunkt in X von der Wandkante wegbleiben muss, damit
+    // sich Kreis und Rechteck auf dieser Hoehe nicht mehr beruehren.
+    const halfSpan = Math.sqrt(radius * radius - gapYSquared);
+    const left = wall.x;
+    const right = wall.x + wall.width;
+
+    if (position.x > left - halfSpan && position.x < right + halfSpan) {
+      if (velocity.x > 0) {
+        position.x = left - halfSpan;
+      } else {
+        position.x = right + halfSpan;
+      }
+      velocity.x = 0;
+    }
+  }
+}
+
+function resolveAxisY(
+  position: Vec2,
+  velocity: Vec2,
+  radius: number,
+  walls: readonly Rect[],
+): void {
+  for (const wall of walls) {
+    const left = wall.x;
+    const right = wall.x + wall.width;
+    const nearestX = clamp(position.x, left, right);
+    const gapX = position.x - nearestX;
+    const gapXSquared = gapX * gapX;
+    if (gapXSquared >= radius * radius) {
+      continue;
+    }
+
+    const halfSpan = Math.sqrt(radius * radius - gapXSquared);
+    const top = wall.y;
+    const bottom = wall.y + wall.height;
+
+    if (position.y > top - halfSpan && position.y < bottom + halfSpan) {
+      if (velocity.y > 0) {
+        position.y = top - halfSpan;
+      } else {
+        position.y = bottom + halfSpan;
+      }
+      velocity.y = 0;
+    }
+  }
+}

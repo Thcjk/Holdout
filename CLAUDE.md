@@ -202,6 +202,51 @@ Zwei Änderungen nach dem ersten Spieltest, beide über das Briefing hinaus:
   Benutzung frisch angewendet. Sonst summieren sich Rundungsfehler, und Host
   und Client laufen auseinander.
 
+### Bewegung: Kennlinie statt Schwelle, Achsen getrennt
+
+Zwei Änderungen am Steuerungsgefühl, beide gemessen statt geschätzt.
+
+**Die Joystick-Kennlinie** (`src/ui/stickResponse.ts`) bildet die Zugstrecke
+des Daumens auf das Tempo ab. Vorher geradlinig: halber Ausschlag, halbes
+Tempo. Das klingt richtig, fühlt sich aber grob an – schon ein kleiner Schubs
+ist ein spürbarer Satz, und langsames Schleichen lässt sich kaum treffen. Jetzt
+quadratisch (`TOUCH.responseCurve = 2`): halber Ausschlag ergibt 25 % Tempo,
+volles Tempo gibt es weiterhin am Rand. Dazu Stickradius 78 → 64 (der Rand
+liegt jetzt im natürlichen Schwenkbereich des Daumens) und tote Zone 10 → 6
+(die Feinsteuerung macht die Kurve, nicht mehr ein breiter toter Bereich).
+
+Die Funktion ist **bewusst phaserfrei und eigenständig**, damit sich die Kurve
+im Test nachrechnen lässt statt nur auf dem Handy zu ahnen
+(`tests/ui/stickResponse.test.ts`: kein Sprung grösser als 5 % Tempo je Pixel).
+
+**Kollision getrennt nach Achsen** (`moveAndCollide` in `systems/collision.ts`):
+erst X bewegen und prüfen, dann Y. Wird schräg gegen eine Wand gedrückt, ist
+nur eine Achse blockiert – die andere kommt im **selben** Tick durch.
+
+Das ist das übliche Muster aus Arcade-Physik. **Phaser Arcade Physics selbst
+kommt dafür nicht in Frage**: Die Simulation muss ohne Phaser laufen (der Host
+rechnet die Runde für alle, Tests spielen ganze Runden ohne Browser). Die
+Rechnung je Achse ist geschlossen lösbar, also exakt und nicht geraten.
+
+**Wichtig fürs Protokoll:** Ein Hängenbleiben an Wänden war *nicht*
+reproduzierbar. `tests/systems/movementCollision.test.ts` misst es: Gleiten an
+geraden Wänden 98–100 % des theoretischen Wegs, einmal um einen Deckungsblock
+herum ohne einen einzigen Stillstand, an der echten Arena der schlechteste Tick
+= volle Geschwindigkeit. Die Umstellung auf getrennte Achsen ist also Vorsorge,
+keine Reparatur. Fühlt es sich weiterhin hakelig an, liegt es nicht an der
+Kollision – dann zuerst die Eingabe verdächtigen.
+
+**Was an gefühlter Verzögerung wirklich messbar war:** Die Kette lautet
+Berührung → noch im selben Bild in eine Richtung umgerechnet (es gibt *keine*
+Warteschlange) → bis zu ein Simulationsschritt Wartezeit (0–33 ms) →
+Beschleunigung auf Vollgeschwindigkeit. Der letzte Posten war mit 100 ms länger
+als die beiden davor zusammen und steht jetzt auf 60 ms
+(`PLAYER.accelerationTime`). Nicht auf 0: Ohne jede Beschleunigung springt die
+Figur zwischen Stillstand und Vollgas.
+
+Steuerungswerte lassen sich jetzt ebenfalls ohne Neubau probieren:
+`?tune=touch.responseCurve=1.5,touch.stickRadius=70,player.accelerationTime=0.04`
+
 ### Treffer werden auf der ganzen Flugstrecke geprüft
 
 Der grösste Fund beim Überarbeiten des Schiessens, und er stand in keiner

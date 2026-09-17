@@ -10,6 +10,7 @@
 import Phaser from "phaser";
 import { COLORS, DEPTH, TOUCH } from "../config/constants";
 import type { Vec2 } from "../systems/types";
+import { stickStrength } from "./stickResponse";
 
 export class VirtualJoystick {
   /** Zeiger-ID des Fingers, der diesen Stick gerade haelt. */
@@ -43,8 +44,16 @@ export class VirtualJoystick {
 
   /**
    * Ausschlag als Vektor der Laenge 0 bis 1.
-   * Innerhalb der toten Zone ist er exakt 0, damit ein zitternder Daumen die
-   * Figur nicht ruckeln laesst.
+   *
+   * Der Wert wird bei jedem Abruf frisch aus der AKTUELLEN Fingerposition
+   * gerechnet - es gibt keine Warteschlange und keinen Zwischenschritt, der
+   * erst im naechsten Bild abgearbeitet wuerde.
+   *
+   * Zwischen toter Zone und Stickrand wird der Ausschlag nicht geradlinig,
+   * sondern ueber eine Kurve abgebildet (`TOUCH.responseCurve`). Geradlinig
+   * hiess: Schon ein kleiner Schubs war ein spuerbarer Satz, und langsames
+   * Gehen liess sich kaum treffen. Quadratisch wird die Mitte fein, waehrend
+   * volles Tempo am Rand unveraendert erreichbar bleibt.
    */
   get vector(): Vec2 {
     if (this.pointerId === null) {
@@ -55,14 +64,10 @@ export class VirtualJoystick {
     const dy = this.current.y - this.origin.y;
     const distance = Math.hypot(dx, dy);
 
-    if (distance <= TOUCH.deadZone) {
+    const strength = stickStrength(distance);
+    if (strength <= 0) {
       return { x: 0, y: 0 };
     }
-
-    // Ausschlag zwischen toter Zone und Stickradius auf 0 bis 1 abbilden.
-    const usable = Math.min(distance, TOUCH.stickRadius) - TOUCH.deadZone;
-    const span = TOUCH.stickRadius - TOUCH.deadZone;
-    const strength = usable / span;
 
     return { x: (dx / distance) * strength, y: (dy / distance) * strength };
   }

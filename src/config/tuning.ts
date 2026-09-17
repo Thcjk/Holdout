@@ -22,6 +22,7 @@
  */
 
 import { CHARACTERS, ENEMIES, LIMITS, PLAYER, PROJECTILE, SKILLS, SUPERS, WAVES } from "./balance";
+import { CAMERA, TOUCH } from "./constants";
 
 /** Die Wurzeln, unter denen gesucht wird. */
 const ROOTS: Record<string, unknown> = {
@@ -33,6 +34,10 @@ const ROOTS: Record<string, unknown> = {
   waves: WAVES,
   skills: SKILLS,
   limits: LIMITS,
+  // Auch das Steuerungsgefuehl laesst sich so ausprobieren, ohne neu zu bauen:
+  // ?tune=touch.responseCurve=1.5,touch.stickRadius=70
+  touch: TOUCH,
+  camera: CAMERA,
 };
 
 /** Was tatsaechlich gesetzt wurde - fuer die Anzeige im Spiel. */
