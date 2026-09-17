@@ -102,6 +102,9 @@ export class Juice {
         case "playerDown":
           this.shake(0.01, 320);
           break;
+        case "spawnWarning":
+          this.spawnWarning(event.x, event.y);
+          break;
         case "superUsed":
           this.hitstop(80);
           this.shake(0.008, 200);
@@ -110,6 +113,25 @@ export class Juice {
           break;
       }
     }
+  }
+
+  /**
+   * Warnmarkierung, eine Sekunde bevor an dieser Stelle ein Gegner erscheint.
+   * Ohne sie waere jeder Spawn ein Hinterhalt - und das waere nur unfair, nicht spannend.
+   */
+  spawnWarning(x: number, y: number): void {
+    const marker = this.scene.add.circle(x, y, 26, COLORS.danger, 0.22);
+    marker.setStrokeStyle(3, COLORS.danger, 0.9);
+    marker.setDepth(DEPTH.spawnWarning);
+
+    this.scene.tweens.add({
+      targets: marker,
+      scale: { from: 0.4, to: 1.25 },
+      alpha: { from: 1, to: 0.15 },
+      duration: 1000,
+      ease: "Quad.easeOut",
+      onComplete: () => marker.destroy(),
+    });
   }
 
   /** Dezentes Wackeln. `intensity` ist ein Bruchteil der Bildschirmbreite. */
@@ -158,6 +180,3 @@ export class Juice {
     this.hitParticles.destroy();
   }
 }
-
-/** Farbe fuer den kurzen Weissblitz eines getroffenen Gegners. */
-export const HIT_FLASH_COLOR = COLORS.playerOutline;

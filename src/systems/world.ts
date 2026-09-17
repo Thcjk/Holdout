@@ -11,12 +11,12 @@
  */
 
 import { ARENA_BOUNDS, SPAWN_POINT, createArenaBushes, createArenaWalls } from "../config/arena";
-import { CHARACTERS, PLAYER } from "../config/balance";
+import { CHARACTERS, PLAYER, WAVES } from "../config/balance";
 import { stepReload, stepRevive, tryShoot } from "./combat";
 import { stepEnemies } from "./enemies";
 import { stepPlayerMovement } from "./movement";
 import { stepProjectiles } from "./projectiles";
-import { keepSandboxEnemiesAlive } from "./sandbox";
+import { stepRound } from "./waves";
 import { emptyInput } from "./types";
 import type { CharacterId, InputState, PlayerState, Vec2, WorldState } from "./types";
 
@@ -72,9 +72,10 @@ export function createPlayer(setup: PlayerSetup, index: number, total: number): 
 export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldState {
   return {
     tick: 0,
-    phase: "wave",
-    phaseTime: 0,
-    wave: 1,
+    // Die Runde beginnt mit dem Countdown, nicht mitten im Gefecht.
+    phase: "preparing",
+    phaseTime: WAVES.preparationSeconds,
+    wave: 0,
     score: 0,
     players: setups.map((setup, index) => createPlayer(setup, index, setups.length)),
     enemies: [],
@@ -117,6 +118,13 @@ export function stepWorld(
   // Ereignisse des vorherigen Ticks sind ausgewertet.
   state.events.length = 0;
 
+  // Nach dem Rundenende steht die Welt still; nur der Tickzaehler laeuft weiter,
+  // damit die Darstellung ihre Effekte zu Ende spielen kann.
+  if (state.phase === "gameover") {
+    state.tick += 1;
+    return;
+  }
+
   for (const player of state.players) {
     const input = inputs.get(player.id) ?? emptyInput();
 
@@ -130,9 +138,7 @@ export function stepWorld(
   stepEnemies(state, dt);
   stepProjectiles(state, dt);
   stepRevive(state, dt);
-
-  // Uebergangsloesung der Phase 3, wird in Phase 4 durch die Wellen ersetzt.
-  keepSandboxEnemiesAlive(state);
+  stepRound(state, dt);
 
   state.tick += 1;
 }

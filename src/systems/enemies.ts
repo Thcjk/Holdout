@@ -18,7 +18,21 @@ import type { EnemyState, EnemyType, PlayerState, Rect, Vec2, WorldState } from 
 const ENEMY_ACCELERATION_TIME = 0.25;
 
 /** Wie weit ein Gegner nach vorne schaut, um einer Wand auszuweichen. */
-const LOOKAHEAD = 54;
+const LOOKAHEAD = 40;
+
+/**
+ * Drehwinkel, die beim Ausweichen der Reihe nach probiert werden (in Radiant).
+ * Der Faecher geht bis ueber 90 Grad hinaus: Steht ein Gegner frontal vor einem
+ * breiten Block, sind alle kleinen Drehungen ebenfalls blockiert - er muss
+ * seitlich daran vorbei.
+ */
+const AVOID_ANGLES = [0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4];
+
+/** Ab dieser Zeit ohne Fortschritt weicht ein Gegner quer aus. */
+const STUCK_SECONDS = 0.4;
+
+/** Wie lange das seitliche Ausweichen dann anhaelt. */
+const SIDESTEP_SECONDS = 0.8;
 
 export function createEnemy(
   id: number,
@@ -49,6 +63,7 @@ export function createEnemy(
     marked: 0,
     shootCooldown: 0,
     contactCooldown: 0,
+    stuckTime: 0,
   };
 }
 
@@ -65,9 +80,14 @@ export function stepEnemies(state: WorldState, dt: number): void {
     enemy.velocity.x = approach(enemy.velocity.x, desired.x, maxDelta);
     enemy.velocity.y = approach(enemy.velocity.y, desired.y, maxDelta);
 
+    const beforeX = enemy.position.x;
+    const beforeY = enemy.position.y;
+
     enemy.position.x += enemy.velocity.x * dt;
     enemy.position.y += enemy.velocity.y * dt;
     resolveAgainstWalls(enemy.position, enemy.velocity, enemy.radius, state.walls);
+
+    trackProgress(enemy, desired, beforeX, beforeY, dt);
 
     if (enemy.type === "shooter" && target) {
       tryEnemyShot(state, enemy, target);
@@ -90,6 +110,42 @@ function approach(value: number, target: number, maxDelta: number): number {
     return target;
   }
   return value + Math.sign(difference) * maxDelta;
+}
+
+/**
+ * Merkt sich, ob ein Gegner tatsaechlich vorwaertskommt.
+ *
+ * Wer laufen will, aber an einer Wand klebt, sammelt `stuckTime` an. Ab einer
+ * knappen halben Sekunde laeuft er quer zur Wunschrichtung - und kommt so um den
+ * Block herum. Ohne diese Notbremse kann eine Welle ewig offen bleiben, weil ein
+ * einzelner Gegner in einer Ecke feststeckt.
+ */
+function trackProgress(
+  enemy: EnemyState,
+  desired: Vec2,
+  beforeX: number,
+  beforeY: number,
+  dt: number,
+): void {
+  const wanted = Math.hypot(desired.x, desired.y) * dt;
+  if (wanted < 1e-6) {
+    enemy.stuckTime = 0;
+    return;
+  }
+
+  const moved = Math.hypot(enemy.position.x - beforeX, enemy.position.y - beforeY);
+
+  if (enemy.stuckTime > STUCK_SECONDS) {
+    // Das Ausweichen laeuft eine Weile weiter, sonst dreht der Gegner sofort
+    // zurueck in die Wand und zittert davor.
+    enemy.stuckTime += dt;
+    if (enemy.stuckTime > STUCK_SECONDS + SIDESTEP_SECONDS) {
+      enemy.stuckTime = 0;
+    }
+    return;
+  }
+
+  enemy.stuckTime = moved < wanted * 0.35 ? enemy.stuckTime + dt : 0;
 }
 
 function desiredVelocity(state: WorldState, enemy: EnemyState, target: PlayerState | null): Vec2 {
@@ -118,6 +174,14 @@ function desiredVelocity(state: WorldState, enemy: EnemyState, target: PlayerSta
     }
   }
 
+  if (enemy.stuckTime > STUCK_SECONDS) {
+    // Quer zur Wunschrichtung ausweichen. Die Seite haengt an der Gegner-ID,
+    // damit zwei Gegner am selben Block nicht in dieselbe Ecke rennen - und
+    // damit die Entscheidung wiederholbar bleibt (wichtig fuer den Koop).
+    const side = enemy.id % 2 === 0 ? 1 : -1;
+    return { x: -dirY * side * enemy.speed, y: dirX * side * enemy.speed };
+  }
+
   const free = avoidWalls(state.walls, enemy, { x: dirX, y: dirY });
   return { x: free.x * enemy.speed, y: free.y * enemy.speed };
 }
@@ -132,7 +196,7 @@ function avoidWalls(walls: readonly Rect[], enemy: EnemyState, direction: Vec2):
   }
 
   const angle = Math.atan2(direction.y, direction.x);
-  for (const turn of [0.7, -0.7, 1.4, -1.4]) {
+  for (const turn of AVOID_ANGLES) {
     const candidate = { x: Math.cos(angle + turn), y: Math.sin(angle + turn) };
     if (!blocked(walls, enemy, candidate, LOOKAHEAD)) {
       return candidate;

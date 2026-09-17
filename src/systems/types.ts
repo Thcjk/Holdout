@@ -104,6 +104,12 @@ export interface EnemyState {
   shootCooldown: number;
   /** Restliche Abklingzeit des Beruehrungsschadens in Sekunden. */
   contactCooldown: number;
+  /**
+   * Wie lange dieser Gegner schon laufen will, aber nicht vom Fleck kommt.
+   * Daraus entsteht das seitliche Ausweichen - ohne diesen Zaehler bleiben
+   * Gegner an Deckungsbloecken dauerhaft kleben und die Welle endet nie.
+   */
+  stuckTime: number;
 }
 
 export type ProjectileOwner = "player" | "enemy";

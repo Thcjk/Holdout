@@ -30,7 +30,16 @@ export class InputManager {
   /** Zuletzt gemeldete Zielstaerke (fuer die Reichweitenanzeige). */
   private lastAimStrength = 0;
 
-  constructor(private readonly scene: Phaser.Scene) {
+  constructor(
+    private readonly scene: Phaser.Scene,
+    /**
+     * Die Kamera des Spiels - nicht die dieser Szene. Das HUD laeuft in einer
+     * eigenen Szene mit eigener Kamera; um aus der Mausposition auf dem
+     * Bildschirm eine Position in der Spielwelt zu machen, braucht es die
+     * Kamera, die die Welt zeichnet.
+     */
+    private readonly gameCamera: Phaser.Cameras.Scene2D.Camera,
+  ) {
     this.touch = new TouchControls(scene);
 
     const keyboard = scene.input.keyboard;
@@ -85,8 +94,9 @@ export class InputManager {
     const pointer = this.scene.input.activePointer;
     if (!aim && pointer && !pointer.wasTouch) {
       // Maus: Zielrichtung ist die Linie von der Figur zum Mauszeiger.
-      const dx = pointer.worldX - playerPosition.x;
-      const dy = pointer.worldY - playerPosition.y;
+      const world = this.gameCamera.getWorldPoint(pointer.x, pointer.y);
+      const dx = world.x - playerPosition.x;
+      const dy = world.y - playerPosition.y;
       const distance = Math.hypot(dx, dy);
       if (distance > 1e-6) {
         aim = { x: dx / distance, y: dy / distance };
