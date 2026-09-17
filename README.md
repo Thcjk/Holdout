@@ -1,121 +1,85 @@
-# Thistle & Crown
+# Koop-Arena-Shooter
 
-A stylized medieval fantasy MOBA for the browser. Two factions — **The Highland Covenant** and **The Iron Crown** — clash over the **Heartstone** in a misted highland vale.
+Top-down-Arena-Shooter für den Handy-Browser: 1–4 Spieler halten gemeinsam gegen
+immer stärkere Gegnerwellen durch. Statische PWA, gehostet auf GitHub Pages.
 
-This repository contains the foundation and a **local playable prototype** (player + bots). Online multiplayer is architected for later, not shipped yet.
+**Live:** https://thcjk.github.io/thistle-and-crown/
 
-## Current status
+> **Stand: Phase 1 (Fundament).** Spielbar ist bisher eine Arena mit Wänden und
+> eine Figur, die sich per Tastatur bewegt. Steuerung, Kampf, Wellen und Koop
+> folgen in den nächsten Phasen – siehe `BRIEFING.md`, Abschnitt 8.
 
-Phase 2 MOBA core (in progress):
+## Steuerung
 
-- Boot → Main Menu → Hero Select → Match → Results
-- Playable hero: **Brenna Stonehand**
-- Enemy bot: **Sir Aldric Vale** (state-machine AI)
-- Three-lane waves, towers, cores, jungle camps
-- Attack-move, stop, camera lock/edge pan, minimap pan
-- Last-hit gold, assists, CS, spawn protection, fountain pressure
-- HTML/CSS HUD over Babylon.js canvas
+| Eingabe                          | Wirkung |
+| -------------------------------- | ------- |
+| `W` `A` `S` `D` oder Pfeiltasten | Laufen  |
 
-## Tech
+Touch-Steuerung kommt in Phase 2.
 
-TypeScript · Vite · Babylon.js · HTML/CSS · Vitest · ESLint · Prettier · GitHub Actions / Pages
+## Technik
 
-## Prerequisites
+TypeScript · Vite · Phaser 3 · vite-plugin-pwa · Vitest · ESLint · Prettier ·
+GitHub Actions / Pages
 
-- Node.js 20+
-- npm 10+
-- Project path **must not** contain `&` on Windows (npm script shims break). Use `thistle-and-crown` as the folder name.
+Die Simulation läuft mit festem Takt (30 Ticks pro Sekunde) und ist strikt von der
+Darstellung getrennt: Alles unter `src/systems/` ist reine Logik ohne Phaser. Warum
+das wichtig ist, steht in `CLAUDE.md`.
 
-## Install
+## Voraussetzungen
+
+- Node.js 20 oder neuer
+- npm 10 oder neuer
+
+## Loslegen
 
 ```bash
 npm install
-```
-
-## Development
-
-```bash
 npm run dev
 ```
 
-Open the printed local URL (default `http://localhost:5173`).
+Der Entwicklungsserver ist auch im lokalen Netz erreichbar (`--host` ist gesetzt),
+damit sich das Spiel direkt auf dem Handy testen lässt: Die zweite Adresse in der
+Ausgabe von `npm run dev` im Handy-Browser öffnen.
 
-## Test / lint / build
+## Befehle
 
-```bash
-npm run test
-npm run lint
-npm run build
-npm run preview
+| Befehl              | Zweck                                   |
+| ------------------- | --------------------------------------- |
+| `npm run dev`       | Entwicklungsserver mit Hot Reload       |
+| `npm run test`      | Tests der Simulation                    |
+| `npm run typecheck` | TypeScript prüfen                       |
+| `npm run lint`      | ESLint                                  |
+| `npm run format`    | Prettier über das Projekt laufen lassen |
+| `npm run build`     | Produktionsbuild nach `dist/`           |
+| `npm run preview`   | Produktionsbuild lokal ansehen          |
+
+## Projektstruktur
+
+```
+src/
+  main.ts       Phaser-Konfiguration
+  config/       Spielwerte (balance.ts), Technisches (constants.ts), Arena (arena.ts)
+  scenes/       Darstellung: BootScene, GameScene
+  input/        Geräte-Eingaben -> einheitlicher InputState
+  systems/      reine Spiellogik, ohne Phaser
+tests/systems/  Tests der Spiellogik
 ```
 
-For GitHub Pages builds, set:
+## Deployment
 
-```bash
-VITE_BASE_PATH=/thistle-and-crown/ npm run build
-```
+Jeder Push auf `main` baut und veröffentlicht über
+`.github/workflows/deploy-pages.yml` auf GitHub Pages. Der Workflow setzt dabei
+`VITE_BASE_PATH=/thistle-and-crown/` – ohne diesen Basispfad findet der Browser die
+Dateien auf Pages nicht.
 
-## Controls
+Einmalig nötig: **Settings → Pages → Source: GitHub Actions**.
 
-| Input | Action |
-| --- | --- |
-| Right-click ground | Move (cancels skill targeting) |
-| Right-click enemy | Attack |
-| Left-click enemy | Select + attack |
-| A then left-click | Attack-move |
-| S | Stop / hold |
-| Q W E R | Abilities (self-cast or aim with left-click) |
-| D F | Reserved |
-| B | Recall channel |
-| Y | Toggle camera lock |
-| Tab | Scoreboard |
-| Space | Center + lock camera on hero |
-| Mouse wheel | Zoom |
-| Minimap click | Pan camera (unlocks follow) |
-| Screen edges | Pan camera when unlocked |
-| Esc | Cancel targeting / pause menu |
+## Dokumentation
 
-Shop purchases require standing in your base heal zone.
+- `BRIEFING.md` – der vollständige Auftrag: Spielkonzept, Werte, Architektur, Phasenplan
+- `CLAUDE.md` – aktueller Stand, Architekturentscheide, offene Punkte
 
-## Project structure
+## Lizenz
 
-```text
-src/app        Bootstrapping
-src/engine     Loop, scenes, input, events
-src/match      Match simulation
-src/entities   Logical entities
-src/combat     Damage / abilities
-src/progression Gold / XP / items
-src/ai         Bots and lane AI
-src/world      Map and collision
-src/camera     MOBA camera
-src/ui         DOM HUD
-src/data       Balance & definitions
-docs/          Design & pipeline docs
-```
-
-## Meshy workflow
-
-See [`docs/MESHY_ASSET_PIPELINE.md`](docs/MESHY_ASSET_PIPELINE.md). Register GLBs in `src/data/assets/modelManifest.ts`; gameplay uses asset IDs only.
-
-## GitHub Pages
-
-Workflow: `.github/workflows/deploy-pages.yml`  
-Enable Pages (GitHub Actions) on the repository after it is public or Pages-enabled. Private repos may need a paid plan for Pages.
-
-## Known limitations
-
-- Single playable hero; one bot opponent
-- Waves fully simulated on mid lane only
-- Procedural placeholder art (no Meshy models yet)
-- No networking
-- Fog of war not gameplay-enforced
-- HP bars use simplified screen mapping
-
-## Next step
-
-Phase 2: full three-lane wave combat, stronger bots, richer ability VFX, and first Meshy hero integration.
-
-## License
-
-MIT — see `LICENSE`.
+MIT, siehe `LICENSE`.

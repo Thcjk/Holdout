@@ -1,55 +1,25 @@
-import type { Scene } from "@babylonjs/core";
-import type { GameScene, GameSceneContext } from "@/engine/SceneManager";
-import type { SceneId } from "@/types/game.types";
+/**
+ * Erste Szene. "Scene" ist in Phaser ein abgeschlossener Abschnitt des Spiels -
+ * Menue, Spiel, Game Over sind je eine eigene Szene mit eigenem `create()` und `update()`.
+ *
+ * Phase 1 laedt noch nichts: Alles wird als farbige Form direkt gezeichnet
+ * (Briefing, Abschnitt 7: erst ab Phase 5 echte Sprites). Diese Szene existiert
+ * trotzdem schon, weil spaeter hier der Ladebalken und die Texture Atlanten liegen.
+ */
 
-export class BootScene implements GameScene {
-  readonly id: SceneId = "boot";
-  private root: HTMLElement | null = null;
-  private cancelled = false;
+import Phaser from "phaser";
+import { COLORS } from "../config/constants";
 
-  enter(context: GameSceneContext): void {
-    this.cancelled = false;
-    this.root = document.createElement("div");
-    this.root.className = "screen menu-screen";
-    this.root.innerHTML = `
-      <div class="menu-panel">
-        <h1 class="menu-brand">Thistle &amp; Crown</h1>
-        <p class="boot-status" data-status>Preparing the highland vale...</p>
-      </div>
-    `;
-    context.uiRoot.appendChild(this.root);
-    // Deferred so SceneManager can finish the boot transition before the next switch.
-    void this.runSequence(context);
+export class BootScene extends Phaser.Scene {
+  constructor() {
+    super("Boot");
   }
 
-  update(_dt: number): void {}
-
-  exit(): void {
-    this.cancelled = true;
-    this.root?.remove();
-    this.root = null;
+  preload(): void {
+    this.cameras.main.setBackgroundColor(COLORS.background);
   }
 
-  getBabylonScene(): Scene | null {
-    return null;
-  }
-
-  private async runSequence(context: GameSceneContext): Promise<void> {
-    const status = this.root?.querySelector("[data-status]");
-    await this.delay(400);
-    if (this.cancelled) return;
-    if (status) status.textContent = "Loading clans and crowns...";
-    await this.delay(350);
-    if (this.cancelled) return;
-    if (status) status.textContent = "Ready.";
-    await this.delay(250);
-    if (this.cancelled) return;
-    await context.switchScene("mainMenu");
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => {
-      window.setTimeout(resolve, ms);
-    });
+  create(): void {
+    this.scene.start("Game");
   }
 }

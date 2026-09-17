@@ -1,8 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Thistle & Crown">
-  <rect width="64" height="64" rx="10" fill="#1a2420"/>
-  <path d="M32 8c2 6 4 10 4 16s-1 8-4 12c-3-4-4-6-4-12s2-10 4-16z" fill="#5a7a4a"/>
-  <circle cx="32" cy="20" r="5" fill="#7a9a5a"/>
-  <path d="M20 48h24l-4-10H24l-4 10z" fill="#8a6a3a"/>
-  <path d="M26 38h12v4H26z" fill="#c9a84c"/>
-  <path d="M28 30h8l2 8H26l2-8z" fill="#b89540"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="12" fill="#11161f" />
+  <circle cx="32" cy="32" r="19.5" fill="none" stroke="#46536b" stroke-width="4"
+    stroke-dasharray="21 9" stroke-dashoffset="10" />
+  <circle cx="32" cy="32" r="10" fill="#4cc2ff" stroke="#e8f6ff" stroke-width="2.5" />
 </svg>
