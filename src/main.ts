@@ -20,6 +20,7 @@ import { applyTuningFromUrl } from "./config/tuning";
 import { lockLandscape } from "./platform/orientation";
 import { waitForLandscape, watchOrientation } from "./platform/rotateGate";
 import { readSafeArea } from "./platform/safeArea";
+import { installNetLogOverlay } from "./platform/netLogOverlay";
 import { COLORS, VIEWPORT, fitViewportToScreen, setSafeAreaFromScreen } from "./config/constants";
 import { BootScene } from "./scenes/BootScene";
 import { GameOverScene } from "./scenes/GameOverScene";
@@ -132,6 +133,10 @@ async function startWhenLandscape(): Promise<void> {
   setSafeAreaFromScreen(readSafeArea(), window.innerWidth);
 
   const game = new Phaser.Game(buildConfig());
+
+  // Mit ?debug=netz: Protokoll des Koop-Verbindungsaufbaus auf dem Bildschirm.
+  // Ohne den Schalter passiert hier nichts.
+  installNetLogOverlay();
 
   // Haelt die installierte App von selbst aktuell - niemand soll sie loeschen
   // und neu hinzufuegen muessen. Siehe platform/update.ts.

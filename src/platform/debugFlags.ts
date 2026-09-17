@@ -7,6 +7,7 @@
  *
  *   .../Holdout/?debug=hitbox        Trefferradien als Umriss
  *   .../Holdout/?debug=hitbox,werte  zusaetzlich die wichtigsten Zahlen
+ *   .../Holdout/?debug=netz          Protokoll des Koop-Verbindungsaufbaus
  *
  * Mehrere Schalter werden mit Komma getrennt. Ohne `?debug=` ist alles aus -
  * es kostet also niemanden etwas, der einfach spielt.
@@ -39,3 +40,11 @@ export const SHOW_HITBOXES = FLAGS.has("hitbox") || FLAGS.has("1") || FLAGS.has(
 
 /** Zahlenanzeige: Bildrate, Gegnerzahl, Munition, Schusstakt. */
 export const SHOW_VALUES = FLAGS.has("werte") || FLAGS.has("values") || FLAGS.has("all");
+
+/**
+ * Protokoll des Verbindungsaufbaus im Koop, direkt auf dem Bildschirm.
+ *
+ * Auf dem Handy gibt es keine Konsole - ohne diese Anzeige laesst sich ein
+ * Fehler, der nur zwischen zwei echten Geraeten auftritt, gar nicht ansehen.
+ */
+export const SHOW_NET_LOG = FLAGS.has("netz") || FLAGS.has("net") || FLAGS.has("all");

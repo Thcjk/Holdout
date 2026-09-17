@@ -16,6 +16,7 @@
 import Peer from "peerjs";
 import type { DataConnection } from "peerjs";
 import type { NetMessage } from "./protocol";
+import { describeString, netLog } from "./netLog";
 import { peerIdForRoom } from "./roomCode";
 import { BaseTransport } from "./Transport";
 
@@ -30,6 +31,10 @@ export class PeerTransport extends BaseTransport {
   private readonly connections = new Map<string, DataConnection>();
   private closed = false;
   private openResolved = false;
+  /** Regelmaessige Statusmeldung des Hosts, nur fuer die Fehlersuche. */
+  private heartbeat: number | null = null;
+  /** Wann der Client `connect()` gerufen hat - fuer die Dauer bis zum Fehler. */
+  private connectStartedAt = 0;
 
   private constructor(roomCode: string, isHost: boolean) {
     super();
@@ -44,13 +49,21 @@ export class PeerTransport extends BaseTransport {
   /** Oeffnet einen Raum. Loest auf, sobald der Raumcode vergeben ist. */
   static host(roomCode: string): Promise<PeerTransport> {
     const transport = new PeerTransport(roomCode, true);
-    return transport.start(peerIdForRoom(roomCode), null);
+    const ownId = peerIdForRoom(roomCode);
+    netLog("HOST: Raum wird geoeffnet");
+    netLog(`HOST: ${describeString("Raumcode", roomCode)}`);
+    netLog(`HOST: ${describeString("Peer-ID angefordert", ownId)}`);
+    return transport.start(ownId, null);
   }
 
   /** Tritt einem Raum bei. Loest auf, sobald die Verbindung zum Host steht. */
   static join(roomCode: string): Promise<PeerTransport> {
     const transport = new PeerTransport(roomCode, false);
-    return transport.start(undefined, peerIdForRoom(roomCode));
+    const target = peerIdForRoom(roomCode);
+    netLog("CLIENT: Beitritt wird versucht");
+    netLog(`CLIENT: ${describeString("Raumcode eingetippt", roomCode)}`);
+    netLog(`CLIENT: ${describeString("Peer-ID gesucht", target)}`);
+    return transport.start(undefined, target);
   }
 
   send(peerId: string, message: NetMessage): void {
@@ -72,7 +85,9 @@ export class PeerTransport extends BaseTransport {
     if (this.closed) {
       return;
     }
+    netLog(`${this.rolle()}: close() - peer wird zerstoert`);
     this.closed = true;
+    this.stopHeartbeat();
     for (const connection of this.connections.values()) {
       connection.close();
     }
@@ -81,10 +96,55 @@ export class PeerTransport extends BaseTransport {
     this.peer = null;
   }
 
+  private rolle(): string {
+    return this.isHost ? "HOST" : "CLIENT";
+  }
+
+  /**
+   * Meldet alle fuenf Sekunden, ob der Host beim Signalisierungsserver noch
+   * angemeldet ist.
+   *
+   * Der wichtigste offene Verdacht: Der Host sieht weiter seinen Raumcode,
+   * waehrend seine Anmeldung beim Server laengst weg ist. Der Code auf dem
+   * Bildschirm sagt darueber nichts aus - er ist nur Text. Erst diese Zeilen
+   * zeigen, ob im Moment des Beitritts ueberhaupt noch jemand da war, den der
+   * Client finden koennte.
+   */
+  private startHeartbeat(peer: Peer): void {
+    if (this.heartbeat !== null) {
+      return;
+    }
+    this.heartbeat = window.setInterval(() => {
+      if (this.closed) {
+        return;
+      }
+      netLog(
+        `HOST: noch da? angemeldet=${String(!peer.disconnected)} ` +
+          `zerstoert=${String(peer.destroyed)} verbindungen=${this.connections.size}`,
+      );
+    }, 5000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeat !== null) {
+      window.clearInterval(this.heartbeat);
+      this.heartbeat = null;
+    }
+  }
+
   private start(ownId: string | undefined, connectTo: string | null): Promise<PeerTransport> {
     return new Promise((resolve, reject) => {
       const peer = ownId ? new Peer(ownId) : new Peer();
       this.peer = peer;
+
+      // Welcher Signalisierungsserver wird ueberhaupt benutzt? Wenn Host und
+      // Client hier verschiedene Werte zeigen, kann der eine den anderen
+      // niemals finden - egal wie richtig der Raumcode ist.
+      const options = (peer as unknown as { options?: Record<string, unknown> }).options ?? {};
+      netLog(
+        `${this.rolle()}: Server host=${String(options.host)} port=${String(options.port)} ` +
+          `path=${String(options.path)} key=${String(options.key)} secure=${String(options.secure)}`,
+      );
 
       const timeout = window.setTimeout(() => {
         if (!this.openResolved) {
@@ -98,6 +158,13 @@ export class PeerTransport extends BaseTransport {
       }, CONNECT_TIMEOUT_MS);
 
       peer.on("error", (error: Error & { type?: string }) => {
+        const since =
+          this.connectStartedAt > 0
+            ? ` (${((Date.now() - this.connectStartedAt) / 1000).toFixed(2)}s nach connect)`
+            : "";
+        netLog(
+          `${this.rolle()}: FEHLER type=${String(error.type)} message=${error.message}${since}`,
+        );
         if (!this.openResolved) {
           window.clearTimeout(timeout);
           this.close();
@@ -107,15 +174,33 @@ export class PeerTransport extends BaseTransport {
         this.errorHandler(describePeerError(error));
       });
 
-      peer.on("open", () => {
+      peer.on("open", (assignedId: string) => {
+        netLog(`${this.rolle()}: open gefeuert`);
+        netLog(`${this.rolle()}: ${describeString("Peer-ID zugeteilt", assignedId)}`);
+        netLog(`${this.rolle()}: ${describeString("peer.id", peer.id)}`);
+        if (ownId !== undefined) {
+          // Der wichtigste Vergleich: Bekommt der Host wirklich die ID, die er
+          // angefordert hat? Weicht sie ab, sucht der Client spaeter eine ID,
+          // die es beim Server nicht gibt.
+          netLog(
+            `HOST: angefordert === zugeteilt ? ${String(ownId === assignedId)} ` +
+              `(und === peer.id ? ${String(ownId === peer.id)})`,
+          );
+        }
+
         if (connectTo === null) {
           // Host: ab jetzt koennen Clients beitreten.
           window.clearTimeout(timeout);
           this.openResolved = true;
+          netLog("HOST: Raum offen, Code wird jetzt angezeigt");
+          this.startHeartbeat(peer);
           resolve(this);
           return;
         }
 
+        netLog(`CLIENT: ${describeString("connect() aufgerufen mit", connectTo)}`);
+        const connectStartedAt = Date.now();
+        this.connectStartedAt = connectStartedAt;
         const connection = peer.connect(connectTo, {
           // Bei Spielzustaenden ist die neueste Nachricht wichtiger als die
           // vollstaendige Reihenfolge (Briefing, Abschnitt 6).
@@ -123,18 +208,35 @@ export class PeerTransport extends BaseTransport {
         });
 
         connection.on("open", () => {
+          netLog("CLIENT: Datenkanal offen - Verbindung steht");
           window.clearTimeout(timeout);
           this.registerConnection(connection);
           this.openResolved = true;
           resolve(this);
         });
+
+        connection.on("error", (error: Error) => {
+          netLog(`CLIENT: Datenkanal-Fehler ${error.message}`);
+        });
       });
 
       peer.on("connection", (connection: DataConnection) => {
-        connection.on("open", () => this.registerConnection(connection));
+        netLog(`HOST: eingehende Verbindung von ${connection.peer}`);
+        connection.on("open", () => {
+          netLog(`HOST: Datenkanal offen mit ${connection.peer}`);
+          this.registerConnection(connection);
+        });
+      });
+
+      peer.on("close", () => {
+        netLog(`${this.rolle()}: peer geschlossen`);
       });
 
       peer.on("disconnected", () => {
+        // Das ist der stille Killer: Faellt der Host vom Signalisierungsserver,
+        // sieht er weiter seinen Raumcode - der Server kennt ihn aber nicht
+        // mehr, und jeder Beitritt scheitert mit "peer-unavailable".
+        netLog(`${this.rolle()}: VOM SERVER GETRENNT (reconnect wird versucht)`);
         // Verbindung zum Signalisierungsserver verloren - die laufenden
         // Direktverbindungen bestehen weiter, ein neuer Beitritt geht nicht mehr.
         if (!this.closed) {
