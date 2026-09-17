@@ -248,40 +248,92 @@ tests/
 **Alle Spielwerte stehen in `src/config/balance.ts`.** Kein anderes Modul
 verdrahtet Spielwerte fest.
 
-`npm run test` gibt bei jedem Lauf eine Messung aus
-(`tests/systems/balanceProbe.test.ts`): Ein einfacher Bot spielt jeden Charakter
-fünfmal durch und meldet, wie weit er kommt. Stand jetzt:
+### Zwei Messungen bei jedem `npm run test`
 
-| Charakter | Erreichte Wellen (Bot) |
-| --------- | ---------------------- |
-| Scout     | ~5                     |
-| Tank      | ~8                     |
-| Sniper    | ~8                     |
+- `tests/systems/balanceProbe.test.ts` – die kurze: Wie weit kommt ein Bot je
+  Charakter (fünf Durchläufe)?
+- `tests/systems/balanceReport.test.ts` – das Protokoll: je Welle Dauer,
+  ausgeteilter und erlittener Schaden, Kills, Leben danach. Dazu die
+  rechnerische Zeit, einen Gegner zu töten. **Rechnerisch** heisst „wenn jede
+  Kugel trifft" – beim Tank (34 Grad Streuung) ist das eine Wunschzahl,
+  **gemessen** ist, was wirklich passiert ist.
 
-Der Bot verteilt seine Skillpunkte reihum. Ohne Aufwertungen kam er nur auf 5
-bis 7 Wellen - die Fähigkeiten sind also spürbar, nicht Kosmetik.
+Der Bot steht in `tests/bot.ts` und wird von beiden benutzt. Er ist absichtlich
+mittelmässig, muss aber zwei Dinge können, sonst misst er Unsinn:
 
-Der Scout bleibt in der Messung zurück, aber das ist vermutlich ein Artefakt:
-Seine Stärke ist Beweglichkeit, und genau die nutzt ein Bot mit grobem
-Ausweichen am wenigsten. Vor einer Anpassung an seinen Werten lohnt es sich,
-ihn selbst zu spielen.
+1. **Auf die eigene Reichweite achten.** Ein früherer Bot hielt pauschal 300 px
+   Abstand – der Tank reicht nur 250. Er floh damit aus seiner eigenen
+   Reichweite und schoss minutenlang ins Leere.
+2. **Merken, wann er zuletzt getroffen hat.** Trifft er drei Sekunden nichts,
+   obwohl Gegner leben, steht eine Wand dazwischen – dann geht er stur nach
+   vorne, statt Abstand zu halten.
 
-Der Bot ist **schlechter als ein Mensch**: Er nutzt keine Deckung, keine Büsche
-(in denen Gegner ihn gar nicht sehen) und weicht Projektilen nicht aus. Seine
-Zahlen sind eine Untergrenze. Das Briefing nennt 8–15 Wellen als realistische
-Runde - ob das stimmt, zeigt erst dein eigenes Spielen.
+### Stand nach der Messung vom 2026-09-17
 
-In Phase 7 wurden nur Werte angepasst, die **nicht** im Briefing stehen:
-`ENEMY_CONTACT_INTERVAL` (0,6 → 1,0 s), `PLAYER.shootCooldown` (0,25 → 0,18 s),
-`WAVES.spawnIntervalSeconds` (0,35 → 0,6 s), `PLAYER.breakHealFraction`
-(45 → 60 %), `ENEMIES.shooter.preferredRange` (420 → 340 px) und der
-Streuwinkel des Scouts (18 → 9 Grad). Alle Zahlen, die das Briefing nennt -
-Leben, Schaden, Tempo, Nachladezeiten, Wellenformel - sind unverändert.
+| Charakter | Wellen (Bot) |
+| --------- | ------------ |
+| Scout     | 10,8         |
+| Tank      | 10,0         |
+| Sniper    | 9,0          |
 
-Der wichtigste Fund dabei: Ein Schütze, der zurückweicht und dabei weiter
-schiesst, als der Spieler reicht, ist für Nahkämpfer unerreichbar - die Welle
-endet dann nie. Deshalb ist sein Wunschabstand jetzt kleiner als jede
-Spielerreichweite, und er weicht erst bei echter Nähe zurück.
+Vorher: Scout 5,0 · Tank 10,4 · Sniper 9,0. Der Scout starb in **allen fünf**
+Durchläufen in Welle 5.
+
+### Drei Fehler, die die Messung aufgedeckt hat
+
+Alle drei sahen nach schlechtem Balancing aus und waren Fehler im Code:
+
+1. **Schützen blieben hinter Deckung stehen.** Sie hielten Abstand, ohne zu
+   prüfen, ob sie den Spieler überhaupt sehen. Schiessen konnten sie nicht
+   (braucht Sicht), getroffen wurden sie auch nicht (die Wand fängt die
+   Schüsse). Wellen dauerten dann 290 bis 400 Sekunden statt dreissig. Jetzt
+   hält ein Schütze nur Abstand, **wenn er Sicht hat**; sonst geht er vor.
+2. **Der Dash schlug durch die Aussenmauer.** Die Mauer ist 40 px dick, ein
+   Tick dauert 1/30 s. Ab 1200 px/s springt der Spieler in einem Tick weiter,
+   als die Mauer dick ist, und `resolveAgainstWalls` schiebt ihn nach **aussen**.
+   Zwei Gegenmassnahmen: Dash-Tempo bleibt bei 1150 (Reichweite kommt über die
+   Dauer), und `clampToArena` hält Spieler und Gegner als Notbremse im Feld.
+   `state.bounds` gab es schon – es wurde nur nie benutzt.
+3. **Der Super lud je Treffer, nicht je Schaden.** Der Scout feuert drei Kugeln
+   je Schuss, der Sniper eine – der Scout lud dreimal so schnell, obwohl er pro
+   Schuss weniger Schaden macht (660 gegen 900). Gemessen: Scout-Super alle
+   0,9 s, Sniper-Super alle 4,4 s. Jetzt lädt er **je 1000 Punkten Schaden**.
+
+### Änderungen an den Werten (jede mit Begründung im Code)
+
+| Wert                             | Alt  | Neu  | Warum                                                                      |
+| -------------------------------- | ---- | ---- | -------------------------------------------------------------------------- |
+| `scout.shot.spread`              | 9°   | 6°   | Bei 9° lagen die äusseren Kugeln auf 450 px rund 35 px neben der Mitte, der Trefferradius ist 23 – auf Distanz traf nur die mittlere. |
+| `SUPERS.scout.duration`          | 0,22 | 0,30 | Der Dash trug 250 px – weniger als die Reichweite eines Schützen, als Flucht also wirkungslos. Jetzt 345 px.                      |
+| `SUPERS.scout.damage`            | 300  | 500  | Der schwächste der drei Supers (Tank 800 Fläche, Sniper doppelter Schaden 5 s).                                                    |
+| `SUPERS.scout.invulnerableTime`  | –    | 0,30 | **Die wirksamste Änderung.** Der Scout kassierte in Welle 5 mehr Schaden als der Tank (2677 gegen 1342) bei 57 % von dessen Leben. Genau so lang wie der Dash: „Während du dashst, kann dir nichts passieren." |
+| `PLAYER.superChargePerHit`       | 17   | –    | Ersetzt durch…                                                             |
+| `PLAYER.superChargePerDamage`    | –    | 26   | …Aufladung je 1000 Schaden. Neutral gegenüber der Kugelzahl.                |
+
+Der Bot ist **schlechter als ein Mensch**: keine Deckung, keine Büsche, kein
+Ausweichen vor einzelnen Projektilen. Seine Zahlen sind eine Untergrenze. Das
+Briefing nennt 8–15 Wellen als realistische Runde – ob das stimmt, zeigt erst
+dein eigenes Spielen.
+
+### Werte ohne Neubau probieren
+
+`?tune=` überschreibt Zahlen aus `balance.ts` direkt in der Adresszeile
+(`src/config/tuning.ts`):
+
+```
+?tune=characters.scout.health=3200
+?tune=player.shootCooldown=0.1,enemies.runner.speed=140
+?tune=supers.scout.invulnerableTime=0.5&debug=werte
+```
+
+Gesetzt wird nur, wo vorher schon eine Zahl stand – ein Tippfehler ändert also
+nichts, sondern erscheint in der Liste „Nicht übernommen". `?debug=werte` blendet
+Bildrate, Gegnerzahl, Munition, Leben, Superladung und Schaden/s ein, dazu alle
+aktiven Überschreibungen.
+
+**Nur solo brauchbar:** Im Koop rechnet der Host für alle. Ein Client mit eigenen
+Werten sagt seine Bewegung falsch voraus und ruckelt. Das steht auch im Spiel auf
+dem Bildschirm.
 
 ## Befehle
 

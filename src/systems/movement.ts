@@ -104,3 +104,27 @@ function stepDash(player: PlayerState, walls: readonly Rect[], dt: number): void
     player.velocity.y = player.dashDirection.y * speed;
   }
 }
+
+/**
+ * Die letzte Notbremse: niemand verlaesst die Arena.
+ *
+ * Die Aussenmauern sind 40 Pixel dick, ein Tick dauert eine dreissigstel
+ * Sekunde. Wer schneller ist als 1200 Pixel je Sekunde, springt in einem Tick
+ * weiter als die Mauer dick ist - und `resolveAgainstWalls` schiebt ihn dann
+ * auf die naechstgelegene Seite heraus, also nach draussen. Genau das ist mit
+ * einem schnelleren Dash passiert: Der Spieler stand ausserhalb des Feldes und
+ * die Welle endete nie.
+ *
+ * Statt das Dash-Tempo zu deckeln und beim naechsten schnellen Effekt wieder
+ * hineinzulaufen, wird hier stumpf begrenzt. `state.bounds` gab es schon, es
+ * wurde nur nie benutzt.
+ */
+export function clampToArena(position: Vec2, radius: number, bounds: Rect): void {
+  const minX = bounds.x + radius;
+  const maxX = bounds.x + bounds.width - radius;
+  const minY = bounds.y + radius;
+  const maxY = bounds.y + bounds.height - radius;
+
+  position.x = position.x < minX ? minX : position.x > maxX ? maxX : position.x;
+  position.y = position.y < minY ? minY : position.y > maxY ? maxY : position.y;
+}

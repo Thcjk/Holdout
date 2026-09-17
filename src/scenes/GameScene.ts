@@ -18,6 +18,7 @@ import { CameraController } from "../render/CameraController";
 import { EntityRenderer } from "../render/EntityRenderer";
 import { Juice } from "../render/Juice";
 import { setReloadSafe } from "../platform/update";
+import { hideValuesOverlay, updateValuesOverlay } from "../platform/valuesOverlay";
 import { loadHighscore } from "../storage/highscore";
 import { nearestEnemy } from "../systems/targeting";
 import type { CharacterId, InputState, PlayerState, Vec2 } from "../systems/types";
@@ -73,6 +74,7 @@ export class GameScene extends Phaser.Scene {
     setReloadSafe(false);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      hideValuesOverlay();
       this.scene.stop("Hud");
       this.session.destroy();
       this.cameraController.destroy();
@@ -104,6 +106,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.handleEvents();
+    this.updateValues(player, delta);
     this.checkConnection();
     this.entities.update();
     this.drawAim(player, input);
@@ -115,6 +118,38 @@ export class GameScene extends Phaser.Scene {
         isSelf: entry.id === this.session.selfId,
         down: entry.down,
       })),
+    );
+  }
+
+  /** Gesamter ausgeteilter Schaden und Zeit - fuer die Schaden/s-Anzeige. */
+  private damageDealt = 0;
+  private fightSeconds = 0;
+
+  /** Fuettert die Zahlenanzeige aus `?debug=werte`. Ohne den Schalter ein No-op. */
+  private updateValues(player: PlayerState, delta: number): void {
+    const state = this.session.view.state;
+    if (state.phase === "wave") {
+      this.fightSeconds += delta / 1000;
+    }
+    for (const event of this.session.view.events) {
+      if (event.type === "hit") {
+        this.damageDealt += event.damage;
+      }
+    }
+
+    updateValuesOverlay(
+      {
+        fps: this.game.loop.actualFps,
+        wave: state.wave,
+        enemies: state.enemies.length,
+        projectiles: state.projectiles.filter((entry) => entry.active).length,
+        ammo: player.reloadTimers.filter((timer) => timer <= 0).length,
+        health: player.health,
+        maxHealth: player.maxHealth,
+        superCharge: player.superCharge,
+        dps: this.fightSeconds > 0 ? this.damageDealt / this.fightSeconds : 0,
+      },
+      this.time.now,
     );
   }
 

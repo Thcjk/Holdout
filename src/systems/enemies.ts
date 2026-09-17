@@ -9,6 +9,7 @@
 
 import { ENEMIES, ENEMY_CONTACT_INTERVAL, PROJECTILE } from "../config/balance";
 import { resolveAgainstWalls } from "./collision";
+import { clampToArena } from "./movement";
 import { damagePlayer } from "./combat";
 import { spawnProjectile } from "./projectiles";
 import { anyStandingPlayer, nearestVisiblePlayer } from "./targeting";
@@ -86,6 +87,8 @@ export function stepEnemies(state: WorldState, dt: number): void {
     enemy.position.x += enemy.velocity.x * dt;
     enemy.position.y += enemy.velocity.y * dt;
     resolveAgainstWalls(enemy.position, enemy.velocity, enemy.radius, state.walls);
+    // Ein Rueckstoss kann einen Gegner genauso durch die Aussenmauer schleudern.
+    clampToArena(enemy.position, enemy.radius, state.bounds);
 
     trackProgress(enemy, desired, beforeX, beforeY, dt);
 
@@ -164,15 +167,26 @@ function desiredVelocity(state: WorldState, enemy: EnemyState, target: PlayerSta
   let dirY = dy / distance;
 
   if (enemy.type === "shooter") {
-    // Der Schuetze haelt Abstand: zu weit weg -> naeher ran, zu nah -> zurueck.
-    const preferred = ENEMIES.shooter.preferredRange;
-    // Erst zurueckweichen, wenn es wirklich eng wird. Wer schon bei kleinen
-    // Annaeherungen flieht, ist fuer Nahkaempfer unerreichbar.
-    if (distance < preferred * 0.6) {
-      dirX = -dirX;
-      dirY = -dirY;
-    } else if (distance < preferred * 1.15) {
-      return { x: 0, y: 0 };
+    // Abstand halten lohnt sich nur, wenn er den Spieler ueberhaupt sieht.
+    //
+    // WARUM DIESE BEDINGUNG DA IST: Ohne sie blieb ein Schuetze hinter einer
+    // Wand stehen, weil der Abstand stimmte - schiessen konnte er nicht (dafuer
+    // braucht er Sicht), getroffen wurde er auch nicht (die Wand faengt die
+    // Schuesse). Beide warteten aufeinander, und die Welle endete nie. Im
+    // Balancing-Protokoll standen dann Wellen mit 290 bis 400 Sekunden statt
+    // dreissig. Sieht er nichts, geht er vor wie jeder andere Gegner, bis er
+    // wieder freie Sicht hat.
+    const sees = hasLineOfSight(state.walls, enemy.position, target.position);
+    if (sees) {
+      const preferred = ENEMIES.shooter.preferredRange;
+      // Erst zurueckweichen, wenn es wirklich eng wird. Wer schon bei kleinen
+      // Annaeherungen flieht, ist fuer Nahkaempfer unerreichbar.
+      if (distance < preferred * 0.6) {
+        dirX = -dirX;
+        dirY = -dirY;
+      } else if (distance < preferred * 1.15) {
+        return { x: 0, y: 0 };
+      }
     }
   }
 

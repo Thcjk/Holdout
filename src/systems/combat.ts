@@ -8,7 +8,7 @@
 
 import { CHARACTERS, PLAYER, PROJECTILE, SUPERS } from "../config/balance";
 import { spawnProjectile } from "./projectiles";
-import { damageFactor, superChargePerHit } from "./skills";
+import { damageFactor, superChargeFor } from "./skills";
 import { nearestEnemy } from "./targeting";
 import type { EnemyState, InputState, PlayerState, Vec2, WorldState } from "./types";
 
@@ -160,21 +160,21 @@ export function damageEnemy(
     enemyId: enemy.id,
   });
 
-  chargeSuper(state, sourcePlayerId);
+  chargeSuper(state, sourcePlayerId, applied);
 
   if (enemy.health <= 0) {
     killEnemy(state, enemy);
   }
 }
 
-function chargeSuper(state: WorldState, playerId: string): void {
+function chargeSuper(state: WorldState, playerId: string, damage: number): void {
   const player = state.players.find((entry) => entry.id === playerId);
   if (!player) {
     return;
   }
 
   const wasReady = isSuperReady(player);
-  player.superCharge = Math.min(100, player.superCharge + superChargePerHit(player));
+  player.superCharge = Math.min(100, player.superCharge + superChargeFor(player, damage));
 
   if (!wasReady && isSuperReady(player)) {
     state.events.push({ type: "superReady", playerId: player.id });

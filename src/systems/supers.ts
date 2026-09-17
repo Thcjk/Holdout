@@ -59,6 +59,10 @@ function startDash(player: PlayerState, direction: Vec2): void {
   player.dashTime = SUPERS.scout.duration;
   player.dashDirection = { x: direction.x, y: direction.y };
   player.dashHits.length = 0;
+  // Waehrend des Dashs unverwundbar - sonst ist Ausweichen nur eine Bewegung,
+  // kein Ausweichen. Das Maximum, damit eine laufende kurze Unverwundbarkeit
+  // aus einem Treffer die laengere nicht verkuerzt.
+  player.invulnerable = Math.max(player.invulnerable, SUPERS.scout.invulnerableTime);
 }
 
 /**

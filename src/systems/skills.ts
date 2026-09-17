@@ -43,9 +43,15 @@ export function maxHealthFor(player: PlayerState): number {
   return Math.round(CHARACTERS[player.character].health * factor(player, "armor"));
 }
 
-/** Super-Aufladung pro Treffer in Prozent. */
-export function superChargePerHit(player: PlayerState): number {
-  return PLAYER.superChargePerHit * factor(player, "super");
+/**
+ * Super-Aufladung in Prozent fuer einen Treffer mit `damage` Schaden.
+ *
+ * Bewusst am Schaden statt an der Trefferzahl: Sonst laedt ein Charakter mit
+ * fuenf Kugeln je Schuss fuenfmal so schnell wie einer mit einer Kugel, ganz
+ * unabhaengig davon, wie viel er tatsaechlich anrichtet.
+ */
+export function superChargeFor(player: PlayerState, damage: number): number {
+  return (PLAYER.superChargePerDamage * damage * factor(player, "super")) / 1000;
 }
 
 /** Lässt sich in diese Fähigkeit noch ein Punkt stecken? */

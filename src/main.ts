@@ -16,6 +16,7 @@ import { showDesktopNotice } from "./platform/DesktopNotice";
 // haengt - das Ereignis kommt einmal und sehr frueh.
 import "./platform/install";
 import { startUpdateWatch } from "./platform/update";
+import { applyTuningFromUrl } from "./config/tuning";
 import { COLORS, VIEWPORT } from "./config/constants";
 import { BootScene } from "./scenes/BootScene";
 import { GameOverScene } from "./scenes/GameOverScene";
@@ -66,6 +67,10 @@ const config: Phaser.Types.Core.GameConfig = {
 // Dem Wächter in index.html melden, dass der Start geklappt hat - sonst
 // blendet er nach acht Sekunden seine Fehlermeldung ein.
 (window as unknown as { __holdoutBooted: boolean }).__holdoutBooted = true;
+
+// Werte aus `?tune=` setzen, bevor die erste Runde startet. Ohne `?tune=`
+// passiert hier nichts.
+applyTuningFromUrl();
 
 if (isSupportedDevice()) {
   new Phaser.Game(config);

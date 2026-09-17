@@ -23,8 +23,22 @@ export const PLAYER = {
   reviveRange: 90,
   /** Munitionsladungen, die einzeln und parallel nachladen. */
   ammoCharges: 3,
-  /** Aufladung der Super-Faehigkeit pro Treffer, in Prozent. */
-  superChargePerHit: 17,
+  /**
+   * Aufladung der Super-Faehigkeit je 1000 Punkten Schaden, in Prozent.
+   *
+   * Frueher war es je TREFFER, und das war ungerecht: Der Scout feuert drei
+   * Kugeln je Schuss, der Sniper eine. Der Scout lud damit dreimal so schnell
+   * wie der Sniper, obwohl er pro Schuss weniger Schaden macht (660 gegen 900).
+   * Gemessen hiess das: Scout-Super etwa alle 0,9 Sekunden, Sniper-Super alle
+   * 4,4 Sekunden. Beim Scout war der Super damit kein Hoehepunkt mehr, sondern
+   * ein Dauerzustand - und jede Aenderung an seiner Staerke schlug sofort voll
+   * durch (0,12 s Unverwundbarkeit: 5 Wellen, 0,35 s: 12,8 Wellen).
+   *
+   * Je Schaden ist neutral: Wer viel Schaden macht, laedt schnell - egal ob in
+   * einer Kugel oder in fuenf. 26 Prozent je 1000 Schaden heisst rund vier
+   * Sekunden Dauerfeuer bis zum Super, bei allen dreien.
+   */
+  superChargePerDamage: 26,
   /** Mindestabstand zwischen zwei Schuessen in Sekunden. */
   shootCooldown: 0.18,
   /** Anteil des Lebens, der in der Pause zwischen zwei Wellen zurueckkommt. */
@@ -70,7 +84,13 @@ export const CHARACTERS: Record<CharacterId, CharacterDefinition> = {
     health: 2400,
     speed: 250,
     reloadTime: 1.3,
-    shot: { bullets: 3, damage: 220, range: 450, spread: 9, piercing: false },
+    // Streuung 9 -> 6 Grad. Begruendung: Bei 9 Grad liegen die aeusseren beiden
+    // Kugeln am Ende der Reichweite (450 px) rund 35 Pixel neben der Mitte -
+    // der Trefferradius gegen einen Laeufer betraegt aber nur 23. Auf Distanz
+    // traf also nur die mittlere Kugel, und der "Dauerfeuer"-Charakter hatte in
+    // Wahrheit ein Drittel seines Schadens. Bei 6 Grad sind es 23 Pixel: alle
+    // drei treffen noch, wenn man ordentlich zielt.
+    shot: { bullets: 3, damage: 220, range: 450, spread: 6, piercing: false },
     super: { name: "Dash", description: "Kurzer Sprint, der Gegner auf dem Weg zurückstösst" },
   },
   tank: {
@@ -103,13 +123,44 @@ export const CHARACTER_ORDER: CharacterId[] = ["scout", "tank", "sniper"];
 /** Werte der drei Super-Faehigkeiten. */
 export const SUPERS = {
   scout: {
+    // Dauer 0,22 -> 0,30 s: Der Dash trug bisher rund 250 Pixel weit, weniger
+    // als die Reichweite eines Schuetzen - als Fluchtmittel wirkungslos, und
+    // Beweglichkeit ist die einzige Staerke des Scouts. Jetzt sind es rund 345.
     /** Dauer des Dashs in Sekunden. */
-    duration: 0.22,
-    /** Tempo waehrend des Dashs in Pixel pro Sekunde. */
+    duration: 0.3,
+    /**
+     * Tempo waehrend des Dashs in Pixel pro Sekunde.
+     *
+     * NICHT ueber 1200 erhoehen: Die Aussenmauer ist 40 Pixel dick, ein Tick
+     * dauert 1/30 Sekunde. Ab 1200 Pixel/s springt der Spieler in einem Tick
+     * weiter als die Mauer dick ist und wird nach draussen geschoben. Mehr
+     * Reichweite gibt es ueber die Dauer, nicht ueber das Tempo. (Seit
+     * `clampToArena` faengt eine Notbremse das ab - verlassen sollte man sich
+     * darauf trotzdem nicht.)
+     */
     speed: 1150,
     /** Rueckstoss auf Gegner, die der Dash streift. */
     knockback: 520,
-    damage: 300,
+    // Schaden 300 -> 500: Der Dash war der schwaechste der drei Supers (Tank
+    // 800 Flaechenschaden, Sniper doppelter Schaden fuer 5 Sekunden). 500 auf
+    // alles, was im Weg steht, ist im selben Bereich, ohne ihn zu ueberholen.
+    damage: 500,
+    /**
+     * Unverwundbarkeit ab Beginn des Dashs, in Sekunden. NEU.
+     *
+     * Begruendung aus der Messung: Der Scout kassierte in Welle 5 mehr Schaden
+     * als der Tank (2677 gegen 1342) - bei 57 Prozent von dessen Leben. Seine
+     * Beweglichkeit zahlte sich nirgends aus, weil ein Ausweichen nichts
+     * verhinderte, was schon unterwegs war. Der Dash ist die einzige Stelle,
+     * an der "beweglich" ein Spielwert statt eines Rollentextes wird.
+     *
+     * Genau so lang wie der Dash (0,30 s) - keine Sekunde laenger. Das ist die
+     * verstaendliche Regel: "Waehrend du dashst, kann dir nichts passieren."
+     * Gemessen bringt das den Scout von 5,0 auf 10,8 Wellen und damit auf
+     * Augenhoehe mit Tank (10,0) und Sniper (9,0). Mit 0,5 s waeren es 12,8 -
+     * dann ist er der staerkste der drei.
+     */
+    invulnerableTime: 0.3,
   },
   tank: {
     radius: 200,

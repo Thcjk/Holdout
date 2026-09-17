@@ -257,7 +257,7 @@ describe("Schaden", () => {
     expect(state.events.some((event) => event.type === "enemyDied")).toBe(true);
   });
 
-  it("laedt den Super pro Treffer auf und meldet, wenn er bereit ist", () => {
+  it("laedt den Super am ausgeteilten Schaden auf, nicht an der Trefferzahl", () => {
     const state = world();
     const player = firstPlayer(state);
     const enemy = createEnemy(1, "runner", { x: 900, y: 600 }, 1, 1, false);
@@ -265,9 +265,29 @@ describe("Schaden", () => {
     enemy.maxHealth = 1e9;
     state.enemies.push(enemy);
 
-    for (let i = 0; i < 6; i += 1) {
-      damageEnemy(state, enemy, 1, player.id);
+    // Ein einzelner grosser Treffer laedt genauso viel wie viele kleine mit
+    // derselben Summe - genau das ist der Punkt an der Umstellung.
+    damageEnemy(state, enemy, 1000, player.id);
+    const afterOneBig = player.superCharge;
+    expect(afterOneBig).toBeCloseTo(PLAYER.superChargePerDamage, 5);
+
+    player.superCharge = 0;
+    for (let i = 0; i < 10; i += 1) {
+      damageEnemy(state, enemy, 100, player.id);
     }
+    expect(player.superCharge).toBeCloseTo(afterOneBig, 5);
+  });
+
+  it("meldet, wenn der Super bereit ist", () => {
+    const state = world();
+    const player = firstPlayer(state);
+    const enemy = createEnemy(1, "runner", { x: 900, y: 600 }, 1, 1, false);
+    enemy.health = 1e9;
+    enemy.maxHealth = 1e9;
+    state.enemies.push(enemy);
+
+    // Genug Schaden fuer eine volle Aufladung, in einem Rutsch.
+    damageEnemy(state, enemy, Math.ceil(100_000 / PLAYER.superChargePerDamage), player.id);
 
     expect(player.superCharge).toBe(100);
     expect(state.events.some((event) => event.type === "superReady")).toBe(true);

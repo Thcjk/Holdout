@@ -14,7 +14,7 @@ import { ARENA_BOUNDS, SPAWN_POINT, createArenaBushes, createArenaWalls } from "
 import { CHARACTERS, PLAYER, WAVES } from "../config/balance";
 import { stepReload, stepRevive, tryShoot } from "./combat";
 import { stepEnemies } from "./enemies";
-import { stepPlayerMovement } from "./movement";
+import { clampToArena, stepPlayerMovement } from "./movement";
 import { stepProjectiles } from "./projectiles";
 import { applyLevelUp, emptySkills } from "./skills";
 import { stepDashDamage, trySuper } from "./supers";
@@ -139,6 +139,8 @@ export function stepWorld(
 
     stepReload(player, dt);
     stepPlayerMovement(player, input, state.walls, dt);
+    // Notbremse gegen das Durchschlagen der Aussenmauer bei hohem Tempo.
+    clampToArena(player.position, player.radius, state.bounds);
     updateFacing(player, input);
     player.inBush = isInBush(state, player.position);
     trySuper(state, player, input);
