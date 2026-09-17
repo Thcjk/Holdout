@@ -13,7 +13,17 @@
 
 import { MAX_TICKS_PER_FRAME, TICK_MS, TICK_SECONDS } from "../config/constants";
 import { createWorld, stepWorld } from "./world";
-import type { InputState, Vec2, WorldState } from "./types";
+import type { PlayerSetup } from "./world";
+import type { GameEvent, InputState, Vec2, WorldState } from "./types";
+
+/** Ein Schluessel je Objekt, damit Spieler und Gegner sich nicht in die Quere kommen. */
+function playerKey(id: string): string {
+  return `p:${id}`;
+}
+
+function enemyKey(id: number): string {
+  return `e:${id}`;
+}
 
 export class Simulation {
   readonly state: WorldState;
@@ -24,8 +34,11 @@ export class Simulation {
   /** Positionen vor dem zuletzt gerechneten Tick - die Basis der Interpolation. */
   private readonly previousPositions = new Map<string, Vec2>();
 
-  constructor(playerIds: readonly string[]) {
-    this.state = createWorld(playerIds);
+  /** Ereignisse aller Ticks dieses Bildes, gesammelt fuer die Darstellung. */
+  private readonly frameEvents: GameEvent[] = [];
+
+  constructor(setups: readonly PlayerSetup[], seed = 1) {
+    this.state = createWorld(setups, seed);
     this.snapshotPositions();
   }
 
@@ -37,6 +50,7 @@ export class Simulation {
    */
   advance(deltaMs: number, inputs: ReadonlyMap<string, InputState>): number {
     this.accumulator += deltaMs;
+    this.frameEvents.length = 0;
 
     let ticks = 0;
     while (this.accumulator >= TICK_MS) {
@@ -50,6 +64,9 @@ export class Simulation {
 
       this.snapshotPositions();
       stepWorld(this.state, inputs, TICK_SECONDS);
+      for (const event of this.state.events) {
+        this.frameEvents.push(event);
+      }
       this.accumulator -= TICK_MS;
       ticks += 1;
     }
@@ -62,40 +79,68 @@ export class Simulation {
     return ticks;
   }
 
+  /** Alle Ereignisse, die seit dem letzten Bild passiert sind. */
+  get events(): readonly GameEvent[] {
+    return this.frameEvents;
+  }
+
   /** Fortschritt zum naechsten Tick, 0 bis 1. */
   get alpha(): number {
     const value = this.accumulator / TICK_MS;
     return value < 0 ? 0 : value > 1 ? 1 : value;
   }
 
-  /** Position, die gezeichnet werden soll: weich zwischen zwei Ticks. */
-  renderPosition(playerId: string): Vec2 {
+  /** Position eines Spielers, weich zwischen zwei Ticks. */
+  renderPlayerPosition(playerId: string): Vec2 {
     const player = this.state.players.find((entry) => entry.id === playerId);
     if (!player) {
       return { x: 0, y: 0 };
     }
+    return this.interpolate(playerKey(playerId), player.position);
+  }
 
-    const previous = this.previousPositions.get(playerId);
+  /** Position eines Gegners, weich zwischen zwei Ticks. */
+  renderEnemyPosition(enemyId: number, current: Vec2): Vec2 {
+    return this.interpolate(enemyKey(enemyId), current);
+  }
+
+  /**
+   * Projektile werden nicht interpoliert, sondern anhand ihrer Geschwindigkeit
+   * vorausberechnet: Sie fliegen geradlinig, und ein Nachlaufen waere sichtbar.
+   */
+  renderProjectilePosition(position: Vec2, velocity: Vec2): Vec2 {
+    const t = this.alpha * TICK_SECONDS;
+    return { x: position.x + velocity.x * t, y: position.y + velocity.y * t };
+  }
+
+  private interpolate(key: string, current: Vec2): Vec2 {
+    const previous = this.previousPositions.get(key);
     if (!previous) {
-      return { x: player.position.x, y: player.position.y };
+      return { x: current.x, y: current.y };
     }
-
     const t = this.alpha;
     return {
-      x: previous.x + (player.position.x - previous.x) * t,
-      y: previous.y + (player.position.y - previous.y) * t,
+      x: previous.x + (current.x - previous.x) * t,
+      y: previous.y + (current.y - previous.y) * t,
     };
   }
 
   private snapshotPositions(): void {
     for (const player of this.state.players) {
-      const stored = this.previousPositions.get(player.id);
-      if (stored) {
-        stored.x = player.position.x;
-        stored.y = player.position.y;
-      } else {
-        this.previousPositions.set(player.id, { x: player.position.x, y: player.position.y });
-      }
+      this.store(playerKey(player.id), player.position);
+    }
+    for (const enemy of this.state.enemies) {
+      this.store(enemyKey(enemy.id), enemy.position);
+    }
+  }
+
+  private store(key: string, position: Vec2): void {
+    const stored = this.previousPositions.get(key);
+    if (stored) {
+      stored.x = position.x;
+      stored.y = position.y;
+    } else {
+      this.previousPositions.set(key, { x: position.x, y: position.y });
     }
   }
 }

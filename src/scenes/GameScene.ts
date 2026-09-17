@@ -4,23 +4,30 @@
  *   Eingabe einsammeln -> Simulation weiterlaufen lassen -> Zustand zeichnen
  *
  * Bewusst keine Spiellogik hier. Wo der Spieler steht und woran er stehen bleibt,
- * entscheidet `systems/` (siehe CLAUDE.md, Architektur-Grundregel). Auch die
- * Phaser-Physik (Arcade Physics) wird deshalb absichtlich nicht benutzt.
+ * entscheidet `systems/` (siehe CLAUDE.md, Architektur-Grundregel).
  */
 
 import Phaser from "phaser";
-import { WALL_THICKNESS } from "../config/arena";
+import { CHARACTERS } from "../config/balance";
 import { ARENA, COLORS, DEPTH, VIEWPORT } from "../config/constants";
 import { InputManager } from "../input/InputManager";
+import { ArenaRenderer } from "../render/ArenaRenderer";
+import { CameraController } from "../render/CameraController";
 import { Simulation } from "../systems/Simulation";
-import type { InputState } from "../systems/types";
+import type { InputState, PlayerState } from "../systems/types";
 
 const LOCAL_PLAYER_ID = "local";
 
 export class GameScene extends Phaser.Scene {
   private simulation!: Simulation;
   private inputManager!: InputManager;
+  private cameraController!: CameraController;
+  private arena!: ArenaRenderer;
+
   private playerSprite!: Phaser.GameObjects.Arc;
+  private facingMarker!: Phaser.GameObjects.Triangle;
+  private aimLine!: Phaser.GameObjects.Graphics;
+
   private readonly inputs = new Map<string, InputState>();
 
   constructor() {
@@ -28,54 +35,57 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.simulation = new Simulation([LOCAL_PLAYER_ID]);
-    this.inputManager = new InputManager(this);
+    this.simulation = new Simulation([{ id: LOCAL_PLAYER_ID, name: "Du", character: "scout" }]);
 
-    this.drawArena();
+    this.arena = new ArenaRenderer(this, this.simulation.state);
+    this.inputManager = new InputManager(this);
+    this.cameraController = new CameraController(this, ARENA.width, ARENA.height);
+
     this.createPlayerSprite();
-    this.setupCamera();
+    this.aimLine = this.add.graphics().setDepth(DEPTH.projectiles);
     this.drawHint();
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.inputManager.destroy();
+      this.cameraController.destroy();
+      this.arena.destroy();
+    });
   }
 
   update(_time: number, delta: number): void {
-    this.inputs.set(LOCAL_PLAYER_ID, this.inputManager.getState());
-    this.simulation.advance(delta, this.inputs);
+    const player = this.localPlayer();
+    if (!player) {
+      return;
+    }
 
-    // Zwischen zwei Simulationsschritten interpolierte Position, damit die
-    // Figur mit voller Bildrate weich laeuft statt mit 30 Hz zu ruckeln.
-    const position = this.simulation.renderPosition(LOCAL_PLAYER_ID);
-    this.playerSprite.setPosition(position.x, position.y);
+    const input = this.inputManager.getState(player.position);
+    this.inputs.set(LOCAL_PLAYER_ID, input);
+
+    const ticks = this.simulation.advance(delta, this.inputs);
+    if (ticks > 0) {
+      // Einmalige Wuensche (Schuss, Super) erst loeschen, wenn ein Tick sie
+      // gesehen hat - sonst geht ein Klick zwischen zwei Ticks verloren.
+      this.inputManager.clearOneShots();
+    }
+
+    this.drawPlayer(player);
+    this.drawAim(player, input);
+
+    this.cameraController.update([
+      {
+        position: this.simulation.renderPlayerPosition(player.id),
+        isSelf: true,
+        down: player.down,
+      },
+    ]);
   }
 
-  /** Boden, Raster und Waende als Platzhaltergrafik. */
-  private drawArena(): void {
-    const floor = this.add.graphics();
-    floor.setDepth(DEPTH.floor);
-    floor.fillStyle(COLORS.floor, 1);
-    floor.fillRect(0, 0, ARENA.width, ARENA.height);
-
-    // Raster: hilft beim Entwickeln, Entfernungen und Tempo einzuschaetzen.
-    floor.lineStyle(1, COLORS.floorGrid, 1);
-    const step = 100;
-    for (let x = step; x < ARENA.width; x += step) {
-      floor.lineBetween(x, WALL_THICKNESS, x, ARENA.height - WALL_THICKNESS);
-    }
-    for (let y = step; y < ARENA.height; y += step) {
-      floor.lineBetween(WALL_THICKNESS, y, ARENA.width - WALL_THICKNESS, y);
-    }
-
-    const walls = this.add.graphics();
-    walls.setDepth(DEPTH.walls);
-    for (const wall of this.simulation.state.walls) {
-      walls.fillStyle(COLORS.wall, 1);
-      walls.fillRect(wall.x, wall.y, wall.width, wall.height);
-      walls.lineStyle(2, COLORS.wallEdge, 1);
-      walls.strokeRect(wall.x, wall.y, wall.width, wall.height);
-    }
+  private localPlayer(): PlayerState | undefined {
+    return this.simulation.state.players.find((entry) => entry.id === LOCAL_PLAYER_ID);
   }
 
   private createPlayerSprite(): void {
-    const player = this.simulation.state.players[0];
+    const player = this.localPlayer();
     if (!player) {
       throw new Error("Kein Spieler in der Simulation vorhanden.");
     }
@@ -88,28 +98,58 @@ export class GameScene extends Phaser.Scene {
     );
     this.playerSprite.setStrokeStyle(3, COLORS.playerOutline);
     this.playerSprite.setDepth(DEPTH.players);
+
+    // Kleiner Keil, der die Blickrichtung zeigt. Ohne ihn sieht man nicht,
+    // wohin die Figur zielt, solange nicht geschossen wird.
+    this.facingMarker = this.add.triangle(0, 0, 0, -7, 0, 7, 15, 0, COLORS.playerOutline);
+    this.facingMarker.setDepth(DEPTH.players + 1);
+  }
+
+  private drawPlayer(player: PlayerState): void {
+    const position = this.simulation.renderPlayerPosition(player.id);
+    this.playerSprite.setPosition(position.x, position.y);
+
+    const angle = Math.atan2(player.facing.y, player.facing.x);
+    const distance = player.radius + 6;
+    this.facingMarker.setPosition(
+      position.x + Math.cos(angle) * distance,
+      position.y + Math.sin(angle) * distance,
+    );
+    this.facingMarker.setRotation(angle);
   }
 
   /**
-   * Die Kamera folgt dem Spieler und bleibt innerhalb der Arena.
-   * Die gemeinsame Kamera fuer mehrere Spieler mit dynamischem Zoom kommt in Phase 2.
+   * Ziellinie mit Reichweitenanzeige: Sie zeigt, wie weit die eigene Waffe
+   * reicht, damit man nicht ins Leere schiesst.
    */
-  private setupCamera(): void {
-    const camera = this.cameras.main;
-    camera.setBackgroundColor(COLORS.background);
-    camera.setBounds(0, 0, ARENA.width, ARENA.height);
-    // Die beiden Werte sind die "Traegheit": 1 waere hart angeheftet, kleiner ist weicher.
-    camera.startFollow(this.playerSprite, true, 0.15, 0.15);
+  private drawAim(player: PlayerState, input: InputState): void {
+    this.aimLine.clear();
+    if (!input.aim) {
+      return;
+    }
+
+    const position = this.simulation.renderPlayerPosition(player.id);
+    const range = CHARACTERS[player.character].shot.range;
+    const strength = Math.max(0.25, this.inputManager.aimStrength);
+    const length = range * strength;
+
+    const endX = position.x + input.aim.x * length;
+    const endY = position.y + input.aim.y * length;
+
+    this.aimLine.lineStyle(3, COLORS.playerBullet, 0.5);
+    this.aimLine.lineBetween(position.x, position.y, endX, endY);
+    // Der Kreis am Ende markiert die maximale Reichweite.
+    this.aimLine.lineStyle(2, COLORS.playerBullet, 0.85);
+    this.aimLine.strokeCircle(endX, endY, 12);
   }
 
   private drawHint(): void {
     const hint = this.add.text(
       16,
-      VIEWPORT.height - 32,
-      "Laufen: WASD oder Pfeiltasten  ·  Phase 1",
-      { fontFamily: "system-ui, sans-serif", fontSize: "16px", color: "#8ea6c4" },
+      VIEWPORT.height - 30,
+      "Laufen: WASD  ·  Zielen: Maus  ·  Schiessen: Linksklick  ·  Super: Leertaste",
+      { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#8ea6c4" },
     );
-    // scrollFactor 0 heftet das Objekt an den Bildschirm statt an die Welt.
     hint.setScrollFactor(0);
     hint.setDepth(DEPTH.hud);
   }

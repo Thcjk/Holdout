@@ -1,21 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { PLAYER } from "../../src/config/balance";
+import { CHARACTERS, PLAYER } from "../../src/config/balance";
 import { TICK_SECONDS } from "../../src/config/constants";
 import { normalizeInput, stepPlayerMovement } from "../../src/systems/movement";
+import { createPlayer } from "../../src/systems/world";
 import type { PlayerState, Rect } from "../../src/systems/types";
+import { makeInput } from "../helpers";
+
+const SPEED = CHARACTERS.scout.speed;
 
 function makePlayer(x = 800, y = 600): PlayerState {
   return {
-    id: "test",
+    ...createPlayer({ id: "test", name: "Test", character: "scout" }, 0, 1),
     position: { x, y },
-    velocity: { x: 0, y: 0 },
-    radius: PLAYER.radius,
   };
 }
 
 function run(player: PlayerState, move: { x: number; y: number }, walls: Rect[], ticks: number) {
   for (let i = 0; i < ticks; i += 1) {
-    stepPlayerMovement(player, { move }, walls, TICK_SECONDS);
+    stepPlayerMovement(player, makeInput(move), walls, TICK_SECONDS);
   }
 }
 
@@ -41,7 +43,7 @@ describe("stepPlayerMovement", () => {
 
     run(player, { x: 1, y: 0 }, [], ticks);
 
-    expect(player.velocity.x).toBeCloseTo(PLAYER.speed, 6);
+    expect(player.velocity.x).toBeCloseTo(SPEED, 6);
   });
 
   it("ist nach der Haelfte der Beschleunigungszeit noch nicht auf Vollgeschwindigkeit", () => {
@@ -50,7 +52,7 @@ describe("stepPlayerMovement", () => {
     run(player, { x: 1, y: 0 }, [], 1);
 
     expect(player.velocity.x).toBeGreaterThan(0);
-    expect(player.velocity.x).toBeLessThan(PLAYER.speed);
+    expect(player.velocity.x).toBeLessThan(SPEED);
   });
 
   it("kommt ohne Eingabe wieder zum Stillstand", () => {

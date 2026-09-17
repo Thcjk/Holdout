@@ -20,6 +20,12 @@ const config: Phaser.Types.Core.GameConfig = {
     width: VIEWPORT.width,
     height: VIEWPORT.height,
   },
+  input: {
+    // Drei gleichzeitige Finger: linker Stick, rechter Stick, Super-Knopf.
+    // Ohne diese Zeile meldet Phaser nur einen Zeiger, und der zweite Daumen
+    // wird stillschweigend ignoriert.
+    activePointers: 4,
+  },
   render: {
     antialias: true,
     // Verhindert Weisspixel an den Raendern gezeichneter Formen auf manchen Handys.

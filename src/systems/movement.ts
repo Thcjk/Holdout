@@ -5,7 +5,7 @@
  * testbar (siehe tests/systems/) und im Koop auf Host und Client identisch.
  */
 
-import { PLAYER } from "../config/balance";
+import { CHARACTERS, PLAYER, SUPERS } from "../config/balance";
 import { resolveAgainstWalls } from "./collision";
 import type { InputState, PlayerState, Rect, Vec2 } from "./types";
 
@@ -45,21 +45,60 @@ export function stepPlayerMovement(
   walls: readonly Rect[],
   dt: number,
 ): void {
+  // Ein Spieler am Boden bleibt liegen, bis ihn jemand wiederbelebt.
+  if (player.down) {
+    player.velocity.x = 0;
+    player.velocity.y = 0;
+    return;
+  }
+
+  if (player.dashTime > 0) {
+    stepDash(player, walls, dt);
+    return;
+  }
+
+  const speed = CHARACTERS[player.character].speed;
   const direction = normalizeInput(input.move);
 
   // Beschleunigung in Pixel pro Sekunde im Quadrat: In `accelerationTime`
   // Sekunden von 0 auf Vollgeschwindigkeit. Dasselbe gilt beim Abbremsen.
-  const acceleration = PLAYER.speed / PLAYER.accelerationTime;
+  const acceleration = speed / PLAYER.accelerationTime;
   const maxDelta = acceleration * dt;
 
-  const targetVelocityX = direction.x * PLAYER.speed;
-  const targetVelocityY = direction.y * PLAYER.speed;
-
-  player.velocity.x = moveTowards(player.velocity.x, targetVelocityX, maxDelta);
-  player.velocity.y = moveTowards(player.velocity.y, targetVelocityY, maxDelta);
+  player.velocity.x = moveTowards(player.velocity.x, direction.x * speed, maxDelta);
+  player.velocity.y = moveTowards(player.velocity.y, direction.y * speed, maxDelta);
 
   player.position.x += player.velocity.x * dt;
   player.position.y += player.velocity.y * dt;
 
   resolveAgainstWalls(player.position, player.velocity, player.radius, walls);
+}
+
+/**
+ * Waehrend des Scout-Supers: fester Kurs mit hohem Tempo, keine Steuerung.
+ * Eine Wand beendet den Dash sofort, sonst bliebe die Figur daran kleben.
+ */
+function stepDash(player: PlayerState, walls: readonly Rect[], dt: number): void {
+  const speed = SUPERS.scout.speed;
+  player.velocity.x = player.dashDirection.x * speed;
+  player.velocity.y = player.dashDirection.y * speed;
+
+  const beforeX = player.position.x;
+  const beforeY = player.position.y;
+
+  player.position.x += player.velocity.x * dt;
+  player.position.y += player.velocity.y * dt;
+  resolveAgainstWalls(player.position, player.velocity, player.radius, walls);
+
+  const movedX = player.position.x - beforeX;
+  const movedY = player.position.y - beforeY;
+  const blocked = Math.hypot(movedX, movedY) < speed * dt * 0.5;
+
+  player.dashTime -= dt;
+  if (blocked || player.dashTime <= 0) {
+    player.dashTime = 0;
+    // Nach dem Dash nicht mit voller Dashgeschwindigkeit weiterschlittern.
+    player.velocity.x = player.dashDirection.x * CHARACTERS[player.character].speed;
+    player.velocity.y = player.dashDirection.y * CHARACTERS[player.character].speed;
+  }
 }

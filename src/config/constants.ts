@@ -2,8 +2,7 @@
  * Technische Konstanten: Bildschirm, Arena, Zeittakt, Zeichenebenen, Farben.
  *
  * Abgrenzung zu `balance.ts`: Hier steht, wie das Spiel technisch aufgebaut ist.
- * Dort steht, wie es sich anfuehlt. Spielwerte (Tempo, Schaden, Leben) gehoeren
- * ausschliesslich nach `balance.ts`.
+ * Dort steht, wie es sich anfuehlt.
  */
 
 /** Groesse des Spielfelds in Pixeln (Briefing, Abschnitt 2 "Kennzahlen"). */
@@ -27,7 +26,6 @@ export const VIEWPORT = {
  *
  * Warum fest? Bei variablem Zeitschritt rechnet ein schnelles Handy andere
  * Ergebnisse als ein langsames. Im Koop wuerden die Spielstaende auseinanderdriften.
- * Gezeichnet wird trotzdem mit 60 fps, dazwischen wird interpoliert (siehe Simulation.ts).
  */
 export const TICK_RATE = 30;
 export const TICK_SECONDS = 1 / TICK_RATE;
@@ -35,26 +33,79 @@ export const TICK_MS = 1000 / TICK_RATE;
 
 /**
  * Obergrenze an Simulationsschritten pro gezeichnetem Bild. Verhindert die
- * "Todesspirale": Nach einem langen Hänger (Tab im Hintergrund, Telefonanruf)
- * wuerde das Spiel sonst hunderte Ticks am Stueck nachrechnen und noch laenger haengen.
+ * "Todesspirale": Nach einem langen Haenger wuerde das Spiel sonst hunderte
+ * Ticks am Stueck nachrechnen und noch laenger haengen.
  */
 export const MAX_TICKS_PER_FRAME = 5;
 
 /** Zeichenreihenfolge. Hoehere Zahl liegt weiter vorne. */
 export const DEPTH = {
   floor: 0,
+  bushesBelow: 5,
   walls: 10,
+  spawnWarning: 12,
+  projectiles: 20,
+  enemies: 25,
   players: 30,
+  bushesAbove: 35,
+  particles: 40,
+  damageNumbers: 50,
   hud: 100,
 } as const;
 
-/** Platzhalter-Farbpalette (Phase 1-3). Kraeftig und klar unterscheidbar. */
+/** Kamera: folgt allen lebenden Spielern und zoomt je nach Abstand heraus. */
+export const CAMERA = {
+  /** Zoom bei einem einzelnen Spieler. */
+  maxZoom: 1.0,
+  /** Weitester Zoom, wenn die Gruppe auseinanderlaeuft. */
+  minZoom: 0.62,
+  /** Rand um die Spielergruppe in Pixeln, damit niemand am Bildschirmrand klebt. */
+  padding: 260,
+  /** Wie schnell der Zoom nachzieht (0 bis 1 pro Bild). */
+  zoomLerp: 0.06,
+  /** Traegheit der Kamerafolge. 1 waere hart angeheftet. */
+  followLerp: 0.12,
+} as const;
+
+/** Touch-Steuerung (Briefing, Abschnitt 3). */
+export const TOUCH = {
+  /** Radius des virtuellen Joysticks in Bildschirmpixeln. */
+  stickRadius: 78,
+  /** Radius des Daumenknopfs. */
+  knobRadius: 32,
+  /** Tote Zone, damit ein zitternder Daumen die Figur nicht ruckeln laesst. */
+  deadZone: 10,
+  /** Bis zu dieser Zugstrecke gilt eine Berührung als Tippen (Auto-Ziel). */
+  tapThreshold: 16,
+  /** Groesse des Super-Knopfs rechts unten. */
+  superButtonRadius: 46,
+  superButtonMargin: 26,
+} as const;
+
+/** Farbpalette. Lesbarkeit auf kleinem Bildschirm geht vor Schoenheit. */
 export const COLORS = {
   background: 0x11161f,
   floor: 0x1e2734,
   floorGrid: 0x263243,
   wall: 0x46536b,
   wallEdge: 0x5f7191,
+  bush: 0x2f6b46,
+  bushEdge: 0x47935f,
   player: 0x4cc2ff,
   playerOutline: 0xe8f6ff,
+  playerDown: 0x4a5a70,
+  mate: 0x7ee08a,
+  playerBullet: 0xfff2a8,
+  enemyBullet: 0xff7a5c,
+  runner: 0xff6b4a,
+  brute: 0xc94f7c,
+  shooter: 0xffa62b,
+  enemyOutline: 0x2a1720,
+  marked: 0xffe066,
+  damageText: 0xfff2a8,
+  critText: 0xffd166,
+  hudText: 0xdce8f7,
+  hudDim: 0x8ea6c4,
+  danger: 0xff5470,
+  superReady: 0xffd166,
 } as const;
