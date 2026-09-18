@@ -481,9 +481,70 @@ Das liest man ohne Erklärung.
    wirken als Fläche wie hohes Gras: genau das Bild aus Brawl Stars, das ohne
    Erklärung sagt „da kann man drin verschwinden".
 
-Deshalb ist der **Boden Stein und nicht Gras**: Grün hat jetzt eine feste
-Bedeutung - „hier kann man sich verstecken". Wäre auch der Boden grün, ginge
-sie verloren, und Lebensbalken und Namen hätten weniger Kontrast.
+Deshalb ist der **Boden nicht Gras**: Grün hat eine feste Bedeutung - „hier
+kann man sich verstecken". Wäre auch der Boden grün, ginge sie verloren, und
+Lebensbalken und Namen hätten weniger Kontrast.
+
+#### Der dünne Streifen neben jeder Deckung – und warum er kein Bluten war
+
+Nach dem Spieltest kam: „Neben jeder Kiste ist ein dünner Streifen des
+Nachbar-Sprites sichtbar." Die naheliegende Erklärung wäre Textur-Bluten beim
+Zerschneiden des Sheets. **Sie war falsch**, und das liess sich belegen statt
+vermuten:
+
+- Es gibt **keine Koordinatendatei** – ein Off-by-one darin ist unmöglich.
+- `tileSprite` **kopiert nur den einen Frame** in eine eigene 16×16-Leinwand
+  (`drawImage(..., frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight, ...)`).
+  Aus dem Sheet kann nichts hineinbluten.
+- Der Filter steht **bereits auf NEAREST**: `canvasToTexture` setzt ihn, solange
+  `antialias: false` – und das ist gesetzt.
+
+Die echte Ursache ist Arithmetik: Ein Deckungsblock ist **60 px** breit, eine
+Kachel erscheint mit **48 px** (16 × `WORLD_SCALE`).
+
+```
+60 / 48 = 1,25   →   die letzte Kachel wird bei einem Viertel abgeschnitten
+```
+
+Bei einer Kachel **mit Rahmen** – dort lag eine Holzkiste – sieht man diesen
+Schnitt sofort: Der Rahmen fehlt plötzlich und man blickt auf das nackte
+Innere. Das ist der „Streifen".
+
+**Zwei Wege wären falsch gewesen.** Die Blöcke auf ein Vielfaches von 48 zu
+bringen, hätte Spielwerte geändert, die Kollision und Balance bestimmen und die
+gemessen sind – Optik ist kein Grund, daran zu drehen. Und das Zeichnen aufs
+Raster zu schnappen, hätte Bild und Trefferfläche auseinanderlaufen lassen.
+
+**Die Lösung sind nahtlose Kacheln plus ein gezeichneter Umriss:** Bei einer
+nahtlosen Textur fällt derselbe Schnitt gar nicht auf, und der Umriss liegt
+**immer genau auf der Kollisionskante** – unabhängig davon, wo die Kachel
+endet. Was man sieht, ist auch das, wogegen man läuft.
+
+| | Kachel | |
+| --- | --- | --- |
+| Boden | (4,0)/(5,0) | warmer Sand statt kühlem Stein |
+| Aussenmauer | (8,0) | kühler Stein – hebt sich vom Sand ab |
+| Deckung | (14,2) | rote Ziegel, nahtlos, mit Umriss |
+
+#### Was NICHT geändert wurde, und warum
+
+Zwei weitere Punkte aus derselben Rückmeldung haben sich als Missverständnis
+erwiesen:
+
+- **„Die Arena wird am Bildrand angeschnitten, zeig sie ganz."** Die Kamera hat
+  bereits `setBounds(0, 0, 1600, 1200)` – sie zeigt nie über die Arena hinaus.
+  Angeschnittene Kacheln am Bildrand sind bei einer mitscrollenden Kamera
+  normal. Die ganze Arena (1600×1200) in die Zeichenfläche (1169×540) zu
+  zwingen hiesse Zoomfaktor 0,45: Der Spieler wäre dann rund 16 Pixel gross.
+- **„Das HUD überlappt die Spielwelt."** Es liegt bereits in einer eigenen,
+  fest verankerten Szene (`HudScene`) – genau wie gefordert. Dass die Welt
+  darunter durchscrollt, ist das Wesen eines HUD.
+- **„Die Buschflächen wirken zufällig platziert."** Sie stehen an vier
+  symmetrischen Stellen und sind seit dem Wechsel auf Graskacheln geschlossene
+  Rechtecke. Eine separate Tiled-Datei würde die Arena ein zweites Mal
+  beschreiben – `config/arena.ts` ist die Quelle, aus der die Simulation
+  rechnet, und zwei Beschreibungen derselben Karte laufen früher oder später
+  auseinander.
 
 #### Was sonst noch dranhing
 

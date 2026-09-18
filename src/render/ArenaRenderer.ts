@@ -16,7 +16,7 @@
 import Phaser from "phaser";
 import {
   BUSH_TILE,
-  CRATE_TILE,
+  COVER_TILE,
   FLOOR_TILES,
   SHEET_KEY,
   WALL_TILE,
@@ -90,15 +90,33 @@ export class ArenaRenderer {
    * Unterschied, und die Spiellogik soll davon nichts wissen muessen.
    */
   private drawWalls(state: WorldState): void {
+    /*
+     * Ein Umriss um jeden Block - und der ist nicht Zierde, sondern die
+     * Loesung eines sichtbaren Fehlers.
+     *
+     * Ein Deckungsblock ist 60 Pixel breit, eine Kachel erscheint mit 48:
+     * 60/48 = 1,25, die letzte Kachel wird also angeschnitten. Frueher lag
+     * dort eine gerahmte Holzkiste, und der Schnitt sah aus wie ein zufaelliger
+     * Streifen neben dem Block. Jetzt liegen dort nahtlose Ziegel, bei denen
+     * der Schnitt nicht auffaellt - und der Umriss gibt dem Block seine Kante
+     * zurueck. Er liegt IMMER genau auf der Kollisionsgrenze, egal wo die
+     * Kachel endet: Was man sieht, ist auch das, wogegen man laeuft.
+     */
+    const umriss = this.scene.add.graphics().setDepth(DEPTH.walls + 1);
+    this.add(umriss);
+
     for (const wall of state.walls) {
-      const kachel = this.istDeckung(wall) ? CRATE_TILE : WALL_TILE;
+      const deckung = this.istDeckung(wall);
       this.add(
         this.scene.add
-          .tileSprite(wall.x, wall.y, wall.width, wall.height, SHEET_KEY, kachel)
+          .tileSprite(wall.x, wall.y, wall.width, wall.height, SHEET_KEY, deckung ? COVER_TILE : WALL_TILE)
           .setOrigin(0)
           .setTileScale(WORLD_SCALE, WORLD_SCALE)
           .setDepth(DEPTH.walls),
       );
+
+      umriss.lineStyle(3, 0x1b2430, deckung ? 0.9 : 0.55);
+      umriss.strokeRect(wall.x, wall.y, wall.width, wall.height);
     }
   }
 

@@ -127,20 +127,50 @@ export const ENEMY_TILES: Record<EnemyType, number> = {
 };
 
 /**
- * Bodenkacheln.
+ * Bodenkacheln: warmer Sand.
  *
- * Heller Stein statt Gras, und das ist kein Zufall: Gruen bekommt im Spiel
- * eine feste Bedeutung - es heisst "hier kann man sich verstecken" (siehe
- * `BUSH_TILE`). Waere auch der Boden gruen, ginge genau diese Bedeutung
- * verloren, und Lebensbalken und Mitspielernamen haetten weniger Kontrast.
+ * Vorher heller Stein - der war zu kuehl und blaeulich, das Spielfeld wirkte
+ * kalt. Sand ist warm und ruhig: Er hat kein starkes Muster, das mit den
+ * Figuren um Aufmerksamkeit kaempft.
+ *
+ * Gras kommt weiterhin NICHT als Boden in Frage: Gruen hat im Spiel eine feste
+ * Bedeutung - "hier kann man sich verstecken" (siehe `BUSH_TILE`). Waere auch
+ * der Boden gruen, ginge genau diese Bedeutung verloren.
  */
-export const FLOOR_TILES: readonly number[] = [tile(6, 0), tile(7, 0), tile(8, 0), tile(9, 0)];
+export const FLOOR_TILES: readonly number[] = [tile(4, 0), tile(5, 0)];
 
-/** Aussenmauer: graue Steinwand, passend zum Boden. */
-export const WALL_TILE = tile(2, 11);
+/**
+ * ================================================================
+ * NUR NAHTLOSE KACHELN FUER FLAECHEN - DAS IST KEINE GESCHMACKSFRAGE
+ * ================================================================
+ *
+ * Hier stand vorher eine gerahmte Holzkiste, und daraus wurde ein sichtbarer
+ * Fehler: Neben jedem Deckungsblock lief ein duenner senkrechter Streifen.
+ *
+ * Die Ursache ist Arithmetik, kein Bluten aus dem Sheet. Ein Deckungsblock ist
+ * 60 Pixel breit, eine Kachel erscheint mit 48 (16 x WORLD_SCALE):
+ *
+ *   60 / 48 = 1,25   ->   die letzte Kachel wird bei einem Viertel abgeschnitten
+ *
+ * Bei einer Kachel MIT RAHMEN sieht man diesen Schnitt sofort - der Rahmen ist
+ * plötzlich weg und man blickt auf das nackte Innere. Bei einer NAHTLOSEN
+ * Kachel faellt derselbe Schnitt gar nicht auf, weil ueberall dasselbe Muster
+ * liegt.
+ *
+ * Die Bloecke einfach auf ein Vielfaches von 48 zu bringen waere der falsche
+ * Weg: Das sind Spielwerte, die Kollision und Balance bestimmen, und die
+ * wurden gemessen. Optik ist kein Grund, daran zu drehen.
+ *
+ * Was den Bloecken ihre Form gibt, ist deshalb ein GEZEICHNETER UMRISS
+ * (`ArenaRenderer`) - eine Linie, die immer genau auf der Kollisionskante
+ * liegt, unabhaengig davon, wo die Kachel gerade endet.
+ */
 
-/** Deckungsbloecke: Holzkiste. */
-export const CRATE_TILE = tile(20, 4);
+/** Aussenmauer: kuehler Stein - hebt sich bewusst vom warmen Sandboden ab. */
+export const WALL_TILE = tile(8, 0);
+
+/** Deckungsbloecke: rote Ziegel, nahtlos. Klar anders als Boden und Mauer. */
+export const COVER_TILE = tile(14, 2);
 
 /**
  * Buschfelder: GRAS, nicht die Buschkacheln des Pakets.
