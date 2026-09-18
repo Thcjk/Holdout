@@ -30,11 +30,11 @@ vollständig im Code. Was aussteht, ist kein Code, sondern dein Urteil:
   anfühlt, lässt sich nicht messen. Fühlt sie sich zäh an: Werte in
   `src/config/balance.ts` (`speed`, `accelerationTime`) und
   `src/config/constants.ts` (`TOUCH`) anpassen.
-- **Phase 6 ist erst auf zwei echten Geräten in verschiedenen Netzen bestanden.**
-  Geprüft ist bisher: zwei Browser-Tabs über den lokalen Transport, und Host plus
-  Client im Test mit 30 % künstlichem Paketverlust. Echtes WebRTC konnte hier
-  nicht geprüft werden, weil der PeerJS-Signalisierungsserver aus der
-  Entwicklungsumgebung nicht erreichbar ist.
+- **Phase 6 ist bestanden.** Der Nutzer hat am 2026-09-18 auf echten Geräten
+  bestätigt, dass Koop über das Internet funktioniert. Hier geprüft ist
+  ausserdem: zwei Browser-Tabs über den lokalen Transport, Host plus Client mit
+  30 % künstlichem Paketverlust, und der Ausfallweg, wenn kein
+  Signalisierungsserver erreichbar ist.
 - **Balancing ist ein Vorschlag, kein Ergebnis.** Siehe unten.
 
 ## Nur Handy, und installiert statt im Browser
@@ -354,9 +354,37 @@ Runde **sofort beendete**. Wer nur kurz aufhören wollte, verlor damit alles und
 musste von vorn anfangen. Genau das kam als „es soll möglich sein Pause zu
 machen und danach weiter zu spielen" zurück.
 
-Der Knopf heisst jetzt **Pause** und hält an; aufgeben kann man danach immer
-noch, aber erst nach einem zweiten, ausdrücklichen Antippen auf „Runde
-beenden".
+Der Knopf öffnet jetzt **immer** einen Zwischenbildschirm; aufgeben kann man
+danach immer noch, aber erst nach einem zweiten, ausdrücklichen Antippen.
+
+**Nachtrag: Im Koop war der alte Weg zuerst stehengeblieben.** Weil Anhalten
+dort nicht geht, gab es auch keine Rückfrage – der Knopf warf einen weiterhin
+ohne Warnung aus der Runde. Das war ein Trugschluss: **Die Rückfrage braucht
+gar kein Anhalten, sie braucht nur eine Anzeige.** Deshalb sind beides jetzt
+zwei getrennte Dinge (`GameScene.overlayOpen` gegen `GameScene.paused`), und
+nur das zweite hängt an `canPause`.
+
+| | Solo | Koop |
+| --- | --- | --- |
+| Knopf heisst | Pause | Menü |
+| Titel | Pause | Menü |
+| Hinweis | „Die Runde wartet auf dich" | „**Achtung: Die Runde läuft weiter** – im Koop rechnet der Host für alle." (gelb) |
+| Knöpfe | Weiter · Runde beenden | Weiter spielen · Runde verlassen |
+| Simulation | angehalten | läuft weiter |
+| Hintergrund | dicht (0,82) | durchscheinend (0,58) – man soll sehen, dass es weitergeht |
+
+**Die Beschriftung sagt die Wahrheit, auch wenn sie unbequem ist.** Im Koop
+steht dort „Menü" und nicht „Pause", und der Hinweis warnt ausdrücklich. Ein
+Knopf, der Pause verspricht und keine macht, wäre schlimmer als der alte
+Zustand gewesen – man würde sich darauf verlassen. Beim Nachstellen mit zwei
+Tabs ist genau das passiert: Der Spieler ging zu Boden, während der
+Zwischenbildschirm offen war. Der Hinweis ist also keine Zierde.
+
+**Während der Bildschirm offen ist, bekommt die Simulation eine LEERE Eingabe**
+(`emptyInput()`). Der dunkle Hintergrund liegt zwar über den Knöpfen, aber die
+Touch-Steuerung hört auf die ganze Szene – ein Daumen, der auf „Weiter spielen"
+zielt, würde sonst nebenbei den Joystick ziehen oder einen Schuss auslösen.
+Stehenbleiben ist das ehrlichere Verhalten: Man spielt gerade nicht.
 
 - **Angehalten heisst: die Simulation bekommt keine Zeit mehr zugeteilt**
   (`GameScene.paused`). Gezeichnet wird weiter – ein eingefrorenes Bild gehört
@@ -367,20 +395,22 @@ beenden".
   etwas nachschauen – vorher lief die Runde dabei weiter, und man kam mit
   deutlich weniger Leben zurück oder gar nicht. Jetzt hört `visibilitychange`
   mit; zurück kommt man von Hand über „Weiter".
-- **Nur solo** (`GameSession.canPause`). Im Koop rechnet der Host für alle
-  weiter; ein Gerät, das für sich anhält, müsste beim Weitermachen entweder
-  minutenlang nachrechnen oder springen. Dort bleibt es beim direkten Weg ins
-  Menü. Die Spielszene fragt dafür die Sitzung, statt selbst nach dem Modus zu
-  schauen – sie soll weiterhin nicht wissen, ob solo, als Host oder als Client
-  gespielt wird.
+- **Angehalten wird nur solo** (`GameSession.canPause`). Im Koop rechnet der
+  Host für alle weiter; ein Gerät, das für sich anhält, müsste beim
+  Weitermachen entweder minutenlang nachrechnen oder springen. Die Spielszene
+  fragt dafür die Sitzung, statt selbst nach dem Modus zu schauen – sie soll
+  weiterhin nicht wissen, ob solo, als Host oder als Client gespielt wird. Die
+  HUD-Szene fragt gar nicht: Sie zeigt an, was ihr gesagt wird.
 - **Einmalige Wünsche werden in der Pause gelöscht.** Sonst läge ein Schuss aus
   dem Moment des Anhaltens bereit und ginge beim Weitermachen sofort los, ohne
   dass jemand den Knopf gedrückt hat.
 - **Der Ton geht mit.** Musik in der Pause weiterlaufen zu lassen, während das
   Bild steht, klingt nach Absturz.
-- **Das HUD ruht ebenfalls.** Nicht nur gespart: Ohne das würde die
-  Skill-Hinweiszeile jedes Bild wieder eingeblendet, die das Pausenbild gerade
-  ausgeblendet hat – sie flackerte mitten durch die Pausenschrift.
+- **Das HUD ruht mit – aber nur solo.** Im Koop läuft die Runde weiter, also
+  müssen Leben, Wellenzahl und Gegnerzahl weiterlaufen. Die Skill-Hinweiszeile
+  wird deshalb nicht mehr über das Einfrieren unterdrückt, sondern über
+  `overlayOpen`: Sonst blendete das weiterlaufende HUD sie jedes Bild wieder
+  ein, und sie flackerte mitten durch die Schrift.
 
 **Stolperstein beim Bauen, der beinahe durchgerutscht wäre:** Das Pausenbild
 wird einmal im `create()` der HUD-Szene gebaut und danach nur ein- und
@@ -870,13 +900,14 @@ Zwei Konsequenzen, beide im Code:
   9,8 · Sniper 7,2 Wellen. Der Bot nutzt keine Deckung, keine Büsche und
   **keine der beiden Fähigkeiten** – das sind Untergrenzen. Ob 8–15 Wellen
   stimmen, zeigt erst eigenes Spielen.
-- **Echtes WebRTC ist weiterhin ungetestet – der Server ist aus dieser
-  Entwicklungsumgebung gesperrt** (der Proxy antwortet mit 403 auf
-  `0.peerjs.com:443`). Geprüft werden konnte deshalb nur der Ausfallweg, und
-  der stimmt: Beide Signalisierungsserver werden der Reihe nach probiert, und
-  am Ende steht „Der Verbindungsdienst ist nicht erreichbar" statt „Raum nicht
-  gefunden". Ob eine echte Verbindung über zwei Netze zustande kommt, zeigt nur
-  ein Test mit zwei Geräten. `?debug=netz` zeigt dabei alles Nötige.
+- **Koop über das Internet funktioniert** – vom Nutzer am 2026-09-18 auf
+  echten Geräten bestätigt („es geht jetzt mit online"). Damit ist der lange
+  offene Punkt aus Phase 6 erledigt. **Was dabei noch offen ist:** ob die
+  Verbindung direkt oder über TURN lief. Die Lobby sagt es seit 1.11.0 von
+  selbst – beim nächsten Mal einfach die Zeile unter dem Raumcode lesen.
+  Aus dieser Entwicklungsumgebung ist der Signalisierungsserver weiterhin
+  gesperrt (403 auf `0.peerjs.com:443`), hier lässt sich also nach wie vor nur
+  der Ausfallweg prüfen.
 
 - **Bildrate auf echtem Gerät ungeprüft.** Im Container laufen selbst fast leere
   Szenen nur mit ~50 fps (Software-Rendering ohne GPU), das Spiel mit ~32 fps.

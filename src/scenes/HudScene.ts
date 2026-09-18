@@ -46,7 +46,9 @@ export class HudScene extends Phaser.Scene {
   private menuButton!: Button;
 
   private canPause = false;
-  /** Angehalten? Dann bringt das HUD nichts mehr nach - es aendert sich nichts. */
+  /** Zwischenbildschirm zu sehen? Dann bleibt die Hinweiszeile unten. */
+  private overlayOpen = false;
+  /** Welt steht wirklich still (nur solo)? Dann bringt das HUD nichts nach. */
   private paused = false;
   private onPause: () => void = () => {};
   private onResume: () => void = () => {};
@@ -141,28 +143,24 @@ export class HudScene extends Phaser.Scene {
      * Pause und Ton liegen oben rechts unter der Punkteanzeige: Unten rechts
      * sitzt der Super-Knopf, und dort wuerde der Daumen sie staendig streifen.
      *
-     * DIESER KNOPF HIESS FRUEHER "MENUE" UND BEENDETE DIE RUNDE SOFORT. Wer
-     * nur kurz aufhoeren wollte, verlor damit alles und musste von vorn
-     * anfangen - genau die Beschwerde, die zu dieser Aenderung gefuehrt hat.
-     * Jetzt haelt er an; aufgeben kann man danach immer noch, aber erst nach
-     * einem zweiten, ausdruecklichen Antippen.
+     * DIESER KNOPF HAT DIE RUNDE FRUEHER SOFORT BEENDET. Wer nur kurz
+     * aufhoeren wollte, verlor damit alles - genau die Beschwerde, die zu
+     * dieser Aenderung gefuehrt hat. Solo wurde das zuerst behoben, im Koop
+     * blieb der alte Weg stehen und warf einen weiterhin ohne Rueckfrage
+     * hinaus. Jetzt oeffnet er in BEIDEN Faellen erst einen
+     * Zwischenbildschirm.
      *
-     * Im Koop geht Anhalten nicht (der Host rechnet fuer alle weiter), deshalb
-     * bleibt es dort beim direkten Weg ins Menue.
+     * Die Beschriftung sagt, was wirklich passiert: Solo wird angehalten
+     * ("Pause"), im Koop laeuft die Runde weiter, weil der Host fuer alle
+     * rechnet - dort steht deshalb "Menü" und nicht "Pause". Ein Knopf, der
+     * Pause verspricht und keine macht, waere schlimmer als der alte Zustand.
      */
     this.menuButton = new Button(
       this,
       rightEdge - 146,
       topEdge + 88,
       this.canPause ? "Pause" : "Menü",
-      () => {
-        if (this.canPause) {
-          this.onPause();
-        } else {
-          this.scene.stop("Game");
-          this.scene.start("Menu");
-        }
-      },
+      () => this.onPause(),
       { width: 80, height: 30, fontSize: 13, color: COLORS.hudDim },
     );
     this.menuButton.setDepth(DEPTH.hud);
@@ -251,7 +249,9 @@ export class HudScene extends Phaser.Scene {
     const inBreak = this.model.phase === "break" || this.model.phase === "preparing";
     this.skillPanel.update(this.model.skillPoints, this.model.skillLevels, inBreak);
 
-    const showHint = this.model.skillPoints > 0 && !inBreak;
+    // Nicht durch den Zwischenbildschirm blinken lassen - im Koop laeuft das
+    // HUD dahinter weiter und wuerde die Zeile jedes Bild neu einblenden.
+    const showHint = this.model.skillPoints > 0 && !inBreak && !this.overlayOpen;
     this.skillHint.setVisible(showHint);
     if (showHint) {
       this.skillHint.setText(
@@ -274,14 +274,26 @@ export class HudScene extends Phaser.Scene {
    * Joystick darunter erwischt.
    */
   private createPauseScreen(): void {
+    /*
+     * Im Koop laeuft die Runde dahinter weiter - dann darf der Hintergrund
+     * nicht so dicht sein, dass man nichts mehr davon sieht. Solo steht das
+     * Bild ohnehin still, dort stoert die dunklere Flaeche niemanden.
+     */
     this.pauseBackdrop = this.add
-      .rectangle(0, 0, VIEWPORT.width * 2, VIEWPORT.height * 2, 0x070b12, 0.82)
+      .rectangle(
+        0,
+        0,
+        VIEWPORT.width * 2,
+        VIEWPORT.height * 2,
+        0x070b12,
+        this.canPause ? 0.82 : 0.58,
+      )
       .setOrigin(0)
       .setDepth(DEPTH.hud + 10)
       .setInteractive();
 
     this.pauseTitle = this.add
-      .text(VIEWPORT.width / 2, VIEWPORT.height / 2 - 96, "Pause", {
+      .text(VIEWPORT.width / 2, VIEWPORT.height / 2 - 96, this.canPause ? "Pause" : "Menü", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "40px",
         color: "#dce8f7",
@@ -291,11 +303,21 @@ export class HudScene extends Phaser.Scene {
       .setDepth(DEPTH.hud + 11);
 
     this.pauseHint = this.add
-      .text(VIEWPORT.width / 2, VIEWPORT.height / 2 - 52, "Die Runde wartet auf dich", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "15px",
-        color: "#8ea6c4",
-      })
+      .text(
+        VIEWPORT.width / 2,
+        VIEWPORT.height / 2 - 52,
+        // Die Wahrheit, nicht die Wunschvorstellung: Im Koop wartet niemand.
+        this.canPause
+          ? "Die Runde wartet auf dich"
+          : "Achtung: Die Runde läuft weiter – im Koop rechnet der Host für alle.",
+        {
+          fontFamily: "system-ui, sans-serif",
+          fontSize: "15px",
+          color: this.canPause ? "#8ea6c4" : "#ffd166",
+          align: "center",
+          wordWrap: { width: VIEWPORT.width - 140 },
+        },
+      )
       .setOrigin(0.5)
       .setDepth(DEPTH.hud + 11);
 
@@ -303,7 +325,7 @@ export class HudScene extends Phaser.Scene {
       this,
       VIEWPORT.width / 2,
       VIEWPORT.height / 2 + 6,
-      "Weiter",
+      this.canPause ? "Weiter" : "Weiter spielen",
       () => this.onResume(),
       { width: 240, height: 52, fontSize: 21 },
     );
@@ -313,7 +335,7 @@ export class HudScene extends Phaser.Scene {
       this,
       VIEWPORT.width / 2,
       VIEWPORT.height / 2 + 74,
-      "Runde beenden",
+      this.canPause ? "Runde beenden" : "Runde verlassen",
       () => {
         this.scene.stop("Game");
         this.onQuit();
@@ -322,11 +344,18 @@ export class HudScene extends Phaser.Scene {
     );
     this.quitButton.setDepth(DEPTH.hud + 11);
 
-    this.setPauseVisible(false);
+    this.setOverlayVisible(false);
   }
 
-  /** Blendet das Pausenbild ein oder aus. Gerufen von der Spielszene. */
-  setPauseVisible(visible: boolean): void {
+  /**
+   * Blendet den Zwischenbildschirm ein oder aus. Gerufen von der Spielszene.
+   *
+   * Ob dahinter wirklich angehalten wird, entscheidet die Spielszene - hier
+   * wird nur angezeigt. Das HUD friert nur dann mit ein, wenn die Welt
+   * tatsaechlich stillsteht (solo); im Koop laeuft die Runde weiter, und die
+   * Anzeigen muessen weiterlaufen.
+   */
+  setOverlayVisible(visible: boolean): void {
     if (!this.pauseBackdrop) {
       return;
     }
@@ -345,7 +374,8 @@ export class HudScene extends Phaser.Scene {
      */
     this.announceText.setVisible(!visible);
     this.skillHint.setVisible(false);
-    this.paused = visible;
+    this.overlayOpen = visible;
+    this.paused = visible && this.canPause;
   }
 
   /**

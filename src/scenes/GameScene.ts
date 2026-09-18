@@ -22,6 +22,7 @@ import { setReloadSafe } from "../platform/update";
 import { hideValuesOverlay, updateValuesOverlay } from "../platform/valuesOverlay";
 import { loadHighscore } from "../storage/highscore";
 import { nearestEnemy } from "../systems/targeting";
+import { emptyInput } from "../systems/types";
 import type { CharacterId, InputState, PlayerState, Vec2 } from "../systems/types";
 import { createHudModel } from "../ui/HudModel";
 import type { HudModel } from "../ui/HudModel";
@@ -47,12 +48,21 @@ export class GameScene extends Phaser.Scene {
   private finished = false;
 
   /**
-   * Angehalten? Dann bekommt die Simulation keine Zeit mehr zugeteilt.
+   * Zwei verschiedene Dinge, die man leicht verwechselt:
    *
-   * Nur solo moeglich (siehe `GameSession.canPause`). Gezeichnet wird weiter -
-   * ein eingefrorenes Bild ist Teil der Pause, ein schwarzer Bildschirm waere
-   * es nicht.
+   *   overlayOpen  Der Zwischenbildschirm ist zu sehen. Das geht IMMER, auch
+   *                im Koop - es ist nur eine Anzeige.
+   *   paused       Die Simulation bekommt keine Zeit mehr. Das geht NUR solo.
+   *                Im Koop rechnet der Host die Runde fuer alle; ein Geraet,
+   *                das fuer sich anhaelt, muesste beim Weitermachen entweder
+   *                minutenlang nachrechnen oder springen.
+   *
+   * Frueher gab es nur `paused`, und weil das im Koop nicht geht, gab es dort
+   * auch keinen Zwischenbildschirm - der Knopf warf einen ohne Rueckfrage aus
+   * der Runde. Genau das war die Beschwerde. Die Rueckfrage braucht aber gar
+   * kein Anhalten, sie braucht nur eine Anzeige.
    */
+  private overlayOpen = false;
   private paused = false;
 
   constructor() {
@@ -142,7 +152,19 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const input = this.hud.inputManager.getState();
+    /*
+     * Zwischenbildschirm offen, aber die Runde laeuft weiter (Koop).
+     *
+     * Dann wird eine LEERE Eingabe geschickt statt der echten. Der dunkle
+     * Hintergrund liegt zwar ueber den Knoepfen, aber die Touch-Steuerung
+     * hoert auf die ganze Szene - ein Daumen, der auf "Weiter spielen" zielt,
+     * wuerde sonst nebenbei den Joystick ziehen oder einen Schuss ausloesen.
+     * Stehenbleiben ist das ehrlichere Verhalten: Man spielt gerade nicht.
+     */
+    const input = this.overlayOpen ? emptyInput() : this.hud.inputManager.getState();
+    if (this.overlayOpen) {
+      this.hud.inputManager.clearOneShots();
+    }
 
     // Beim Super laeuft die Zeit kurz langsamer. Die Simulation merkt davon
     // nichts - sie bekommt einfach weniger Zeit zugeteilt.
@@ -171,22 +193,32 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Haelt die Runde an oder laesst sie weiterlaufen.
+   * Oeffnet oder schliesst den Zwischenbildschirm.
    *
-   * Der Ton geht mit: Musik in der Pause weiterlaufen zu lassen, waehrend das
-   * Bild steht, klingt nach Absturz.
+   * Solo wird dabei wirklich angehalten, im Koop nur angezeigt. Diese eine
+   * Unterscheidung steht absichtlich NUR hier - die HUD-Szene fragt nicht nach
+   * dem Modus, sie zeigt nur an, was ihr gesagt wird.
    */
-  setPaused(paused: boolean): void {
-    if (this.paused === paused || this.finished || !this.session.canPause) {
+  setPaused(open: boolean): void {
+    if (this.overlayOpen === open || this.finished) {
       return;
     }
-    this.paused = paused;
-    this.hud?.setPauseVisible(paused);
+    this.overlayOpen = open;
 
-    if (paused) {
-      audio.stopMusic();
-    } else {
-      audio.startMusic();
+    // Anhalten geht nur solo. Im Koop bleibt `paused` false, und die Runde
+    // laeuft hinter dem Bildschirm weiter.
+    this.paused = open && this.session.canPause;
+
+    this.hud?.setOverlayVisible(open);
+
+    // Der Ton geht nur mit, wenn wirklich angehalten wird. Im Koop laeuft die
+    // Runde weiter - stille Musik waere dort ein falsches Signal.
+    if (this.session.canPause) {
+      if (open) {
+        audio.stopMusic();
+      } else {
+        audio.startMusic();
+      }
     }
   }
 
