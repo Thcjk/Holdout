@@ -237,7 +237,7 @@ Vorbild von Wild Rift:
 | Knopf | Lage | Verhalten |
 | ----- | ---- | --------- |
 | **FEUER** | innen in der Ecke, der grösste | Antippen feuert **sofort** auf den nächsten Gegner in Reichweite. Halten feuert weiter, so schnell wie Munition und Schusstakt es zulassen. |
-| **Fähigkeit** (Name der Fähigkeit) | links davon | Halten zeigt den Zielhinweis, Ziehen richtet aus, Loslassen löst aus. Kurzes Antippen ohne Ziehen löst in Blickrichtung aus. |
+| **Fähigkeit** (Name der Fähigkeit) | links davon | Halten zeigt den Zielhinweis, Ziehen richtet aus, Loslassen löst aus. Kurzes Antippen ohne Ziehen löst in Blickrichtung aus. Beim Tank gibt es nichts zu zielen (`aimStyle: "self"`) – dort löst schon das Antippen aus. |
 | **SUPER** | darüber, grösser als die Fähigkeit | Gleiches Prinzip. |
 
 Alle drei sind ausgegraut und zeigen einen **Abklingring**, solange sie nicht
@@ -262,9 +262,12 @@ Fähigkeit und Super.
 jeder Radius in `drawAbilityAim` kommt aus derselben Stelle, mit der die
 Simulation rechnet (`ABILITIES` beziehungsweise `SUPERS`). Eine Anzeige, die
 eine andere Reichweite zeigt als die, die wirkt, wäre schlimmer als gar keine:
-Man würde ihr glauben und danebenzielen. Der Kreis der Blendgranate ist ihr
-echter Explosionsradius, die Strecke der Schildwand liegt genau so, wie die
-Wand nachher steht.
+Man würde ihr glauben und danebenzielen. Der Kreis der Splittergranate ist ihr
+echter Schadensradius – wer darin steht, bekommt ab, wer daneben steht, nicht.
+
+Wo es **nichts** zu zielen gibt, wird auch nichts angezeigt: Die Heilung des
+Tanks (`aimStyle: "self"`) wirkt auf ihn selbst, und ein Zielstrahl wäre dort
+eine Linie, der man folgt, obwohl sie nichts bedeutet.
 
 ### Die zweite aktive Fähigkeit
 
@@ -274,37 +277,117 @@ und ist der grosse Moment; diese hier soll laufend eingesetzt werden.
 
 | Charakter | Fähigkeit | Wirkung | Abklingzeit |
 | --------- | --------- | ------- | ----------- |
-| Scout | **Blendgranate** | Wurf bis 400 px, Explosionsradius 150 px. Getroffene Gegner greifen 1,5 s nicht an – weder im Nahkampf noch mit Schüssen. Die Granate selbst macht keinen Schaden. | 8 s |
-| Tank | **Schildwand** | 120 px breite Barriere, 90 px vor dem Spieler, quer zur Blickrichtung, 4 s lang. Blockt **gegnerische** Schüsse, lässt eigene durch. | 10 s |
+| Scout | **Splittergranate** | Wurf bis 400 px, Explosionsradius 140 px, 700 Schaden an jedem Gegner darin. Das Wurfgeschoss selbst macht keinen Schaden – der ganze Schaden steckt in der Explosion. | 7 s |
+| Tank | **Zweite Luft** | Heilt sofort 1000 Lebenspunkte (von 4200). Kein Zielen. | 12 s |
 | Sniper | **Lähmschuss** | Langsames Geschoss (300 px/s), 200 Schaden statt 900, wurzelt den Getroffenen 1,5 s fest. | 9 s |
 
-Drei Entscheidungen dahinter, die im Code stehen:
+#### Die Lehre aus dem zweiten Spieltest: Wirkung muss man **sehen**
 
-- **Die Schildwand ist eine Strecke, kein Rechteck.** Sie steht quer zur
-  Blickrichtung, also schräg im Raum. Ein achsenparalleles Rechteck kann das
-  nicht abbilden, ein gedrehtes wäre deutlich mehr Rechnerei. Der Schnitt
-  zweier Strecken ist exakt und braucht kein Abtasten – auch ein schnelles
-  Projektil kann nicht hindurchspringen.
-- **Sie blockt nur gegnerische Schüsse.** Würde sie auch die eigenen halten,
-  wäre sie keine Deckung, sondern ein Käfig.
-- **Die Blendgranate läuft über den normalen Projektilweg**, nicht als
-  Sonderfall. So gelten dieselbe Flugbahnprüfung und dieselben Wände wie für
-  alles andere, und ein Wurf hinter eine Deckung ist unmöglich. Sie wirkt auch
-  dort, wo sie auf eine Wand trifft oder ihre Wurfweite aufbraucht – sonst wäre
-  ein Wurf ins Leere wirkungslos, obwohl Gegner danebenstehen.
+Scout und Tank hatten vorher andere Fähigkeiten, und beide wurden mit „macht
+keinen Sinn" bzw. „hat keine Wirkung" zurückgemeldet. Das Aufschlussreiche
+daran: **Beide wirkten messbar.** Der Fehler lag nicht in der Rechnung.
 
-**Blendung und Wurzelung sind verschieden**, und das ist Absicht: Geblendet
-heisst „läuft weiter, greift nicht an", gewurzelt heisst „steht fest, greift
-weiter an". Betäubt (Tank-Super) heisst „tut gar nichts". In der Darstellung
-sind sie an der Farbe zu unterscheiden – geblendet hell, gewurzelt kalt blau.
+- **Scout hatte eine Blendgranate.** Getroffene Gegner griffen 1,5 s nicht an.
+  Nachgemessen in einer Runde mit fünf Läufern: Der erlittene Schaden
+  **halbierte sich** (2400 → 1200), und alle fünf waren geblendet. Nur *sehen*
+  konnte man davon nichts – die Gegner liefen unverändert weiter, nichts starb,
+  nichts flog. Eine Wirkung, die man nicht sieht, ist im Gefecht keine: Man
+  hält die Fähigkeit für kaputt und benutzt sie nicht mehr.
+- **Tank hatte eine Schildwand**, die gegnerische Schüsse blockte. Sie passte
+  aus zwei Gründen nicht zu ihm: Er kämpft auf 250 px mitten im Getümmel, und
+  dort kommt der Schaden von Läufern, die ihn *berühren* – genau davor schützte
+  die Wand nicht. Und sie verlangte Stellungsspiel (hinstellen, dahinter
+  bleiben), während der Tank der Charakter ist, der das gerade *nicht* nötig
+  haben soll.
+
+Daraus die Leitregel, die jetzt oben in `systems/abilities.ts` steht:
+**Eine Fähigkeit muss binnen einer Sekunde sichtbar sein.** Die Granate macht
+jetzt Schaden – Gegner sterben. Der Tank heilt – der Lebensbalken springt hoch.
+
+**Warum der Tank keine Schockwelle bekam**, obwohl das naheliegt: Sein Super
+(Bodenstampfer) macht bereits Flächenschaden **mit** Rückstoss. Eine zweite
+Fähigkeit derselben Art wäre nur eine schwächere Kopie davon gewesen. Heilung
+ist im ganzen Spiel sonst nirgends zu haben – ausser über die Wiederbelebung.
+
+#### Drei Entscheidungen, die im Code stehen
+
+- **Die Explosion geht über `damageEnemy`**, nicht über `enemy.health -= x`.
+  An dieser Funktion hängen Sniper-Markierung, Superladung, Punkte und
+  Todesmeldung. Wer den Schaden von Hand abzieht, bekommt Gegner mit null Leben,
+  die weiterlaufen.
+- **Erst sammeln, dann Schaden machen.** `damageEnemy` kann töten, und ein
+  toter Gegner wird sofort aus `state.enemies` entfernt. Würde `detonate`
+  direkt über diese Liste laufen und dabei töten, rückten die folgenden
+  Einträge eine Stelle vor – **jeder zweite Gegner im Radius bliebe
+  unversehrt.** Das hätte sich als „die Granate trifft manchmal nicht alle"
+  gezeigt und wäre schwer zu finden gewesen; `tests/systems/abilities.test.ts`
+  prüft deshalb ausdrücklich drei Gegner auf einmal.
+- **Die Granate läuft über den normalen Projektilweg**, nicht als Sonderfall.
+  So gelten dieselbe Flugbahnprüfung und dieselben Wände wie für alles andere,
+  und ein Wurf hinter eine Deckung ist unmöglich. Sie wirkt auch dort, wo sie
+  auf eine Wand trifft oder ihre Wurfweite aufbraucht – sonst wäre ein Wurf ins
+  Leere wirkungslos, obwohl Gegner danebenstehen.
+- **Der Schaden fällt im ganzen Radius gleich hoch aus**, ohne Abschwächung
+  nach aussen. Der Zielkreis am Knopf zeigt genau diesen Radius; eine
+  Abschwächung hiesse, dass der Kreis etwas anderes verspricht, als er hält.
+- **Gemeldet wird die echte Heilung, nicht der Tabellenwert.** Bei fast vollem
+  Leben schwebt `+100` über der Figur, nicht `+1000`.
+
+**Gewurzelt und betäubt sind weiterhin verschieden**, und das ist Absicht:
+Gewurzelt heisst „steht fest, greift weiter an", betäubt (Tank-Super) heisst
+„tut gar nichts". In der Darstellung ist gewurzelt an kaltem Blau zu erkennen.
+Die **Blendung ist samt Maschinerie entfernt** – mit der Blendgranate hatte sie
+ihren einzigen Verwender verloren, und toter Code veraltet still.
 
 Im Netzwerkprotokoll ist die Fähigkeit ein eigenes Feld (`ability` plus
 `abilityAim`), genau wie der Super: einmaliger Wunsch, der zwischen zwei
-Paketen nicht verlorengehen darf. Eigene Zielrichtung deshalb, weil man die
-Fähigkeit oft woandershin zielt als den Schuss.
+Paketen nicht verlorengehen darf.
 
 `tests/systems/abilities.test.ts` prüft die Wirkung, nicht die Darstellung –
-darunter, dass die Schildwand gegnerische Schüsse hält **und** eigene durchlässt.
+darunter, dass die Granate schwache Gegner wirklich **tötet** (aus der Liste
+entfernt, mit Punkten) statt sie auf null Leben zu setzen.
+
+### Pause: anhalten und weiterspielen
+
+**Der Fehler, den das behebt:** Oben rechts sass ein Knopf „Menü", der die
+Runde **sofort beendete**. Wer nur kurz aufhören wollte, verlor damit alles und
+musste von vorn anfangen. Genau das kam als „es soll möglich sein Pause zu
+machen und danach weiter zu spielen" zurück.
+
+Der Knopf heisst jetzt **Pause** und hält an; aufgeben kann man danach immer
+noch, aber erst nach einem zweiten, ausdrücklichen Antippen auf „Runde
+beenden".
+
+- **Angehalten heisst: die Simulation bekommt keine Zeit mehr zugeteilt**
+  (`GameScene.paused`). Gezeichnet wird weiter – ein eingefrorenes Bild gehört
+  zur Pause, ein schwarzer Bildschirm nicht. Nachgemessen im Emulator: Zwei
+  Bildschirmfotos im Abstand von drei Sekunden sind **Pixel für Pixel
+  identisch**; ohne Pause sind sie es nicht.
+- **Auch die App im Hintergrund hält an.** Ein Anruf, eine Nachricht, kurz
+  etwas nachschauen – vorher lief die Runde dabei weiter, und man kam mit
+  deutlich weniger Leben zurück oder gar nicht. Jetzt hört `visibilitychange`
+  mit; zurück kommt man von Hand über „Weiter".
+- **Nur solo** (`GameSession.canPause`). Im Koop rechnet der Host für alle
+  weiter; ein Gerät, das für sich anhält, müsste beim Weitermachen entweder
+  minutenlang nachrechnen oder springen. Dort bleibt es beim direkten Weg ins
+  Menü. Die Spielszene fragt dafür die Sitzung, statt selbst nach dem Modus zu
+  schauen – sie soll weiterhin nicht wissen, ob solo, als Host oder als Client
+  gespielt wird.
+- **Einmalige Wünsche werden in der Pause gelöscht.** Sonst läge ein Schuss aus
+  dem Moment des Anhaltens bereit und ginge beim Weitermachen sofort los, ohne
+  dass jemand den Knopf gedrückt hat.
+- **Der Ton geht mit.** Musik in der Pause weiterlaufen zu lassen, während das
+  Bild steht, klingt nach Absturz.
+- **Das HUD ruht ebenfalls.** Nicht nur gespart: Ohne das würde die
+  Skill-Hinweiszeile jedes Bild wieder eingeblendet, die das Pausenbild gerade
+  ausgeblendet hat – sie flackerte mitten durch die Pausenschrift.
+
+**Stolperstein beim Bauen, der beinahe durchgerutscht wäre:** Das Pausenbild
+wird einmal im `create()` der HUD-Szene gebaut und danach nur ein- und
+ausgeblendet. Der Aufruf stand zuerst zu früh – vor der Skill-Hinweiszeile, die
+er ausblenden will. Ergebnis war ein Abbruch mit „Cannot read properties of
+undefined", und zwar *nur im echten Spiel*, nicht in den Tests. Gefunden hat
+ihn erst der Durchlauf im Browser-Emulator.
 
 ### Bewegung: Kennlinie statt Schwelle, Achsen getrennt
 
@@ -565,16 +648,23 @@ mittelmässig, muss aber zwei Dinge können, sonst misst er Unsinn:
    obwohl Gegner leben, steht eine Wand dazwischen – dann geht er stur nach
    vorne, statt Abstand zu halten.
 
-### Stand nach der Messung vom 2026-09-17
+### Stand nach der Messung vom 2026-09-18
 
 | Charakter | Wellen (Bot) |
 | --------- | ------------ |
-| Scout     | 10,8         |
-| Tank      | 10,0         |
-| Sniper    | 9,0          |
+| Scout     | 10,2         |
+| Tank      | 9,8          |
+| Sniper    | 7,2          |
 
-Vorher: Scout 5,0 · Tank 10,4 · Sniper 9,0. Der Scout starb in **allen fünf**
-Durchläufen in Welle 5.
+Vor der Balancing-Runde vom 2026-09-17: Scout 5,0 · Tank 10,4 · Sniper 9,0.
+Der Scout starb damals in **allen fünf** Durchläufen in Welle 5.
+
+**Die Zahlen sind seit der zweiten aktiven Fähigkeit noch deutlicher eine
+Untergrenze:** Der Bot benutzt sie nicht. Er wirft keine Granate und heilt sich
+nicht – die Messung ist also die eines Spielers, der zwei Knöpfe ignoriert.
+Dass sie sich beim Umbau der Fähigkeiten nicht verändert hat, ist genau deshalb
+kein Widerspruch, sondern die Bestätigung, dass am Grundgerüst nichts verrutscht
+ist.
 
 ### Drei Fehler, die die Messung aufgedeckt hat
 
@@ -689,9 +779,10 @@ Zwei Konsequenzen, beide im Code:
 - **Version 1.1.0 ist ein kaputter Stand** (falscher Basispfad, weisse bzw.
   blaue Seite). Heruntergeladen hat sie niemand (0 Downloads). Ab 1.1.1 ist es
   behoben; ob das alte Release gelöscht wird, entscheidet der Nutzer.
-- **Die Balance ist am Bot gemessen, nicht am Menschen.** Scout 10,8 · Tank
-  10,0 · Sniper 9,0 Wellen. Der Bot nutzt keine Deckung und keine Büsche – das
-  sind Untergrenzen. Ob 8–15 Wellen stimmen, zeigt erst eigenes Spielen.
+- **Die Balance ist am Bot gemessen, nicht am Menschen.** Scout 10,2 · Tank
+  9,8 · Sniper 7,2 Wellen. Der Bot nutzt keine Deckung, keine Büsche und
+  **keine der beiden Fähigkeiten** – das sind Untergrenzen. Ob 8–15 Wellen
+  stimmen, zeigt erst eigenes Spielen.
 - **Echtes WebRTC ist weiterhin ungetestet – der Server ist aus dieser
   Entwicklungsumgebung gesperrt** (der Proxy antwortet mit 403 auf
   `0.peerjs.com:443`). Geprüft werden konnte deshalb nur der Ausfallweg, und

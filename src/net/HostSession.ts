@@ -18,6 +18,8 @@ const STATE_INTERVAL_MS = 1000 / STATE_RATE;
 
 export class HostSession implements GameSession {
   readonly selfId: string;
+  /** Der Host rechnet fuer alle mit - hielte er an, stuende die Runde fuer alle. */
+  readonly canPause = false;
   connectionLost: string | null = null;
 
   private readonly simulation: Simulation;

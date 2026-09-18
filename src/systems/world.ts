@@ -90,13 +90,11 @@ export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldStat
     pendingSpawns: [],
     walls: createArenaWalls(),
     bushes: createArenaBushes(),
-    barriers: [],
     bounds: { ...ARENA_BOUNDS },
     events: [],
     rngState: seed | 0,
     nextEnemyId: 1,
     nextProjectileId: 1,
-    nextBarrierId: 1,
   };
 }
 

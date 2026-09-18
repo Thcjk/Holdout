@@ -148,39 +148,67 @@ export const CHARACTER_ORDER: CharacterId[] = ["scout", "tank", "sniper"];
  */
 export const ABILITIES = {
   scout: {
-    name: "Blendgranate",
+    /*
+     * Frueher "Blendgranate": Sie blendete Gegner 1,5 s lang, die liefen dabei
+     * aber unveraendert weiter und starben nicht. Gemessen half sie durchaus -
+     * der erlittene Schaden halbierte sich (2400 -> 1200) -, nur SEHEN konnte
+     * man davon nichts. Eine Wirkung, die man nicht sieht, ist im Gefecht
+     * keine: Man haelt die Faehigkeit fuer kaputt und benutzt sie nicht mehr.
+     * Jetzt macht derselbe Wurf Schaden, und Schaden sieht man sofort.
+     */
+    name: "Splittergranate",
     /** Kurzform fuer den Knopf - auf 40 Pixel Radius passt kein ganzes Wort. */
-    short: "BLEND",
-    description: "Wurf: blendet Gegner im Umkreis",
+    short: "GRANATE",
+    description: "Wurf: Flächenschaden im Umkreis",
     aimStyle: "circle",
-    cooldown: 8,
+    cooldown: 7,
     /** Wurfweite in Pixeln. Etwas kuerzer als die Schussreichweite (450). */
     range: 400,
     /** Fluggeschwindigkeit des Wurfgeschosses. */
     speed: 700,
-    /** Explosionsradius - hier wird geblendet. */
-    blastRadius: 150,
-    /** So lange greifen getroffene Gegner nicht an. */
-    blindDuration: 1.5,
+    /** Explosionsradius - so weit reicht der Schaden. */
+    blastRadius: 140,
+    /**
+     * Schaden an jedem Gegner im Radius.
+     *
+     * Zum Vergleich: Ein normaler Scout-Schuss macht 3 x 220 = 660, wenn alle
+     * drei Kugeln sitzen. Die Granate liegt knapp darueber - ihr Wert liegt
+     * aber darin, dass sie eine ganze Gruppe auf einmal trifft.
+     */
+    damage: 700,
   },
   tank: {
-    name: "Schildwand",
-    short: "SCHILD",
-    description: "Barriere, die gegnerische Schuesse blockt",
-    aimStyle: "line",
-    cooldown: 10,
-    /**
-     * Abstand vor dem Spieler, an dem die Wand entsteht.
+    /*
+     * Frueher "Schildwand": eine Barriere, die gegnerische SCHUESSE blockte.
+     * Zwei Gruende, warum sie nicht passte. Erstens kaempft der Tank auf 250
+     * Pixel mitten im Getuemmel, und dort kommt der Schaden von Laeufern, die
+     * einen beruehren - genau davor schuetzte die Wand nicht. Zweitens musste
+     * man sie im Laufen vor sich hinstellen und dann dahinter bleiben; das ist
+     * Stellungsspiel, und der Tank ist der Charakter, der genau das NICHT
+     * noetig haben soll.
      *
-     * Nicht direkt am Koerper: Sonst steht man selbst in der eigenen Wand und
-     * kann nicht mehr an ihr vorbei schiessen. 90 Pixel sind gut vier
-     * Spielerradien.
+     * Jetzt heilt er sich. Das passt zu seiner Rolle ("haelt aus"), ist die
+     * einzige Heilung im Spiel ausser der Wiederbelebung - und es ist sofort zu
+     * sehen: Der Lebensbalken springt hoch.
+     *
+     * Warum keine Schockwelle: Sein Super (Bodenstampfer) macht bereits
+     * Flaechenschaden MIT Rueckstoss. Eine zweite Faehigkeit derselben Art
+     * waere nur eine schwaechere Kopie davon.
      */
-    range: 90,
-    /** Breite der Barriere, quer zur Blickrichtung. */
-    width: 120,
-    /** Standzeit in Sekunden. */
-    duration: 4,
+    name: "Zweite Luft",
+    short: "HEILEN",
+    description: "Heilt sofort einen Teil der Lebenspunkte",
+    /** Wirkt auf einen selbst - es gibt nichts zu zielen. */
+    aimStyle: "self",
+    cooldown: 12,
+    /**
+     * Sofort geheilte Lebenspunkte.
+     *
+     * Der Tank hat 4200 Leben; 1000 sind knapp ein Viertel davon. Genug, dass
+     * man es deutlich sieht und eine brenzlige Lage ueberlebt - zu wenig, um
+     * sich damit aus jedem Fehler herauszuheilen.
+     */
+    heal: 1000,
   },
   sniper: {
     name: "Lähmschuss",

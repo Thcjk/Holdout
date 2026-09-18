@@ -8,6 +8,7 @@
  */
 
 import Phaser from "phaser";
+import { audio } from "../audio/AudioEngine";
 import { playEventSounds } from "../audio/eventSounds";
 import { ABILITIES, CHARACTERS, PLAYER, SUPERS } from "../config/balance";
 import { ARENA, COLORS, DEPTH } from "../config/constants";
@@ -45,6 +46,15 @@ export class GameScene extends Phaser.Scene {
   private character: CharacterId = "scout";
   private finished = false;
 
+  /**
+   * Angehalten? Dann bekommt die Simulation keine Zeit mehr zugeteilt.
+   *
+   * Nur solo moeglich (siehe `GameSession.canPause`). Gezeichnet wird weiter -
+   * ein eingefrorenes Bild ist Teil der Pause, ein schwarzer Bildschirm waere
+   * es nicht.
+   */
+  private paused = false;
+
   constructor() {
     super("Game");
   }
@@ -66,8 +76,36 @@ export class GameScene extends Phaser.Scene {
     this.cameraController = new CameraController(this, ARENA.width, ARENA.height);
     this.aimLine = this.add.graphics().setDepth(DEPTH.projectiles);
 
-    this.scene.launch("Hud", { model: this.hudModel });
+    this.scene.launch("Hud", {
+      model: this.hudModel,
+      canPause: this.session.canPause,
+      onPause: () => this.setPaused(true),
+      onResume: () => this.setPaused(false),
+      onQuit: () => {
+        this.scene.stop("Hud");
+        this.scene.start("Menu");
+      },
+    });
     this.hud = this.scene.get("Hud") as HudScene;
+
+    /*
+     * Von selbst anhalten, wenn die App in den Hintergrund geht.
+     *
+     * DER FALL, UM DEN ES GEHT: Ein Anruf, eine Nachricht, kurz etwas
+     * nachschauen. Vorher lief die Runde dabei weiter, und man kam mit deutlich
+     * weniger Leben zurueck - oder gar nicht. Die Simulation verwirft nach
+     * einem langen Haenger zwar die aufgelaufene Zeit (`MAX_TICKS_PER_FRAME`),
+     * aber die Gegner haben in den Sekunden davor weiter zugeschlagen.
+     *
+     * Im Koop wird nicht angehalten: Dort rechnet der Host weiter, und ein
+     * Client, der fuer sich stehenbleibt, geriete nur aus dem Takt.
+     */
+    if (this.session.canPause) {
+      document.addEventListener("visibilitychange", this.onVisibilityChange);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        document.removeEventListener("visibilitychange", this.onVisibilityChange);
+      });
+    }
 
     // Ab jetzt laeuft eine Runde: Eine neue Version darf erst im Menue greifen,
     // sonst reisst ein Neustart die Runde mitten im Gefecht ab.
@@ -90,6 +128,17 @@ export class GameScene extends Phaser.Scene {
     // bereit ist, gibt es noch keine Eingabe - ein Bild ohne Steuerung faellt
     // niemandem auf, ein Absturz schon.
     if (!player || !this.hud?.ready) {
+      return;
+    }
+
+    if (this.paused) {
+      /*
+       * Angehalten: Die Simulation bekommt keine Zeit. Einmalige Wuensche
+       * werden trotzdem geloescht - sonst laege ein Schuss oder eine Faehigkeit
+       * aus dem Moment des Anhaltens bereit und ginge beim Weitermachen sofort
+       * los, ohne dass jemand den Knopf gedrueckt haette.
+       */
+      this.hud.inputManager.clearOneShots();
       return;
     }
 
@@ -120,6 +169,33 @@ export class GameScene extends Phaser.Scene {
       })),
     );
   }
+
+  /**
+   * Haelt die Runde an oder laesst sie weiterlaufen.
+   *
+   * Der Ton geht mit: Musik in der Pause weiterlaufen zu lassen, waehrend das
+   * Bild steht, klingt nach Absturz.
+   */
+  setPaused(paused: boolean): void {
+    if (this.paused === paused || this.finished || !this.session.canPause) {
+      return;
+    }
+    this.paused = paused;
+    this.hud?.setPauseVisible(paused);
+
+    if (paused) {
+      audio.stopMusic();
+    } else {
+      audio.startMusic();
+    }
+  }
+
+  /** Beim Verlassen der App von selbst anhalten. Zurueck kommt man von Hand. */
+  private readonly onVisibilityChange = (): void => {
+    if (document.visibilityState === "hidden") {
+      this.setPaused(true);
+    }
+  };
 
   /** Gesamter ausgeteilter Schaden und Zeit - fuer die Schaden/s-Anzeige. */
   private damageDealt = 0;
@@ -265,6 +341,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     const ability = ABILITIES[player.character];
+
+    // Die Heilung des Tanks wirkt auf ihn selbst - es gibt keine Richtung, in
+    // die man sie schicken koennte. Ein Zielstrahl waere hier eine Linie, der
+    // man folgen wuerde, obwohl sie nichts bedeutet.
+    if (ability.aimStyle === "self") {
+      return;
+    }
+
     const reach = ability.range * (ability.aimStyle === "circle" ? strength : 1);
     const endX = position.x + direction.x * reach;
     const endY = position.y + direction.y * reach;
@@ -273,27 +357,11 @@ export class GameScene extends Phaser.Scene {
     this.aimLine.lineBetween(position.x, position.y, endX, endY);
 
     if (player.character === "scout") {
-      // Blendgranate: der Kreis ist der echte Explosionsradius.
+      // Splittergranate: der Kreis ist der echte Schadensradius.
       this.aimLine.lineStyle(2, COLORS.superReady, 0.9);
       this.aimLine.strokeCircle(endX, endY, ABILITIES.scout.blastRadius);
       this.aimLine.fillStyle(COLORS.superReady, 0.12);
       this.aimLine.fillCircle(endX, endY, ABILITIES.scout.blastRadius);
-      return;
-    }
-
-    if (player.character === "tank") {
-      // Schildwand: die Strecke ist genau so lang und liegt genau so, wie die
-      // Wand nachher steht - quer zur Blickrichtung.
-      const half = ABILITIES.tank.width / 2;
-      const alongX = -direction.y;
-      const alongY = direction.x;
-      this.aimLine.lineStyle(6, COLORS.superReady, 0.85);
-      this.aimLine.lineBetween(
-        endX - alongX * half,
-        endY - alongY * half,
-        endX + alongX * half,
-        endY + alongY * half,
-      );
       return;
     }
 

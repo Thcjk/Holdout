@@ -121,10 +121,89 @@ export class Juice {
           this.hitstop(80);
           this.shake(0.008, 200);
           break;
+        case "blast":
+          this.blastRing(event.x, event.y, event.radius);
+          this.deathParticles.emitParticleAt(event.x, event.y, 16);
+          this.shake(0.006, 160);
+          break;
+        case "healed":
+          // Nur melden, wenn wirklich etwas angekommen ist: Bei vollem Leben
+          // waere eine gruene Null nur eine Luege mit Animation.
+          if (event.amount > 0) {
+            this.healPulse(event.x, event.y, event.amount);
+          }
+          break;
         default:
           break;
       }
     }
+  }
+
+  /**
+   * Der Ring der Splittergranate.
+   *
+   * Er wird mit GENAU dem Radius gezeichnet, den die Simulation gerade
+   * abgerechnet hat - der Wert kommt im Ereignis mit. So sieht man hinterher,
+   * wie weit die Explosion wirklich reichte, und nicht, wie weit sie ungefaehr
+   * reichte.
+   */
+  blastRing(x: number, y: number, radius: number): void {
+    const ring = this.scene.add.circle(x, y, radius, COLORS.superReady, 0.25);
+    ring.setStrokeStyle(4, COLORS.superReady, 0.95);
+    ring.setDepth(DEPTH.projectiles);
+
+    this.scene.tweens.add({
+      targets: ring,
+      scale: { from: 0.35, to: 1 },
+      alpha: { from: 1, to: 0 },
+      duration: 320,
+      ease: "Quad.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  /**
+   * Die Heilung des Tanks: gruener Ring nach innen und die geheilte Zahl.
+   *
+   * Nach INNEN, entgegen dem Explosionsring - Schaden geht nach aussen, Leben
+   * kommt zurueck. Das liest man, ohne es erklaert zu bekommen.
+   */
+  healPulse(x: number, y: number, amount: number): void {
+    const ring = this.scene.add.circle(x, y, 54, COLORS.mate, 0.2);
+    ring.setStrokeStyle(4, COLORS.mate, 0.95);
+    ring.setDepth(DEPTH.projectiles);
+
+    this.scene.tweens.add({
+      targets: ring,
+      scale: { from: 1.3, to: 0.5 },
+      alpha: { from: 1, to: 0 },
+      duration: 420,
+      ease: "Quad.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+
+    const text = this.damageTexts[this.nextDamageText];
+    this.nextDamageText = (this.nextDamageText + 1) % this.damageTexts.length;
+    if (!text) {
+      return;
+    }
+
+    this.scene.tweens.killTweensOf(text);
+    text.setText(`+${amount}`);
+    text.setColor("#7ee08a");
+    text.setPosition(x, y - 26);
+    text.setAlpha(1);
+    text.setScale(1.1);
+    text.setActive(true).setVisible(true);
+
+    this.scene.tweens.add({
+      targets: text,
+      y: text.y - 40,
+      alpha: 0,
+      duration: 700,
+      ease: "Quad.easeOut",
+      onComplete: () => text.setActive(false).setVisible(false),
+    });
   }
 
   /**

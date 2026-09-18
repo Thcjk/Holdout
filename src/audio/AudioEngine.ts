@@ -25,6 +25,8 @@ export type SoundName =
   | "revive"
   | "superReady"
   | "superUsed"
+  | "blast"
+  | "healed"
   | "waveStart"
   | "gameOver";
 
@@ -124,6 +126,17 @@ export class AudioEngine {
       case "superUsed":
         this.tone(220, 0.35, "sawtooth", 0.2, 900);
         this.noise(0.25, 0.12, 1800);
+        break;
+      case "blast":
+        // Tiefer Knall plus kurzes Rauschen - der Unterschied zum Schuss ist
+        // die Tiefe, sonst ginge er im Dauerfeuer unter.
+        this.tone(120, 0.3, "sawtooth", 0.22, 50);
+        this.noise(0.2, 0.18, 900);
+        break;
+      case "healed":
+        // Zwei steigende Toene: aufwaerts heisst "es wird besser".
+        this.tone(520, 0.14, "sine", 0.16, 700);
+        this.tone(780, 0.22, "sine", 0.12, 980, 0.1);
         break;
       case "waveStart":
         this.tone(440, 0.12, "square", 0.13);

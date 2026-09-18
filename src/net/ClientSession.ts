@@ -17,6 +17,8 @@ const INPUT_INTERVAL_MS = 1000 / INPUT_RATE;
 
 export class ClientSession implements GameSession {
   readonly selfId: string;
+  /** Der Host rechnet weiter - ein angehaltener Client geriete nur aus dem Takt. */
+  readonly canPause = false;
   connectionLost: string | null = null;
 
   private readonly clientView: ClientView;

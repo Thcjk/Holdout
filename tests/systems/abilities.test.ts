@@ -11,7 +11,7 @@ import { ABILITIES, CHARACTERS } from "../../src/config/balance";
 import { TICK_SECONDS } from "../../src/config/constants";
 import { isAbilityReady, stepAbilities, tryAbility } from "../../src/systems/abilities";
 import { createEnemy } from "../../src/systems/enemies";
-import { spawnProjectile, stepProjectiles } from "../../src/systems/projectiles";
+import { stepProjectiles } from "../../src/systems/projectiles";
 import { createWorld, stepWorld } from "../../src/systems/world";
 import { makeInput, soloSetup } from "../helpers";
 import type { CharacterId } from "../../src/systems/types";
@@ -67,32 +67,46 @@ describe("Abklingzeit", () => {
   });
 });
 
-describe("Scout: Blendgranate", () => {
-  it("blendet alle Gegner im Explosionsradius", () => {
+describe("Scout: Splittergranate", () => {
+  it("macht Schaden an allen Gegnern im Radius - und an keinem ausserhalb", () => {
     const { state, player } = world("scout");
     player.position.x = 100;
     player.position.y = 600;
 
-    // Einer knapp im Radius, einer klar ausserhalb.
-    const near = createEnemy(1, "runner", { x: 400, y: 600 }, 1, 1, false);
-    const far = createEnemy(2, "runner", { x: 400, y: 900 }, 1, 1, false);
-    state.enemies.push(near, far);
+    // Drei Gegner dicht beieinander am Einschlagsort, einer klar ausserhalb.
+    const treffer = [
+      createEnemy(1, "runner", { x: 500, y: 600 }, 1, 1, false),
+      createEnemy(2, "runner", { x: 500, y: 660 }, 1, 1, false),
+      createEnemy(3, "runner", { x: 500, y: 540 }, 1, 1, false),
+    ];
+    const daneben = createEnemy(4, "runner", { x: 500, y: 1000 }, 1, 1, false);
+    state.enemies.push(...treffer, daneben);
+    const vorher = treffer.map((enemy) => enemy.health);
 
     tryAbility(state, player, useAbility({ x: 1, y: 0 }));
-    // Fliegen lassen, bis die Wurfweite aufgebraucht ist.
     for (let i = 0; i < 40; i += 1) {
       stepProjectiles(state, TICK_SECONDS);
     }
 
-    expect(near.blinded).toBeGreaterThan(0);
-    expect(far.blinded).toBe(0);
+    /*
+     * Jeder im Radius muss Schaden bekommen haben - auch die spaeteren in der
+     * Liste. Genau hier schlaegt der Fehler zu, wenn `detonate` waehrend des
+     * Durchlaufens toetet: Dann ruecken die Eintraege nach und jeder zweite
+     * bliebe unversehrt.
+     */
+    treffer.forEach((enemy, index) => {
+      expect(enemy.health).toBeLessThan(vorher[index]!);
+    });
+    expect(daneben.health).toBe(daneben.maxHealth);
   });
 
-  it("macht selbst keinen Schaden", () => {
+  it("toetet schwache Gegner wirklich, statt sie mit 0 Leben weiterlaufen zu lassen", () => {
     const { state, player } = world("scout");
     player.position.x = 100;
     player.position.y = 600;
-    const enemy = createEnemy(1, "runner", { x: 300, y: 600 }, 1, 1, false);
+
+    const enemy = createEnemy(1, "runner", { x: 500, y: 600 }, 1, 1, false);
+    enemy.health = 50;
     state.enemies.push(enemy);
 
     tryAbility(state, player, useAbility({ x: 1, y: 0 }));
@@ -100,104 +114,64 @@ describe("Scout: Blendgranate", () => {
       stepProjectiles(state, TICK_SECONDS);
     }
 
-    expect(enemy.blinded).toBeGreaterThan(0);
-    expect(enemy.health).toBe(enemy.maxHealth);
+    // Aus der Liste entfernt heisst: ueber `damageEnemy` gestorben, mit Punkten
+    // und Todesmeldung - nicht bloss auf null Leben gesetzt.
+    expect(state.enemies).toHaveLength(0);
+    expect(state.score).toBeGreaterThan(0);
   });
 
-  it("laesst einen geblendeten Schuetzen nicht mehr feuern", () => {
-    const state = createWorld(soloSetup());
-    state.enemies.length = 0;
-    const player = state.players[0]!;
-    const shooter = createEnemy(1, "shooter", { x: player.position.x + 250, y: player.position.y }, 1, 1, false);
-    // Deutlich laenger als der Testlauf: Es geht darum, ob Blendung ueberhaupt
-    // das Schiessen unterbindet - nicht darum, wann sie ausläuft.
-    shooter.blinded = 10;
-    state.enemies.push(shooter);
+  it("explodiert auch, wenn der Wurf ins Leere geht", () => {
+    const { state, player } = world("scout");
+    player.position.x = 100;
+    player.position.y = 600;
 
-    const before = state.projectiles.filter((entry) => entry.active).length;
+    // Der Gegner steht seitlich am Ende der Wurfweite - die Granate trifft ihn
+    // nicht direkt, muss ihn aber am Ende der Flugbahn noch erwischen.
+    const enemy = createEnemy(1, "runner", { x: 100 + ABILITIES.scout.range, y: 680 }, 1, 1, false);
+    state.enemies.push(enemy);
+
+    tryAbility(state, player, useAbility({ x: 1, y: 0 }));
     for (let i = 0; i < 60; i += 1) {
-      stepWorld(state, new Map(), TICK_SECONDS);
+      stepProjectiles(state, TICK_SECONDS);
     }
 
-    const enemyShots = state.projectiles.filter(
-      (entry) => entry.active && entry.owner === "enemy",
-    ).length;
-    expect(enemyShots).toBe(before);
+    expect(enemy.health).toBeLessThan(enemy.maxHealth);
   });
 });
 
-describe("Tank: Schildwand", () => {
-  it("stellt eine Wand in Blickrichtung auf, quer dazu", () => {
+describe("Tank: Zweite Luft", () => {
+  it("heilt den angeschlagenen Tank um den vollen Betrag", () => {
     const { state, player } = world("tank");
-    player.position.x = 800;
-    player.position.y = 600;
+    player.health = player.maxHealth - 2000;
 
-    tryAbility(state, player, useAbility({ x: 1, y: 0 }));
+    tryAbility(state, player, useAbility());
 
-    expect(state.barriers).toHaveLength(1);
-    const barrier = state.barriers[0]!;
-    // Vor dem Spieler...
-    expect(barrier.position.x).toBeCloseTo(800 + ABILITIES.tank.range, 5);
-    expect(barrier.position.y).toBeCloseTo(600, 5);
-    // ...und quer zur Blickrichtung, also senkrecht.
-    expect(Math.abs(barrier.along.x)).toBeLessThan(1e-6);
-    expect(Math.abs(barrier.along.y)).toBeCloseTo(1, 5);
+    expect(player.health).toBe(player.maxHealth - 2000 + ABILITIES.tank.heal);
   });
 
-  it("verschwindet nach ihrer Standzeit", () => {
+  it("heilt nicht ueber das Maximum hinaus und meldet den echten Betrag", () => {
     const { state, player } = world("tank");
-    tryAbility(state, player, useAbility({ x: 1, y: 0 }));
+    player.health = player.maxHealth - 100;
 
-    const ticks = Math.ceil(ABILITIES.tank.duration / TICK_SECONDS) + 1;
-    for (let i = 0; i < ticks; i += 1) {
-      stepAbilities(state, TICK_SECONDS);
-    }
+    tryAbility(state, player, useAbility());
 
-    expect(state.barriers).toHaveLength(0);
-  });
-
-  it("blockt gegnerische Schuesse, laesst eigene durch", () => {
-    const { state, player } = world("tank");
-    player.position.x = 800;
-    player.position.y = 600;
-    tryAbility(state, player, useAbility({ x: 1, y: 0 }));
-
-    const target = createEnemy(1, "runner", { x: 800 + ABILITIES.tank.range + 120, y: 600 }, 1, 1, false);
-    state.enemies.push(target);
-
-    // Gegnerischer Schuss von rechts auf den Spieler zu - die Wand liegt dazwischen.
-    spawnProjectile(state, {
-      owner: "enemy",
-      ownerId: "e1",
-      position: { x: 800 + ABILITIES.tank.range + 60, y: 600 },
-      direction: { x: -1, y: 0 },
-      speed: 600,
-      damage: 500,
-      range: 900,
-      radius: 9,
-      piercing: false,
-    });
-    for (let i = 0; i < 10; i += 1) {
-      stepProjectiles(state, TICK_SECONDS);
-    }
     expect(player.health).toBe(player.maxHealth);
 
-    // Eigener Schuss vom Spieler nach rechts - er muss durch.
-    spawnProjectile(state, {
-      owner: "player",
-      ownerId: player.id,
-      position: { x: 800, y: 600 },
-      direction: { x: 1, y: 0 },
-      speed: 600,
-      damage: 300,
-      range: 900,
-      radius: 7,
-      piercing: false,
-    });
-    for (let i = 0; i < 20; i += 1) {
-      stepProjectiles(state, TICK_SECONDS);
-    }
-    expect(target.health).toBeLessThan(target.maxHealth);
+    // Gemeldet wird, was wirklich angekommen ist (100) - nicht der Wert aus
+    // der Tabelle (1000). Sonst schwebte eine erfundene Zahl ueber der Figur.
+    const geheilt = state.events.find((event) => event.type === "healed");
+    expect(geheilt).toBeDefined();
+    expect(geheilt?.type === "healed" && geheilt.amount).toBe(100);
+  });
+
+  it("dreht die Blickrichtung nicht - sie wirkt auf einen selbst", () => {
+    const { state, player } = world("tank");
+    player.facing = { x: 0, y: -1 };
+
+    tryAbility(state, player, useAbility({ x: 1, y: 0 }));
+
+    expect(player.facing.x).toBe(0);
+    expect(player.facing.y).toBe(-1);
   });
 });
 

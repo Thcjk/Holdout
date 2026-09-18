@@ -136,11 +136,6 @@ export interface EnemyState {
   /** Restzeit der Sniper-Markierung in Sekunden: doppelter Schaden. */
   marked: number;
   /**
-   * Restzeit der Blendung in Sekunden (Scout-Blendgranate).
-   * Ein geblendeter Gegner laeuft weiter, greift aber nicht an.
-   */
-  blinded: number;
-  /**
    * Restzeit der Wurzelung in Sekunden (Sniper-Laehmschuss).
    * Ein gewurzelter Gegner kann sich nicht bewegen, greift aber weiter an.
    */
@@ -160,29 +155,7 @@ export interface EnemyState {
 export type ProjectileOwner = "player" | "enemy";
 
 /** Zusatzwirkung eines Projektils - normale Schuesse haben "none". */
-export type ProjectileEffect = "none" | "blind" | "root";
-
-/**
- * Eine Schildwand (Tank-Faehigkeit).
- *
- * Bewusst als STRECKE gespeichert und nicht als Rechteck: Sie steht quer zur
- * Blickrichtung, also schraeg im Raum. Ein achsenparalleles Rechteck koennte
- * das nicht abbilden, und ein gedrehtes Rechteck waere in der Kollision
- * deutlich mehr Rechnerei als der Schnitt zweier Strecken.
- */
-export interface BarrierState {
-  id: number;
-  /** Wer sie aufgestellt hat - fuer die Darstellung. */
-  ownerId: string;
-  /** Mittelpunkt der Wand. */
-  position: Vec2;
-  /** Richtung ENTLANG der Wand (Einheitsvektor), quer zur Blickrichtung. */
-  along: Vec2;
-  /** Halbe Breite in Pixeln. */
-  halfWidth: number;
-  /** Restliche Standzeit in Sekunden. */
-  remaining: number;
-}
+export type ProjectileEffect = "none" | "blast" | "root";
 
 export interface ProjectileState {
   id: number;
@@ -200,11 +173,13 @@ export interface ProjectileState {
   piercing: boolean;
   /**
    * Was beim Treffer zusaetzlich passiert.
-   * "blind" explodiert im Umkreis, "root" wurzelt den Getroffenen fest.
+   * "blast" explodiert im Umkreis, "root" wurzelt den Getroffenen fest.
    */
   effect: ProjectileEffect;
-  /** Wirkradius fuer "blind", sonst 0. */
+  /** Wirkradius fuer "blast", sonst 0. */
   blastRadius: number;
+  /** Schaden der Explosion an jedem Gegner im Radius. Nur fuer "blast". */
+  blastDamage: number;
   /** Bereits getroffene Gegner, damit ein Durchschuss nicht mehrfach zaehlt. */
   hitEnemies: number[];
 }
@@ -228,7 +203,7 @@ export type GameEvent =
   | { type: "superUsed"; playerId: string; character: CharacterId; x: number; y: number }
   | { type: "abilityUsed"; playerId: string; character: CharacterId; x: number; y: number }
   | { type: "blast"; x: number; y: number; radius: number }
-  | { type: "barrierUp"; x: number; y: number }
+  | { type: "healed"; playerId: string; amount: number; x: number; y: number }
   | { type: "levelUp"; playerId: string; skill: SkillId; level: number }
   | { type: "spawnWarning"; x: number; y: number }
   | { type: "waveStart"; wave: number }
@@ -259,8 +234,6 @@ export interface WorldState {
   walls: Rect[];
   /** Buschfelder: Gegner sehen Spieler darin nicht. */
   bushes: Rect[];
-  /** Aufgestellte Schildwaende (Tank-Faehigkeit). */
-  barriers: BarrierState[];
   bounds: Rect;
   /** Ereignisse dieses Ticks. Die Darstellung leert die Liste nach dem Auswerten. */
   events: GameEvent[];
@@ -268,5 +241,4 @@ export interface WorldState {
   rngState: number;
   nextEnemyId: number;
   nextProjectileId: number;
-  nextBarrierId: number;
 }

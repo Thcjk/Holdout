@@ -27,6 +27,11 @@ function soundFor(event: GameEvent): SoundName | null {
       return "superReady";
     case "superUsed":
       return "superUsed";
+    case "blast":
+      return "blast";
+    case "healed":
+      // Bei vollem Leben ist nichts angekommen - dann auch kein Ton.
+      return event.amount > 0 ? "healed" : null;
     case "waveStart":
       return "waveStart";
     case "gameOver":

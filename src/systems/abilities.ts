@@ -5,12 +5,21 @@
  * Schaden auf und ist der grosse Moment. Diese Faehigkeit hat eine feste
  * Abklingzeit und soll laufend eingesetzt werden.
  *
+ * DIE LEITREGEL NACH DEM ZWEITEN SPIELTEST: Eine Faehigkeit muss binnen einer
+ * Sekunde SICHTBAR sein. Die erste Fassung hatte fuer Scout und Tank je eine,
+ * die das nicht war - eine Blendung, bei der die Gegner unveraendert
+ * weiterliefen, und eine Wand, die nur Schuesse hielt, waehrend der Tank im
+ * Nahkampf steht. Beide wirkten messbar und fuehlten sich trotzdem wie nichts
+ * an. Eine Wirkung, die man nicht sieht, benutzt niemand. Die Begruendungen im
+ * Einzelnen stehen bei den Werten in `config/balance.ts`.
+ *
  * Wie ueberall unter `systems/`: reine Logik auf Datenobjekten, kein Phaser.
  */
 
 import { ABILITIES } from "../config/balance";
+import { damageEnemy } from "./combat";
 import { spawnProjectile } from "./projectiles";
-import type { BarrierState, InputState, PlayerState, Vec2, WorldState } from "./types";
+import type { EnemyState, InputState, PlayerState, Vec2, WorldState } from "./types";
 
 /** Ist die Faehigkeit gerade einsatzbereit? */
 export function isAbilityReady(player: PlayerState): boolean {
@@ -45,10 +54,10 @@ export function tryAbility(state: WorldState, player: PlayerState, input: InputS
 
   switch (player.character) {
     case "scout":
-      throwFlashGrenade(state, player, direction);
+      throwFragGrenade(state, player, direction);
       break;
     case "tank":
-      raiseBarrier(state, player, direction);
+      secondWind(state, player);
       break;
     case "sniper":
       fireRootShot(state, player, direction);
@@ -56,8 +65,13 @@ export function tryAbility(state: WorldState, player: PlayerState, input: InputS
   }
 
   player.abilityCooldown = ABILITIES[player.character].cooldown;
-  player.facing.x = direction.x;
-  player.facing.y = direction.y;
+
+  // Die Heilung des Tanks hat keine Richtung - seine Blickrichtung deshalb
+  // nicht verdrehen, nur weil ein Knopf gedrueckt wurde.
+  if (player.character !== "tank") {
+    player.facing.x = direction.x;
+    player.facing.y = direction.y;
+  }
 
   state.events.push({
     type: "abilityUsed",
@@ -71,14 +85,19 @@ export function tryAbility(state: WorldState, player: PlayerState, input: InputS
 }
 
 /**
- * Scout: Blendgranate.
+ * Scout: Splittergranate.
  *
  * Ein gewoehnliches Projektil mit Zusatzwirkung - beim Aufschlag explodiert es
  * (siehe `detonate`). Absichtlich ueber den normalen Projektilweg statt als
  * Sonderfall: So gelten dieselbe Flugbahnpruefung und dieselben Waende wie fuer
  * alles andere, und ein Wurf hinter eine Deckung ist unmoeglich.
+ *
+ * Das Wurfgeschoss selbst macht keinen Schaden (`damage: 0`) - der ganze
+ * Schaden steckt in der Explosion. Sonst bekaeme ein direkt getroffener Gegner
+ * doppelt ab, und die Granate waere gegen einen einzelnen Gegner stark statt
+ * gegen eine Gruppe.
  */
-function throwFlashGrenade(state: WorldState, player: PlayerState, direction: Vec2): void {
+function throwFragGrenade(state: WorldState, player: PlayerState, direction: Vec2): void {
   const ability = ABILITIES.scout;
   spawnProjectile(state, {
     owner: "player",
@@ -86,40 +105,35 @@ function throwFlashGrenade(state: WorldState, player: PlayerState, direction: Ve
     position: player.position,
     direction,
     speed: ability.speed,
-    // Die Granate selbst macht keinen Schaden - sie blendet nur.
     damage: 0,
     range: ability.range,
     radius: 10,
     piercing: false,
-    effect: "blind",
+    effect: "blast",
     blastRadius: ability.blastRadius,
+    blastDamage: ability.damage,
   });
 }
 
 /**
- * Tank: Schildwand.
+ * Tank: Zweite Luft - heilt sofort.
  *
- * Sie steht QUER zur Blickrichtung, ein Stueck vor dem Spieler. "Quer" heisst:
- * Die Wand verlaeuft entlang der um 90 Grad gedrehten Blickrichtung - sonst
- * stuende sie in Blickrichtung und man schiesse selbst dagegen.
+ * Ueber das Maximum hinaus wird nicht geheilt; `Math.min` ist hier der ganze
+ * Trick. Gemeldet wird der TATSAECHLICH geheilte Betrag, nicht der aus den
+ * Werten: Bei fast vollem Leben soll die Anzeige nicht 1000 behaupten, wenn
+ * nur 80 angekommen sind.
  */
-function raiseBarrier(state: WorldState, player: PlayerState, direction: Vec2): void {
-  const ability = ABILITIES.tank;
-  const barrier: BarrierState = {
-    id: state.nextBarrierId++,
-    ownerId: player.id,
-    position: {
-      x: player.position.x + direction.x * ability.range,
-      y: player.position.y + direction.y * ability.range,
-    },
-    // Um 90 Grad gedreht: aus (x, y) wird (-y, x).
-    along: { x: -direction.y, y: direction.x },
-    halfWidth: ability.width / 2,
-    remaining: ability.duration,
-  };
-  state.barriers.push(barrier);
+function secondWind(state: WorldState, player: PlayerState): void {
+  const before = player.health;
+  player.health = Math.min(player.maxHealth, player.health + ABILITIES.tank.heal);
 
-  state.events.push({ type: "barrierUp", x: barrier.position.x, y: barrier.position.y });
+  state.events.push({
+    type: "healed",
+    playerId: player.id,
+    amount: player.health - before,
+    x: player.position.x,
+    y: player.position.y,
+  });
 }
 
 /** Sniper: Laehmschuss - langsam, weniger Schaden, wurzelt den Getroffenen fest. */
@@ -137,93 +151,69 @@ function fireRootShot(state: WorldState, player: PlayerState, direction: Vec2): 
     piercing: false,
     effect: "root",
     blastRadius: 0,
+    blastDamage: 0,
   });
 }
 
 /**
- * Wirkung eines Projektils mit Zusatzeffekt, sobald es etwas trifft oder seine
- * Reichweite aufbraucht.
+ * Wirkung der Splittergranate, sobald sie etwas trifft oder ihre Wurfweite
+ * aufbraucht.
  *
  * Wird aus `projectiles.ts` gerufen - dort liegt die Flugbahn, hier die
  * Wirkung. Die Trennung haelt die Flugbahnrechnung frei von Sonderfaellen.
+ *
+ * Der Schaden ist im ganzen Radius gleich hoch, ohne Abschwaechung nach aussen.
+ * Das ist Absicht: Der Zielkreis am Knopf zeigt genau diesen Radius, und eine
+ * Abschwaechung wuerde bedeuten, dass der Kreis etwas anderes verspricht, als
+ * er haelt.
  */
-export function detonate(state: WorldState, x: number, y: number, radius: number): void {
-  const blind = ABILITIES.scout.blindDuration;
+export function detonate(
+  state: WorldState,
+  x: number,
+  y: number,
+  radius: number,
+  damage: number,
+  ownerId: string,
+): void {
+  /*
+   * ERST SAMMELN, DANN SCHADEN MACHEN.
+   *
+   * `damageEnemy` kann den Gegner toeten, und ein toter Gegner wird sofort aus
+   * `state.enemies` entfernt. Wuerde man direkt ueber diese Liste laufen und
+   * dabei toeten, ruecken die folgenden Eintraege eine Stelle vor - jeder
+   * zweite Gegner im Radius bliebe unversehrt. Genau der Fehler, der sich als
+   * "die Granate trifft manchmal nicht alle" zeigen wuerde.
+   */
+  const targets: EnemyState[] = [];
   for (const enemy of state.enemies) {
     const dx = enemy.position.x - x;
     const dy = enemy.position.y - y;
     const reach = radius + enemy.radius;
     if (dx * dx + dy * dy <= reach * reach) {
-      enemy.blinded = Math.max(enemy.blinded, blind);
+      targets.push(enemy);
     }
   }
+
+  for (const enemy of targets) {
+    /*
+     * Ueber `damageEnemy` statt `enemy.health -= ...`: Dort haengen Markierung,
+     * Superladung, Todesmeldung und Punkte dran. Wer den Schaden von Hand
+     * abzieht, bekommt Gegner mit null Leben, die weiterlaufen.
+     *
+     * Ohne Rueckstossrichtung - eine Explosion kommt aus der Mitte und hat
+     * keine Flugrichtung.
+     */
+    damageEnemy(state, enemy, damage, ownerId);
+  }
+
   state.events.push({ type: "blast", x, y, radius });
 }
 
-/** Zaehlt Abklingzeiten und Standzeiten herunter. */
+/** Zaehlt die Abklingzeiten herunter. */
 export function stepAbilities(state: WorldState, dt: number): void {
   for (const player of state.players) {
     if (player.abilityCooldown > 0) {
       player.abilityCooldown = Math.max(0, player.abilityCooldown - dt);
     }
   }
-
-  // Rueckwaerts laufen, damit das Entfernen die Reihenfolge nicht durcheinander
-  // bringt.
-  for (let i = state.barriers.length - 1; i >= 0; i -= 1) {
-    const barrier = state.barriers[i];
-    if (!barrier) {
-      continue;
-    }
-    barrier.remaining -= dt;
-    if (barrier.remaining <= 0) {
-      state.barriers.splice(i, 1);
-    }
-  }
-}
-
-/**
- * Blockiert eine Schildwand die Strecke von `from` nach `to`?
- *
- * Zwei Strecken schneiden sich - das ist die ganze Rechnung. Sie ist exakt und
- * braucht kein Abtasten, also kann auch ein schnelles Projektil nicht
- * hindurchspringen.
- *
- * @returns Anteil der Strecke bis zum Treffer (0 bis 1), oder null.
- */
-export function barrierHitTime(
-  state: WorldState,
-  fromX: number,
-  fromY: number,
-  stepX: number,
-  stepY: number,
-): number | null {
-  let earliest: number | null = null;
-
-  for (const barrier of state.barriers) {
-    const wallX = barrier.along.x * barrier.halfWidth;
-    const wallY = barrier.along.y * barrier.halfWidth;
-    const startX = barrier.position.x - wallX;
-    const startY = barrier.position.y - wallY;
-
-    // Schnitt der Strecken (from + t * step) und (start + u * 2*wall).
-    const denominator = stepX * (2 * wallY) - stepY * (2 * wallX);
-    if (Math.abs(denominator) < 1e-9) {
-      // Parallel - kein Schnitt.
-      continue;
-    }
-
-    const diffX = startX - fromX;
-    const diffY = startY - fromY;
-    const t = (diffX * (2 * wallY) - diffY * (2 * wallX)) / denominator;
-    const u = (diffX * stepY - diffY * stepX) / denominator;
-
-    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-      if (earliest === null || t < earliest) {
-        earliest = t;
-      }
-    }
-  }
-
-  return earliest;
 }

@@ -10,7 +10,7 @@
 
 import { LIMITS, PROJECTILE } from "../config/balance";
 import { ABILITIES } from "../config/balance";
-import { barrierHitTime, detonate } from "./abilities";
+import { detonate } from "./abilities";
 import { damageEnemy, damagePlayer } from "./combat";
 import type {
   EnemyState,
@@ -35,8 +35,10 @@ export interface ProjectileOptions {
   piercing: boolean;
   /** Zusatzwirkung beim Treffer. Normale Schuesse lassen das weg. */
   effect?: ProjectileEffect;
-  /** Wirkradius fuer "blind". */
+  /** Wirkradius fuer "blast". */
   blastRadius?: number;
+  /** Schaden der Explosion an jedem Gegner im Radius. Nur fuer "blast". */
+  blastDamage?: number;
 }
 
 /** Ein freies Projektil aus dem Pool holen - oder das aelteste ueberschreiben. */
@@ -61,6 +63,7 @@ function takeFromPool(state: WorldState): ProjectileState | null {
       piercing: false,
       effect: "none",
       blastRadius: 0,
+      blastDamage: 0,
       hitEnemies: [],
     };
     state.projectiles.push(fresh);
@@ -92,6 +95,7 @@ export function spawnProjectile(state: WorldState, options: ProjectileOptions): 
   projectile.piercing = options.piercing;
   projectile.effect = options.effect ?? "none";
   projectile.blastRadius = options.blastRadius ?? 0;
+  projectile.blastDamage = options.blastDamage ?? 0;
   projectile.hitEnemies.length = 0;
 }
 
@@ -217,17 +221,7 @@ export function stepProjectiles(state: WorldState, dt: number): void {
     const outOfRange = projectile.rangeLeft <= 0;
 
     // Bis wohin auf der Strecke darf getroffen werden? Eine Wand schneidet sie ab.
-    let wallT = wallHitTime(fromX, fromY, stepX, stepY, projectile.radius, state.walls);
-
-    // Eine Schildwand haelt nur GEGNERISCHE Schuesse auf. Wuerde sie auch die
-    // eigenen blocken, waere sie keine Deckung, sondern ein Kaefig - man
-    // koennte aus der eigenen Stellung nicht mehr herausschiessen.
-    if (projectile.owner === "enemy") {
-      const barrierT = barrierHitTime(state, fromX, fromY, stepX, stepY);
-      if (barrierT !== null && (wallT === null || barrierT < wallT)) {
-        wallT = barrierT;
-      }
-    }
+    const wallT = wallHitTime(fromX, fromY, stepX, stepY, projectile.radius, state.walls);
 
     const limit = wallT ?? 1;
 
@@ -238,12 +232,19 @@ export function stepProjectiles(state: WorldState, dt: number): void {
     }
 
     if (projectile.active && (wallT !== null || outOfRange)) {
-      // Eine Blendgranate wirkt auch dort, wo sie auf eine Wand trifft oder
-      // ihre Wurfweite aufbraucht - sonst waere ein Wurf ins Leere wirkungslos,
+      // Eine Granate wirkt auch dort, wo sie auf eine Wand trifft oder ihre
+      // Wurfweite aufbraucht - sonst waere ein Wurf ins Leere wirkungslos,
       // obwohl Gegner danebenstehen.
-      if (projectile.effect === "blind") {
+      if (projectile.effect === "blast") {
         const t = wallT ?? 1;
-        detonate(state, fromX + stepX * t, fromY + stepY * t, projectile.blastRadius);
+        detonate(
+          state,
+          fromX + stepX * t,
+          fromY + stepY * t,
+          projectile.blastRadius,
+          projectile.blastDamage,
+          projectile.ownerId,
+        );
       }
       projectile.active = false;
     }
@@ -308,8 +309,15 @@ function resolveEnemyHits(
     projectile.position.x = fromX + stepX * bestT;
     projectile.position.y = fromY + stepY * bestT;
 
-    if (projectile.effect === "blind") {
-      detonate(state, projectile.position.x, projectile.position.y, projectile.blastRadius);
+    if (projectile.effect === "blast") {
+      detonate(
+        state,
+        projectile.position.x,
+        projectile.position.y,
+        projectile.blastRadius,
+        projectile.blastDamage,
+        projectile.ownerId,
+      );
     }
 
     projectile.active = false;

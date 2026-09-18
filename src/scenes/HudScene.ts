@@ -19,6 +19,12 @@ import type { HudModel } from "../ui/HudModel";
 
 export interface HudSceneData {
   model: HudModel;
+  /** Nur solo darf angehalten werden - siehe `GameSession.canPause`. */
+  canPause: boolean;
+  onPause: () => void;
+  onResume: () => void;
+  /** Runde aufgeben und zurueck ins Menue. */
+  onQuit: () => void;
 }
 
 
@@ -39,12 +45,30 @@ export class HudScene extends Phaser.Scene {
   private skillHint!: Phaser.GameObjects.Text;
   private menuButton!: Button;
 
+  private canPause = false;
+  /** Angehalten? Dann bringt das HUD nichts mehr nach - es aendert sich nichts. */
+  private paused = false;
+  private onPause: () => void = () => {};
+  private onResume: () => void = () => {};
+  private onQuit: () => void = () => {};
+
+  /** Die Teile des Pausenbildes. Zusammen ein- und ausgeblendet. */
+  private pauseBackdrop!: Phaser.GameObjects.Rectangle;
+  private pauseTitle!: Phaser.GameObjects.Text;
+  private pauseHint!: Phaser.GameObjects.Text;
+  private resumeButton!: Button;
+  private quitButton!: Button;
+
   constructor() {
     super("Hud");
   }
 
   init(data: HudSceneData): void {
     this.model = data.model;
+    this.canPause = data.canPause;
+    this.onPause = data.onPause;
+    this.onResume = data.onResume;
+    this.onQuit = data.onQuit;
   }
 
   create(): void {
@@ -113,17 +137,31 @@ export class HudScene extends Phaser.Scene {
     );
     this.muteButton.setDepth(DEPTH.hud);
 
-    // Menü und Ton liegen oben rechts unter der Punkteanzeige: Unten rechts
-    // sitzt der Super-Knopf, und dort wuerde der Daumen sie staendig streifen.
-    // Rueckweg ins Menue auch ohne Tastatur - auf dem Handy gibt es kein Esc.
+    /*
+     * Pause und Ton liegen oben rechts unter der Punkteanzeige: Unten rechts
+     * sitzt der Super-Knopf, und dort wuerde der Daumen sie staendig streifen.
+     *
+     * DIESER KNOPF HIESS FRUEHER "MENUE" UND BEENDETE DIE RUNDE SOFORT. Wer
+     * nur kurz aufhoeren wollte, verlor damit alles und musste von vorn
+     * anfangen - genau die Beschwerde, die zu dieser Aenderung gefuehrt hat.
+     * Jetzt haelt er an; aufgeben kann man danach immer noch, aber erst nach
+     * einem zweiten, ausdruecklichen Antippen.
+     *
+     * Im Koop geht Anhalten nicht (der Host rechnet fuer alle weiter), deshalb
+     * bleibt es dort beim direkten Weg ins Menue.
+     */
     this.menuButton = new Button(
       this,
       rightEdge - 146,
       topEdge + 88,
-      "Menü",
+      this.canPause ? "Pause" : "Menü",
       () => {
-        this.scene.stop("Game");
-        this.scene.start("Menu");
+        if (this.canPause) {
+          this.onPause();
+        } else {
+          this.scene.stop("Game");
+          this.scene.start("Menu");
+        }
       },
       { width: 80, height: 30, fontSize: 13, color: COLORS.hudDim },
     );
@@ -150,6 +188,12 @@ export class HudScene extends Phaser.Scene {
       })
       .setDepth(DEPTH.hud);
 
+    // GANZ ZUM SCHLUSS: `createPauseScreen` blendet am Ende alles aus, was in
+    // der Pause nicht sichtbar sein darf - dazu gehoert die Hinweiszeile oben.
+    // Frueher aufgerufen, gaebe es die noch gar nicht, und der Aufbau des HUD
+    // braeche mit "Cannot read properties of undefined" ab.
+    this.createPauseScreen();
+
     this.ready = true;
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -161,7 +205,14 @@ export class HudScene extends Phaser.Scene {
   }
 
   update(): void {
-    if (!this.model) {
+    /*
+     * In der Pause steht die Welt still, also gibt es nichts nachzufuehren.
+     *
+     * Das ist nicht nur gespart: Ohne diese Zeile wuerde `updateSkills` jedes
+     * Bild die Hinweiszeile wieder einblenden, die `setPauseVisible` gerade
+     * ausgeblendet hat - sie flackerte mitten durch das Pausenbild.
+     */
+    if (!this.model || this.paused) {
       return;
     }
 
@@ -212,6 +263,92 @@ export class HudScene extends Phaser.Scene {
   }
 
   /**
+   * Das Pausenbild.
+   *
+   * Es wird EINMAL gebaut und danach nur ein- und ausgeblendet. Bei jedem
+   * Anhalten neu zu bauen hiesse, mitten im Spiel Objekte zu erzeugen - das
+   * ruckelt genau in dem Moment, in dem man hinschaut.
+   *
+   * Der dunkle Hintergrund ist nicht nur Optik: Er faengt als anklickbare
+   * Flaeche die Beruehrungen ab, damit ein Daumen neben den Knoepfen nicht den
+   * Joystick darunter erwischt.
+   */
+  private createPauseScreen(): void {
+    this.pauseBackdrop = this.add
+      .rectangle(0, 0, VIEWPORT.width * 2, VIEWPORT.height * 2, 0x070b12, 0.82)
+      .setOrigin(0)
+      .setDepth(DEPTH.hud + 10)
+      .setInteractive();
+
+    this.pauseTitle = this.add
+      .text(VIEWPORT.width / 2, VIEWPORT.height / 2 - 96, "Pause", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "40px",
+        color: "#dce8f7",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.hud + 11);
+
+    this.pauseHint = this.add
+      .text(VIEWPORT.width / 2, VIEWPORT.height / 2 - 52, "Die Runde wartet auf dich", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "15px",
+        color: "#8ea6c4",
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.hud + 11);
+
+    this.resumeButton = new Button(
+      this,
+      VIEWPORT.width / 2,
+      VIEWPORT.height / 2 + 6,
+      "Weiter",
+      () => this.onResume(),
+      { width: 240, height: 52, fontSize: 21 },
+    );
+    this.resumeButton.setDepth(DEPTH.hud + 11);
+
+    this.quitButton = new Button(
+      this,
+      VIEWPORT.width / 2,
+      VIEWPORT.height / 2 + 74,
+      "Runde beenden",
+      () => {
+        this.scene.stop("Game");
+        this.onQuit();
+      },
+      { width: 240, height: 42, fontSize: 16, color: COLORS.hudDim },
+    );
+    this.quitButton.setDepth(DEPTH.hud + 11);
+
+    this.setPauseVisible(false);
+  }
+
+  /** Blendet das Pausenbild ein oder aus. Gerufen von der Spielszene. */
+  setPauseVisible(visible: boolean): void {
+    if (!this.pauseBackdrop) {
+      return;
+    }
+    this.pauseBackdrop.setVisible(visible);
+    this.pauseTitle.setVisible(visible);
+    this.pauseHint.setVisible(visible);
+    this.resumeButton.setVisible(visible);
+    this.quitButton.setVisible(visible);
+
+    /*
+     * Die grosse Ansage in der Bildmitte muss weg, solange pausiert ist.
+     *
+     * Sie sitzt genau dort, wo "Pause" steht, und der dunkle Hintergrund ist
+     * absichtlich durchscheinend - also stand "Bereitmachen 2" quer durch die
+     * Pausenschrift. Zwei Ueberschriften uebereinander liest niemand.
+     */
+    this.announceText.setVisible(!visible);
+    this.skillHint.setVisible(false);
+    this.paused = visible;
+  }
+
+  /**
    * Setzt alles neu, was an einer Bildschirmkante klebt.
    *
    * Wird bei jeder Aenderung der Entwurfsflaeche gerufen. Die Balken unten
@@ -234,6 +371,14 @@ export class HudScene extends Phaser.Scene {
     this.announceText.setPosition(VIEWPORT.width / 2, 132);
     this.muteButton.setPosition(rightEdge - 44, topEdge + 88);
     this.menuButton.setPosition(rightEdge - 146, topEdge + 88);
+
+    // Das Pausenbild sitzt in der Mitte - die verschiebt sich mit der Breite.
+    this.pauseTitle.setPosition(VIEWPORT.width / 2, VIEWPORT.height / 2 - 96);
+    this.pauseHint.setPosition(VIEWPORT.width / 2, VIEWPORT.height / 2 - 52);
+    this.resumeButton.setPosition(VIEWPORT.width / 2, VIEWPORT.height / 2 + 6);
+    this.quitButton.setPosition(VIEWPORT.width / 2, VIEWPORT.height / 2 + 74);
+    this.pauseBackdrop.setSize(VIEWPORT.width * 2, VIEWPORT.height * 2);
+
     this.inputManager.layout();
   }
 

@@ -27,6 +27,17 @@ export interface WorldView {
 export interface GameSession {
   readonly selfId: string;
   readonly view: WorldView;
+
+  /**
+   * Darf diese Runde angehalten werden?
+   *
+   * Nur solo. Im Koop rechnet der Host die Runde fuer alle weiter; ein Geraet,
+   * das fuer sich anhaelt, wuerde beim Weitermachen entweder minutenlang
+   * nachrechnen oder springen. Die Szene fragt das hier ab, statt selbst nach
+   * dem Modus zu schauen - sie soll weiterhin nicht wissen, ob solo, als Host
+   * oder als Client gespielt wird.
+   */
+  readonly canPause: boolean;
   /** Gesetzt, sobald die Verbindung abgerissen ist - mit Text fuer den Spieler. */
   readonly connectionLost: string | null;
 

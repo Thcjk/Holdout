@@ -13,6 +13,8 @@ import type { GameSession, WorldView } from "./GameSession";
 export class SoloSession implements GameSession {
   readonly selfId: string;
   readonly connectionLost = null;
+  /** Solo laeuft die Simulation auf diesem Geraet - Anhalten stoert niemanden. */
+  readonly canPause = true;
   private readonly simulation: Simulation;
   private readonly inputs = new Map<string, InputState>();
 
