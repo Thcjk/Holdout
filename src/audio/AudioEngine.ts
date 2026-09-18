@@ -15,6 +15,11 @@
 
 const MUTE_STORAGE_KEY = "arena-shooter.muted";
 
+import { MUSIC_MENU, MUSIC_WAVE } from "../config/assets";
+
+/** Die beiden Musikstuecke. */
+export type MusicTrack = "menu" | "wave";
+
 export type SoundName =
   | "shoot"
   | "enemyShoot"
@@ -34,7 +39,12 @@ export class AudioEngine {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private musicGain: GainNode | null = null;
-  private musicTimer: number | null = null;
+  /** Die geladenen Musikstuecke. Leer, wenn der Browser kein Ogg kann. */
+  private readonly tracks = new Map<MusicTrack, HTMLAudioElement>();
+  /** Was gerade laufen soll - unabhaengig davon, ob es auch laeuft. */
+  private currentTrack: MusicTrack | null = null;
+  /** Zeitgeber des Ersatzklangs, falls kein Ogg moeglich ist. */
+  private fallbackTimer: number | null = null;
   private muted = false;
   /** Rauschpuffer wird einmal erzeugt und immer wieder verwendet. */
   private noiseBuffer: AudioBuffer | null = null;
@@ -70,6 +80,15 @@ export class AudioEngine {
     }
 
     void this.context.resume();
+
+    /*
+     * Erst jetzt die Musikdateien anlegen, nicht schon beim Laden der Seite:
+     * `new Audio(...)` faengt sofort an zu laden, und vor der ersten Beruehrung
+     * darf ohnehin nichts klingen. Ausserdem steht hier fest, dass der Nutzer
+     * getippt hat - genau der Moment, in dem `play()` erlaubt ist.
+     */
+    this.prepareMusic();
+    this.applyMusic();
   }
 
   setMuted(muted: boolean): void {
@@ -77,6 +96,11 @@ export class AudioEngine {
     if (this.master && this.context) {
       this.master.gain.setTargetAtTime(muted ? 0 : 0.6, this.context.currentTime, 0.02);
     }
+    // Die Musikstuecke haengen nicht am Web-Audio-Regler, sondern sind eigene
+    // Elemente - sie muessen getrennt angehalten werden, sonst spielt die Musik
+    // stumm geschaltet weiter.
+    this.applyMusic();
+
     try {
       localStorage.setItem(MUTE_STORAGE_KEY, muted ? "1" : "0");
     } catch {
@@ -151,23 +175,122 @@ export class AudioEngine {
   }
 
   /**
-   * Ein ruhiger Musikteppich: alle vier Sekunden ein weicher Akkord, dazu ein
-   * Basston. Bewusst schlicht - Musik soll hier tragen, nicht ablenken.
+   * ================================================================
+   * MUSIK
+   * ================================================================
+   *
+   * Welches Stueck gerade laufen soll - oder `null` fuer Stille.
+   *
+   * Die STILLE ist hier ein Spielelement, kein Versaeumnis: Zwischen zwei
+   * Wellen laeuft nichts. Setzt die Musik wieder ein, beginnt die naechste
+   * Welle. Das hoert man auch, wenn man gerade nicht hinschaut - und man
+   * braucht dafuer keine Anzeige zu lesen.
+   *
+   * Nur EINE Stelle steuert das (`setMusic`), statt frueher zwei (`startMusic`
+   * und `stopMusic`). Mit zwei Schaltern und drei Szenen, die sie rufen, waere
+   * schwer zu sagen, was gerade laufen sollte.
    */
-  startMusic(): void {
-    if (!this.context || this.musicTimer !== null) {
+  setMusic(track: MusicTrack | null): void {
+    if (this.currentTrack === track) {
+      return;
+    }
+    this.currentTrack = track;
+    this.applyMusic();
+  }
+
+  /**
+   * Spielt das gewuenschte Stueck und haelt alle anderen an.
+   *
+   * Wird auch beim Stummschalten und beim Freigeben des Tons gerufen - deshalb
+   * steht die ganze Entscheidung an einer Stelle, statt an jeder Aufrufstelle
+   * wiederholt zu werden.
+   */
+  private applyMusic(): void {
+    const soll = this.muted ? null : this.currentTrack;
+
+    for (const [name, element] of this.tracks) {
+      if (name === soll) {
+        continue;
+      }
+      element.pause();
+      // Auf Anfang zuruecksetzen: Eine Welle soll mit ihrem Anfang beginnen,
+      // nicht dort weitermachen, wo die vorige aufgehoert hat.
+      element.currentTime = 0;
+    }
+
+    // Kein Stueck gewuenscht, oder die Dateien lassen sich nicht abspielen:
+    // dann bleibt es still bzw. der Ersatzklang uebernimmt.
+    if (soll === null) {
+      this.stopFallbackMusic();
       return;
     }
 
-    const play = (): void => this.musicChord();
-    play();
-    this.musicTimer = window.setInterval(play, 4000);
+    const element = this.tracks.get(soll);
+    if (!element) {
+      this.startFallbackMusic();
+      return;
+    }
+
+    this.stopFallbackMusic();
+    /*
+     * `play()` gibt ein Promise zurueck, das fehlschlagen DARF: Browser
+     * verweigern Ton, bevor der Nutzer etwas angetippt hat. Das ist kein
+     * Fehler, den man melden muesste - beim naechsten Antippen ruft `unlock()`
+     * dieselbe Stelle noch einmal.
+     */
+    void element.play().catch(() => {
+      /* noch nicht freigegeben - beim naechsten Antippen erneut */
+    });
   }
 
-  stopMusic(): void {
-    if (this.musicTimer !== null) {
-      window.clearInterval(this.musicTimer);
-      this.musicTimer = null;
+  /**
+   * Laedt die Musikdateien - wenn der Browser sie abspielen kann.
+   *
+   * WARUM DIE PRUEFUNG: Die Dateien sind Ogg Vorbis. Android kann das seit
+   * jeher, Safari auf dem iPhone erst ab Version 17.4 (Maerz 2024). Auf einem
+   * aelteren iPhone bliebe es sonst einfach stumm, ohne dass man den Grund
+   * saehe. Kann der Browser kein Ogg, uebernimmt der bisherige synthetisierte
+   * Klang - weniger schoen, aber besser als Stille.
+   */
+  private prepareMusic(): void {
+    if (this.tracks.size > 0 || !this.canPlayOgg()) {
+      return;
+    }
+
+    for (const [name, url] of [
+      ["menu", MUSIC_MENU],
+      ["wave", MUSIC_WAVE],
+    ] as [MusicTrack, string][]) {
+      const element = new Audio(url);
+      element.loop = true;
+      element.preload = "auto";
+      element.volume = 0.5;
+      this.tracks.set(name, element);
+    }
+  }
+
+  private canPlayOgg(): boolean {
+    if (typeof Audio === "undefined") {
+      return false;
+    }
+    // "" heisst "kann ich nicht", "maybe"/"probably" heissen "kann ich".
+    return new Audio().canPlayType('audio/ogg; codecs="vorbis"') !== "";
+  }
+
+  /** Ersatz, wenn der Browser kein Ogg kann: der bisherige Akkordteppich. */
+  private startFallbackMusic(): void {
+    if (!this.context || this.fallbackTimer !== null) {
+      return;
+    }
+    const play = (): void => this.musicChord();
+    play();
+    this.fallbackTimer = window.setInterval(play, 4000);
+  }
+
+  private stopFallbackMusic(): void {
+    if (this.fallbackTimer !== null) {
+      window.clearInterval(this.fallbackTimer);
+      this.fallbackTimer = null;
     }
   }
 

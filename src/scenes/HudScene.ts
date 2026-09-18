@@ -165,10 +165,16 @@ export class HudScene extends Phaser.Scene {
     );
     this.menuButton.setDepth(DEPTH.hud);
 
-    // Falls das Spiel direkt gestartet wurde: Ton beim ersten Antippen freigeben.
+    /*
+     * Ton beim ersten Antippen freigeben - Browser verweigern Klang, bevor der
+     * Nutzer etwas beruehrt hat.
+     *
+     * Hier wird NICHT die Musik gestartet: Welches Stueck laufen soll, haengt
+     * an der Rundenphase, und die kennt nur die Spielszene. `unlock()` nimmt
+     * die dort gesetzte Wahl von selbst auf.
+     */
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {
       audio.unlock();
-      audio.startMusic();
     });
 
     this.inputManager = new InputManager(this);

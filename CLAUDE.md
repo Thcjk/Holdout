@@ -508,6 +508,50 @@ sie verloren, und Lebensbalken und Namen hätten weniger Kontrast.
 **Offen:** `BRIEFING.md` Abschnitt 7 nennt weiterhin die Cartoon-Pakete; der
 Nutzer wollte ihn aktualisieren, die Änderung ist hier nie angekommen.
 
+### Musik: Stille als Signal
+
+Zwei Stücke, vom Nutzer geliefert (`public/assets/audio/`), Pfade in
+`config/assets.ts`:
+
+| Wann | Stück |
+| --- | --- |
+| Menü und Lobby | `menu.ogg` (Retro Comedy) |
+| **Während einer Welle** | `wave.ogg` (Retro Mystic) |
+| Vorbereitung, Pause zwischen den Wellen, Pausenbildschirm | **nichts** |
+
+**Die Stille ist ein Spielelement, kein Versäumnis.** Setzt die Musik ein,
+beginnt die nächste Welle – das hört man auch dann, wenn man gerade nicht auf
+den Bildschirm schaut. Genau so vom Nutzer gewünscht.
+
+**Eine Stelle statt zwei.** Früher gab es `startMusic()` und `stopMusic()`;
+mit zwei Schaltern und vier Szenen, die sie rufen, war schwer zu sagen, was
+gerade laufen sollte. Jetzt gibt es nur `audio.setMusic("menu" | "wave" | null)`.
+Die Spielszene ruft das jedes Bild aus der Rundenphase heraus – `setMusic`
+prüft selbst, ob sich etwas ändert, und tut sonst nichts.
+
+**Beim Wellenstart beginnt das Stück von vorn** (`currentTime = 0` beim
+Anhalten). Eine Welle soll mit ihrem Anfang beginnen, nicht dort weitermachen,
+wo die vorige aufgehört hat.
+
+**Ogg ist nicht überall abspielbar, und das ist abgesichert.** Android kann es
+seit jeher, **Safari auf dem iPhone erst ab 17.4** (März 2024). Auf einem
+älteren iPhone bliebe es sonst stumm, ohne dass man den Grund sähe. Deshalb
+prüft `canPlayOgg()` vorher mit `canPlayType`, und wenn der Browser nicht kann,
+übernimmt der bisherige synthetisierte Akkordteppich – weniger schön, aber
+besser als Stille. Die Pause zwischen den Wellen bleibt auch dort still.
+
+**Im Browser nachgewiesen** (über mitgeschriebene `play()`/`pause()`-Aufrufe,
+weil `new Audio(...)` ein Element ausserhalb des DOM erzeugt und mit
+`querySelectorAll` nicht zu finden ist):
+
+```
+Menue:         PLAY  menu.ogg
+Vorbereitung:  PAUSE menu.ogg , PAUSE wave.ogg      → still
+Welle laeuft:  PLAY  wave.ogg
+nach Welle 1:  PAUSE wave.ogg                       → still
+Welle 2:       PLAY  wave.ogg
+```
+
 ### Bewegung: Kennlinie statt Schwelle, Achsen getrennt
 
 Zwei Änderungen am Steuerungsgefühl, beide gemessen statt geschätzt.
@@ -772,7 +816,7 @@ zu zeichnen?_ Wenn ja, gehört es nach `systems/`.
 | Phaser-Version        | Phaser 3 (3.90), nicht Phaser 4                                           | Briefing gibt Phaser 3 vor. Für Einsteiger zählt vor allem, dass Tutorials, Forenantworten und Beispiele passen - dieses Material gibt es fast ausschliesslich für Phaser 3.                                                                                                                                                           |
 | Phaser Arcade Physics | Wird **nicht** benutzt                                                    | Das Briefing nennt Arcade Physics für die Gegner-KI (Abschnitt 4), aber die Architektur-Grundregel (Abschnitt 5) ist stärker: Die Simulation muss ohne Phaser laufen. Kollision Kreis gegen Rechteck steht deshalb selbst in `systems/collision.ts` - rund 60 Zeilen, testbar.                                                         |
 | Sprites               | **Pixel Art von Kenney** (seit 2026-09-18). Projektile, Funken und Punkte bleiben gezeichnet | Ursprünglich alles gezeichnet, weil kenney.nl aus dieser Entwicklungsumgebung nicht erreichbar ist. Der Nutzer hat das Paket selbst ins Repo gelegt. Dass der Wechsel eine Datei war und keine fünfzig Fundstellen, lag genau an der damals gewählten Schnittstelle. Siehe „Pixel Art" unten. |
-| Ton                   | Wird mit der Web-Audio-API synthetisiert statt als .ogg geladen           | Gleicher Grund. Gleiche Schnittstelle: Im Spielcode steht nur `audio.play("hit")`, siehe `src/audio/`.                                                                                                                                                                                                                                 |
+| Ton                   | Klangeffekte synthetisiert, **Musik als .ogg** (seit 2026-09-18)          | Effekte bleiben synthetisiert (kenney.nl war nicht erreichbar); gleiche Schnittstelle: Im Spielcode steht nur `audio.play("hit")`. Die zwei Musikstücke hat der Nutzer geliefert. Siehe „Musik" unten.                                                                                                                                  |
 | HUD und Touch         | Eigene Szene (`HudScene`)                                                 | Die Spielkamera zoomt je nach Spielerabstand, und alles in ihrer Kamera zoomt mit - auch Text und Joysticks, die fest am Bildschirmrand kleben sollen. Eine zweite Szene hat ihre eigene Kamera ohne Zoom.                                                                                                                             |
 | Spielerform           | Kreis statt Rechteck                                                      | Ein Kreis gleitet an Wänden und Ecken entlang, ein Rechteck verhakt sich. Genau dieses Verhaken lässt Top-down-Steuerung zäh wirken.                                                                                                                                                                                                   |
 | Rundenablauf          | Vorbereitung nur vor Welle 1, danach Welle → Pause → Welle                | Die Pause kündigt laut Briefing selbst die nächste Welle an. Eine zusätzliche Vorbereitung dazwischen wären 15 Sekunden Warten zwischen zwei Wellen.                                                                                                                                                                                   |

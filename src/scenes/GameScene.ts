@@ -193,6 +193,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Welche Musik gerade laufen soll.
+   *
+   * NUR WAEHREND DER WELLE. In der Vorbereitung und in der Pause zwischen zwei
+   * Wellen ist es absichtlich still - die Stille ist das Signal. Setzt die
+   * Musik ein, faengt die naechste Welle an, und das hoert man auch dann, wenn
+   * man gerade nicht auf den Bildschirm schaut.
+   *
+   * Angehalten (solo) ist ebenfalls still: Musik, die weiterlaeuft, waehrend
+   * das Bild steht, klingt nach Absturz.
+   *
+   * `setMusic` prueft selbst, ob sich ueberhaupt etwas aendert - deshalb darf
+   * das hier jedes Bild gerufen werden.
+   */
+  private updateMusic(): void {
+    const laeuftWelle = this.session.view.state.phase === "wave";
+    audio.setMusic(laeuftWelle && !this.paused && !this.finished ? "wave" : null);
+  }
+
+  /**
    * Oeffnet oder schliesst den Zwischenbildschirm.
    *
    * Solo wird dabei wirklich angehalten, im Koop nur angezeigt. Diese eine
@@ -214,11 +233,7 @@ export class GameScene extends Phaser.Scene {
     // Der Ton geht nur mit, wenn wirklich angehalten wird. Im Koop laeuft die
     // Runde weiter - stille Musik waere dort ein falsches Signal.
     if (this.session.canPause) {
-      if (open) {
-        audio.stopMusic();
-      } else {
-        audio.startMusic();
-      }
+      this.updateMusic();
     }
   }
 
@@ -467,6 +482,7 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.wave = state.wave;
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
+    this.updateMusic();
     this.hudModel.phaseTime = state.phaseTime;
     this.hudModel.enemiesLeft = state.enemies.length + this.session.view.pendingCount;
     this.hudModel.skillPoints = player.skillPoints;

@@ -53,11 +53,20 @@ export class MenuScene extends Phaser.Scene {
     setReloadSafe(true);
     this.cameras.main.setBackgroundColor(COLORS.background);
 
-    // Ton darf erst nach einer Nutzerinteraktion starten - deshalb hier und
-    // nicht beim Laden des Spiels.
+    /*
+     * Im Menue laeuft Menuemusik.
+     *
+     * Zweimal gesetzt, und beides ist noetig:
+     *  - Hier sofort, damit die Musik beim RUECKWEG aus einer Runde direkt
+     *    weiterlaeuft. Der Ton ist dann laengst freigegeben.
+     *  - Im Antipp-Ereignis, weil beim ALLERERSTEN Aufruf noch nichts klingen
+     *    darf: Browser verweigern Ton vor der ersten Beruehrung.
+     * `setMusic` merkt sich den Wunsch; `unlock()` setzt ihn dann um.
+     */
+    audio.setMusic("menu");
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {
       audio.unlock();
-      audio.startMusic();
+      audio.setMusic("menu");
     });
 
     this.createHeader();
@@ -129,7 +138,7 @@ export class MenuScene extends Phaser.Scene {
       "Solo starten",
       () => {
         audio.unlock();
-        audio.startMusic();
+        audio.setMusic("menu");
         this.scene.start("Game", { character: this.selected });
       },
       { width },
@@ -182,7 +191,7 @@ export class MenuScene extends Phaser.Scene {
         const muted = audio.toggleMuted();
         button.setText(muted ? "Ton aus" : "Ton an");
         if (!muted) {
-          audio.startMusic();
+          audio.setMusic("menu");
         }
       },
     });

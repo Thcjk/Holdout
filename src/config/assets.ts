@@ -156,3 +156,22 @@ export const CRATE_TILE = tile(20, 4);
  * kann man drin verschwinden."
  */
 export const BUSH_TILE = tile(0, 0);
+
+
+/**
+ * ================================================================
+ * MUSIK
+ * ================================================================
+ *
+ * Zwei Stuecke, vom Nutzer geliefert. Die Zuordnung ist Absicht:
+ *
+ *   Menue   ruhig und freundlich - man waehlt in Ruhe aus.
+ *   Welle   getragen und angespannt - es geht los.
+ *
+ * WICHTIG FUERS SPIELGEFUEHL: In der Pause ZWISCHEN den Wellen laeuft
+ * absichtlich NICHTS. Die Stille ist das Signal - wenn die Musik wieder
+ * einsetzt, beginnt die naechste Welle. Das hoert man auch dann, wenn man
+ * gerade nicht auf den Bildschirm schaut.
+ */
+export const MUSIC_MENU = `${import.meta.env.BASE_URL}assets/audio/menu.ogg`;
+export const MUSIC_WAVE = `${import.meta.env.BASE_URL}assets/audio/wave.ogg`;

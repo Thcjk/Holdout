@@ -295,7 +295,7 @@ export class LobbyScene extends Phaser.Scene {
 
     lobby.onStart((setups, seed) => {
       lobby.destroy();
-      audio.startMusic();
+      audio.setMusic("menu");
 
       const session = transport.isHost
         ? new HostSession(transport, setups, transport.selfId, seed)
