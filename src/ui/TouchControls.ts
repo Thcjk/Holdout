@@ -153,6 +153,35 @@ export class TouchControls {
     };
   }
 
+  /**
+   * Setzt alle Knoepfe neu, nachdem sich die Entwurfsflaeche geaendert hat.
+   *
+   * Noetig, weil die Mitten aus `VIEWPORT.width` und `SAFE` berechnet werden -
+   * beides kann sich aendern, wenn auf dem Handy die Adressleiste ein- oder
+   * ausklappt und das Fenster damit ein anderes Seitenverhaeltnis bekommt.
+   * Ohne dieses Nachsetzen saessen die Knoepfe danach neben ihrem Bild.
+   */
+  layout(): void {
+    const fire = centerFor(TOUCH.fireButton);
+    this.fireCenter.x = fire.x;
+    this.fireCenter.y = fire.y;
+    this.fireLabel.setPosition(fire.x, fire.y);
+
+    for (const [button, spec] of [
+      [this.ability, TOUCH.abilityButton],
+      [this.superButton, TOUCH.superButton],
+    ] as [AimedButton, { marginX: number; marginY: number }][]) {
+      const center = centerFor(spec);
+      button.center.x = center.x;
+      button.center.y = center.y;
+      button.label.setPosition(center.x, center.y);
+    }
+
+    this.drawFireButton();
+    this.drawAimedButton(this.ability, COLORS.playerBullet);
+    this.drawAimedButton(this.superButton, COLORS.superReady);
+  }
+
   /** Aktualisiert Bereitschaft und Abklingringe aus dem Spielzustand. */
   setStatus(status: TouchStatus): void {
     // Der Knopf traegt den Namen der Faehigkeit, nicht das Wort "Faehigkeit".

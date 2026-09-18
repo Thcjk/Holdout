@@ -33,6 +33,11 @@ export class InputManager {
     this.touch.setStatus(status);
   }
 
+  /** Knoepfe neu einmessen, nachdem sich die Entwurfsflaeche geaendert hat. */
+  layout(): void {
+    this.touch.layout();
+  }
+
   /** Vom HUD gerufen, wenn ein Skillpunkt verteilt wird. */
   requestLevelUp(skill: SkillId): void {
     this.pendingLevelUp = skill;

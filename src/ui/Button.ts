@@ -54,6 +54,18 @@ export class Button {
     );
   }
 
+  /**
+   * Verschiebt den Knopf.
+   *
+   * Gebraucht, wenn sich die Entwurfsflaeche aendert - dann muessen alle
+   * Anzeigen am Bildschirmrand nachruecken, statt an der alten Kante zu kleben.
+   */
+  setPosition(x: number, y: number): this {
+    this.background.setPosition(x, y);
+    this.label.setPosition(x, y);
+    return this;
+  }
+
   setText(text: string): void {
     this.label.setText(text);
   }

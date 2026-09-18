@@ -21,7 +21,13 @@ import { lockLandscape } from "./platform/orientation";
 import { waitForLandscape, watchOrientation } from "./platform/rotateGate";
 import { readSafeArea } from "./platform/safeArea";
 import { installNetLogOverlay } from "./platform/netLogOverlay";
-import { COLORS, VIEWPORT, fitViewportToScreen, setSafeAreaFromScreen } from "./config/constants";
+import {
+  COLORS,
+  VIEWPORT,
+  designWidthFor,
+  fitViewportToScreen,
+  setSafeAreaFromScreen,
+} from "./config/constants";
 import { BootScene } from "./scenes/BootScene";
 import { GameOverScene } from "./scenes/GameOverScene";
 import { GameScene } from "./scenes/GameScene";
@@ -146,18 +152,46 @@ async function startWhenLandscape(): Promise<void> {
   // zurueck. Das Spiel laeuft dahinter weiter.
   watchOrientation();
 
-  // Auf Groessenaenderungen reagieren: Phaser passt den Modus FIT von selbst an
-  // die neue Fenstergroesse an, braucht dafuer aber den Anstoss. `refresh`
-  // misst neu - ohne das bleibt die alte Zeichenflaechengroesse stehen, und
-  // Beruehrungen landen daneben.
-  //
-  // Die Entwurfsaufloesung wird hier NICHT neu berechnet. Sie steckt in den
-  // Positionen aller Knoepfe, Texte und Anzeigen; sie mitten im Spiel zu
-  // aendern hiesse, jede Szene neu aufzubauen. Da das Spiel nur quer laeuft,
-  // aendert sich das Verhaeltnis ohnehin kaum noch.
+  /*
+   * Auf Groessenaenderungen reagieren.
+   *
+   * DER FEHLER, DEN DAS BEHEBT: Die Entwurfsflaeche wurde nur EINMAL beim Start
+   * berechnet. Klappt danach die Adressleiste ein, wird das Fenster hoeher -
+   * das Seitenverhaeltnis stimmt nicht mehr, und der Modus FIT legt Balken
+   * drum. Gemessen im Emulator: Aus 844x390 ohne Rand wurde 844x390 an
+   * Position 0,23 - also 23 Pixel schwarz oben.
+   *
+   * Jetzt wird die Breite neu bestimmt und, wenn sie sich geaendert hat, auch
+   * wirklich gesetzt. Danach muessen alle Anzeigen am Bildschirmrand nachruecken -
+   * dafuer feuert Phaser `RESIZE`, und die HUD-Szene setzt sich darauf neu.
+   */
   const refit = (): void => {
+    const width = designWidthFor(window.innerWidth, window.innerHeight);
+    if (width !== null && width !== VIEWPORT.width) {
+      VIEWPORT.width = width;
+      // Sicherheitsabstaende haengen am Umrechnungsfaktor, der sich mit der
+      // Breite aendert.
+      setSafeAreaFromScreen(readSafeArea(), window.innerWidth);
+      game.scale.resize(width, VIEWPORT.height);
+
+      /*
+       * Diese Zeile sieht ueberfluessig aus und ist der eigentliche Kern.
+       *
+       * `resize` setzt zwar die Zeichenflaeche um, aber NICHT das
+       * Seitenverhaeltnis, mit dem FIT sie danach in den Bildschirm einpasst.
+       * Phaser merkt sich dieses Verhaeltnis getrennt und behaelt es bei jeder
+       * Umstellung bei - im Quelltext steht daneben sogar "which doesn't then
+       * change". Gemessen: Canvas 1169x540 -> 1085x540 umgestellt, angezeigt
+       * aber weiterhin 844x390, also im alten Verhaeltnis 1169:540. Genau die
+       * Differenz waren die 23 schwarzen Pixel oben.
+       */
+      game.scale.displaySize.setAspectRatio(width / VIEWPORT.height);
+      game.scale.refresh();
+      return;
+    }
     game.scale.refresh();
   };
+
   window.addEventListener("resize", refit);
   window.addEventListener("orientationchange", () => {
     // Nach einer Drehung meldet der Browser die neuen Masse erst ein paar

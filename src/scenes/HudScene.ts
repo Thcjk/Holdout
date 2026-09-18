@@ -21,7 +21,6 @@ export interface HudSceneData {
   model: HudModel;
 }
 
-const AMMO_SLOT_WIDTH = 34;
 
 export class HudScene extends Phaser.Scene {
   /** Erst wenn das hier `true` ist, darf die Spielszene Eingaben abholen. */
@@ -38,6 +37,7 @@ export class HudScene extends Phaser.Scene {
   private muteButton!: Button;
   private skillPanel!: SkillPanel;
   private skillHint!: Phaser.GameObjects.Text;
+  private menuButton!: Button;
 
   constructor() {
     super("Hud");
@@ -53,6 +53,11 @@ export class HudScene extends Phaser.Scene {
     const leftEdge = SAFE.left + 14;
     const rightEdge = VIEWPORT.width - SAFE.right - 14;
     const topEdge = SAFE.top + 12;
+
+    // Aendert sich die Entwurfsflaeche (Adressleiste klappt ein oder aus),
+    // muessen alle Anzeigen am Rand neu gesetzt werden - sonst kleben sie an
+    // der alten Kante.
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
 
     this.bars = this.add.graphics().setDepth(DEPTH.hud);
 
@@ -111,7 +116,7 @@ export class HudScene extends Phaser.Scene {
     // Menü und Ton liegen oben rechts unter der Punkteanzeige: Unten rechts
     // sitzt der Super-Knopf, und dort wuerde der Daumen sie staendig streifen.
     // Rueckweg ins Menue auch ohne Tastatur - auf dem Handy gibt es kein Esc.
-    new Button(
+    this.menuButton = new Button(
       this,
       rightEdge - 146,
       topEdge + 88,
@@ -121,7 +126,8 @@ export class HudScene extends Phaser.Scene {
         this.scene.start("Menu");
       },
       { width: 80, height: 30, fontSize: 13, color: COLORS.hudDim },
-    ).setDepth(DEPTH.hud);
+    );
+    this.menuButton.setDepth(DEPTH.hud);
 
     // Falls das Spiel direkt gestartet wurde: Ton beim ersten Antippen freigeben.
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {
@@ -147,6 +153,7 @@ export class HudScene extends Phaser.Scene {
     this.ready = true;
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
       this.ready = false;
       this.inputManager.destroy();
       this.skillPanel.destroy();
@@ -204,7 +211,40 @@ export class HudScene extends Phaser.Scene {
     }
   }
 
-  /** Leben, Munition und Super unten links - der Blick geht im Spiel nach unten. */
+  /**
+   * Setzt alles neu, was an einer Bildschirmkante klebt.
+   *
+   * Wird bei jeder Aenderung der Entwurfsflaeche gerufen. Die Balken unten
+   * links zeichnen sich ohnehin jedes Bild neu und rechnen dabei frisch - hier
+   * geht es um die Texte und Knoepfe, die ihre Position nur einmal bekommen
+   * haben.
+   */
+  private layout(): void {
+    if (!this.ready) {
+      return;
+    }
+    const leftEdge = SAFE.left + 14;
+    const rightEdge = VIEWPORT.width - SAFE.right - 14;
+    const topEdge = SAFE.top + 12;
+
+    this.waveText.setPosition(leftEdge, topEdge);
+    this.scoreText.setPosition(rightEdge, topEdge);
+    this.mateText.setPosition(leftEdge, topEdge + 28);
+    this.skillHint.setPosition(leftEdge, topEdge + 50);
+    this.announceText.setPosition(VIEWPORT.width / 2, 132);
+    this.muteButton.setPosition(rightEdge - 44, topEdge + 88);
+    this.menuButton.setPosition(rightEdge - 146, topEdge + 88);
+    this.inputManager.layout();
+  }
+
+  /**
+   * Leben und Super unten links.
+   *
+   * Die Munition steht hier bewusst NICHT mehr: Sie sitzt jetzt als Ringstuecke
+   * um den FEUER-Knopf, also genau dort, wo der Daumen ohnehin liegt. Zweimal
+   * dasselbe an zwei Bildschirmecken kostet nur Platz und Aufmerksamkeit - und
+   * der untere Rand ist der knappste Platz im Bild.
+   */
   private drawPlayerBars(): void {
     const left = SAFE.left + 16;
     const bottom = VIEWPORT.height - SAFE.bottom - 18;
@@ -219,18 +259,8 @@ export class HudScene extends Phaser.Scene {
     this.bars.fillStyle(healthFraction > 0.3 ? COLORS.mate : COLORS.danger, 1);
     this.bars.fillRect(left, bottom - 18, healthWidth * healthFraction, 12);
 
-    // Munitionsladungen: volle Ladungen leuchten, nachladende fuellen sich auf.
-    const ammoY = bottom - 40;
-    this.model.ammo.forEach((fill, index) => {
-      const x = left + index * (AMMO_SLOT_WIDTH + 6);
-      this.bars.fillStyle(0x000000, 0.5);
-      this.bars.fillRect(x - 2, ammoY - 2, AMMO_SLOT_WIDTH + 4, 14);
-      this.bars.fillStyle(fill >= 1 ? COLORS.playerBullet : COLORS.hudDim, fill >= 1 ? 1 : 0.8);
-      this.bars.fillRect(x, ammoY, AMMO_SLOT_WIDTH * fill, 10);
-    });
-
-    // Super-Aufladung
-    const superY = bottom - 58;
+    // Super-Aufladung, direkt ueber dem Lebensbalken.
+    const superY = bottom - 40;
     const superWidth = 140;
     const ready = this.model.superCharge >= 100;
     this.bars.fillStyle(0x000000, 0.5);

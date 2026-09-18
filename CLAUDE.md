@@ -150,11 +150,38 @@ Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
   die Finger (Phasers `transformPointer` musste ersetzt werden), und gedreht
   werden darf nur die Zeichenfläche, nicht ihr Rahmen (Phaser misst den Rahmen
   zum Einpassen und bekäme sonst die hochkanten Masse).
-- **Auf Grössenänderung wird reagiert**, aber nur mit `game.scale.refresh()`.
-  Die **Entwurfsauflösung wird dabei nicht neu berechnet**: Sie steckt in den
-  Positionen aller Knöpfe, Texte und Anzeigen; sie mitten im Spiel zu ändern
-  hiesse, jede Szene neu aufzubauen. Da das Spiel nur quer startet, ändert sich
-  das Verhältnis danach ohnehin kaum noch.
+- **Auf Grössenänderung wird die Entwurfsfläche neu berechnet** (`refit` in
+  `main.ts`). Vorher geschah das nur einmal beim Start, und genau das war der
+  **schwarze Rand oben**: Klappt in Safari die Adressleiste ein, wird das
+  Fenster höher, das Seitenverhältnis stimmt nicht mehr, und `FIT` legt Balken
+  drum. Gemessen im Emulator, vorher:
+
+  ```
+  1 direkt nach Start   : Fenster 844x390 | Canvas 844x390 @0,0  | Rand o0  u0
+  2 Fenster wird höher  : Fenster 844x420 | Canvas 844x390 @0,23 | Rand o23 u8
+  ```
+
+  **Die Falle dabei – zwei Dinge, die gleich klingen.** `game.scale.resize()`
+  stellt die Zeichenfläche um, aber **nicht** das Seitenverhältnis, mit dem
+  `FIT` sie danach einpasst. Phaser merkt sich das getrennt und behält es bei;
+  im Quelltext steht daneben sogar „which doesn't then change". Ohne die Zeile
+  `displaySize.setAspectRatio(...)` wechselte die Zeichenfläche also brav von
+  1169×540 auf 1085×540 – angezeigt wurde sie weiterhin im alten Verhältnis,
+  und der Rand blieb genau wie vorher stehen. Nachher:
+
+  ```
+  1 direkt nach Start   : Fenster 844x390 | Canvas 844x390 @0,0 | Rand o0 u0
+  2 Fenster wird höher  : Fenster 844x420 | Canvas 844x420 @0,0 | Rand o0 u0
+  3 Fenster wird breiter: Fenster 900x420 | Canvas 900x420 @0,0 | Rand o0 u0
+  ```
+
+  **Folge fürs Weiterbauen:** Die Entwurfsbreite ändert sich jetzt auch
+  *während* des Spiels. Alles, was an einer Bildschirmkante klebt, muss darauf
+  hören statt seine Position nur einmal zu bekommen. Phaser meldet es als
+  Ereignis `RESIZE`; `HudScene.layout()` setzt daraufhin Texte und Knöpfe neu
+  und reicht es über `InputManager.layout()` an `TouchControls` weiter, damit
+  auch die drei Knöpfe unten rechts nachrücken. Wer eine neue Anzeige an den
+  Rand setzt, gehört in `layout()` – sonst klebt sie an der alten Kante.
 - **Die installierte App aktualisiert sich selbst** (`src/platform/update.ts`).
   Ein Service Worker haelt die App offline verfuegbar - und liefert deshalb von
   sich aus weiter die gespeicherte Fassung. Das Modul fragt regelmaessig nach
@@ -217,6 +244,12 @@ Alle drei sind ausgegraut und zeigen einen **Abklingring**, solange sie nicht
 einsatzbereit sind. Beim FEUER-Knopf ist das die Munition als Ringstücke – so
 sieht man blind, ob noch etwas da ist. Der Bewegungs-Joystick links bleibt, wie
 er war.
+
+**Die Munition steht deshalb nur noch dort.** Unten links, neben dem
+Lebensbalken, gab es sie ein zweites Mal als Kästchenreihe – dieselbe Zahl an
+der gegenüberliegenden Bildschirmecke. Der untere Rand ist der knappste Platz
+im Bild, und beim Schiessen schaut der Daumen ohnehin auf den Ring. Die
+Kästchen sind weg, der Super-Balken ist an ihre Stelle nachgerückt.
 
 **Der Basisangriff zielt nicht mehr von Hand.** Bisher konnte man am
 FEUER-Knopf ziehen, um selbst zu zielen. Genau das war die Ursache für

@@ -83,21 +83,29 @@ export function setSafeAreaFromScreen(
   SAFE.left = Math.round(insets.left * scale);
 }
 
-export function fitViewportToScreen(screenWidth: number, screenHeight: number): void {
-  if (screenWidth <= 0 || screenHeight <= 0) {
-    return;
+/**
+ * Welche Entwurfsbreite passt zu diesem Bildschirm?
+ *
+ * Eigene Funktion, weil sie zweimal gebraucht wird: beim Start und bei jeder
+ * Groessenaenderung, um zu erkennen, ob sich ueberhaupt etwas geaendert hat.
+ *
+ * `null` heisst "nicht umstellen" - im Hochformat waere die abgeleitete Breite
+ * winzig und das Spiel unspielbar schmal.
+ */
+export function designWidthFor(screenWidth: number, screenHeight: number): number | null {
+  if (screenWidth <= 0 || screenHeight <= 0 || screenHeight > screenWidth) {
+    return null;
   }
-
-  // Im Hochformat nicht umstellen: Dort waere die abgeleitete Breite winzig und
-  // das Spiel unspielbar schmal. Das Hochformat zeigt ohnehin nur den Hinweis,
-  // das Handy quer zu halten.
-  if (screenHeight > screenWidth) {
-    return;
-  }
-
   const aspect = screenWidth / screenHeight;
   const width = Math.round(VIEWPORT.height * aspect);
-  VIEWPORT.width = Math.min(1600, Math.max(960, width));
+  return Math.min(1600, Math.max(960, width));
+}
+
+export function fitViewportToScreen(screenWidth: number, screenHeight: number): void {
+  const width = designWidthFor(screenWidth, screenHeight);
+  if (width !== null) {
+    VIEWPORT.width = width;
+  }
 }
 
 /**
