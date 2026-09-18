@@ -33,6 +33,8 @@ export class LobbyScene extends Phaser.Scene {
   private transport: Transport | null = null;
 
   private statusText!: Phaser.GameObjects.Text;
+  /** Zeigt nach dem Verbinden, ob direkt oder ueber TURN gespielt wird. */
+  private pathText!: Phaser.GameObjects.Text;
   private codeText!: Phaser.GameObjects.Text;
   private playerText!: Phaser.GameObjects.Text;
   private startButton?: Button;
@@ -79,6 +81,24 @@ export class LobbyScene extends Phaser.Scene {
       .text(VIEWPORT.width / 2, 160, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "16px",
+        color: "#8ea6c4",
+        align: "center",
+        wordWrap: { width: VIEWPORT.width - 120 },
+      })
+      .setOrigin(0.5);
+
+    /*
+     * Der Verbindungsweg, direkt unter der Statuszeile.
+     *
+     * WARUM IM SPIEL UND NICHT NUR IM PROTOKOLL: Diese eine Zeile beantwortet
+     * beim Test mit zwei Geraeten die entscheidende Frage - hat TURN gegriffen,
+     * oder ging es auch so? Sie nur unter `?debug=netz` zu zeigen hiesse, dass
+     * man sie genau dann nicht hat, wenn man normal spielt und es klemmt.
+     */
+    this.pathText = this.add
+      .text(VIEWPORT.width / 2, 196, "", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "13px",
         color: "#8ea6c4",
         align: "center",
         wordWrap: { width: VIEWPORT.width - 120 },
@@ -238,6 +258,7 @@ export class LobbyScene extends Phaser.Scene {
 
   private useTransport(transport: Transport): void {
     this.transport = transport;
+    this.watchConnectionPath(transport);
     const lobby = new Lobby(transport, {
       name: playerName(transport.isHost),
       character: this.character,
@@ -310,6 +331,44 @@ export class LobbyScene extends Phaser.Scene {
     this.lobby?.destroy();
     this.transport?.close();
     this.scene.start("Menu");
+  }
+
+  /**
+   * Wartet, bis der Verbindungsweg feststeht, und zeigt ihn an.
+   *
+   * Warum abfragen statt melden lassen: Die Messung braucht ein paar hundert
+   * Millisekunden (der Browser waehlt das Kandidatenpaar erst nach dem
+   * Oeffnen des Datenkanals aus). Ein paar Blicke im Abstand von einer halben
+   * Sekunde sind einfacher als eine Rueckmeldekette quer durch den Transport -
+   * und wenn nichts kommt, bleibt die Zeile eben leer.
+   *
+   * Nur fuer echte Netzverbindungen: Der lokale Transport zwischen zwei Tabs
+   * benutzt gar kein WebRTC, dort gaebe es nichts zu messen.
+   */
+  private watchConnectionPath(transport: Transport): void {
+    if (!(transport instanceof PeerTransport)) {
+      return;
+    }
+
+    let versuche = 0;
+    const schauen = (): void => {
+      versuche += 1;
+      const pfad = transport.connectionPath;
+      if (pfad) {
+        this.pathText.setText(
+          pfad.kind === "relay"
+            ? "Verbindung über TURN-Relay (direkt ging es nicht)"
+            : pfad.kind === "direkt"
+              ? "Verbindung direkt zwischen den Geräten"
+              : "Verbindungsweg unbekannt",
+        );
+        return;
+      }
+      if (versuche < 12) {
+        this.time.delayedCall(500, schauen);
+      }
+    };
+    this.time.delayedCall(500, schauen);
   }
 }
 

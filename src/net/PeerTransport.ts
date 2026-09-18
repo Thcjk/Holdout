@@ -18,6 +18,9 @@ import type { DataConnection } from "peerjs";
 import type { NetMessage } from "./protocol";
 import { describeString, netLog } from "./netLog";
 import { SIGNAL_SERVERS, peerOptions } from "./peerConfig";
+import { ensureIceServers, hasOwnTurnKey } from "./turnCredentials";
+import { reportConnectionPath } from "./connectionPath";
+import type { ConnectionPath } from "./connectionPath";
 import type { SignalServer } from "./peerConfig";
 import { peerIdForRoom } from "./roomCode";
 import { BaseTransport } from "./Transport";
@@ -63,7 +66,11 @@ function describeFailure(reason: ConnectFailure): string {
     case "room-not-found":
       return "Kein Raum mit diesem Code. Tippfehler? Oder der Host hat den Raum inzwischen geschlossen.";
     case "no-direct-connection":
-      return "Der Raum wurde gefunden, aber es kommt keine Verbindung zwischen euren Geräten zustande. Das liegt meist am Mobilfunknetz - im WLAN klappt es oft.";
+      // Der Raum WURDE gefunden - der Raumcode ist also richtig. Das gehoert
+      // in die Meldung, sonst tippt man ihn zehnmal neu ein. Seit es einen
+      // eigenen TURN-Schluessel gibt, kommt eine zweite Ursache dazu: ein
+      // aufgebrauchtes Kontingent sieht fuer den Spieler genauso aus.
+      return "Verbindung konnte nicht hergestellt werden. Der Raumcode stimmt - es kommt nur kein Weg zwischen euren Geräten zustande. Versucht es im selben WLAN noch einmal. (Möglich ist auch, dass das Kontingent des Relay-Servers aufgebraucht ist.)";
     case "room-code-taken":
       return "Dieser Raumcode ist gerade belegt. Erstelle einen neuen Raum.";
     case "unsupported":
@@ -76,6 +83,8 @@ export class PeerTransport extends BaseTransport {
   readonly isHost: boolean;
 
   private peer: Peer | null = null;
+  /** Zuletzt gemessener Verbindungsweg - fuer die Anzeige in der Lobby. */
+  private lastPath: ConnectionPath | null = null;
   private readonly connections = new Map<string, DataConnection>();
   private closed = false;
   private openResolved = false;
@@ -103,6 +112,12 @@ export class PeerTransport extends BaseTransport {
   static async host(roomCode: string): Promise<PeerTransport> {
     const ownId = peerIdForRoom(roomCode);
     netLog("HOST: Raum wird geoeffnet");
+    // Zugangsdaten VOR dem Anmelden holen: `new Peer(...)` bekommt seine
+    // ICE-Server beim Erzeugen mit, nachtragen geht nicht mehr. Host und
+    // Client holen dieselben - beide Seiten brauchen dieselbe Ausstattung,
+    // sonst findet nur eine von beiden einen Weg.
+    await ensureIceServers();
+    netLog(`HOST: TURN-Schluessel eigener? ${hasOwnTurnKey() ? "ja" : "nein"}`);
     netLog(`HOST: ${describeString("Raumcode", roomCode)}`);
     netLog(`HOST: ${describeString("Peer-ID angefordert", ownId)}`);
 
@@ -144,6 +159,8 @@ export class PeerTransport extends BaseTransport {
     netLog("CLIENT: Beitritt wird versucht");
     netLog(`CLIENT: ${describeString("Raumcode eingetippt", roomCode)}`);
     netLog(`CLIENT: ${describeString("Peer-ID gesucht", target)}`);
+    await ensureIceServers();
+    netLog(`CLIENT: TURN-Schluessel eigener? ${hasOwnTurnKey() ? "ja" : "nein"}`);
 
     let lastReason: ConnectFailure = "signal-unreachable";
 
@@ -419,9 +436,42 @@ export class PeerTransport extends BaseTransport {
     });
   }
 
+  /**
+   * Der zuletzt gemessene Verbindungsweg, oder null solange er nicht feststeht.
+   * Die Lobby zeigt ihn an - sonst saehe man ihn nur mit `?debug=netz`.
+   */
+  get connectionPath(): ConnectionPath | null {
+    return this.lastPath;
+  }
+
+  /**
+   * Die RTCPeerConnection hinter einem PeerJS-Datenkanal.
+   *
+   * PeerJS gibt sie als `peerConnection` heraus, fuehrt sie aber nicht in
+   * seinen Typen - deshalb der Umweg ueber `unknown`. Fehlt sie (andere
+   * PeerJS-Version), gibt es eben keine Wegauskunft, aber keinen Absturz.
+   */
+  private peerConnectionOf(connection: DataConnection): RTCPeerConnection | undefined {
+    return (connection as unknown as { peerConnection?: RTCPeerConnection }).peerConnection;
+  }
+
   private registerConnection(connection: DataConnection): void {
     this.connections.set(connection.peer, connection);
     this.peerJoinHandler(connection.peer);
+
+    /*
+     * Jetzt nachsehen, welcher Weg wirklich benutzt wird - direkt oder ueber
+     * TURN. Hier und nicht woanders, weil JEDE offene Verbindung durch diese
+     * Stelle laeuft: der Host fuer jeden Beitretenden, der Client fuer den
+     * Host. Beide Seiten protokollieren damit unabhaengig voneinander.
+     *
+     * Bewusst nicht abgewartet (`void`): Die Auskunft braucht ein paar hundert
+     * Millisekunden, und niemand soll darauf warten, um zu spielen. Sie ist
+     * Diagnose, kein Spielinhalt.
+     */
+    void reportConnectionPath(this.peerConnectionOf(connection), this.rolle()).then((path) => {
+      this.lastPath = path;
+    });
 
     connection.on("data", (data: unknown) => {
       const message = data as NetMessage;

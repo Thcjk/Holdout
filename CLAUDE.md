@@ -525,6 +525,93 @@ einen eigenen. Und ein eigener Signalisierungsserver wäre die einzige Lösung,
 die nicht von fremder Verfügbarkeit abhängt; er passt nur nicht zu „statische
 Seite auf GitHub Pages".
 
+#### Eigener TURN-Schlüssel statt geteiltem Gratis-Relay
+
+Die Open-Relay-Daten in `peerConfig.ts` darf jeder mitbenutzen – und teilen
+sich deshalb ein Kontingent mit allen anderen, die sie benutzen. Ist es
+aufgebraucht, geht die Verbindung nicht mehr, und man sieht nicht warum. Mit
+einem eigenen Schlüssel (metered.ca) gibt es ein eigenes Kontingent und eine
+Nutzungsanzeige beim Anbieter.
+
+`src/net/turnCredentials.ts` holt die Zugangsdaten beim Start ab:
+
+```
+https://<app-name>.metered.live/api/v1/turn/credentials?apiKey=<schlüssel>
+```
+
+Schlüssel und App-Name stehen in `.env` (`VITE_TURN_API_KEY`, `VITE_TURN_APP`),
+Vorlage in `.env.example`. Für den Pages-Build liest der Workflow das Secret
+`TURN_API_KEY`. **Fehlt beides, passiert nichts Schlimmes:** Dann gelten die
+öffentlichen Open-Relay-Daten, und das Spiel läuft unverändert.
+
+**Der Schlüssel ist in der ausgelieferten App NICHT geheim, und das lässt sich
+auch nicht reparieren.** Vite setzt jeden `VITE_*`-Wert beim Bauen fest in das
+JavaScript ein, das an die Handys geht; Holdout ist eine statische Seite ohne
+eigenen Server, es gibt also keinen Ort, an dem ein Geheimnis bleiben könnte.
+Nachgeprüft am fertigen Build:
+
+```
+$ grep -rl "<schlüssel>" dist/
+dist/assets/index-COblGTJi.js
+```
+
+Was `.env` trotzdem bringt: Der Schlüssel steht nicht in der Git-Historie (dort
+bekommt man ihn nie wieder heraus) und lässt sich beim Anbieter zurückziehen
+und ersetzen. **Folge:** nur einen Schlüssel mit Gratis-Kontingent verwenden,
+nie einen mit hinterlegter Zahlung, und die Nutzung gelegentlich ansehen.
+Wirklich geheim ginge nur mit einem eigenen kleinen Server – und der passt
+nicht zu „statische Seite auf GitHub Pages".
+
+**Fällt der Abruf aus, wird nicht abgebrochen**, sondern auf die öffentlichen
+Daten zurückgefallen. Eingeschränkt zu funktionieren ist besser, als wegen
+einer fehlgeschlagenen Nebensächlichkeit gar nicht zu starten. Genau dieser
+Fall liess sich hier im Echtbetrieb prüfen, weil der Proxy `metered.live`
+sperrt:
+
+```
+TURN: Abruf fehlgeschlagen (Failed to fetch) - oeffentliche Daten
+HOST: TURN-Schluessel eigener? ja
+```
+
+**Host und Client holen dieselben Server**, und zwar **vor** `new Peer(...)`:
+Die ICE-Server bekommt eine Verbindung beim Erzeugen mit, nachtragen geht
+nicht. Bekäme nur eine Seite TURN, fände auch nur eine Seite einen Weg.
+
+#### Sehen, WELCHER Weg benutzt wird
+
+Ohne diese Auskunft weiss man bei einer klappenden Verbindung nicht, ob TURN
+gegriffen hat oder ob es auch ohne gegangen wäre – und bei einer scheiternden
+nicht, ob TURN überhaupt versucht wurde. Man ändert dann Dinge auf Verdacht.
+
+`src/net/connectionPath.ts` liest nach dem Verbinden über
+`RTCPeerConnection.getStats()` das **benutzte** Kandidatenpaar aus:
+
+| Typ | Bedeutung |
+| --- | --------- |
+| `host` | Adresse im lokalen Netz – nur im selben WLAN |
+| `srflx` | über STUN gefundene Aussenadresse – direkt übers Internet |
+| `prflx` | unterwegs entdeckt, ebenfalls direkt |
+| `relay` | **über TURN** – die Daten laufen über fremde Rechner |
+
+Steht auf **einer** der beiden Seiten `relay`, läuft die Verbindung über TURN.
+Angezeigt wird es in der Lobby („Verbindung direkt zwischen den Geräten" bzw.
+„Verbindung über TURN-Relay") und ausführlich unter `?debug=netz`.
+
+**Zwei Fallen, die im Code stehen:**
+
+- **Nur das nominierte Paar zählt.** Es gibt mehrere geprüfte Paare; wer das
+  erstbeste nimmt, meldet womöglich TURN, obwohl direkt verbunden wird.
+  `tests/net/connectionPath.test.ts` prüft genau das mit einem zweiten,
+  gescheiterten Relay-Paar im Aufbau.
+- **Der Datenkanal ist offen, bevor die Zahlen da sind.** Einmal fragen liefert
+  oft noch nichts – deshalb dreimal im Abstand von 400 ms.
+
+Geprüft ist das nicht nur gegen nachgebaute Statistiken, sondern gegen eine
+**echte** WebRTC-Verbindung: zwei `RTCPeerConnection` in einer Seite, direkt
+verdrahtet. Ergebnis: `kind = direkt`, `lokal host/lokales Netz, entfernt
+host/lokales Netz`. Der `relay`-Fall lässt sich hier nicht herstellen – dafür
+braucht es zwei Geräte in verschiedenen Netzen.
+
 ## Der Name
 
 Das Spiel heisst **Holdout**. Umbenannt wurde alles Sichtbare: Browser-Titel,
@@ -794,8 +881,15 @@ Zwei Konsequenzen, beide im Code:
 - **Bildrate auf echtem Gerät ungeprüft.** Im Container laufen selbst fast leere
   Szenen nur mit ~50 fps (Software-Rendering ohne GPU), das Spiel mit ~32 fps.
   Diese Zahlen sagen nichts über ein Handy aus. Auf einem echten Gerät messen.
-- **Kein TURN-Server, keine Host-Migration.** Verlässt der Host, endet die Runde
-  mit Hinweis - so im Briefing vorgesehen.
+- **Keine Host-Migration.** Verlässt der Host, endet die Runde mit Hinweis -
+  so im Briefing vorgesehen.
+- **Der TURN-Weg ist auf zwei echten Geräten noch nicht bestätigt.** Abruf,
+  Rückfall und Wegerkennung sind geprüft (149 Tests, dazu ein Durchlauf gegen
+  eine echte WebRTC-Verbindung). Ob im Fall „ein Handy WLAN, eines Mobilfunk"
+  wirklich `relay` herauskommt, zeigt nur der Test mit zwei Geräten - die
+  Lobby sagt es dann von selbst. **Dafür muss vorher das Secret
+  `TURN_API_KEY` im Repository hinterlegt sein**, sonst baut der Workflow ohne
+  Schlüssel und es gelten wieder die öffentlichen Daten.
 - **Bundle ist gross** (~1,6 MB, gzip ~370 kB), weil Phaser komplett eingebunden
   ist. Ein massgeschneiderter Phaser-Build wäre der nächste Hebel.
 - **Die APK baut, ist aber nur debug-signiert.** Der Workflow lief am

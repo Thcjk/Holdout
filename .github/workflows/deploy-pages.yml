@@ -36,6 +36,16 @@ jobs:
       - run: npm run build
         env:
           VITE_BASE_PATH: ${{ steps.base.outputs.path }}
+          # Eigener TURN-Schluessel (metered.ca). Fehlt das Secret, ist der Wert
+          # leer - dann gelten die oeffentlichen Open-Relay-Daten aus
+          # src/net/peerConfig.ts und das Spiel laeuft normal weiter.
+          #
+          # Anzulegen unter Settings -> Secrets and variables -> Actions als
+          # TURN_API_KEY. Zur Erinnerung: Dieser Wert wird beim Bauen fest in
+          # das ausgelieferte JavaScript eingesetzt und ist dort lesbar - ein
+          # Secret schuetzt ihn nur davor, im Repository zu stehen.
+          VITE_TURN_API_KEY: ${{ secrets.TURN_API_KEY }}
+          VITE_TURN_APP: ${{ vars.TURN_APP || 'holdout-turn' }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
