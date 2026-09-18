@@ -191,6 +191,47 @@ Nach Phase 7 gewünschte Änderung, bewusst ausserhalb des Briefings:
   Szene meldet das selbst (`setReloadSafe`) - Menue `true`, Spiel, Lobby und
   Ergebnisbildschirm `false`. Sonst waere ein Neustart der Verlust der Runde
   oder der Punktzahl. Niemand muss die App loeschen und neu hinzufuegen.
+- **Nicht jede Datei kam beim Update mit - der Fehler, der die Musik zweimal
+  „nicht getauscht" aussehen liess.** Der Service Worker merkt sich zu jeder
+  Datei eine Kennung, an der er erkennt, ob sie sich geändert hat. Steht dort
+  `null`, heisst das: „Der **Dateiname** enthält schon eine Version, diese
+  Datei ändert sich nie" – sie wird nach der ersten Installation **nie wieder
+  geladen**.
+
+  Für `assets/index-Cx-XINIv.js` stimmt das. Für `assets/audio/menu.ogg`
+  stimmt es **nicht**: Der Name bleibt immer gleich. Die Voreinstellung von
+  vite-plugin-pwa nimmt aber pauschal alles unter `assets/` als unveränderlich
+  an – und dort landet auch alles aus `public/assets/`: Musik, Tilesheet,
+  Vorschaubilder.
+
+  **Folge, und sie war heimtückisch:** Die Versionsnummer im Menü sprang brav
+  auf den neuen Stand (der Bundle-Name hat ja einen Hash), die Musik blieb die
+  alte. Der Nutzer sah 1.16.0 und hörte 1.14.0. Zweimal wurde deshalb ein
+  Tausch gemeldet, der längst im Repo stand.
+
+  **Nachgestellt statt vermutet**, mit einem echten Update von 1.14.0 auf
+  1.16.0 im Browser (alte Fassung installieren, neue Fassung auf den Server
+  legen, aktualisieren lassen):
+
+  ```
+  vorher                                   nachher (mit dontCacheBustURLsMatching)
+  1) alter Stand   menu.ogg = 52630        1) alter Stand   menu.ogg = 52630
+     Deploy:       menu.ogg = 364365          Deploy:       menu.ogg = 364365
+  3) Bundle neu    index-oufIWByq.js       3) Bundle neu    index-oufIWByq.js
+     ausgeliefert  menu.ogg = 52630  ALT      ausgeliefert  menu.ogg = 364365  NEU
+  ```
+
+  `dontCacheBustURLsMatching` in `vite.config.ts` gilt jetzt nur noch für
+  Dateien, deren Name wirklich einen Hash trägt. Alles andere bekommt eine
+  Inhaltskennung. **Eine bereits installierte App heilt sich damit von
+  selbst** – die Kennung ändert den Zwischenspeicher-Schlüssel, also wird neu
+  geladen.
+
+  **Folge fürs Weiterbauen:** Wer eine Datei mit festem Namen nach
+  `public/` legt, muss nichts weiter tun – sie wird jetzt richtig behandelt.
+  Wer die Regel ändert, prüft am fertigen Build nach:
+  `grep -o '{url:"[^"]*",revision:[^}]*}' dist/sw.js` darf `null` nur bei den
+  hash-benannten Bundles zeigen.
 - **Zwei Wege zur Installation.** Android bekommt eine echte APK über Capacitor
   (`android/`, Workflow `android-apk.yml`). Android und iPhone können die Seite
   zusätzlich als PWA installieren (`src/platform/install.ts`). Eine iOS-App ist
@@ -591,6 +632,21 @@ Annahmen von mir, keine Vorgaben:
    sollte das Signal sein. Der Nutzer wollte stattdessen leise Musik
    („zwischen den Wellen braucht es doch Musik, aber leiser und nicht die
    Wellenmusik").
+
+**Welche Datei welches Stück ist, steht nicht mehr zur Debatte – es ist
+gemessen.** Beide Dateien heissen `menu.ogg` und `wave.ogg` und tragen keinen
+Titel in sich; die ursprünglichen Namen sind nie im Repo gelandet. Statt zu
+raten, wurden sie in Chromium dekodiert und ausgewertet:
+
+| Datei | Dauer | Anschläge/s | Helligkeit | also |
+| --- | --- | --- | --- | --- |
+| `menu.ogg` | **48 s** | 1,1 | 576 Hz | langsam, dunkel, getragen → **Retro Mystic** |
+| `wave.ogg` | **6 s** | 6,7 | 772 Hz | hektisch, hell, kurz → **Retro Comedy** |
+
+Wer die Zuordnung künftig anzweifelt, misst nach, statt die Dateien erneut zu
+tauschen – genau das wäre hier beinahe passiert und hätte den richtigen Stand
+wieder kaputtgemacht. Der eigentliche Fehler lag nicht in der Zuordnung,
+sondern beim Service Worker (siehe „Nicht jede Datei kam beim Update mit").
 
 **Damit trägt jetzt der WECHSEL das Signal, nicht die Stille** – und zwar
 doppelt: anderes Stück **und** andere Lautstärke. Nur eines von beidem wäre zu

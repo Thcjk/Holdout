@@ -59,6 +59,39 @@ export default defineConfig({
         // Offline-Zwischenspeicher ausschliessen.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         globPatterns: ["**/*.{js,css,html,svg,png,ogg,m4a,json}"],
+        /*
+         * ================================================================
+         * DER FEHLER, DER DIE MUSIK ZWEIMAL "NICHT GETAUSCHT" AUSSEHEN LIESS
+         * ================================================================
+         *
+         * Workbox merkt sich zu jeder Datei eine Kennung ("revision"), an der
+         * es erkennt, ob sie sich geaendert hat. Steht dort `null`, heisst das:
+         * "Der DATEINAME enthaelt schon eine Version, diese Datei aendert sich
+         * nie." Solche Dateien werden nach der ersten Installation NIE WIEDER
+         * geladen.
+         *
+         * Fuer `assets/index-Cx-XINIv.js` stimmt das - der Name enthaelt einen
+         * Hash und wechselt bei jeder Aenderung. Fuer `assets/audio/menu.ogg`
+         * stimmt es NICHT: Der Name bleibt immer gleich.
+         *
+         * Die Voreinstellung von vite-plugin-pwa nimmt aber pauschal ALLES
+         * unter `assets/` als unveraenderlich an - und dort landet auch alles
+         * aus `public/assets/`: Musik, Tilesheet, Vorschaubilder. Folge: Der
+         * Tausch der beiden Musikstuecke wurde zwar ausgeliefert, aber auf
+         * einem Geraet mit installierter App nie abgeholt. Die Versionsnummer
+         * sprang auf 1.16.0 (der Bundle-Name hat ja einen Hash), die Musik
+         * blieb die alte. Nachgestellt und gemessen:
+         *
+         *   1) alter Stand installiert   menu.ogg = 52630 Bytes
+         *      Deploy: auf dem Server liegt menu.ogg mit 364365 Bytes
+         *   3) nach dem Update  Bundle = index-oufIWByq.js  (neu!)
+         *      ausgeliefert     menu.ogg = 52630 Bytes      (alt!)
+         *
+         * Deshalb gilt "unveraenderlich" jetzt nur noch fuer Dateien, deren
+         * Name wirklich einen Hash traegt. Alles andere bekommt eine echte
+         * Kennung und wird bei Aenderung neu geladen.
+         */
+        dontCacheBustURLsMatching: /assets\/[^/]+-[\w-]{8,}\.(?:js|css)$/,
       },
     }),
   ],
