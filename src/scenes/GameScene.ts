@@ -28,6 +28,13 @@ import { createHudModel } from "../ui/HudModel";
 import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
 
+/**
+ * Wie laut die Musik zwischen den Wellen ist, als Anteil der vollen
+ * Lautstaerke. Deutlich leiser, aber nicht weg: Der Sprung auf volle
+ * Lautstaerke ist das Zeichen, dass die naechste Welle beginnt.
+ */
+const BREAK_MUSIC_VOLUME = 0.35;
+
 export interface GameSceneData {
   character?: CharacterId;
   /** Gesetzt, wenn die Runde aus der Lobby kommt. Sonst wird solo gespielt. */
@@ -195,20 +202,35 @@ export class GameScene extends Phaser.Scene {
   /**
    * Welche Musik gerade laufen soll.
    *
-   * NUR WAEHREND DER WELLE. In der Vorbereitung und in der Pause zwischen zwei
-   * Wellen ist es absichtlich still - die Stille ist das Signal. Setzt die
-   * Musik ein, faengt die naechste Welle an, und das hoert man auch dann, wenn
-   * man gerade nicht auf den Bildschirm schaut.
+   *   Welle              das treibende Stueck, volle Lautstaerke
+   *   dazwischen         das ruhige Stueck, deutlich leiser
+   *   angehalten (solo)  nichts
    *
-   * Angehalten (solo) ist ebenfalls still: Musik, die weiterlaeuft, waehrend
-   * das Bild steht, klingt nach Absturz.
+   * Der WECHSEL ist das Signal, nicht die Stille: Zwischen zwei Wellen laeuft
+   * leise das ruhige Stueck; setzt das treibende in voller Lautstaerke ein,
+   * beginnt die naechste Welle. Das hoert man auch dann, wenn man gerade nicht
+   * auf den Bildschirm schaut - und anders als bei voelliger Stille wirkt die
+   * Pause nicht wie ein Aussetzer.
+   *
+   * Angehalten bleibt es still: Musik, die weiterlaeuft, waehrend das Bild
+   * steht, klingt nach Absturz.
    *
    * `setMusic` prueft selbst, ob sich ueberhaupt etwas aendert - deshalb darf
    * das hier jedes Bild gerufen werden.
    */
   private updateMusic(): void {
-    const laeuftWelle = this.session.view.state.phase === "wave";
-    audio.setMusic(laeuftWelle && !this.paused && !this.finished ? "wave" : null);
+    if (this.paused || this.finished) {
+      audio.setMusic(null);
+      return;
+    }
+
+    if (this.session.view.state.phase === "wave") {
+      audio.setMusic("wave", 1);
+      return;
+    }
+
+    // Vorbereitung und Pause zwischen den Wellen.
+    audio.setMusic("menu", BREAK_MUSIC_VOLUME);
   }
 
   /**

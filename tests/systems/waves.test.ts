@@ -97,6 +97,22 @@ describe("Rundenablauf", () => {
     expect(player.health).toBeGreaterThan(100);
   });
 
+  it("meldet Start UND Ende einer Welle - beides braucht einen Klang", () => {
+    const state = createWorld(soloSetup());
+
+    startWave(state, 1);
+    expect(state.events.some((event) => event.type === "waveStart")).toBe(true);
+
+    // Welle leerraeumen: Damit ist sie geschafft.
+    state.events.length = 0;
+    state.pendingSpawns.length = 0;
+    stepRound(state, TICK_SECONDS);
+
+    const geschafft = state.events.find((event) => event.type === "waveCleared");
+    expect(geschafft).toBeDefined();
+    expect(geschafft?.type === "waveCleared" && geschafft.wave).toBe(1);
+  });
+
   it("hilft Gefallenen in der Pause wieder auf", () => {
     const state = createWorld([
       { id: "a", name: "A", character: "scout" },

@@ -34,6 +34,8 @@ function soundFor(event: GameEvent): SoundName | null {
       return event.amount > 0 ? "healed" : null;
     case "waveStart":
       return "waveStart";
+    case "waveCleared":
+      return "waveCleared";
     case "gameOver":
       return "gameOver";
     default:

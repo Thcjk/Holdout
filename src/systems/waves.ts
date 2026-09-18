@@ -168,6 +168,12 @@ function startBreak(state: WorldState): void {
   state.phase = "break";
   state.phaseTime = WAVES.breakSeconds;
 
+  // Gegenstueck zu "waveStart". Ohne dieses Ereignis gaebe es fuer das Ende
+  // einer Welle keinen Klang - und genau das ist der Moment, in dem die Musik
+  // aussetzt. Ein Signal sagt "geschafft", die Stille danach sagt "noch nicht
+  // wieder los".
+  state.events.push({ type: "waveCleared", wave: state.wave });
+
   for (const player of state.players) {
     // Ein Punkt pro geschaffter Welle - auch fuer Gefallene, sonst waere ein
     // schlechter Moment doppelt bestraft.

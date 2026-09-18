@@ -193,15 +193,23 @@ export const BUSH_TILE = tile(0, 0);
  * MUSIK
  * ================================================================
  *
- * Zwei Stuecke, vom Nutzer geliefert. Die Zuordnung ist Absicht:
+ * Zwei Stuecke, vom Nutzer geliefert. Die Zuordnung hat er festgelegt:
  *
- *   Menue   ruhig und freundlich - man waehlt in Ruhe aus.
- *   Welle   getragen und angespannt - es geht los.
+ *   Menue   Retro Mystic  - getragen, man waehlt in Ruhe aus.
+ *   Welle   Retro Comedy  - treibend, waehrend gekaempft wird.
  *
- * WICHTIG FUERS SPIELGEFUEHL: In der Pause ZWISCHEN den Wellen laeuft
- * absichtlich NICHTS. Die Stille ist das Signal - wenn die Musik wieder
- * einsetzt, beginnt die naechste Welle. Das hoert man auch dann, wenn man
- * gerade nicht auf den Bildschirm schaut.
+ * (Ich hatte sie zuerst andersherum eingebaut - das war eine Annahme von mir,
+ * keine Vorgabe.)
+ *
+ * WICHTIG FUERS SPIELGEFUEHL: Zwischen den Wellen laeuft das MENUESTUECK, und
+ * zwar leise (siehe `BREAK_MUSIC_VOLUME` in `GameScene`). Der WECHSEL ist das
+ * Signal - springt die Musik auf das treibende Stueck in voller Lautstaerke,
+ * beginnt die naechste Welle. Das hoert man auch dann, wenn man gerade nicht
+ * auf den Bildschirm schaut.
+ *
+ * Zuerst war dort Stille vorgesehen; der Nutzer wollte leise Musik statt
+ * nichts. Der Unterschied zur Welle muss aber hoerbar bleiben - deshalb ein
+ * ANDERES Stueck UND eine andere Lautstaerke, nicht nur eins von beidem.
  */
 export const MUSIC_MENU = `${import.meta.env.BASE_URL}assets/audio/menu.ogg`;
 export const MUSIC_WAVE = `${import.meta.env.BASE_URL}assets/audio/wave.ogg`;

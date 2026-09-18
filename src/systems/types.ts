@@ -207,6 +207,8 @@ export type GameEvent =
   | { type: "levelUp"; playerId: string; skill: SkillId; level: number }
   | { type: "spawnWarning"; x: number; y: number }
   | { type: "waveStart"; wave: number }
+  /** Welle geschafft - der Moment, in dem die Pause beginnt. */
+  | { type: "waveCleared"; wave: number }
   | { type: "gameOver"; score: number; wave: number };
 
 export interface SpawnOrder {

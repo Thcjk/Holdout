@@ -17,6 +17,12 @@ const MUTE_STORAGE_KEY = "arena-shooter.muted";
 
 import { MUSIC_MENU, MUSIC_WAVE } from "../config/assets";
 
+/**
+ * Grundlautstaerke der Musik. `setMusic` multipliziert sie mit einem Faktor -
+ * so bleibt "wie laut ist Musik ueberhaupt" an einer Stelle einstellbar.
+ */
+const MUSIC_BASE_VOLUME = 0.5;
+
 /** Die beiden Musikstuecke. */
 export type MusicTrack = "menu" | "wave";
 
@@ -33,6 +39,7 @@ export type SoundName =
   | "blast"
   | "healed"
   | "waveStart"
+  | "waveCleared"
   | "gameOver";
 
 export class AudioEngine {
@@ -43,6 +50,8 @@ export class AudioEngine {
   private readonly tracks = new Map<MusicTrack, HTMLAudioElement>();
   /** Was gerade laufen soll - unabhaengig davon, ob es auch laeuft. */
   private currentTrack: MusicTrack | null = null;
+  /** Wie laut, 0 bis 1. Zwischen den Wellen laeuft dasselbe Stueck leiser. */
+  private currentVolume = 1;
   /** Zeitgeber des Ersatzklangs, falls kein Ogg moeglich ist. */
   private fallbackTimer: number | null = null;
   private muted = false;
@@ -167,6 +176,17 @@ export class AudioEngine {
         this.tone(554, 0.12, "square", 0.13, 554, 0.1);
         this.tone(659, 0.2, "square", 0.13, 659, 0.2);
         break;
+      case "waveCleared":
+        /*
+         * Gegenstueck zum Wellenstart: Der faehrt hinauf (440-554-659), dieser
+         * loest nach OBEN auf und bleibt stehen (523-659-784, ein C-Dur-
+         * Dreiklang). Aufwaerts heisst "geschafft"; abwaerts klaenge nach
+         * Niederlage, und das waere hier genau das falsche Signal.
+         */
+        this.tone(523, 0.12, "triangle", 0.14);
+        this.tone(659, 0.14, "triangle", 0.14, 659, 0.09);
+        this.tone(784, 0.3, "triangle", 0.15, 784, 0.18);
+        break;
       case "gameOver":
         this.tone(440, 0.3, "triangle", 0.2, 220);
         this.tone(330, 0.5, "triangle", 0.18, 150, 0.22);
@@ -179,22 +199,27 @@ export class AudioEngine {
    * MUSIK
    * ================================================================
    *
-   * Welches Stueck gerade laufen soll - oder `null` fuer Stille.
+   * Welches Stueck gerade laufen soll - oder `null` fuer Stille - und wie laut.
    *
-   * Die STILLE ist hier ein Spielelement, kein Versaeumnis: Zwischen zwei
-   * Wellen laeuft nichts. Setzt die Musik wieder ein, beginnt die naechste
-   * Welle. Das hoert man auch, wenn man gerade nicht hinschaut - und man
-   * braucht dafuer keine Anzeige zu lesen.
+   * DER WECHSEL IST DAS SIGNAL, NICHT DIE STILLE. Zwischen zwei Wellen laeuft
+   * leise das ruhige Stueck; setzt das treibende in voller Lautstaerke ein,
+   * beginnt die naechste Welle. Das hoert man auch dann, wenn man gerade nicht
+   * hinschaut - man braucht keine Anzeige zu lesen.
+   *
+   * (Hier war zuerst wirklich Stille vorgesehen. Der Nutzer wollte stattdessen
+   * leise Musik - deshalb der zweite Parameter.)
    *
    * Nur EINE Stelle steuert das (`setMusic`), statt frueher zwei (`startMusic`
    * und `stopMusic`). Mit zwei Schaltern und drei Szenen, die sie rufen, waere
-   * schwer zu sagen, was gerade laufen sollte.
+   * schwer zu sagen, was gerade laufen sollte. Der Vergleich oben prueft
+   * deshalb BEIDES: Dasselbe Stueck in anderer Lautstaerke ist eine Aenderung.
    */
-  setMusic(track: MusicTrack | null): void {
-    if (this.currentTrack === track) {
+  setMusic(track: MusicTrack | null, volume = 1): void {
+    if (this.currentTrack === track && this.currentVolume === volume) {
       return;
     }
     this.currentTrack = track;
+    this.currentVolume = volume;
     this.applyMusic();
   }
 
@@ -232,6 +257,16 @@ export class AudioEngine {
     }
 
     this.stopFallbackMusic();
+
+    /*
+     * Lautstaerke JEDES MAL neu setzen, nicht nur beim Anlegen.
+     *
+     * Zwischen den Wellen laeuft dasselbe Stueck wie im Menue, nur leiser -
+     * ohne diese Zeile bliebe es auf der Lautstaerke stehen, mit der es zuletzt
+     * lief, und der Unterschied zwischen "Gefecht" und "Verschnaufen" waere weg.
+     */
+    element.volume = MUSIC_BASE_VOLUME * this.currentVolume;
+
     /*
      * `play()` gibt ein Promise zurueck, das fehlschlagen DARF: Browser
      * verweigern Ton, bevor der Nutzer etwas angetippt hat. Das ist kein
@@ -264,7 +299,7 @@ export class AudioEngine {
       const element = new Audio(url);
       element.loop = true;
       element.preload = "auto";
-      element.volume = 0.5;
+      element.volume = MUSIC_BASE_VOLUME;
       this.tracks.set(name, element);
     }
   }

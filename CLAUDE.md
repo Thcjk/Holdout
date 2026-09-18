@@ -569,26 +569,56 @@ erwiesen:
 **Offen:** `BRIEFING.md` Abschnitt 7 nennt weiterhin die Cartoon-Pakete; der
 Nutzer wollte ihn aktualisieren, die Änderung ist hier nie angekommen.
 
-### Musik: Stille als Signal
+### Musik: der Wechsel ist das Signal
 
 Zwei Stücke, vom Nutzer geliefert (`public/assets/audio/`), Pfade in
 `config/assets.ts`:
 
-| Wann | Stück |
-| --- | --- |
-| Menü und Lobby | `menu.ogg` (Retro Comedy) |
-| **Während einer Welle** | `wave.ogg` (Retro Mystic) |
-| Vorbereitung, Pause zwischen den Wellen, Pausenbildschirm | **nichts** |
+| Wann | Stück | Lautstärke |
+| --- | --- | --- |
+| Menü und Lobby | `menu.ogg` (Retro Mystic) | voll |
+| **Während einer Welle** | `wave.ogg` (Retro Comedy) | voll |
+| Vorbereitung und Pause zwischen den Wellen | `menu.ogg`, das ruhige Stück | **leise** (35 %) |
+| Pausenbildschirm (nur solo) | nichts | – |
 
-**Die Stille ist ein Spielelement, kein Versäumnis.** Setzt die Musik ein,
-beginnt die nächste Welle – das hört man auch dann, wenn man gerade nicht auf
-den Bildschirm schaut. Genau so vom Nutzer gewünscht.
+**Zwei Korrekturen des Nutzers stecken in dieser Tabelle**, und beide waren
+Annahmen von mir, keine Vorgaben:
+
+1. Die Zuordnung war zuerst vertauscht („du hast die sound falschherum
+   gebaut"). Retro Mystic ist das getragene Stück und gehört ins Menü, Retro
+   Comedy das treibende und gehört ins Gefecht.
+2. Zwischen den Wellen war zuerst **Stille** vorgesehen – die Stille selbst
+   sollte das Signal sein. Der Nutzer wollte stattdessen leise Musik
+   („zwischen den Wellen braucht es doch Musik, aber leiser und nicht die
+   Wellenmusik").
+
+**Damit trägt jetzt der WECHSEL das Signal, nicht die Stille** – und zwar
+doppelt: anderes Stück **und** andere Lautstärke. Nur eines von beidem wäre zu
+wenig. Dasselbe Stück leise und laut wechselt zu unauffällig, und ein anderes
+Stück auf gleicher Lautstärke hört man im Gefecht nicht heraus. So merkt man
+den Wellenstart auch dann, wenn man gerade nicht auf den Bildschirm schaut.
+
+**Die Lautstärke ist ein zweiter Parameter, kein zweiter Schalter**
+(`audio.setMusic(track, volume)`, Grundlautstärke × Faktor). Zwei Folgen im
+Code, beide Fallen:
+
+- Der Vergleich „ändert sich überhaupt etwas?" muss **beides** prüfen.
+  Verglichen er nur das Stück, bliebe beim Wechsel Menü → Pause die volle
+  Lautstärke stehen, und der Unterschied wäre weg.
+- `applyMusic()` setzt `element.volume` bei **jedem** Aufruf neu, nicht nur
+  beim Anlegen. Sonst behielte das Element den zuletzt gesetzten Wert.
+
+**Zusätzlich hat jetzt jeder Wellenstart UND jedes Wellenende einen Klang**
+(die synthetisierten, wie vorher): `waveStart` als tiefer Stoss, `waveCleared`
+als steigender Dreiklang (523/659/784 Hz). Dafür meldet die Simulation ein
+eigenes Ereignis `waveCleared` – die Darstellung liest es nur ab, entschieden
+wird es in `systems/waves.ts` (Architektur-Grundregel).
 
 **Eine Stelle statt zwei.** Früher gab es `startMusic()` und `stopMusic()`;
 mit zwei Schaltern und vier Szenen, die sie rufen, war schwer zu sagen, was
-gerade laufen sollte. Jetzt gibt es nur `audio.setMusic("menu" | "wave" | null)`.
-Die Spielszene ruft das jedes Bild aus der Rundenphase heraus – `setMusic`
-prüft selbst, ob sich etwas ändert, und tut sonst nichts.
+gerade laufen sollte. Jetzt gibt es nur `audio.setMusic(...)`. Die Spielszene
+ruft das jedes Bild aus der Rundenphase heraus – `setMusic` prüft selbst, ob
+sich etwas ändert, und tut sonst nichts.
 
 **Beim Wellenstart beginnt das Stück von vorn** (`currentTime = 0` beim
 Anhalten). Eine Welle soll mit ihrem Anfang beginnen, nicht dort weitermachen,
@@ -599,19 +629,24 @@ seit jeher, **Safari auf dem iPhone erst ab 17.4** (März 2024). Auf einem
 älteren iPhone bliebe es sonst stumm, ohne dass man den Grund sähe. Deshalb
 prüft `canPlayOgg()` vorher mit `canPlayType`, und wenn der Browser nicht kann,
 übernimmt der bisherige synthetisierte Akkordteppich – weniger schön, aber
-besser als Stille. Die Pause zwischen den Wellen bleibt auch dort still.
+besser als Stille.
 
-**Im Browser nachgewiesen** (über mitgeschriebene `play()`/`pause()`-Aufrufe,
-weil `new Audio(...)` ein Element ausserhalb des DOM erzeugt und mit
-`querySelectorAll` nicht zu finden ist):
+**Im Browser nachgemessen** (über mitgeschriebene `play()`/`pause()`-Aufrufe
+samt `volume`, weil `new Audio(...)` ein Element ausserhalb des DOM erzeugt und
+mit `querySelectorAll` nicht zu finden ist). Gegner auf 1 Leben gesetzt, damit
+mehrere Wellen in eine Messung passen:
 
 ```
-Menue:         PLAY  menu.ogg
-Vorbereitung:  PAUSE menu.ogg , PAUSE wave.ogg      → still
-Welle laeuft:  PLAY  wave.ogg
-nach Welle 1:  PAUSE wave.ogg                       → still
-Welle 2:       PLAY  wave.ogg
+1 Menue          laeuft: menu.ogg vol=0.50
+2 Vorbereitung   laeuft: menu.ogg vol=0.17   (PAUSE wave , PLAY menu)
+   +4s           laeuft: wave.ogg vol=0.50   <- Welle 1 beginnt
+  +10s           laeuft: menu.ogg vol=0.17   <- Welle 1 geschafft
+  +20s           laeuft: wave.ogg vol=0.50   <- Welle 2
+  +28s           laeuft: menu.ogg vol=0.17
 ```
+
+0,17 ist 0,5 × 0,35 – Grundlautstärke mal `BREAK_MUSIC_VOLUME` aus
+`GameScene`.
 
 ### Bewegung: Kennlinie statt Schwelle, Achsen getrennt
 
