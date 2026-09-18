@@ -1145,7 +1145,7 @@ Zwei Konsequenzen, beide im Code:
 - **Keine Host-Migration.** Verlässt der Host, endet die Runde mit Hinweis -
   so im Briefing vorgesehen.
 - **Der TURN-Weg ist auf zwei echten Geräten noch nicht bestätigt.** Abruf,
-  Rückfall und Wegerkennung sind geprüft (149 Tests, dazu ein Durchlauf gegen
+  Rückfall und Wegerkennung sind geprüft (150 Tests, dazu ein Durchlauf gegen
   eine echte WebRTC-Verbindung). Ob im Fall „ein Handy WLAN, eines Mobilfunk"
   wirklich `relay` herauskommt, zeigt nur der Test mit zwei Geräten - die
   Lobby sagt es dann von selbst. **Dafür muss vorher das Secret
