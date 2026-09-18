@@ -12,7 +12,7 @@
  */
 
 import Phaser from "phaser";
-import { ATLAS_KEY, BODY_RADIUS } from "../assets/textures";
+import { CHARACTER_TILES, SHEET_KEY, WORLD_SCALE } from "../config/assets";
 import { audio } from "../audio/AudioEngine";
 import { CHARACTERS, CHARACTER_ORDER } from "../config/balance";
 import { COLORS, SAFE, VIEWPORT } from "../config/constants";
@@ -299,8 +299,16 @@ export class MenuScene extends Phaser.Scene {
     });
     this.cards.set(id, card);
 
-    const portrait = this.add.image(centerX, CARD_Y - 78, ATLAS_KEY, id);
-    portrait.setScale(32 / BODY_RADIUS);
+    /*
+     * Das Bild auf der Karte kommt aus demselben Sheet wie die Figur im Spiel.
+     *
+     * Sonst waere die Auswahl eine Luege: Man saehe im Menue etwas anderes, als
+     * man danach steuert. Ganzzahlig vergroessert (viermal statt dreimal wie in
+     * der Welt) - auf der Karte ist Platz, und bei Pixel-Art muss der Faktor
+     * ganzzahlig bleiben, sonst franst das Bild aus.
+     */
+    const portrait = this.add.image(centerX, CARD_Y - 78, SHEET_KEY, CHARACTER_TILES[id]);
+    portrait.setScale(WORLD_SCALE + 1);
 
     this.add
       .text(centerX, CARD_Y - 34, definition.name, {

@@ -419,6 +419,95 @@ er ausblenden will. Ergebnis war ein Abbruch mit „Cannot read properties of
 undefined", und zwar *nur im echten Spiel*, nicht in den Tests. Gefunden hat
 ihn erst der Durchlauf im Browser-Emulator.
 
+### Pixel Art: das Kenney-Paket
+
+Seit dem 2026-09-18 kommen Figuren und Arena aus **"Topdown Shooter Pixel"**
+von Kenney (CC0, `public/assets/`). Alles steht in **einer** Datei:
+`src/config/assets.ts`. Im Spielcode steht nur `CHARACTER_TILES.scout`, nie
+eine Zahl - wer das Paket wechselt, ändert diese Datei und sonst nichts.
+
+**Kein Atlas, sondern ein Spritesheet.** Das Paket bringt **keine Datei mit
+Koordinaten** mit (kein XML, kein JSON) - nur Lizenz, zwei Vorschaubilder und
+die Sheets. `load.atlasXML` fällt damit weg. Stattdessen ein gleichmässiges
+Raster, das sich nachrechnen lässt:
+
+```
+577 = 34 × (16 + 1) − 1        339 = 20 × (16 + 1) − 1
+→ 16×16-Kacheln, 1 px Abstand, kein Rand, 34 × 20 = 680 Kacheln
+```
+
+`tile(spalte, reihe)` rechnet das in die Nummer um, die Phaser benutzt - so
+stehen in der Zuordnung Koordinaten statt Zahlen wie 64.
+
+#### Die Zuordnung
+
+Auf dem Sheet ist die **Spalte die Waffe** und die **Reihe das Outfit**. Beides
+wird genutzt: Farbe allein reicht bei 16 Pixeln nicht.
+
+| | Kachel | Aussehen |
+| --- | --- | --- |
+| Scout | (30, 1) | blau, kurze Waffe |
+| Tank | (32, 2) | orange, grosse quer gehaltene Waffe |
+| Sniper | (33, 3) | grün, längster Lauf |
+| Läufer | (28, 7) | braun-grün gefleckt, **ohne Waffe** |
+| Brocken | (29, 15) | dunkel mit Grün, Arme vor |
+| Schütze | (31, 6) | Tarnfarben, **mit Gewehr** |
+
+**Das Paket enthält keine Monster.** Alle 96 Figuren sind derselbe Mensch in
+anderer Kleidung - keine Zombies, keine Kreaturen, keine Grössenvarianten.
+Unterschieden wird deshalb über Farbe, **Bewaffnung** und Grösse. Die
+Bewaffnung trägt dabei die Bedeutung: Wer keine Waffe hat, macht
+Berührungsschaden und muss zu einem hin; wer eine hat, schiesst aus der Ferne.
+Das liest man ohne Erklärung.
+
+#### Drei Dinge, die gemessen wurden statt geraten
+
+1. **Die Figurengrösse.** Bei allen Figuren belegt der Körper senkrecht genau
+   die Pixel 2 bis 13, also **12 Pixel**. Die Breite schwankt (8 px ohne Waffe
+   bis 15 px mit langem Lauf) und taugt deshalb nicht als Mass.
+   `SPRITE_BODY_RADIUS = 6` sorgt dafür, dass die Höhe der Figur genau dem
+   Durchmesser des Trefferkreises entspricht - was man sieht, ist auch das, was
+   getroffen wird. Für Spieler und Schütze (Radius 18) ergibt das glatt ×3.
+2. **Der Weltmassstab muss dazu passen** (`WORLD_SCALE = 3`). Beim ersten
+   Versuch wurden Figuren dreifach, Boden und Kisten aber 1:1 gezeichnet.
+   Ergebnis: Ein Buschfeld von 180×140 px bestand aus rund hundert
+   Miniatursträuchern und sah aus wie gemusterte Tapete, und die Figur war
+   grösser als eine Bodenkachel. In Kenneys Vorlage ist eine Figur etwa eine
+   Kachel gross - also bekommt die Welt denselben Faktor.
+3. **Die Buschfelder sind Gras, nicht die Buschkacheln.** Das klingt verkehrt
+   und ist gemessen: Die Buschkacheln (18,6) und (19,6) sind **Viertelstücke**
+   eines grossen Busches und decken einzeln gekachelt nur **54 %** ihrer
+   Fläche - dazwischen klaffen Lücken. Die Graskacheln decken **100 %** und
+   wirken als Fläche wie hohes Gras: genau das Bild aus Brawl Stars, das ohne
+   Erklärung sagt „da kann man drin verschwinden".
+
+Deshalb ist der **Boden Stein und nicht Gras**: Grün hat jetzt eine feste
+Bedeutung - „hier kann man sich verstecken". Wäre auch der Boden grün, ginge
+sie verloren, und Lebensbalken und Namen hätten weniger Kontrast.
+
+#### Was sonst noch dranhing
+
+- **`pixelArt: true` und `roundPixels: true`** in der Phaser-Konfiguration.
+  Ohne das erste wird ein dreifach vergrössertes 16-px-Sprite matschig, weil
+  der Browser Zwischenfarben ausrechnet; ohne das zweite flimmern die Kanten
+  bei langsamer Bewegung. Dafür sind `antialias: true` und
+  `roundPixels: false` gewichen, die gegen Weisspixel an gezeichneten Formen
+  standen - diese Formen sind grösstenteils weg.
+- **Der Pfad braucht `import.meta.env.BASE_URL`.** Auf GitHub Pages liegt das
+  Spiel unter `/Holdout/`; ein Pfad, der mit `/assets/...` beginnt, zeigte dort
+  ins Leere. Genau dieser Fehler hat das Projekt schon einmal lahmgelegt.
+- **Die Karten im Menü zeigen dieselben Sprites** wie das Spiel. Sonst wäre die
+  Auswahl eine Lüge: Man sähe etwas anderes, als man danach steuert.
+- **Projektile, Funken und Punkte bleiben gezeichnet.** Das Paket hat dafür
+  nichts Passendes, und abstrakte Punkte passen in jeden Stil.
+- **Deckung und Aussenmauer sehen verschieden aus** (Holzkiste gegen
+  Steinwand), obwohl die Simulation beides als dasselbe Rechteck kennt. Rein
+  optisch - hinter der Aussenmauer steht nie jemand, hinter einer Kiste
+  ständig.
+
+**Offen:** `BRIEFING.md` Abschnitt 7 nennt weiterhin die Cartoon-Pakete; der
+Nutzer wollte ihn aktualisieren, die Änderung ist hier nie angekommen.
+
 ### Bewegung: Kennlinie statt Schwelle, Achsen getrennt
 
 Zwei Änderungen am Steuerungsgefühl, beide gemessen statt geschätzt.
@@ -682,7 +771,7 @@ zu zeichnen?_ Wenn ja, gehört es nach `systems/`.
 | --------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Phaser-Version        | Phaser 3 (3.90), nicht Phaser 4                                           | Briefing gibt Phaser 3 vor. Für Einsteiger zählt vor allem, dass Tutorials, Forenantworten und Beispiele passen - dieses Material gibt es fast ausschliesslich für Phaser 3.                                                                                                                                                           |
 | Phaser Arcade Physics | Wird **nicht** benutzt                                                    | Das Briefing nennt Arcade Physics für die Gegner-KI (Abschnitt 4), aber die Architektur-Grundregel (Abschnitt 5) ist stärker: Die Simulation muss ohne Phaser laufen. Kollision Kreis gegen Rechteck steht deshalb selbst in `systems/collision.ts` - rund 60 Zeilen, testbar.                                                         |
-| Sprites               | Werden beim Start gezeichnet statt von Kenney geladen                     | kenney.nl und itch.io sind aus dieser Entwicklungsumgebung nicht erreichbar. Entscheidend ist, dass die Schnittstelle stimmt: Im Spielcode steht nur `FRAMES.runner`. Auf echte Sprites zu wechseln heisst, `buildAtlas` in `src/assets/textures.ts` durch ein `scene.load.atlas` zu ersetzen - eine Datei, nicht fünfzig Fundstellen. |
+| Sprites               | **Pixel Art von Kenney** (seit 2026-09-18). Projektile, Funken und Punkte bleiben gezeichnet | Ursprünglich alles gezeichnet, weil kenney.nl aus dieser Entwicklungsumgebung nicht erreichbar ist. Der Nutzer hat das Paket selbst ins Repo gelegt. Dass der Wechsel eine Datei war und keine fünfzig Fundstellen, lag genau an der damals gewählten Schnittstelle. Siehe „Pixel Art" unten. |
 | Ton                   | Wird mit der Web-Audio-API synthetisiert statt als .ogg geladen           | Gleicher Grund. Gleiche Schnittstelle: Im Spielcode steht nur `audio.play("hit")`, siehe `src/audio/`.                                                                                                                                                                                                                                 |
 | HUD und Touch         | Eigene Szene (`HudScene`)                                                 | Die Spielkamera zoomt je nach Spielerabstand, und alles in ihrer Kamera zoomt mit - auch Text und Joysticks, die fest am Bildschirmrand kleben sollen. Eine zweite Szene hat ihre eigene Kamera ohne Zoom.                                                                                                                             |
 | Spielerform           | Kreis statt Rechteck                                                      | Ein Kreis gleitet an Wänden und Ecken entlang, ein Rechteck verhakt sich. Genau dieses Verhaken lässt Top-down-Steuerung zäh wirken.                                                                                                                                                                                                   |
@@ -696,6 +785,7 @@ src/
   main.ts                 Phaser-Konfiguration, Szenenliste
   config/
     balance.ts            ALLE Spielwerte
+    assets.ts             ALLE Sprites: Kachelnummern, Massstab, Zuordnung
     constants.ts          Arena, Bildschirm, Tickrate, Kamera, Touch, Farben
     arena.ts              Arena als reine Daten: Wände, Büsche, Spawnzonen
   systems/                PHASER-FREI - die Simulation

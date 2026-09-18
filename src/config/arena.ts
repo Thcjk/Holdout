@@ -16,7 +16,7 @@ export const WALL_THICKNESS = 40;
 export const SPAWN_POINT: Vec2 = { x: ARENA.width / 2, y: ARENA.height / 2 };
 
 /** Die vier Aussenmauern. Sie halten Spieler und Gegner im Spielfeld. */
-const OUTER_WALLS: Rect[] = [
+export const OUTER_WALLS: Rect[] = [
   { x: 0, y: 0, width: ARENA.width, height: WALL_THICKNESS },
   { x: 0, y: ARENA.height - WALL_THICKNESS, width: ARENA.width, height: WALL_THICKNESS },
   { x: 0, y: 0, width: WALL_THICKNESS, height: ARENA.height },
@@ -27,7 +27,7 @@ const OUTER_WALLS: Rect[] = [
  * Acht Deckungsbloecke, symmetrisch gespiegelt, mit offener Mitte.
  * Symmetrisch, damit keine Spielerposition von vornherein besser ist als eine andere.
  */
-const COVER_BLOCKS: Rect[] = [
+export const COVER_BLOCKS: Rect[] = [
   { x: 280, y: 240, width: 200, height: 60 },
   { x: 1120, y: 240, width: 200, height: 60 },
   { x: 280, y: 900, width: 200, height: 60 },

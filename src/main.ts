@@ -85,10 +85,25 @@ function buildConfig(): Phaser.Types.Core.GameConfig {
       // wird stillschweigend ignoriert.
       activePointers: 4,
     },
+    /*
+     * Pixel-Art statt weichgezeichneter Formen.
+     *
+     * `pixelArt` schaltet die Glaettung beim Vergroessern ab. Ohne das wird ein
+     * 16 Pixel grosses Sprite, das auf das Dreifache skaliert wird, matschig -
+     * der Browser rechnet dann Zwischenfarben aus, und genau die will man bei
+     * Pixel-Art nicht.
+     *
+     * `roundPixels` setzt Sprites auf ganze Pixel statt auf Zwischenpositionen.
+     * Ohne das flimmern die Kanten, sobald sich etwas langsam bewegt.
+     *
+     * Hier stand vorher `antialias: true` und `roundPixels: false`, gegen
+     * Weisspixel an den Raendern GEZEICHNETER Formen. Diese Formen sind
+     * groesstenteils weg - Figuren und Arena kommen jetzt aus dem Sheet.
+     */
+    pixelArt: true,
     render: {
-      antialias: true,
-      // Verhindert Weisspixel an den Raendern gezeichneter Formen auf manchen Handys.
-      roundPixels: false,
+      antialias: false,
+      roundPixels: true,
     },
     // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser hier
     // keine eigene Physik-Engine (siehe CLAUDE.md, Architektur-Grundregel).

@@ -11,6 +11,12 @@
 
 import Phaser from "phaser";
 import { ATLAS_KEY, BODY_RADIUS, FRAMES } from "../assets/textures";
+import {
+  CHARACTER_TILES,
+  ENEMY_TILES,
+  SHEET_KEY,
+  SPRITE_BODY_RADIUS,
+} from "../config/assets";
 import { COLORS, DEPTH } from "../config/constants";
 import type { WorldView } from "../net/GameSession";
 import { SHOW_HITBOXES } from "../platform/debugFlags";
@@ -21,16 +27,16 @@ import type { CharacterId, EnemyState, EnemyType, PlayerState, WorldState } from
 // Bilder statt sechs - der Unterschied zwischen "war da was?" und "getroffen".
 const HIT_FLASH_MS = 130;
 
-const ENEMY_FRAMES: Record<EnemyType, string> = {
-  runner: FRAMES.runner,
-  brute: FRAMES.brute,
-  shooter: FRAMES.shooter,
+const ENEMY_FRAMES: Record<EnemyType, number> = {
+  runner: ENEMY_TILES.runner,
+  brute: ENEMY_TILES.brute,
+  shooter: ENEMY_TILES.shooter,
 };
 
-const CHARACTER_FRAMES: Record<CharacterId, string> = {
-  scout: FRAMES.scout,
-  tank: FRAMES.tank,
-  sniper: FRAMES.sniper,
+const CHARACTER_FRAMES: Record<CharacterId, number> = {
+  scout: CHARACTER_TILES.scout,
+  tank: CHARACTER_TILES.tank,
+  sniper: CHARACTER_TILES.sniper,
 };
 
 /** Halber Durchmesser des Leuchtkerns eines Projektils im Atlas. */
@@ -58,7 +64,7 @@ export class EntityRenderer {
    * sich nichts geaendert hat. Bei 40 Gegnern in jedem Bild ist das messbare
    * Arbeit fuer nichts - deshalb wird der Wechsel hier gemerkt.
    */
-  private readonly enemyFrames: string[] = [];
+  private readonly enemyFrames: number[] = [];
   private readonly projectileFrames: string[] = [];
 
   constructor(
@@ -159,7 +165,7 @@ export class EntityRenderer {
       const position = this.simulation.renderPlayerPosition(player.id);
 
       visual.body.setPosition(position.x, position.y);
-      visual.body.setScale(player.radius / BODY_RADIUS);
+      visual.body.setScale(player.radius / SPRITE_BODY_RADIUS);
       visual.body.setRotation(Math.atan2(player.facing.y, player.facing.x));
 
       // Am Boden: grau und flach. Unverwundbar nach einem Treffer: blinkt.
@@ -199,7 +205,7 @@ export class EntityRenderer {
       return existing;
     }
 
-    const body = this.scene.add.image(0, 0, ATLAS_KEY, CHARACTER_FRAMES[player.character]);
+    const body = this.scene.add.image(0, 0, SHEET_KEY, CHARACTER_FRAMES[player.character]);
     body.setDepth(DEPTH.players);
 
     const label = this.scene.add.text(0, 0, player.name, {
@@ -229,11 +235,11 @@ export class EntityRenderer {
 
       const frame = ENEMY_FRAMES[enemy.type];
       if (this.enemyFrames[i] !== frame) {
-        sprite.setTexture(ATLAS_KEY, frame);
+        sprite.setTexture(SHEET_KEY, frame);
         this.enemyFrames[i] = frame;
       }
       sprite.setPosition(position.x, position.y);
-      sprite.setScale(enemy.radius / BODY_RADIUS);
+      sprite.setScale(enemy.radius / SPRITE_BODY_RADIUS);
       sprite.setVisible(true);
 
       // In Laufrichtung drehen, solange der Gegner sich bewegt.
@@ -272,7 +278,7 @@ export class EntityRenderer {
       return existing;
     }
 
-    const sprite = this.scene.add.image(0, 0, ATLAS_KEY, FRAMES.runner);
+    const sprite = this.scene.add.image(0, 0, SHEET_KEY, ENEMY_TILES.runner);
     sprite.setDepth(DEPTH.enemies);
     this.enemySprites[index] = sprite;
     return sprite;

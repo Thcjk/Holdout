@@ -1,70 +1,142 @@
 /**
- * Zeichnet die unbewegliche Arena: Boden, Raster, Waende und Buesche.
+ * Zeichnet die unbewegliche Arena: Boden, Waende, Deckung und Buesche.
  *
- * Alles hier wird einmal gezeichnet und danach nicht mehr angefasst - das ist
+ * Alles hier wird einmal aufgebaut und danach nicht mehr angefasst - das ist
  * billiger, als jedes Bild neu zu zeichnen.
+ *
+ * WARUM `tileSprite` UND NICHT VIELE EINZELBILDER: Eine Kachel ist 16 Pixel
+ * gross, die Arena 1600 x 1200 - das waeren 7500 einzelne Bilder, jedes mit
+ * eigener Position und eigenem Zeichenaufruf. Ein `tileSprite` ist EIN Objekt,
+ * das seine Kachel selbst wiederholt. Es passt ausserdem auf beliebige Masse:
+ * Die Deckungsbloecke sind 200 x 60 Pixel gross, was kein glattes Vielfaches
+ * von 16 ist - ein `tileSprite` schneidet die letzte Kachel einfach ab, statt
+ * ueber den Rand zu stehen.
  */
 
 import Phaser from "phaser";
-import { ARENA, COLORS, DEPTH } from "../config/constants";
-import type { WorldState } from "../systems/types";
+import {
+  BUSH_TILE,
+  CRATE_TILE,
+  FLOOR_TILES,
+  SHEET_KEY,
+  WALL_TILE,
+  WORLD_SCALE,
+} from "../config/assets";
+import { COVER_BLOCKS } from "../config/arena";
+import { ARENA, DEPTH } from "../config/constants";
+import type { Rect, WorldState } from "../systems/types";
 
 export class ArenaRenderer {
-  private readonly floor: Phaser.GameObjects.Graphics;
-  private readonly walls: Phaser.GameObjects.Graphics;
-  private readonly bushes: Phaser.GameObjects.Graphics;
+  /** Alles, was beim Verlassen der Szene wieder wegmuss. */
+  private readonly parts: Phaser.GameObjects.GameObject[] = [];
 
-  constructor(scene: Phaser.Scene, state: WorldState) {
-    this.floor = scene.add.graphics().setDepth(DEPTH.floor);
-    this.bushes = scene.add.graphics().setDepth(DEPTH.bushesAbove);
-    this.walls = scene.add.graphics().setDepth(DEPTH.walls);
-
+  constructor(
+    private readonly scene: Phaser.Scene,
+    state: WorldState,
+  ) {
     this.drawFloor();
     this.drawWalls(state);
     this.drawBushes(state);
   }
 
   destroy(): void {
-    this.floor.destroy();
-    this.walls.destroy();
-    this.bushes.destroy();
+    for (const part of this.parts) {
+      part.destroy();
+    }
+    this.parts.length = 0;
   }
 
+  /**
+   * Der Boden.
+   *
+   * Vier Steinkacheln in grossen Feldern statt einer einzigen ueber alles:
+   * Eine einzelne Kachel ueber 1600 Pixel wiederholt ergibt ein sichtbares
+   * Streifenmuster, weil das Auge die Wiederholung findet. Vier Felder
+   * unterschiedlicher Kachel brechen das auf, ohne dass es unruhig wird.
+   */
   private drawFloor(): void {
-    this.floor.fillStyle(COLORS.floor, 1);
-    this.floor.fillRect(0, 0, ARENA.width, ARENA.height);
+    const half = { w: ARENA.width / 2, h: ARENA.height / 2 };
+    const felder: [number, number, number][] = [
+      [0, 0, 0],
+      [half.w, 0, 1],
+      [0, half.h, 2],
+      [half.w, half.h, 3],
+    ];
 
-    // Raster: hilft beim Entwickeln, Entfernungen und Tempo einzuschaetzen,
-    // und gibt dem Auge im Spiel einen Anhaltspunkt fuer die eigene Bewegung.
-    this.floor.lineStyle(1, COLORS.floorGrid, 1);
-    const step = 100;
-    for (let x = step; x < ARENA.width; x += step) {
-      this.floor.lineBetween(x, 0, x, ARENA.height);
-    }
-    for (let y = step; y < ARENA.height; y += step) {
-      this.floor.lineBetween(0, y, ARENA.width, y);
-    }
-  }
-
-  private drawWalls(state: WorldState): void {
-    for (const wall of state.walls) {
-      this.walls.fillStyle(COLORS.wall, 1);
-      this.walls.fillRect(wall.x, wall.y, wall.width, wall.height);
-      this.walls.lineStyle(2, COLORS.wallEdge, 1);
-      this.walls.strokeRect(wall.x, wall.y, wall.width, wall.height);
+    for (const [x, y, index] of felder) {
+      this.add(
+        this.scene.add
+          .tileSprite(x, y, half.w, half.h, SHEET_KEY, FLOOR_TILES[index % FLOOR_TILES.length])
+          .setOrigin(0)
+          // Die Kachel selbst vergroessern, nicht das Sprite: `setScale` wuerde
+          // auch die Flaeche strecken und ueber die Arena hinausragen.
+          .setTileScale(WORLD_SCALE, WORLD_SCALE)
+          .setDepth(DEPTH.floor),
+      );
     }
   }
 
   /**
-   * Buesche liegen ueber den Figuren: Wer drinsteht, ist halb verdeckt -
-   * genau das ist ja der Sinn eines Verstecks.
+   * Waende - und zwar zweierlei.
+   *
+   * Die Aussenmauer haelt das Spielfeld zusammen und bekommt die Steinwand aus
+   * dem Sheet. Die Deckungsbloecke stehen mitten im Feld und bekommen
+   * Holzkisten: Sie sollen sich vom Rand abheben, weil sie taktisch etwas ganz
+   * anderes bedeuten - hinter der Aussenmauer steht nie jemand, hinter einer
+   * Kiste staendig.
+   *
+   * Die Simulation kennt diesen Unterschied nicht; fuer sie ist beides
+   * dasselbe Rechteck. Das ist Absicht - es ist ein rein optischer
+   * Unterschied, und die Spiellogik soll davon nichts wissen muessen.
+   */
+  private drawWalls(state: WorldState): void {
+    for (const wall of state.walls) {
+      const kachel = this.istDeckung(wall) ? CRATE_TILE : WALL_TILE;
+      this.add(
+        this.scene.add
+          .tileSprite(wall.x, wall.y, wall.width, wall.height, SHEET_KEY, kachel)
+          .setOrigin(0)
+          .setTileScale(WORLD_SCALE, WORLD_SCALE)
+          .setDepth(DEPTH.walls),
+      );
+    }
+  }
+
+  /** Ist dieses Rechteck einer der Deckungsbloecke aus `config/arena.ts`? */
+  private istDeckung(wall: Rect): boolean {
+    return COVER_BLOCKS.some(
+      (block) =>
+        block.x === wall.x &&
+        block.y === wall.y &&
+        block.width === wall.width &&
+        block.height === wall.height,
+    );
+  }
+
+  /**
+   * Buesche liegen UEBER den Figuren: Wer drinsteht, ist halb verdeckt - genau
+   * das ist ja der Sinn eines Verstecks.
+   *
+   * Zwei Anlaeufe waren noetig, beide aus demselben Grund falsch - die Kacheln
+   * waren zu klein und zu luecken­haft. Warum es jetzt GRAS ist und nicht die
+   * Buschkacheln des Pakets, steht bei `BUSH_TILE` in `config/assets.ts`.
    */
   private drawBushes(state: WorldState): void {
     for (const bush of state.bushes) {
-      this.bushes.fillStyle(COLORS.bush, 0.82);
-      this.bushes.fillRoundedRect(bush.x, bush.y, bush.width, bush.height, 22);
-      this.bushes.lineStyle(3, COLORS.bushEdge, 0.9);
-      this.bushes.strokeRoundedRect(bush.x, bush.y, bush.width, bush.height, 22);
+      this.add(
+        this.scene.add
+          .tileSprite(bush.x, bush.y, bush.width, bush.height, SHEET_KEY, BUSH_TILE)
+          .setOrigin(0)
+          .setTileScale(WORLD_SCALE, WORLD_SCALE)
+          // Leicht durchscheinend: Man soll erkennen, dass da jemand drin
+          // steht, ohne ihn genau zu sehen.
+          .setAlpha(0.85)
+          .setDepth(DEPTH.bushesAbove),
+      );
     }
+  }
+
+  private add(part: Phaser.GameObjects.GameObject): void {
+    this.parts.push(part);
   }
 }
