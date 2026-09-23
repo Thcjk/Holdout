@@ -21,17 +21,34 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
-**Phase 1 bis 7 sind umgesetzt, dazu Phase 8 und 9 des neuen Plans.** Am
-2026-09-23 hat der Nutzer `BRIEFING.md` grundlegend überarbeitet: Aus dem
-Wellen-Survival wird ein **Koop-Roguelike mit Extraction-Loot**. Gebaut sind:
+> **Seit 2026-09-23 abends läuft eine grosse Überarbeitung nach einem
+> technischen Arbeitsdokument (Etappen 0–12).** Der verlässliche Stand steht
+> in **`AUDIT.md`** (geprüft im Code, nicht aus dieser Datei übernommen) und
+> im **Protokoll der Überarbeitung** direkt unten. Wo der Rest dieser Datei
+> etwas anderes sagt, gilt das Protokoll.
 
-- **Phase 8** – prozedurale offene Welt statt fester Arena, Gegner nach Distanz
-  statt nach Wellen.
-- **Phase 9** – Mini-Boss- und Ende-Boss-Encounter, Extraktionspunkte, drei
-  Ausgänge statt nur Game Over.
+Gebaut vor der Überarbeitung (alles auf dem Branch, **Pages zeigt noch
+Phase 9**): Phase 8 (offene Welt aus Seed), Phase 9 (Encounter, Boss,
+Extraktion), Gebäude, Kamera 0,8, Kompass, Minimap, Phase 10 (Loot),
+Phase 11 zum Teil (Gitter-Logik, Loadout-Bildschirm, Rucksack reist in den
+Run).
 
-**Als Nächstes laut Plan: Phase 10** – das Loot-Grundsystem. Bis dahin
-belohnt ein geschaffter Encounter noch nichts ausser Punkten.
+### Protokoll der Überarbeitung
+
+Jede Etappe: was gebaut wurde, **wie** geprüft wurde, was nicht wie geplant
+lief. Neueste unten.
+
+#### Etappe 0 – Bestandsaudit · 2026-09-23 21:30 UTC
+
+- **Gebaut:** `AUDIT.md` mit allen 19 Punkten der Checkliste.
+- **Geprüft wie:** Jede Aufrufkette im Code verfolgt (Datei geöffnet,
+  Aufrufstelle gesucht), `grep` nach `fillRect`/`fillCircle`/`fillRoundedRect`
+  über `src/` mit Zählung je Datei, Durchlauf Menü → Rucksack → Run im
+  Emulator ohne Seitenfehler.
+- **Ergebnis kurz:** 6 × ✅, 10 × ⚠️, 3 × ❌ (Tank-Heilung,
+  Sniper-Aufklärung, Auto-Aim). Pinke Linie geklärt: der Encounter-Ring.
+- **Nicht wie geplant:** Der durchsichtige Doppel-Charakter liess sich beim
+  Lesen nicht eindeutig finden – wird in Etappe 2 nachgestellt.
 
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
