@@ -259,6 +259,8 @@ export type GameEvent =
   | { type: "encounterStarted"; index: number; isFinal: boolean; x: number; y: number }
   /** Der Boss dieses Encounters ist besiegt. */
   | { type: "encounterCleared"; index: number; isFinal: boolean }
+  /** Ein Ausstieg ist zum ersten Mal in Sichtweite gekommen. */
+  | { type: "extractionFound"; x: number; y: number }
   /** Der Boss holt aus: Warnkreis an dieser Stelle, mit diesem Radius. */
   | { type: "bossWindup"; x: number; y: number; radius: number; seconds: number }
   | { type: "runEnded"; outcome: RunOutcome; score: number; zone: number };
@@ -305,6 +307,21 @@ export interface EncounterSpot {
 export interface ExtractionZone {
   position: Vec2;
   radius: number;
+  /**
+   * War schon einmal jemand nah genug dran, um sie zu sehen?
+   *
+   * DAS IST DIE ANTWORT AUF "AUSSTIEGE FINDET MAN NICHT". Ein Punkt, von dem
+   * man nichts weiss, ist kein Angebot - er ist eine Falle, in die man
+   * zufaellig hineinlaeuft oder eben nicht. Einmal entdeckt, zeigt der
+   * Kompass am Bildschirmrand dorthin und die Karte merkt ihn sich.
+   *
+   * Nicht von Anfang an alle zeigen: Dann waere die Karte sofort geloest und
+   * das Erkunden bedeutungslos. Entdecken ist der Fortschritt.
+   *
+   * Gehoert in die Simulation und nicht in die Darstellung, weil es im Koop
+   * fuer ALLE gilt: Wer einen Ausstieg findet, findet ihn fuer das Team.
+   */
+  discovered: boolean;
 }
 
 /**

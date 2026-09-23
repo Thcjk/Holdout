@@ -151,12 +151,41 @@ export const DEPTH = {
   hud: 100,
 } as const;
 
-/** Kamera: folgt allen lebenden Spielern und zoomt je nach Abstand heraus. */
+/**
+ * Kamera: folgt allen lebenden Spielern und zoomt je nach Abstand heraus.
+ *
+ * ================================================================
+ * WARUM DER ZOOM NACH PHASE 9 WEITER GEWORDEN IST
+ * ================================================================
+ *
+ * In der festen Arena (1600x1200) war Zoom 1.0 richtig: Man sah rund ein
+ * Drittel der Karte auf einmal. In der offenen Welt (16000x16000) zeigt
+ * derselbe Wert nur noch rund 1169x540 Weltpixel - das sind 0,5 Prozent der
+ * Flaeche, und rundherum ist alles unbekannt.
+ *
+ * Gemeldet wurde das als "zu leer und zu unuebersichtlich, Extraktionspunkte
+ * findet man nicht". Nachgerechnet stimmt das: Eine Ausstiegszone hat 220 px
+ * Radius, die naechste liegt 1200 px vom Start entfernt - bei Zoom 1.0 sieht
+ * man aber nur 585 px nach jeder Seite. Man musste also fast draufstehen.
+ *
+ * 1.0 -> 0.80 zeigt 1461x675 statt 1169x540, also gut die Haelfte mehr
+ * Flaeche. Die Figur wird dabei von 48 auf 38 Bildpunkte kleiner - immer noch
+ * groesser als bei dem Zoom, den der Koop-Fall (0.62) ohnehin schon erzeugt.
+ * Weiter hinaus waere moeglich, aber das ist ein Gefuehlswert: erst spielen,
+ * dann feinjustieren. Ohne Neubau probieren mit
+ * `?tune=camera.maxZoom=0.7`.
+ */
 export const CAMERA = {
   /** Zoom bei einem einzelnen Spieler. */
-  maxZoom: 1.0,
-  /** Weitester Zoom, wenn die Gruppe auseinanderlaeuft. */
-  minZoom: 0.62,
+  maxZoom: 0.8,
+  /**
+   * Weitester Zoom, wenn die Gruppe auseinanderlaeuft.
+   *
+   * Zieht mit `maxZoom` mit (0.62 -> 0.55): Der Abstand zwischen beiden ist
+   * der Spielraum, den eine auseinanderlaufende Gruppe hat. Bliebe die
+   * Untergrenze stehen, waere dieser Spielraum halbiert.
+   */
+  minZoom: 0.55,
   /** Rand um die Spielergruppe in Pixeln, damit niemand am Bildschirmrand klebt. */
   padding: 260,
   /** Wie schnell der Zoom nachzieht (0 bis 1 pro Bild). */

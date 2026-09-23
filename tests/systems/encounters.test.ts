@@ -179,6 +179,66 @@ describe("Encounter auslösen", () => {
   });
 });
 
+describe("Ausstiege entdecken", () => {
+  it("kennt am Anfang keinen einzigen", () => {
+    const state = createWorld(soloSetup(), 4242);
+    expect(state.extractions.every((zone) => !zone.discovered)).toBe(true);
+  });
+
+  it("merkt sich einen, an dem jemand nah genug vorbeikommt", () => {
+    const state = createWorld(soloSetup(), 4242);
+    const zone = state.extractions[0];
+    if (!zone) throw new Error("keine Ausstiegszone");
+
+    // Knapp innerhalb des Entdeckungsradius - also gesehen, aber nicht drin.
+    place(state, zone.position.x + ENCOUNTERS.discoverRadius - 50, zone.position.y);
+    tick(state, TICK_SECONDS);
+
+    expect(zone.discovered).toBe(true);
+    expect(state.phase).toBe("running");
+  });
+
+  it("vergisst einen entdeckten Ausstieg nicht wieder", () => {
+    // Der Kompass haengt daran. Einer, der beim Weglaufen wieder vergisst,
+    // waere schlimmer als gar keiner: Man liefe zurueck und faende nichts.
+    const state = createWorld(soloSetup(), 4242);
+    const zone = state.extractions[0];
+    if (!zone) throw new Error("keine Ausstiegszone");
+
+    place(state, zone.position.x, zone.position.y - ENCOUNTERS.discoverRadius + 50);
+    tick(state, TICK_SECONDS);
+    expect(zone.discovered).toBe(true);
+
+    place(state, state.bounds.width / 2, state.bounds.height / 2);
+    tick(state, 2);
+
+    expect(zone.discovered).toBe(true);
+  });
+
+  it("entdeckt nur, was wirklich in Reichweite war", () => {
+    const state = createWorld(soloSetup(), 4242);
+    const zone = state.extractions[0];
+    if (!zone) throw new Error("keine Ausstiegszone");
+
+    place(state, zone.position.x + ENCOUNTERS.discoverRadius + 300, zone.position.y);
+    tick(state, 1);
+
+    expect(zone.discovered).toBe(false);
+  });
+
+  it("stellt sicher, dass jeder Seed Ausstiege hat", () => {
+    /*
+     * Zurueckgemeldet wurde "Extraktionspunkte sind gar nicht zu finden", und
+     * der erste Verdacht war ein Fehler in der Erzeugung. Der Test haelt das
+     * Gegenteil fest: Es lag an der Sichtbarkeit, nicht an den Daten.
+     */
+    for (const seed of SEEDS) {
+      const world = generateWorld(seed);
+      expect(world.extractions.length).toBe(ENCOUNTERS.extractionCount);
+    }
+  });
+});
+
 describe("Extraktion", () => {
   it("laeuft ab, wenn ein einzelner Spieler in der Zone bleibt", () => {
     const state = createWorld(soloSetup(), 4242);

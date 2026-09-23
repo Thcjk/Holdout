@@ -275,7 +275,8 @@ function placeExtractions(
     const radius = (zone + 0.5) * DIFFICULTY.zoneSize;
     const point = findSpotOnRing(rng, spawnPoint, walls, size, radius, clearance);
     if (point) {
-      zones.push({ position: point, radius: ENCOUNTERS.extractionRadius });
+      // `discovered: false` - kein Ausstieg ist von Anfang an bekannt.
+      zones.push({ position: point, radius: ENCOUNTERS.extractionRadius, discovered: false });
     }
   }
 

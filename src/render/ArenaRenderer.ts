@@ -160,16 +160,48 @@ export class ArenaRenderer {
       }
     }
 
+    /*
+     * Die Ausstiegszonen - und die haben nach dem Spieltest deutlich
+     * zugelegt.
+     *
+     * Vorher waren sie ein duenner gruener Kreis mit 10 % Fuellung. Auf einem
+     * Bild voller Sand, Ziegel und Gras ist das genau dann zu sehen, wenn man
+     * schon davorsteht - zurueckgemeldet als "Extraktionspunkte findet man
+     * gar nicht". Jetzt sind es DREI Dinge uebereinander, weil ein einzelnes
+     * im Getuemmel untergeht:
+     *
+     *   1. ein kraeftig gefuellter Kreis (die Zone selbst),
+     *   2. ein PULSIERENDER Ring darueber - Bewegung faellt im Augenwinkel
+     *      auf, eine ruhende Flaeche nicht,
+     *   3. ein doppelt so grosser, blasser Hof - er ist im Bild, bevor die
+     *      Zone selbst es ist.
+     *
+     * Der Puls laeuft ueber die Weltzeit und nicht ueber einen eigenen
+     * Zaehler: So pulsieren alle Zonen im Gleichtakt, und im Koop sehen alle
+     * Geraete dasselbe.
+     */
+    const pulse = 0.5 + 0.5 * Math.sin(this.scene.time.now / 420);
+
     for (const zone of this.state.extractions) {
       const { x, y } = zone.position;
-      if (!visible(x, y, zone.radius)) {
+      const halo = zone.radius * 2;
+      if (!visible(x, y, halo)) {
         continue;
       }
 
-      this.markers.lineStyle(4, COLORS.mate, 0.8);
-      this.markers.strokeCircle(x, y, zone.radius);
-      this.markers.fillStyle(COLORS.mate, 0.1);
+      // Der Hof: gross und blass, damit er von weitem als gruener Fleck
+      // auffaellt, ohne die Sicht auf Gegner darin zu nehmen.
+      this.markers.fillStyle(COLORS.mate, 0.05);
+      this.markers.fillCircle(x, y, halo);
+
+      this.markers.fillStyle(COLORS.mate, 0.22);
       this.markers.fillCircle(x, y, zone.radius);
+      this.markers.lineStyle(5, COLORS.mate, 0.95);
+      this.markers.strokeCircle(x, y, zone.radius);
+
+      // Der Puls: ein Ring, der nach aussen laeuft und dabei verblasst.
+      this.markers.lineStyle(3, COLORS.mate, 0.5 * (1 - pulse));
+      this.markers.strokeCircle(x, y, zone.radius * (0.55 + 0.45 * pulse));
     }
   }
 

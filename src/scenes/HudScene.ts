@@ -77,6 +77,9 @@ export class HudScene extends Phaser.Scene {
     this.onQuit = data.onQuit;
   }
 
+  private compass!: Phaser.GameObjects.Graphics;
+  private compassText!: Phaser.GameObjects.Text;
+
   create(): void {
     // Randabstaende: Grundabstand plus das, was das Geraet selbst als verdeckt
     // meldet (Notch, Home-Indikator, runde Ecken). Siehe platform/safeArea.ts.
@@ -90,6 +93,19 @@ export class HudScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
 
     this.bars = this.add.graphics().setDepth(DEPTH.hud);
+
+    // Der Ausstiegs-Kompass. Eigenes Graphics-Objekt, weil er jedes Bild neu
+    // gezeichnet wird und die Balken daneben nicht mitloeschen soll.
+    this.compass = this.add.graphics().setDepth(DEPTH.hud);
+    this.compassText = this.add
+      .text(0, 0, "", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "13px",
+        color: "#7ee08a",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.hud);
 
     this.waveText = this.add
       .text(leftEdge, topEdge, "", {
@@ -233,6 +249,7 @@ export class HudScene extends Phaser.Scene {
     this.waveText.setText(
       this.model.inSafeZone ? "Sichere Zone" : `Zone ${this.model.zone}`,
     );
+    this.drawCompass();
     this.scoreText.setText(
       `Score ${this.model.score}\nRekord ${this.model.highscore}\nGegner ${this.model.enemiesLeft}`,
     );
@@ -410,6 +427,90 @@ export class HudScene extends Phaser.Scene {
    * geht es um die Texte und Knoepfe, die ihre Position nur einmal bekommen
    * haben.
    */
+  /**
+   * Der Pfeil zum naechsten bekannten Ausstieg.
+   *
+   * ================================================================
+   * WARUM ER AM BILDSCHIRMRAND SITZT UND NICHT IN DER MITTE
+   * ================================================================
+   *
+   * Ein Kompass soll im Augenwinkel liegen, nicht im Blickfeld. Waehrend man
+   * kaempft, schaut man auf die eigene Figur und auf das, was auf sie zulaeuft
+   * - alles, was dort zusaetzlich steht, verdeckt genau das.
+   *
+   * Deshalb laeuft der Pfeil auf einer ELLIPSE um die Bildmitte und sitzt
+   * immer dort, wo der Ausstieg liegt. Eine Ellipse und kein Kreis, weil das
+   * Bild breiter als hoch ist: Auf einem Kreis waere der Pfeil oben und unten
+   * am Rand, links und rechts aber mitten im Bild.
+   *
+   * Die Zahl daneben ist der Abstand in Metern (100 Weltpixel = 1 m, dieselbe
+   * Umrechnung wie sonst nirgends - sie muss nur in sich stimmig sein und eine
+   * Groessenordnung vermitteln, die man mit dem Laufweg vergleichen kann).
+   *
+   * Gezeichnet wird nur, was es zu zeigen gibt: Ohne entdeckten Ausstieg
+   * bleibt die Flaeche leer.
+   */
+  private drawCompass(): void {
+    this.compass.clear();
+
+    const target = this.model?.extractionCompass ?? null;
+    if (!target) {
+      this.compassText.setVisible(false);
+      return;
+    }
+
+    const centerX = VIEWPORT.width / 2;
+    const centerY = VIEWPORT.height / 2;
+    // Die Halbachsen: so weit aussen wie moeglich, aber innerhalb der
+    // Geraeteraender - sonst sitzt der Pfeil unter der Notch.
+    const radiusX = (VIEWPORT.width - SAFE.left - SAFE.right) / 2 - 42;
+    const radiusY = (VIEWPORT.height - SAFE.top - SAFE.bottom) / 2 - 42;
+
+    const x = centerX + Math.cos(target.angle) * radiusX;
+    const y = centerY + Math.sin(target.angle) * radiusY;
+
+    // Steht man schon drin, waere ein Pfeil nur Verwirrung - dann sagt es der
+    // Extraktionsbalken, nicht der Kompass.
+    const meters = Math.round(target.distance / 100);
+    if (meters <= 2) {
+      this.compassText.setVisible(false);
+      return;
+    }
+
+    // Ein Dreieck in Zielrichtung, dahinter ein dunkler Kreis als Untergrund:
+    // Auf hellem Sand waere ein gruener Pfeil allein schwer zu sehen.
+    this.compass.fillStyle(0x0d1420, 0.55);
+    this.compass.fillCircle(x, y, 17);
+    this.compass.lineStyle(2, COLORS.mate, 0.9);
+    this.compass.strokeCircle(x, y, 17);
+
+    const tip = 11;
+    const back = 7;
+    const spread = 2.5;
+    this.compass.fillStyle(COLORS.mate, 1);
+    this.compass.beginPath();
+    this.compass.moveTo(x + Math.cos(target.angle) * tip, y + Math.sin(target.angle) * tip);
+    this.compass.lineTo(
+      x + Math.cos(target.angle + spread) * back,
+      y + Math.sin(target.angle + spread) * back,
+    );
+    this.compass.lineTo(
+      x + Math.cos(target.angle - spread) * back,
+      y + Math.sin(target.angle - spread) * back,
+    );
+    this.compass.closePath();
+    this.compass.fillPath();
+
+    // Die Zahl nach INNEN versetzt, nie nach aussen: Sonst rutscht sie bei
+    // einem Pfeil am Rand aus dem Bild.
+    this.compassText.setPosition(
+      x - Math.cos(target.angle) * 27,
+      y - Math.sin(target.angle) * 27,
+    );
+    this.compassText.setText(`${meters} m`);
+    this.compassText.setVisible(true);
+  }
+
   private layout(): void {
     if (!this.ready) {
       return;

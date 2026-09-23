@@ -25,7 +25,7 @@ import { extractionFraction } from "../systems/encounters";
 import { distanceFromStart } from "../systems/zones";
 import { nearestEnemy } from "../systems/targeting";
 import { emptyInput } from "../systems/types";
-import type { CharacterId, InputState, PlayerState, Vec2 } from "../systems/types";
+import type { CharacterId, InputState, PlayerState, Vec2, WorldState } from "../systems/types";
 import { createHudModel } from "../ui/HudModel";
 import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
@@ -372,6 +372,10 @@ export class GameScene extends Phaser.Scene {
             zone: event.zone,
             outcome: event.outcome,
             character: this.character,
+            // Ob solo oder im Koop gespielt wurde, weiss nur die Sitzung -
+            // und sie ist gleich weg. Deshalb wird die Antwort jetzt
+            // mitgegeben statt spaeter erfragt.
+            coop: !this.session.canPause,
           });
         });
       }
@@ -564,6 +568,7 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.inSafeZone =
       distanceFromStart(state, player.position) <= WORLD.safeRadius;
     this.hudModel.extraction = state.extractionIndex < 0 ? -1 : extractionFraction(state);
+    this.hudModel.extractionCompass = nearestKnownExtraction(state, player.position);
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
     this.hudModel.runTime = state.runTime;
@@ -580,4 +585,36 @@ export class GameScene extends Phaser.Scene {
         down: entry.down,
       }));
   }
+}
+
+/**
+ * Richtung und Entfernung zum naechsten schon entdeckten Ausstieg.
+ *
+ * NUR ENTDECKTE ZAEHLEN. Wuerde der Kompass auf alle sechs zeigen, waere die
+ * Karte vom ersten Moment an geloest - man liefe die Pfeile ab, statt zu
+ * erkunden. So ist er das, was er sein soll: ein Gedaechtnis fuer das, was man
+ * schon gesehen hat, und kein Spickzettel.
+ *
+ * Steht hier in der Szene und nicht in `systems/`, weil es reine Anzeige ist:
+ * Die Simulation trifft daraus keine Entscheidung.
+ */
+function nearestKnownExtraction(
+  state: WorldState,
+  from: Vec2,
+): { angle: number; distance: number } | null {
+  let best: { angle: number; distance: number } | null = null;
+
+  for (const zone of state.extractions) {
+    if (!zone.discovered) {
+      continue;
+    }
+    const dx = zone.position.x - from.x;
+    const dy = zone.position.y - from.y;
+    const distance = Math.hypot(dx, dy);
+    if (!best || distance < best.distance) {
+      best = { angle: Math.atan2(dy, dx), distance };
+    }
+  }
+
+  return best;
 }

@@ -43,9 +43,54 @@ function standingPlayers(state: WorldState): PlayerState[] {
 
 /** Ein Tick Encounter und Extraktion. */
 export function stepEncounters(state: WorldState, dt: number): void {
+  discoverExtractions(state);
   wakeEncounters(state);
   checkCleared(state);
   stepExtraction(state, dt);
+}
+
+/**
+ * Merkt sich jeden Ausstieg, an dem jemand nah genug vorbeigekommen ist.
+ *
+ * ================================================================
+ * WARUM DAS EIN EIGENER SCHRITT IST UND NICHT NUR ANZEIGE
+ * ================================================================
+ *
+ * Zurueckgemeldet wurde "Extraktionspunkte sind schwer bis gar nicht zu
+ * finden". Nachgemessen war es kein Fehler in der Erzeugung: Ueber 500
+ * zufaellige Seeds entstehen jedes Mal genau sechs Zonen, keine einzige
+ * fehlte. Das Problem war die Sichtbarkeit - eine Zone mit 220 px Radius, die
+ * naechste 1200 px vom Start entfernt, bei einem Bild von damals 1169 px
+ * Breite. Man musste praktisch darueberlaufen.
+ *
+ * Die Zone selbst groesser zu machen waere der falsche Hebel gewesen: Sie ist
+ * der Ort, an dem das ganze Team gleichzeitig stehen muss, und diese Zahl ist
+ * eine Spielentscheidung. Was gefehlt hat, war das WISSEN darueber, wo sie
+ * liegt. Genau das hier ist dieses Wissen - und weil es im Koop fuer alle
+ * gilt, gehoert es in die Simulation und nicht in die Darstellung.
+ *
+ * Einmal entdeckt, bleibt es entdeckt: Ein Kompass, der wieder vergisst,
+ * waere schlimmer als keiner.
+ */
+function discoverExtractions(state: WorldState): void {
+  const living = standingPlayers(state);
+  if (living.length === 0) {
+    return;
+  }
+
+  for (const zone of state.extractions) {
+    if (zone.discovered) {
+      continue;
+    }
+    if (living.some((player) => distance(player.position, zone.position) <= ENCOUNTERS.discoverRadius)) {
+      zone.discovered = true;
+      state.events.push({
+        type: "extractionFound",
+        x: zone.position.x,
+        y: zone.position.y,
+      });
+    }
+  }
 }
 
 /**

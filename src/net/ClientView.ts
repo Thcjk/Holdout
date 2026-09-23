@@ -227,6 +227,15 @@ export class ClientView implements WorldView {
         spot.status = ENCOUNTER_STATUS_ORDER[status] ?? "sleeping";
       }
     });
+    // Entdeckte Ausstiege: Der Host sagt, welche bekannt sind. Nur setzen,
+    // nie zuruecksetzen - ein Kompass, der wieder vergisst, waere schlimmer
+    // als keiner, und ein verlorenes Paket duerfte das nicht ausloesen.
+    for (const index of to.found) {
+      const zone = this.state.extractions[index];
+      if (zone) {
+        zone.discovered = true;
+      }
+    }
     this.pendingCount = to.pending;
 
     this.rebuildPlayers(from, to, t);

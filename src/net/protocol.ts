@@ -130,6 +130,15 @@ export interface StateMessage {
    * demselben Seed. Uebertragen wird nur, was sich im Spiel aendert.
    */
   encounters: number[];
+  /**
+   * Welche Ausstiege das Team schon entdeckt hat, als Liste ihrer Indizes.
+   *
+   * Als Indexliste statt als Ja/Nein je Zone: Entdeckt wird nach und nach,
+   * am Anfang ist die Liste leer und am Ende hat sie sechs Eintraege - das
+   * ist in jedem Fall kuerzer als sechs Wahrheitswerte. Und weil ein einmal
+   * entdeckter Ausstieg nie wieder unbekannt wird, kann die Liste nur wachsen.
+   */
+  found: number[];
   /** In welcher Ausstiegszone das Team steht (-1 = in keiner) und wie weit. */
   extractionIndex: number;
   extractionProgress: number;
@@ -205,6 +214,7 @@ export function encodeState(state: WorldState): StateMessage {
     phase: state.phase,
     runTime: round1(state.runTime),
     encounters: state.encounters.map((spot) => ENCOUNTER_STATUS_ORDER.indexOf(spot.status)),
+    found: state.extractions.flatMap((zone, index) => (zone.discovered ? [index] : [])),
     extractionIndex: state.extractionIndex,
     extractionProgress: round1(state.extractionProgress),
     pending: state.pendingSpawns.length,

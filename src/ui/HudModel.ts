@@ -51,6 +51,16 @@ export interface HudModel {
    * dieselbe Information, und zwei Felder koennen sich widersprechen.
    */
   extraction: number;
+  /**
+   * Richtung und Entfernung zum naechsten BEKANNTEN Ausstieg, oder `null`.
+   *
+   * `null` heisst "noch keinen entdeckt" - dann zeigt der Kompass nichts an,
+   * statt in eine beliebige Richtung zu raten. Ein Pfeil, der auf etwas zeigt,
+   * von dem man nichts weiss, waere keine Hilfe, sondern eine Behauptung.
+   *
+   * Der Winkel ist im Bogenmass, die Entfernung in Weltpixeln.
+   */
+  extractionCompass: { angle: number; distance: number } | null;
   enemiesLeft: number;
   down: boolean;
   reviveProgress: number;
@@ -77,6 +87,7 @@ export function createHudModel(): HudModel {
     deepestZone: 0,
     score: 0,
     highscore: 0,
+    extractionCompass: null,
     phase: "running",
     runTime: 0,
     inSafeZone: true,

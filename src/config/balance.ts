@@ -442,6 +442,16 @@ export const ENCOUNTERS = {
   extractionRadius: 220,
   /** So lange muss das Team drinstehen. */
   extractionSeconds: 5,
+  /**
+   * Ab dieser Entfernung gilt ein Ausstieg als entdeckt.
+   *
+   * 1400 px ist knapp eine Bildschirmbreite bei Zoom 0,8 (1461 px). Das ist
+   * Absicht: Entdeckt wird, was man tatsaechlich haette sehen koennen - nicht
+   * mehr und nicht weniger. Waere der Wert groesser, bekaeme man Punkte
+   * geschenkt, die nie im Bild waren; waere er kleiner, stuende man davor,
+   * ohne dass der Kompass es merkt.
+   */
+  discoverRadius: 1400,
 } as const;
 
 /** Wie oft ein Gegner durch Beruehrung Schaden macht (Sekunden). */
