@@ -29,6 +29,7 @@ import type { CharacterId, InputState, PlayerState, Vec2, WorldState } from "../
 import { createHudModel } from "../ui/HudModel";
 import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
+import { finishRun } from "../storage/carried";
 
 /**
  * ================================================================
@@ -376,6 +377,16 @@ export class GameScene extends Phaser.Scene {
             // und sie ist gleich weg. Deshalb wird die Antwort jetzt
             // mitgegeben statt spaeter erfragt.
             coop: !this.session.canPause,
+            /*
+             * Beute abrechnen, SOLANGE DER ZUSTAND NOCH DA IST.
+             *
+             * Gleich wird die Szene abgeraeumt und mit ihr die Sitzung. Wer
+             * das dem Ergebnisbildschirm ueberliesse, muesste ihm die ganze
+             * Item-Liste mitgeben - und die Regel "Wipe leert, Erfolg
+             * behaelt" stuende dann dort, statt an der einen Stelle in
+             * `storage/carried.ts`.
+             */
+            loot: finishRun(event.outcome, this.selfPlayer()?.items ?? []),
           });
         });
       }
@@ -570,6 +581,7 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.extraction = state.extractionIndex < 0 ? -1 : extractionFraction(state);
     this.hudModel.extractionCompass = nearestKnownExtraction(state, player.position);
     this.fillMinimap(state, player);
+    this.hudModel.carriedItems = player.items.length;
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
     this.hudModel.runTime = state.runTime;

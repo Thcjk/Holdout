@@ -11,6 +11,7 @@ import { spawnProjectile } from "./projectiles";
 import { damageFactor, superChargeFor } from "./skills";
 import { nearestEnemy } from "./targeting";
 import type { EnemyState, InputState, PlayerState, Vec2, WorldState } from "./types";
+import { dropFromEnemy } from "./loot";
 
 /** Volle Munitionsladungen eines Spielers. */
 export function ammoCount(player: PlayerState): number {
@@ -189,6 +190,11 @@ export function killEnemy(state: WorldState, enemy: EnemyState): void {
 
   state.enemies.splice(index, 1);
   state.score += enemy.scoreValue;
+
+  // ERST entfernen, DANN Loot legen: `dropFromEnemy` liest die Position des
+  // Gegners, aendert `state.enemies` aber nicht - die Reihenfolge ist hier
+  // also ungefaehrlich und so herum besser lesbar.
+  dropFromEnemy(state, enemy);
   state.events.push({
     type: "enemyDied",
     x: enemy.position.x,

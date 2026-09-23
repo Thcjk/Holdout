@@ -27,6 +27,7 @@ const MUSIC_BASE_VOLUME = 0.5;
 export type MusicTrack = "menu" | "wave";
 
 export type SoundName =
+  | "pickup"
   | "shoot"
   | "enemyShoot"
   | "hit"
@@ -164,6 +165,18 @@ export class AudioEngine {
         // die Tiefe, sonst ginge er im Dauerfeuer unter.
         this.tone(120, 0.3, "sawtooth", 0.22, 50);
         this.noise(0.2, 0.18, 900);
+        break;
+      case "pickup":
+        /*
+         * Ein kurzer, heller Doppelton.
+         *
+         * Bewusst LEISE und kurz: Aufheben passiert oft, teils mehrmals in
+         * einer Sekunde. Ein satter Klang waere nach zwei Minuten eine
+         * Belaestigung - er soll bestaetigen, nicht feiern. Fuer das Feiern
+         * ist der Reaktorkern da, und der faellt selten genug.
+         */
+        this.tone(880, 0.06, "square", 0.05, 1180);
+        this.tone(1320, 0.07, "square", 0.04, 1560, 0.04);
         break;
       case "healed":
         // Zwei steigende Toene: aufwaerts heisst "es wird besser".

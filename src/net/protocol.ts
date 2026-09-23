@@ -81,6 +81,8 @@ export interface NetPlayer {
   sp: number;
   /** Stufen der Faehigkeiten in der Reihenfolge von SKILL_ORDER. */
   sk: number[];
+  /** Wie viele Gegenstaende dieser Spieler traegt. Nur die Anzahl. */
+  items: number;
 }
 
 export interface NetEnemy {
@@ -146,6 +148,17 @@ export interface StateMessage {
   extractionProgress: number;
   /** Noch nicht erschienene Gegner - damit das HUD bei allen dasselbe zeigt. */
   pending: number;
+  /**
+   * Was gerade in der Welt liegt.
+   *
+   * Die POSITIONEN muessen mit, anders als bei Encountern und Ausstiegen: Die
+   * Fundorte der Karte stehen zwar im Seed, aber was ein Gegner fallen laesst,
+   * entsteht erst im Spiel. Und was schon aufgehoben wurde, weiss nur der Host.
+   *
+   * Ein gemeinsames Format fuer beide Herkuenfte statt zweier Listen: Fuer den
+   * Client ist der Unterschied bedeutungslos - er zeichnet, was daliegt.
+   */
+  items: NetGroundItem[];
 }
 
 /** Ereignisse, die nicht in jeden Zustand gehoeren: Treffer, Tod, neue Zone. */
@@ -198,6 +211,20 @@ export type NetMessage =
  */
 export const ENEMY_TYPE_ORDER = ["runner", "brute", "shooter", "boss"] as const;
 
+/**
+ * Ein Gegenstand am Boden, wie er uebers Netz geht.
+ *
+ * `def` ist der Index in `ITEMS` aus `config/items.ts` - dieselbe Regel wie
+ * bei den Gegnertypen: Neue Eintraege gehoeren ans Ende der Liste, sonst
+ * sieht ein Geraet mit aelterer Version etwas anderes als der Host.
+ */
+export interface NetGroundItem {
+  id: number;
+  def: number;
+  x: number;
+  y: number;
+}
+
 /** Gleiche Regel wie bei den Gegnertypen: Der Index wandert, nicht das Wort. */
 export const ENCOUNTER_STATUS_ORDER = ["sleeping", "active", "cleared"] as const;
 
@@ -221,6 +248,12 @@ export function encodeState(state: WorldState): StateMessage {
     extractionIndex: state.extractionIndex,
     extractionProgress: round1(state.extractionProgress),
     pending: state.pendingSpawns.length,
+    items: state.groundItems.map((item) => ({
+      id: item.id,
+      def: item.def,
+      x: round1(item.position.x),
+      y: round1(item.position.y),
+    })),
     players: state.players.map(encodePlayer),
     enemies: state.enemies.map((enemy) => ({
       id: enemy.id,
@@ -269,5 +302,9 @@ function encodePlayer(player: PlayerState): NetPlayer {
     sp: player.skillPoints,
     // Als Zahlenliste statt als Objekt: kuerzer, und die Reihenfolge steht fest.
     sk: SKILL_ORDER.map((skill) => player.skills[skill] ?? 0),
+    // Nur die ANZAHL, nicht die Liste: Das HUD zeigt eine Zahl, und die
+    // Rucksaecke der anderen gehen niemanden etwas an (Briefing, Abschnitt 4).
+    // Ab Phase 11 braucht der eigene Client mehr - dann kommt es dazu.
+    items: player.items.length,
   };
 }

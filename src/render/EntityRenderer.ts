@@ -21,6 +21,7 @@ import { COLORS, DEPTH } from "../config/constants";
 import type { WorldView } from "../net/GameSession";
 import { SHOW_HITBOXES } from "../platform/debugFlags";
 import type { CharacterId, EnemyState, EnemyType, PlayerState, WorldState } from "../systems/types";
+import { RARITY_COLORS, itemAt } from "../config/items";
 
 /** Wie lange ein getroffener Gegner weiss aufblitzt, in Millisekunden. */
 // 130 statt 110 Millisekunden: Bei 60 Bildern je Sekunde sind das acht
@@ -52,6 +53,8 @@ export class EntityRenderer {
   private readonly playerVisuals = new Map<string, PlayerVisual>();
   private readonly enemySprites: Phaser.GameObjects.Image[] = [];
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
+  /** Was am Boden liegt, je Bild neu gezeichnet. */
+  private readonly ground: Phaser.GameObjects.Graphics;
   private readonly trails: Phaser.GameObjects.Graphics;
   /** Aufgestellte Schildwaende (Tank-Faehigkeit). */
   private readonly bars: Phaser.GameObjects.Graphics;
@@ -73,6 +76,9 @@ export class EntityRenderer {
     private readonly simulation: WorldView,
     private readonly selfId: string,
   ) {
+    // UNTER den Figuren: Wer ueber einen Gegenstand laeuft, soll die eigene
+    // Figur sehen und nicht auf einem bunten Rechteck stehen.
+    this.ground = scene.add.graphics().setDepth(DEPTH.players - 1);
     this.trails = scene.add.graphics().setDepth(DEPTH.projectiles - 1);
     this.bars = scene.add.graphics().setDepth(DEPTH.enemies + 1);
     // Ueber allem, damit kein Sprite den Umriss verdeckt.
@@ -89,10 +95,63 @@ export class EntityRenderer {
     this.bars.clear();
     this.trails.clear();
 
+    this.updateGroundItems(state);
     this.updatePlayers(state);
     this.updateEnemies(state);
     this.updateProjectiles(state);
     this.drawHitboxes(state);
+  }
+
+  /**
+   * Was am Boden liegt.
+   *
+   * ================================================================
+   * GEZEICHNET STATT GESPRITET - und warum das hier richtig ist
+   * ================================================================
+   *
+   * Das Kenney-Paket hat zwar Kisten und Faesser, aber nichts, was einen
+   * Reaktorkern von einer Platine unterscheidet. Zwoelf Gegenstaende auf drei
+   * Kachelbilder abzubilden hiesse, dass man am Boden nicht sieht, was da
+   * liegt - und genau das ist die eine Information, die zaehlt.
+   *
+   * Deshalb ein Rechteck in der FARBE DER SELTENHEITSSTUFE, in der GROESSE
+   * der Gitterform. Beides sagt auf einen Blick, ob sich das Hinlaufen lohnt,
+   * und beides kommt aus derselben Tabelle, mit der auch gerechnet wird
+   * (`config/items.ts`). Projektile, Funken und Punkte sind aus demselben
+   * Grund gezeichnet (siehe CLAUDE.md).
+   *
+   * Der Puls ist kein Schmuck: Ein ruhendes Rechteck im gemusterten Sand
+   * uebersieht man, ein blinkendes nicht.
+   */
+  private updateGroundItems(state: WorldState): void {
+    this.ground.clear();
+
+    const pulse = 0.55 + 0.45 * Math.sin(this.scene.time.now / 360);
+
+    for (const item of state.groundItems) {
+      const def = itemAt(item.def);
+      if (!def) {
+        continue;
+      }
+
+      const color = RARITY_COLORS[def.rarity] ?? 0xffffff;
+      // Die Gitterform wird sichtbar: ein 2x1-Gewehr liegt breit da, ein
+      // 1x1-Schrott ist ein Punkt. Ab Phase 11 ist genau das die Frage, die
+      // beim Aufheben zaehlt - passt das ueberhaupt in den Rucksack?
+      const width = 9 + def.size.width * 7;
+      const height = 9 + def.size.height * 7;
+      const x = item.position.x - width / 2;
+      const y = item.position.y - height / 2;
+
+      // Schatten darunter, damit das Rechteck nicht im Boden klebt.
+      this.ground.fillStyle(0x0d1420, 0.35);
+      this.ground.fillRoundedRect(x + 2, y + 3, width, height, 3);
+
+      this.ground.fillStyle(color, 0.9);
+      this.ground.fillRoundedRect(x, y, width, height, 3);
+      this.ground.lineStyle(2, 0xffffff, 0.35 + 0.45 * pulse);
+      this.ground.strokeRoundedRect(x, y, width, height, 3);
+    }
   }
 
   /**
@@ -155,6 +214,7 @@ export class EntityRenderer {
     for (const sprite of this.projectileSprites) {
       sprite.destroy();
     }
+    this.ground.destroy();
     this.trails.destroy();
     this.bars.destroy();
     this.hitboxes?.destroy();

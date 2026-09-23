@@ -242,6 +242,27 @@ export class ClientView implements WorldView {
         spot.discovered = true;
       }
     }
+    /*
+     * Bodenfunde: Der Host sagt, was daliegt - der Client rechnet NICHTS
+     * voraus. Ein Gegenstand, der aufploppt und wieder verschwindet, weil
+     * jemand anderes schneller war, saehe nach einem Fehler aus.
+     *
+     * Die Liste wird komplett neu aufgebaut statt abgeglichen: Bodenfunde
+     * bewegen sich nicht, es gibt also nichts zu interpolieren, und bei
+     * hoechstens ein paar Dutzend Eintraegen ist das billiger als ein
+     * Vergleich Eintrag fuer Eintrag.
+     */
+    this.state.groundItems.length = 0;
+    for (const item of to.items) {
+      this.state.groundItems.push({
+        id: item.id,
+        def: item.def,
+        position: { x: item.x, y: item.y },
+        lifetime: Number.POSITIVE_INFINITY,
+        fromWorld: false,
+      });
+    }
+
     this.pendingCount = to.pending;
 
     this.rebuildPlayers(from, to, t);
@@ -314,6 +335,26 @@ export class ClientView implements WorldView {
       SKILL_ORDER.forEach((skill, index) => {
         player.skills[skill] = netPlayer.sk[index] ?? 0;
       });
+
+      /*
+       * Vom Rucksack kommt nur die ANZAHL uebers Netz.
+       *
+       * Die Liste auf diese Laenge zu bringen ist eine Notluege, und sie ist
+       * hier vertretbar: Gebraucht wird in dieser Phase ausschliesslich
+       * `items.length` fuer den HUD-Zaehler. Welche Gegenstaende es sind,
+       * weiss der Host - und ab Phase 11 braucht der eigene Client sie
+       * wirklich, dann kommt die Liste selbst mit.
+       *
+       * `def: -1` macht sichtbar, dass diese Eintraege KEIN echter Gegenstand
+       * sind: Jeder Index ausserhalb des Katalogs liefert beim Nachschlagen
+       * `null`, statt still auf Schrott zu zeigen.
+       */
+      while (player.items.length > netPlayer.items) {
+        player.items.pop();
+      }
+      while (player.items.length < netPlayer.items) {
+        player.items.push({ id: -1, def: -1 });
+      }
 
       // Nachladeuhren gibt es auf dem Client nicht - nur die Anzahl voller
       // Ladungen. Das HUD braucht nicht mehr.

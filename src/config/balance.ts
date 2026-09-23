@@ -454,6 +454,73 @@ export const ENCOUNTERS = {
   discoverRadius: 1400,
 } as const;
 
+/**
+ * ================================================================
+ * LOOT - was faellt, wo es liegt und wie man es aufhebt
+ * ================================================================
+ *
+ * Der Katalog selbst steht in `config/items.ts`. Hier stehen nur die Zahlen,
+ * mit denen gerechnet wird - wie bei allem anderen auch.
+ */
+export const LOOT = {
+  /**
+   * Wahrscheinlichkeit, dass ein Gegner beim Tod etwas fallen laesst.
+   *
+   * Nach Typ gestaffelt statt einheitlich: Ein Laeufer ist Kanonenfutter und
+   * kommt zu Dutzenden - waere seine Chance so hoch wie die eines Brockens,
+   * laege der Boden nach einer Minute voll, und Aufheben waere kein Fund
+   * mehr, sondern Hausarbeit.
+   */
+  dropChance: {
+    runner: 0.08,
+    brute: 0.28,
+    shooter: 0.16,
+    // Ein Boss laesst IMMER etwas fallen. Ein Encounter, der nach zwei
+    // Minuten Kampf nichts hergibt, waere die Enttaeuschung, die einen davon
+    // abhaelt, es noch einmal zu versuchen.
+    boss: 1,
+  } as Record<string, number>,
+
+  /** Wie viele Gegenstaende ein Boss hinterlaesst. */
+  bossDrops: 2,
+  finalBossDrops: 4,
+
+  /**
+   * Wie stark die Tiefe die Seltenheit anhebt.
+   *
+   * Das ist die Belohnung fuer genau die Entscheidung, um die sich der ganze
+   * Umbau dreht: weitergehen oder aussteigen. Ohne besseres Loot weiter
+   * draussen waere Tiefe nur Risiko ohne Gegenwert.
+   *
+   * Gerechnet wird als Gewichtsverschiebung, nicht als harte Stufe: Auch in
+   * Zone 9 faellt noch Schrott, nur seltener.
+   */
+  rarityPerZone: 0.16,
+
+  /** Aufsammelradius in Pixeln. */
+  pickupRadius: 46,
+
+  /**
+   * Fundorte auf der Karte, je Gebaeude.
+   *
+   * Sie liegen INNERHALB der Gebaeude - das ist der Grund, warum ein Haus
+   * mehr ist als Deckung. Wer hineingeht, ist drinnen in der Falle (ein
+   * Ausgang, enge Raeume) und bekommt dafuer etwas.
+   */
+  spotsPerBuildingMin: 1,
+  spotsPerBuildingMax: 3,
+
+  /**
+   * Wie lange ein liegengebliebener Gegenstand sichtbar bleibt (Sekunden).
+   *
+   * 0 hiesse "fuer immer", und das waere kein Geschenk: Nach einer halben
+   * Stunde laegen hunderte Punkte herum, jeder davon im Netzprotokoll und in
+   * der Aufsammelpruefung. Drei Minuten sind lang genug, um zurueckzukommen.
+   * Fundorte aus der Weltgenerierung verfallen NICHT - sie gehoeren zum Ort.
+   */
+  dropLifetime: 180,
+} as const;
+
 /** Wie oft ein Gegner durch Beruehrung Schaden macht (Sekunden). */
 export const ENEMY_CONTACT_INTERVAL = 1.0;
 

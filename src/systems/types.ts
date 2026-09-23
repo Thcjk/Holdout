@@ -80,6 +80,41 @@ export type SkillId = "weapon" | "armor" | "speed" | "super";
  */
 export type EnemyType = "runner" | "brute" | "shooter" | "boss";
 
+/**
+ * Ein Gegenstand, wie ihn ein Spieler mit sich traegt.
+ *
+ * Bewusst duenn: eine laufende Nummer und der Index im Katalog
+ * (`config/items.ts`). Alles Weitere - Name, Typ, Form, Seltenheit - steht
+ * dort und wird nachgeschlagen.
+ *
+ * WARUM NICHT DIE GANZE DEFINITION KOPIEREN: Dann gaebe es zwei Wahrheiten
+ * ueber dasselbe Item. Aendert sich eine Groesse im Katalog, traegt ein
+ * Spieler sonst weiterhin die alte mit sich herum - und ab Phase 11 haette
+ * sein Rucksack dann eine andere Belegung, als das Gitter berechnet.
+ */
+export interface ItemInstance {
+  id: number;
+  /** Index in `ITEMS` aus `config/items.ts`. */
+  def: number;
+}
+
+/**
+ * Ein Gegenstand, der in der Welt liegt.
+ *
+ * `fromWorld` unterscheidet zwei Herkuenfte mit unterschiedlichen Regeln:
+ * Ein Fundort aus der Weltgenerierung gehoert zum ORT und verfaellt nie; was
+ * ein Gegner fallen laesst, verschwindet nach einer Weile wieder, damit sich
+ * die Karte nicht mit Kleinkram zusetzt.
+ */
+export interface GroundItem {
+  id: number;
+  def: number;
+  position: Vec2;
+  /** Restliche Liegezeit in Sekunden. Unendlich fuer Fundorte der Karte. */
+  lifetime: number;
+  fromWorld: boolean;
+}
+
 export interface PlayerState {
   id: string;
   name: string;
@@ -122,6 +157,17 @@ export interface PlayerState {
   skillPoints: number;
   /** Stufe je Faehigkeit, 0 bis SKILLS[...].maxLevel. */
   skills: Record<SkillId, number>;
+  /**
+   * Was dieser Spieler im Run eingesammelt hat.
+   *
+   * JEDER HAT SEINE EIGENE LISTE, nicht das Team eine gemeinsame. So wie es
+   * im Briefing steht - und es macht das Aufheben zu einer Entscheidung:
+   * Wer zuerst da ist, bekommt es.
+   *
+   * Noch OHNE Platzgrenze. Das Gitter kommt in Phase 11; bis dahin waere
+   * eine Zahl als Grenze nur geraten.
+   */
+  items: ItemInstance[];
 }
 
 export interface EnemyState {
@@ -261,6 +307,8 @@ export type GameEvent =
   | { type: "encounterCleared"; index: number; isFinal: boolean }
   /** Ein Ausstieg ist zum ersten Mal in Sichtweite gekommen. */
   | { type: "extractionFound"; x: number; y: number }
+  /** Jemand hat etwas aufgehoben. `own` sagt, ob man selbst es war. */
+  | { type: "itemPicked"; playerId: string; def: number; x: number; y: number }
   /** Der Boss holt aus: Warnkreis an dieser Stelle, mit diesem Radius. */
   | { type: "bossWindup"; x: number; y: number; radius: number; seconds: number }
   | { type: "runEnded"; outcome: RunOutcome; score: number; zone: number };
@@ -377,6 +425,10 @@ export interface WorldState {
   projectiles: ProjectileState[];
   /** Angekuendigte, aber noch nicht erschienene Gegner. */
   pendingSpawns: SpawnOrder[];
+  /** Alles, was gerade in der Welt herumliegt und aufgehoben werden kann. */
+  groundItems: GroundItem[];
+  /** Fortlaufende Nummern fuer Bodenfunde und getragene Gegenstaende. */
+  nextItemId: number;
   /** Alles, was Bewegung blockiert: Aussenmauern und Deckungsbloecke. */
   walls: Rect[];
   /** Buschfelder: Gegner sehen Spieler darin nicht. */

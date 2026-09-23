@@ -19,6 +19,7 @@ import { applyLevelUp, emptySkills } from "./skills";
 import { stepAbilities, tryAbility } from "./abilities";
 import { stepDashDamage, trySuper } from "./supers";
 import { stepEncounters } from "./encounters";
+import { stepLoot } from "./loot";
 import { stepRound } from "./spawning";
 import { gameplaySeed, generateWorld } from "./WorldGenerator";
 import { emptyInput } from "./types";
@@ -82,6 +83,7 @@ export function createPlayer(
     abilityCooldown: 0,
     skillPoints: 0,
     skills: emptySkills(),
+    items: [],
   };
 }
 
@@ -113,6 +115,8 @@ export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldStat
     enemies: [],
     projectiles: [],
     pendingSpawns: [],
+    groundItems: [...world.lootSpots],
+    nextItemId: world.nextItemId,
     walls: world.walls,
     bushes: world.bushes,
     buildings: world.buildings,
@@ -187,6 +191,18 @@ export function stepWorld(
   stepEnemies(state, dt);
   stepProjectiles(state, dt);
   stepRevive(state, dt);
+  /*
+   * Loot NACH den Projektilen und VOR dem Rundenablauf.
+   *
+   * Nach den Projektilen, weil ein Gegner, der in diesem Tick stirbt, sein
+   * Loot sofort fallen laesst - es liegt dann schon da, wenn man einen
+   * Schritt weiter geht.
+   *
+   * Vor `stepRound`, weil dort `despawnDistant` laeuft: Die Reihenfolge ist
+   * nur der Ordnung halber so, Bodenfunde sind vom Despawn ohnehin nicht
+   * betroffen.
+   */
+  stepLoot(state, dt);
   stepRound(state, dt);
   // Nach dem Rundenablauf: Ein Team, das gerade zu Boden gegangen ist, soll
   // nicht im selben Tick noch extrahieren.

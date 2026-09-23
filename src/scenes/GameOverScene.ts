@@ -34,6 +34,8 @@ export interface GameOverData {
    * dasselbe noch einmal anders macht.
    */
   coop: boolean;
+  /** Wie viele Gegenstaende der Run eingebracht oder gekostet hat. */
+  loot: { kept: number; lost: number };
 }
 
 /**
@@ -152,6 +154,33 @@ export class GameOverScene extends Phaser.Scene {
      * ueberall aus denselben Bausteinen besteht. Ein Satz kostet nichts und
      * beantwortet die Frage, bevor sie entsteht.
      */
+    /*
+     * Die Beutezeile - und sie sagt beides aus, auch das Unangenehme.
+     *
+     * Nach einem Wipe steht dort ausdruecklich, WIE VIEL verloren ist. Das
+     * ist der Moment, in dem die Entscheidung "noch tiefer oder raus"
+     * nachtraeglich ihren Preis bekommt; ihn zu verschweigen waere, den
+     * ganzen Sinn des Aussteigens zu verschweigen.
+     */
+    const loot = this.result.loot;
+    this.add
+      .text(
+        VIEWPORT.width / 2,
+        272,
+        loot.lost > 0
+          ? `${loot.lost} Gegenstände verloren`
+          : loot.kept > 0
+            ? `${loot.kept} Gegenstände gesichert`
+            : "Keine Beute gemacht",
+        {
+          fontFamily: "system-ui, sans-serif",
+          fontSize: "17px",
+          color: loot.lost > 0 ? "#ff5470" : loot.kept > 0 ? "#7ee08a" : "#8ea6c4",
+          fontStyle: "bold",
+        },
+      )
+      .setOrigin(0.5);
+
     this.add
       .text(
         VIEWPORT.width / 2,

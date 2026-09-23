@@ -36,9 +36,10 @@
  * `gameplaySeed()` leitet deshalb einen zweiten, unabhaengigen Startwert ab.
  */
 
-import { DIFFICULTY, ENCOUNTERS, WORLD } from "../config/balance";
+import { DIFFICULTY, ENCOUNTERS, LOOT, WORLD } from "../config/balance";
+import { ITEMS } from "../config/items";
 import { randomRange, type RngHolder } from "./rng";
-import type { EncounterSpot, ExtractionZone, Rect, Vec2 } from "./types";
+import type { EncounterSpot, ExtractionZone, GroundItem, Rect, Vec2 } from "./types";
 
 /** Das Ergebnis der Generierung - genau die Daten, die der Weltzustand braucht. */
 export interface GeneratedWorld {
@@ -50,6 +51,22 @@ export interface GeneratedWorld {
   bushes: Rect[];
   /** Grundrisse der Gebaeude - nur zum Zeichnen und fuer Loot-Fundorte. */
   buildings: Rect[];
+  /**
+   * Was von Anfang an in der Welt liegt - in den Gebaeuden.
+   *
+   * Aus dem Seed, wie alles andere: Host und Clients bekommen dieselben
+   * Fundorte mit denselben Gegenstaenden, ohne dass eine Koordinate uebers
+   * Netz geht. Uebertragen wird spaeter nur, was schon aufgehoben wurde.
+   */
+  lootSpots: GroundItem[];
+  /**
+   * Die naechste freie Nummer nach den Fundorten.
+   *
+   * Muss mit in den Weltzustand: Vergaebe der die Nummern wieder ab 0, haetten
+   * spaeter fallende Gegenstaende dieselbe Id wie die Fundorte - und ein
+   * aufgehobener Reaktorkern liesse nebenbei einen Verband verschwinden.
+   */
+  nextItemId: number;
   /** Wo die Spieler starten. */
   spawnPoint: Vec2;
   /** Die Boss-Stellen: Mini-Bosse und der eine Ende-Boss. */
@@ -179,7 +196,26 @@ export function generateWorld(seed: number): GeneratedWorld {
   const encounters = placeEncounters(rng, spawnPoint, walls, size);
   const extractions = placeExtractions(rng, spawnPoint, walls, size);
 
-  return { bounds, walls, bushes, buildings, spawnPoint, encounters, extractions };
+  /*
+   * Fundorte ganz zum Schluss - nach Encountern und Ausstiegen.
+   *
+   * Dieselbe Regel wie dort: Die Reihenfolge der Zufallszahlen ist Teil der
+   * Zusicherung. Wer hier etwas DAVOR einfuegt, verschiebt jede Stelle, die
+   * vorher gewuerfelt wurde, und Host und Client bauen verschiedene Karten.
+   */
+  const { lootSpots, nextItemId } = placeLootSpots(rng, buildings);
+
+  return {
+    bounds,
+    walls,
+    bushes,
+    buildings,
+    spawnPoint,
+    encounters,
+    extractions,
+    lootSpots,
+    nextItemId,
+  };
 }
 
 /** Die aeusserste Zone, die auf dieser Karte ueberhaupt Platz hat. */
@@ -318,6 +354,71 @@ function placeExtractions(
   }
 
   return zones;
+}
+
+/**
+ * Die Fundorte in den Gebaeuden.
+ *
+ * ================================================================
+ * WARUM DRINNEN UND NICHT VERSTREUT
+ * ================================================================
+ *
+ * Loot, das offen herumliegt, ist kein Fund, sondern Einsammeln. Liegt es in
+ * Gebaeuden, bekommt das Hineingehen einen Preis und einen Gegenwert: drinnen
+ * ist man in Deckung, aber auch in der Falle - ein Ausgang, enge Raeume, und
+ * die Salve eines Schuetzen von draussen kommt durch die Tuer.
+ *
+ * Damit haengen zwei Dinge zusammen, die vorher nebeneinanderstanden: Die
+ * Gebaeude aus der letzten Runde waren Orientierungspunkte ohne Zweck, das
+ * Loot haette ohne sie irgendwo gelegen. Jetzt erklaeren sie sich gegenseitig.
+ *
+ * Die Seltenheit steigt NICHT hier, sondern ueber `rollItem` in `loot.ts` -
+ * dort steht die Gewichtung, und zwei Stellen, die dasselbe entscheiden,
+ * laufen auseinander.
+ */
+function placeLootSpots(
+  rng: RngHolder,
+  buildings: readonly Rect[],
+): { lootSpots: GroundItem[]; nextItemId: number } {
+  const lootSpots: GroundItem[] = [];
+  let nextItemId = 1;
+
+  for (const house of buildings) {
+    const count = Math.floor(
+      randomRange(rng, LOOT.spotsPerBuildingMin, LOOT.spotsPerBuildingMax + 1),
+    );
+
+    for (let i = 0; i < count; i += 1) {
+      // Innerhalb der Waende, mit etwas Abstand - ein Gegenstand, der halb in
+      // der Mauer liegt, sieht aus wie ein Fehler, und der Aufsammelradius
+      // waere zum Teil unerreichbar.
+      const pad = WORLD.buildingWall + 24;
+      const x = randomRange(rng, house.x + pad, house.x + house.width - pad);
+      const y = randomRange(rng, house.y + pad, house.y + house.height - pad);
+
+      /*
+       * Die SELTENHEIT der Fundorte wird hier nicht gewuerfelt.
+       *
+       * `rollItem` braucht den Weltzustand (fuer den Spielzufall), den es zur
+       * Generierungszeit noch nicht gibt. Deshalb zieht der Generator nur eine
+       * Zahl von 0 bis 1 und legt sie als Index-Platzhalter ab; `createWorld`
+       * uebernimmt die Liste unveraendert, und welcher Gegenstand es ist,
+       * steht damit trotzdem schon im Seed - nur eben ueber einen eigenen,
+       * einfachen Wurf statt ueber die Gewichtung des Spielzufalls.
+       */
+      const def = Math.floor(randomRange(rng, 0, ITEMS.length)) % ITEMS.length;
+
+      lootSpots.push({
+        id: nextItemId++,
+        def,
+        position: { x: Math.round(x), y: Math.round(y) },
+        lifetime: Number.POSITIVE_INFINITY,
+        fromWorld: true,
+      });
+    }
+  }
+
+  return { lootSpots, nextItemId };
 }
 
 /** Die vier Aussenmauern. Sie halten Spieler und Gegner im Feld. */

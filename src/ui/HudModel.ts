@@ -98,6 +98,8 @@ export interface HudModel {
   extractionCompass: { angle: number; distance: number } | null;
   /** Stand fuer die Uebersichtskarte. */
   minimap: MinimapModel;
+  /** Wie viele Gegenstaende man im Run schon eingesammelt hat. */
+  carriedItems: number;
   enemiesLeft: number;
   down: boolean;
   reviveProgress: number;
@@ -126,6 +128,7 @@ export function createHudModel(): HudModel {
     highscore: 0,
     extractionCompass: null,
     minimap: emptyMinimap(),
+    carriedItems: 0,
     phase: "running",
     runTime: 0,
     inSafeZone: true,

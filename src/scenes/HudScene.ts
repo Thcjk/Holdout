@@ -279,8 +279,16 @@ export class HudScene extends Phaser.Scene {
     );
     this.drawCompass();
     this.minimap.update(this.model.minimap);
+    /*
+     * Die Beute steht bei der Punktzahl und nicht unten.
+     *
+     * Eine Zahl reicht - was genau man traegt, gehoert ab Phase 11 in den
+     * Rucksack und nicht ins Gefechts-HUD. Der untere Rand ist ohnehin der
+     * knappste Platz im Bild; dort sitzen Leben, Super und der Knopfbogen.
+     */
     this.scoreText.setText(
-      `Score ${this.model.score}\nRekord ${this.model.highscore}\nGegner ${this.model.enemiesLeft}`,
+      `Score ${this.model.score}\nRekord ${this.model.highscore}\n` +
+        `Gegner ${this.model.enemiesLeft}\nBeute ${this.model.carriedItems}`,
     );
     this.mateText.setText(
       this.model.mates
