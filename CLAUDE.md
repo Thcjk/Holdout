@@ -607,8 +607,10 @@ erwiesen:
   optisch - hinter der Aussenmauer steht nie jemand, hinter einer Kiste
   ständig.
 
-**Offen:** `BRIEFING.md` Abschnitt 7 nennt weiterhin die Cartoon-Pakete; der
-Nutzer wollte ihn aktualisieren, die Änderung ist hier nie angekommen.
+**Erledigt am 2026-09-23:** `BRIEFING.md` Abschnitt 7 nennt jetzt das
+Kenney-Pixel-Paket statt der Cartoon-Pakete. Einziger Rest: Der Abschnitt sagt
+weiterhin, man solle „die dazugehörige Koordinatendatei prüfen" – die gibt es
+in diesem Paket nicht, deshalb Spritesheet statt Atlas (siehe oben).
 
 ### Musik: der Wechsel ist das Signal
 
