@@ -521,6 +521,64 @@ export const LOOT = {
   dropLifetime: 180,
 } as const;
 
+/**
+ * ================================================================
+ * DER RUCKSACK - Gittergroesse und das unverlierbare Starter-Set
+ * ================================================================
+ *
+ * DIE GROESSE IST GEMESSEN, NICHT GESCHAETZT. Ein Bot-Durchlauf ueber drei
+ * Charaktere und vier Seeds ergab pro Run im Schnitt 2,4 Gegenstaende und
+ * 6,2 belegte Zellen, im besten Lauf 15 Zellen. Der Bot betritt allerdings
+ * keine Gebaeude - und genau dort liegen die Fundorte. Ein Mensch, der
+ * durchsucht, kommt also deutlich hoeher.
+ *
+ * 8 x 4 = 32 Zellen geben darauf das Zwei- bis Fuenffache Luft. Zwei Grenzen
+ * sind dabei hart:
+ *
+ *  - Der groesste Gegenstand (Gewehr und Railgun, 4x2) muss in BEIDE
+ *    Richtungen passen. Gedreht ist er 2x4, also braucht das Gitter
+ *    mindestens 4 Zellen Hoehe - sonst waere die Drehung fuer genau die
+ *    Gegenstaende unmoeglich, bei denen sie am meisten brachte.
+ *  - Voll ausgereizt soll der Rucksack sein. Waere er so gross, dass alles
+ *    hineinpasst, gaebe es nichts zu entscheiden - und die Entscheidung ist
+ *    der Sinn des Gitters.
+ */
+export const INVENTORY = {
+  width: 8,
+  height: 4,
+
+  /**
+   * Kantenlaenge einer Zelle in Entwurfseinheiten.
+   *
+   * GEGEN DEN DAUMEN GERECHNET, nicht gegen die Maus. Apple nennt 44 x 44
+   * Punkte als kleinstes Ziel, das sich zuverlaessig treffen laesst. Auf
+   * einem iPhone 13 quer werden 540 Entwurfseinheiten auf 390 Bildschirmpunkte
+   * abgebildet, der Faktor ist also 0,722:
+   *
+   *     44 Punkte / 0,722 = 61 Entwurfseinheiten Mindestgroesse
+   *
+   * 64 liegt knapp darueber - ein 1x1-Gegenstand ist damit rund 46 Punkte
+   * gross und bleibt auch fuer einen breiten Daumen treffbar. Das ganze
+   * Gitter misst 8 x 64 = 512 auf 4 x 64 = 256 Einheiten und passt damit
+   * neben die Liste der verfuegbaren Gegenstaende.
+   */
+  cellSize: 64,
+
+  /**
+   * Das Starter-Set: die unverlierbare Grundausruestung.
+   *
+   * Laut Briefing (Abschnitt 4) das Sicherheitsnetz gegen komplettes
+   * Leerlaufen - ohne es koennte ein Team nach einem Wipe ohne alles
+   * dastehen und haette keinen Weg zurueck.
+   *
+   * Fest im Code, weil es das dauerhafte Lager erst in Phase 13 gibt. Steht
+   * hier als Liste von Katalog-Schluesseln und nicht als Indizes: Ein Index
+   * verschiebt sich, wenn jemand im Katalog etwas einfuegt, ein Schluessel
+   * nicht.
+   */
+  starterSet: ["pistol", "bandage", "bandage", "ammoBox"] as readonly string[],
+} as const;
+
 /** Wie oft ein Gegner durch Beruehrung Schaden macht (Sekunden). */
 export const ENEMY_CONTACT_INTERVAL = 1.0;
 
