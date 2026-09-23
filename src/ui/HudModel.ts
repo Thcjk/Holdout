@@ -44,6 +44,13 @@ export interface HudModel {
    * die Pause zwischen zwei Wellen gebunden - die gibt es nicht mehr.
    */
   inSafeZone: boolean;
+  /**
+   * Fortschritt der Extraktion von 0 bis 1, oder -1 wenn gerade keine laeuft.
+   *
+   * Eine Zahl statt zweier Felder: "laeuft gerade" und "wie weit" sind
+   * dieselbe Information, und zwei Felder koennen sich widersprechen.
+   */
+  extraction: number;
   enemiesLeft: number;
   down: boolean;
   reviveProgress: number;
@@ -73,6 +80,7 @@ export function createHudModel(): HudModel {
     phase: "running",
     runTime: 0,
     inSafeZone: true,
+    extraction: -1,
     enemiesLeft: 0,
     down: false,
     reviveProgress: 0,

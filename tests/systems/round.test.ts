@@ -96,11 +96,11 @@ describe("Ganze Runde", () => {
     const idle = new Map<string, InputState>();
 
     const maxTicks = TICK_RATE * 240;
-    for (let i = 0; i < maxTicks && state.phase !== "gameover"; i += 1) {
+    for (let i = 0; i < maxTicks && state.phase !== "ended"; i += 1) {
       stepWorld(state, idle, TICK_SECONDS);
     }
 
-    expect(state.phase).toBe("gameover");
+    expect(state.phase).toBe("ended");
   });
 
   it("haelt die Gegnerzahl unter dem harten Limit", () => {

@@ -71,7 +71,14 @@ export type CharacterId = "scout" | "tank" | "sniper";
 
 /** Die vier Fähigkeiten, die sich zwischen den Wellen aufwerten lassen. */
 export type SkillId = "weapon" | "armor" | "speed" | "super";
-export type EnemyType = "runner" | "brute" | "shooter";
+/**
+ * Die Gegnertypen.
+ *
+ * "boss" deckt Mini-Boss UND Ende-Boss ab - unterschieden werden sie ueber das
+ * Feld `isBoss` in `EnemyState`, das ohnehin schon funffaches Leben und
+ * doppelte Groesse bedeutet. Siehe `ENEMIES.boss` in `config/balance.ts`.
+ */
+export type EnemyType = "runner" | "brute" | "shooter" | "boss";
 
 export interface PlayerState {
   id: string;
@@ -145,6 +152,30 @@ export interface EnemyState {
   /** Restliche Abklingzeit des Beruehrungsschadens in Sekunden. */
   contactCooldown: number;
   /**
+   * Schadensfaktor aus der Distanzzone, in der dieser Gegner erschienen ist.
+   *
+   * STEHT HIER, STATT AUS DEM LEBEN ABGELEITET ZU WERDEN. Frueher rechnete
+   * `damageScale()` ihn als `maxHealth / Grundleben` aus. Das ging gut, solange
+   * beide Faktoren dasselbe waren - war aber schon damals falsch (das Leben
+   * waechst 8 % je Zone, der Schaden laut Briefing nur 4 %) und waere beim Boss
+   * richtig schiefgegangen: Dessen Leben ist zusaetzlich verfuenffacht, er
+   * haette also mit fuenffachem Schaden geschossen.
+   */
+  damageMultiplier: number;
+  /**
+   * Nur beim Boss: Zustand seiner beiden Angriffe.
+   *
+   * Steht direkt am Gegner statt in einer Nebentabelle, damit ein Boss beim
+   * Sterben nichts hinterlaesst, was jemand aufraeumen muesste.
+   */
+  boss?: BossState;
+  /**
+   * Zu welchem Encounter-Punkt dieser Gegner gehoert (Index in `encounters`).
+   *
+   * Daran erkennt die Simulation beim Tod, welcher Punkt als geschafft gilt.
+   */
+  encounterIndex?: number;
+  /**
    * Wie lange dieser Gegner schon laufen will, aber nicht vom Fleck kommt.
    * Daraus entsteht das seitliche Ausweichen - ohne diesen Zaehler bleiben
    * Gegner an Deckungsbloecken dauerhaft kleben und die Welle endet nie.
@@ -191,8 +222,11 @@ export interface ProjectileState {
  * Wegfall der Wellen bleiben zwei: Man spielt, oder der Run ist vorbei. Eine
  * Pause gibt es nicht mehr - die Verschnaufpause holt man sich, indem man in
  * Richtung Startpunkt zurueckgeht, wo weniger und schwaechere Gegner stehen.
+ *
+ * "ended" hiess bis Phase 9 "gameover". Umbenannt, weil ein Run seitdem auch
+ * gut ausgehen kann - wie, steht in `WorldState.outcome`.
  */
-export type RoundPhase = "running" | "gameover";
+export type RoundPhase = "running" | "ended";
 
 /**
  * Ereignisse eines Ticks. Die Simulation beschreibt damit, was passiert ist;
@@ -221,7 +255,13 @@ export type GameEvent =
    * Anzeige und die Skillpunkte.
    */
   | { type: "zoneReached"; zone: number }
-  | { type: "gameOver"; score: number; zone: number };
+  /** Ein Boss ist erwacht - jemand hat seinen Encounter betreten. */
+  | { type: "encounterStarted"; index: number; isFinal: boolean; x: number; y: number }
+  /** Der Boss dieses Encounters ist besiegt. */
+  | { type: "encounterCleared"; index: number; isFinal: boolean }
+  /** Der Boss holt aus: Warnkreis an dieser Stelle, mit diesem Radius. */
+  | { type: "bossWindup"; x: number; y: number; radius: number; seconds: number }
+  | { type: "runEnded"; outcome: RunOutcome; score: number; zone: number };
 
 export interface SpawnOrder {
   type: EnemyType;
@@ -230,6 +270,50 @@ export interface SpawnOrder {
   atTick: number;
   position: Vec2;
 }
+
+/** Der Zustand der beiden Boss-Angriffe. */
+export interface BossState {
+  /** Restzeit bis zur naechsten Schockwelle. */
+  slamCooldown: number;
+  /** Restliche Vorwarnzeit. Groesser 0 heisst: Der Warnkreis steht gerade. */
+  slamWindup: number;
+  /** Restzeit bis zur naechsten Salve. */
+  salvoCooldown: number;
+}
+
+/** Was aus einem Encounter-Punkt geworden ist. */
+export type EncounterStatus = "sleeping" | "active" | "cleared";
+
+/**
+ * Ein Encounter-Punkt: die Stelle, an der ein Boss wartet.
+ *
+ * Position und Art kommen aus dem Seed und sind auf allen Geraeten gleich -
+ * uebertragen wird nur der `status` und die Id des erweckten Gegners.
+ */
+export interface EncounterSpot {
+  position: Vec2;
+  /** Der Ende-Boss ist `true`, jeder Mini-Boss `false`. */
+  isFinal: boolean;
+  /** Distanzzone, in der der Punkt liegt - bestimmt die Staerke des Bosses. */
+  zone: number;
+  status: EncounterStatus;
+  /** Id des aktiven Gegners, solange gekaempft wird. */
+  enemyId: number | null;
+}
+
+/** Eine Zone, in der das Team den Run beenden kann. */
+export interface ExtractionZone {
+  position: Vec2;
+  radius: number;
+}
+
+/**
+ * Wie ein Run ausgegangen ist.
+ *
+ * Frueher gab es nur "Game Over". Seit Phase 9 kann ein Run auch GUT enden,
+ * und der Ergebnisbildschirm muss den Unterschied sagen koennen.
+ */
+export type RunOutcome = "wipe" | "extracted" | "bossDefeated";
 
 export interface WorldState {
   /** Fortlaufende Nummer des Simulationsschritts. */
@@ -249,6 +333,18 @@ export interface WorldState {
   zone: number;
   /** Tiefste je erreichte Zone. Daran haengen Skillpunkte und Ergebnis. */
   deepestZone: number;
+  /** Wie der Run ausgegangen ist. `null`, solange er laeuft. */
+  outcome: RunOutcome | null;
+  /** Die Boss-Stellen der Karte, aus dem Seed erzeugt. */
+  encounters: EncounterSpot[];
+  /** Die Ausstiegszonen der Karte, aus dem Seed erzeugt. */
+  extractions: ExtractionZone[];
+  /**
+   * Index der Zone, in der das Team gerade gemeinsam steht, oder -1.
+   * Dazu die schon abgelaufene Zeit in Sekunden.
+   */
+  extractionIndex: number;
+  extractionProgress: number;
   score: number;
   players: PlayerState[];
   enemies: EnemyState[];

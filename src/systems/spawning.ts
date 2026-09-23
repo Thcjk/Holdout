@@ -26,48 +26,13 @@
  * Die Zahlen stammen alle aus `config/balance.ts`.
  */
 
-import { DIFFICULTY, LIMITS, PLAYER, SKILL_POINTS_PER_ZONE, WORLD } from "../config/balance";
+import { DIFFICULTY, PLAYER, SKILL_POINTS_PER_ZONE, WORLD } from "../config/balance";
 import { TICK_RATE } from "../config/constants";
 import { createEnemy } from "./enemies";
 import { nextRandom, randomRange } from "./rng";
+import { distanceFromStart, targetPopulation, zoneAt, zoneScaling } from "./zones";
+import { enemyBudget, endRun } from "./encounters";
 import type { EnemyType, PlayerState, Vec2, WorldState } from "./types";
-
-/** In welcher Distanzzone liegt ein Punkt mit diesem Abstand zum Start? */
-export function zoneAt(distance: number): number {
-  return Math.max(0, Math.floor(distance / DIFFICULTY.zoneSize));
-}
-
-/** Abstand eines Punktes zum Startpunkt der Welt. */
-export function distanceFromStart(state: WorldState, point: Vec2): number {
-  const center = { x: state.bounds.width / 2, y: state.bounds.height / 2 };
-  return Math.hypot(point.x - center.x, point.y - center.y);
-}
-
-/**
- * Lebens- und Schadensfaktor einer Zone.
- *
- * Dieselben Wachstumsraten wie frueher je Welle (+8 % Leben, +4 % Schaden) -
- * nur haengen sie jetzt daran, WO ein Gegner erscheint, nicht WANN. Ein Gegner
- * nahe am Start bleibt also schwach, auch nach einer Stunde Spielzeit.
- */
-export function zoneScaling(zone: number): { health: number; damage: number } {
-  return {
-    health: Math.pow(DIFFICULTY.healthGrowth, zone),
-    damage: Math.pow(DIFFICULTY.damageGrowth, zone),
-  };
-}
-
-/**
- * Wie viele Gegner sollen bei dieser Zone gleichzeitig unterwegs sein?
- *
- * `playerCount` geht wie frueher mit 0,6 + 0,4 * Spielerzahl ein: Vier Spieler
- * bekommen gut das Doppelte eines Einzelspielers, nicht das Vierfache.
- */
-export function targetPopulation(zone: number, playerCount: number): number {
-  const scale = DIFFICULTY.playerCountBase + DIFFICULTY.playerCountFactor * playerCount;
-  const target = (DIFFICULTY.baseEnemies + DIFFICULTY.enemiesPerZone * zone) * scale;
-  return Math.min(LIMITS.maxEnemies, Math.round(target));
-}
 
 /** Welcher Gegnertyp erscheint in dieser Zone? */
 function pickType(state: WorldState, zone: number): EnemyType {
@@ -139,13 +104,12 @@ function pointInRect(point: Vec2, rect: { x: number; y: number; width: number; h
  * Zone fortschreiben, dann aufraeumen, dann nachlegen.
  */
 export function stepRound(state: WorldState, dt: number): void {
-  if (state.phase === "gameover") {
+  if (state.phase === "ended") {
     return;
   }
 
   if (state.players.length > 0 && state.players.every((player) => player.down)) {
-    state.phase = "gameover";
-    state.events.push({ type: "gameOver", score: state.score, zone: state.deepestZone });
+    endRun(state, "wipe");
     return;
   }
 
@@ -257,6 +221,16 @@ function despawnDistant(state: WorldState): void {
 
   for (let i = state.enemies.length - 1; i >= 0; i -= 1) {
     const enemy = state.enemies[i];
+    /*
+     * Ein Boss wird NIE aufgeraeumt.
+     *
+     * Ohne diese Ausnahme koennte man einen Encounter erledigen, indem man
+     * einmal weglaeuft - der Boss verschwaende lautlos, der Punkt bliebe fuer
+     * immer "aktiv", und der Ende-Boss waere gar nicht mehr zu besiegen.
+     */
+    if (enemy?.type === "boss") {
+      continue;
+    }
     if (enemy && distanceToNearestPlayer(enemy.position) > DIFFICULTY.despawnRadius) {
       // Lautlos: kein Todesereignis, keine Punkte. Der Gegner ist nicht
       // gestorben, er ist nur nicht mehr da.
@@ -323,8 +297,9 @@ function spawnDueEnemies(state: WorldState): void {
     }
 
     // Harte Obergrenze fuer die Handy-Leistung: lieber spaeter erscheinen
-    // lassen, als die Bildrate einbrechen zu lassen.
-    if (state.enemies.length >= LIMITS.maxEnemies) {
+    // lassen, als die Bildrate einbrechen zu lassen. Bosse zaehlen nicht mit -
+    // sonst blockierte eine volle Gegnerschar den Encounter.
+    if (state.enemies.length >= enemyBudget(state)) {
       continue;
     }
 

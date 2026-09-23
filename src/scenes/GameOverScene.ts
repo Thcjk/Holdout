@@ -9,7 +9,7 @@ import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import { COLORS, VIEWPORT } from "../config/constants";
 import { loadHighscore, saveHighscore } from "../storage/highscore";
-import type { CharacterId } from "../systems/types";
+import type { CharacterId, RunOutcome } from "../systems/types";
 import { Button } from "../ui/Button";
 import { setReloadSafe } from "../platform/update";
 
@@ -17,8 +17,38 @@ export interface GameOverData {
   score: number;
   /** Tiefste erreichte Distanzzone - Nachfolger der Wellennummer. */
   zone: number;
+  /** Wie der Run ausgegangen ist. Seit Phase 9 kann er auch gut enden. */
+  outcome: RunOutcome;
   character: CharacterId;
 }
+
+/**
+ * Titel und Farbe je Ausgang.
+ *
+ * Bis Phase 9 stand hier immer "Runde vorbei" - es gab ja nur einen Ausgang.
+ * Jetzt sind es drei, und der Unterschied ist der ganze Sinn des Umbaus: Wer
+ * rechtzeitig aussteigt, hat etwas richtig gemacht, und das muss der
+ * Bildschirm auch sagen. Stuende dort nach einer geglueckten Extraktion
+ * dasselbe wie nach einem Team-Wipe, waere die Entscheidung, um die sich der
+ * Run dreht, nachtraeglich entwertet.
+ */
+const OUTCOMES: Record<RunOutcome, { title: string; color: string; note: string }> = {
+  wipe: {
+    title: "Team am Boden",
+    color: "#ff5470",
+    note: "Kein Ausstieg geschafft.",
+  },
+  extracted: {
+    title: "Extrahiert",
+    color: "#7ee08a",
+    note: "Rechtzeitig rausgekommen.",
+  },
+  bossDefeated: {
+    title: "Wächter besiegt",
+    color: "#ffd166",
+    note: "Der Ende-Boss ist gefallen - mehr geht nicht.",
+  },
+};
 
 /**
  * Die Rekordzeile.
@@ -55,12 +85,22 @@ export class GameOverScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor(COLORS.background);
 
+    const outcome = OUTCOMES[this.result.outcome] ?? OUTCOMES.wipe;
+
     this.add
-      .text(VIEWPORT.width / 2, 110, "Runde vorbei", {
+      .text(VIEWPORT.width / 2, 100, outcome.title, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "44px",
-        color: "#dce8f7",
+        color: outcome.color,
         fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+
+    this.add
+      .text(VIEWPORT.width / 2, 142, outcome.note, {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "16px",
+        color: "#8ea6c4",
       })
       .setOrigin(0.5);
 

@@ -30,7 +30,7 @@ import type {
   WorldState,
 } from "../systems/types";
 import type { WorldView } from "./GameSession";
-import { ENEMY_TYPE_ORDER, INTERPOLATION_DELAY_MS } from "./protocol";
+import { ENCOUNTER_STATUS_ORDER, ENEMY_TYPE_ORDER, INTERPOLATION_DELAY_MS } from "./protocol";
 import type { NetEnemy, NetPlayer, StateMessage } from "./protocol";
 
 /** Ab dieser Abweichung wird hart gesetzt statt sanft korrigiert. */
@@ -217,6 +217,16 @@ export class ClientView implements WorldView {
     this.state.score = to.score;
     this.state.phase = to.phase;
     this.state.runTime = to.runTime;
+    this.state.extractionIndex = to.extractionIndex;
+    this.state.extractionProgress = to.extractionProgress;
+    // Die Positionen der Encounter stehen schon aus dem Seed fest; vom Host
+    // kommt nur, was daraus geworden ist.
+    to.encounters.forEach((status, index) => {
+      const spot = this.state.encounters[index];
+      if (spot) {
+        spot.status = ENCOUNTER_STATUS_ORDER[status] ?? "sleeping";
+      }
+    });
     this.pendingCount = to.pending;
 
     this.rebuildPlayers(from, to, t);
@@ -378,6 +388,9 @@ export class ClientView implements WorldView {
       maxHealth: netEnemy.maxHp,
       speed: 0,
       contactDamage: 0,
+      // Der Client rechnet keinen Schaden - das macht der Host. Der Wert ist
+      // nur da, damit das Datenobjekt vollstaendig ist.
+      damageMultiplier: 1,
       scoreValue: 0,
       isBoss: netEnemy.boss,
       scale: netEnemy.boss ? 2 : 1,

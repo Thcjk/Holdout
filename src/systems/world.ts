@@ -18,6 +18,7 @@ import { stepProjectiles } from "./projectiles";
 import { applyLevelUp, emptySkills } from "./skills";
 import { stepAbilities, tryAbility } from "./abilities";
 import { stepDashDamage, trySuper } from "./supers";
+import { stepEncounters } from "./encounters";
 import { stepRound } from "./spawning";
 import { gameplaySeed, generateWorld } from "./WorldGenerator";
 import { emptyInput } from "./types";
@@ -104,6 +105,7 @@ export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldStat
     runTime: 0,
     zone: 0,
     deepestZone: 0,
+    outcome: null,
     score: 0,
     players: setups.map((setup, index) =>
       createPlayer(setup, index, setups.length, world.spawnPoint),
@@ -114,6 +116,10 @@ export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldStat
     walls: world.walls,
     bushes: world.bushes,
     bounds: world.bounds,
+    encounters: world.encounters,
+    extractions: world.extractions,
+    extractionIndex: -1,
+    extractionProgress: 0,
     events: [],
     // Eigener Strom, getrennt von dem der Weltgenerierung - siehe
     // `WorldGenerator.ts`, Abschnitt "Zwei Zufallsstroeme aus einem Seed".
@@ -152,7 +158,7 @@ export function stepWorld(
 
   // Nach dem Rundenende steht die Welt still; nur der Tickzaehler laeuft weiter,
   // damit die Darstellung ihre Effekte zu Ende spielen kann.
-  if (state.phase === "gameover") {
+  if (state.phase === "ended") {
     state.tick += 1;
     return;
   }
@@ -181,6 +187,9 @@ export function stepWorld(
   stepProjectiles(state, dt);
   stepRevive(state, dt);
   stepRound(state, dt);
+  // Nach dem Rundenablauf: Ein Team, das gerade zu Boden gegangen ist, soll
+  // nicht im selben Tick noch extrahieren.
+  stepEncounters(state, dt);
 
   state.tick += 1;
 }

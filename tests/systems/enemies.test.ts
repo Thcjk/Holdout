@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../../src/config/balance";
 import { TICK_SECONDS } from "../../src/config/constants";
-import { createEnemy, hasLineOfSight, stepEnemies } from "../../src/systems/enemies";
+import { hasLineOfSight } from "../../src/systems/collision";
+import { createEnemy, stepEnemies } from "../../src/systems/enemies";
 import { createWorld } from "../../src/systems/world";
 import { soloSetup } from "../helpers";
 import type { Rect } from "../../src/systems/types";

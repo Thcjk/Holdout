@@ -10,13 +10,13 @@
 import { describe, expect, it } from "vitest";
 import { DIFFICULTY, LIMITS, SKILL_POINTS_PER_ZONE, WORLD } from "../../src/config/balance";
 import { TICK_RATE, TICK_SECONDS } from "../../src/config/constants";
+import { stepRound } from "../../src/systems/spawning";
 import {
   distanceFromStart,
-  stepRound,
   targetPopulation,
   zoneAt,
   zoneScaling,
-} from "../../src/systems/spawning";
+} from "../../src/systems/zones";
 import { createWorld, stepWorld } from "../../src/systems/world";
 import { makeInput, soloSetup } from "../helpers";
 import type { WorldState } from "../../src/systems/types";

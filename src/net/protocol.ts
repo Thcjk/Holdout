@@ -123,6 +123,16 @@ export interface StateMessage {
   phase: RoundPhase;
   /** Laufzeit des Runs in Sekunden. */
   runTime: number;
+  /**
+   * Zustand der Encounter, einer je Eintrag: 0 schlafend, 1 aktiv, 2 geschafft.
+   *
+   * Die POSITIONEN fehlen hier mit Absicht - sie entstehen auf jedem Geraet aus
+   * demselben Seed. Uebertragen wird nur, was sich im Spiel aendert.
+   */
+  encounters: number[];
+  /** In welcher Ausstiegszone das Team steht (-1 = in keiner) und wie weit. */
+  extractionIndex: number;
+  extractionProgress: number;
   /** Noch nicht erschienene Gegner - damit das HUD bei allen dasselbe zeigt. */
   pending: number;
 }
@@ -170,7 +180,15 @@ export type NetMessage =
   | ReadyMessage
   | ByeMessage;
 
-export const ENEMY_TYPE_ORDER = ["runner", "brute", "shooter"] as const;
+/**
+ * Die Reihenfolge ist Teil des Protokolls: Uebertragen wird der INDEX, nicht
+ * das Wort. Neue Typen kommen deshalb hinten an - wer einen dazwischenschiebt,
+ * verschiebt die Bedeutung aller folgenden Zahlen.
+ */
+export const ENEMY_TYPE_ORDER = ["runner", "brute", "shooter", "boss"] as const;
+
+/** Gleiche Regel wie bei den Gegnertypen: Der Index wandert, nicht das Wort. */
+export const ENCOUNTER_STATUS_ORDER = ["sleeping", "active", "cleared"] as const;
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
@@ -186,6 +204,9 @@ export function encodeState(state: WorldState): StateMessage {
     score: state.score,
     phase: state.phase,
     runTime: round1(state.runTime),
+    encounters: state.encounters.map((spot) => ENCOUNTER_STATUS_ORDER.indexOf(spot.status)),
+    extractionIndex: state.extractionIndex,
+    extractionProgress: round1(state.extractionProgress),
     pending: state.pendingSpawns.length,
     players: state.players.map(encodePlayer),
     enemies: state.enemies.map((enemy) => ({

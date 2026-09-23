@@ -8,9 +8,10 @@
  */
 
 import { ENEMIES, ENEMY_CONTACT_INTERVAL, PROJECTILE } from "../config/balance";
-import { resolveAgainstWalls } from "./collision";
+import { hasLineOfSight, resolveAgainstWalls } from "./collision";
 import { clampToArena } from "./movement";
 import { damagePlayer } from "./combat";
+import { createBossState, stepBoss } from "./boss";
 import { spawnProjectile } from "./projectiles";
 import { anyStandingPlayer, nearestVisiblePlayer } from "./targeting";
 import type { EnemyState, EnemyType, PlayerState, Rect, Vec2, WorldState } from "./types";
@@ -57,6 +58,7 @@ export function createEnemy(
     maxHealth: health,
     speed: definition.speed,
     contactDamage: Math.round(definition.contactDamage * damageMultiplier),
+    damageMultiplier,
     scoreValue: definition.score * (isBoss ? 5 : 1),
     isBoss,
     scale,
@@ -66,6 +68,9 @@ export function createEnemy(
     shootCooldown: 0,
     contactCooldown: 0,
     stuckTime: 0,
+    // Der Angriffszustand gehoert zur Geburt, nicht zum Aufrufer: Sonst gaebe
+    // es Bosse ohne Angriffe, wenn jemand die Zeile vergisst.
+    ...(type === "boss" ? { boss: createBossState() } : {}),
   };
 }
 
@@ -95,6 +100,12 @@ export function stepEnemies(state: WorldState, dt: number): void {
 
     if (enemy.type === "shooter" && target) {
       tryEnemyShot(state, enemy, target);
+    }
+
+    if (enemy.type === "boss") {
+      // Nach der Bewegung, damit der Warnkreis dort liegt, wo der Boss am Ende
+      // dieses Ticks wirklich steht.
+      stepBoss(state, enemy, target, dt);
     }
 
     applyContactDamage(state, enemy);
@@ -248,30 +259,6 @@ function blocked(
   return false;
 }
 
-/**
- * Sichtlinie: Der Schuetze feuert nicht durch Waende. Statt einer exakten
- * Schnittrechnung wird die Linie in Schritten abgetastet - kurz, lesbar und
- * bei dieser Kartengroesse genau genug.
- */
-export function hasLineOfSight(walls: readonly Rect[], from: Vec2, to: Vec2): boolean {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const distance = Math.hypot(dx, dy);
-  const steps = Math.ceil(distance / 24);
-
-  for (let i = 1; i < steps; i += 1) {
-    const x = from.x + (dx * i) / steps;
-    const y = from.y + (dy * i) / steps;
-    for (const wall of walls) {
-      if (x >= wall.x && x <= wall.x + wall.width && y >= wall.y && y <= wall.y + wall.height) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
 function tryEnemyShot(state: WorldState, enemy: EnemyState, target: PlayerState): void {
   if (enemy.stunned > 0 || enemy.shootCooldown > 0) {
     return;
@@ -295,7 +282,7 @@ function tryEnemyShot(state: WorldState, enemy: EnemyState, target: PlayerState)
     position: enemy.position,
     direction: { x: dx / distance, y: dy / distance },
     speed: PROJECTILE.enemySpeed,
-    damage: Math.round(ENEMIES.shooter.shotDamage * damageScale(enemy)),
+    damage: Math.round(ENEMIES.shooter.shotDamage * enemy.damageMultiplier),
     range: ENEMIES.shooter.preferredRange * 1.6,
     radius: PROJECTILE.enemyRadius,
     piercing: false,
@@ -316,10 +303,6 @@ function tryEnemyShot(state: WorldState, enemy: EnemyState, target: PlayerState)
  * Wellenskalierung im Schussschaden. Abgeleitet aus dem Verhaeltnis von
  * aktuellem zu ursprünglichem Leben - so braucht der Gegner kein zusaetzliches Feld.
  */
-function damageScale(enemy: EnemyState): number {
-  return enemy.maxHealth / ENEMIES[enemy.type].health;
-}
-
 function applyContactDamage(state: WorldState, enemy: EnemyState): void {
   if (enemy.contactDamage <= 0 || enemy.contactCooldown > 0 || enemy.stunned > 0) {
     return;

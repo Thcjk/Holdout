@@ -228,3 +228,31 @@ function resolveAxisY(
     }
   }
 }
+
+/**
+ * Sichtlinie: Niemand schiesst durch Waende. Statt einer exakten
+ * Schnittrechnung wird die Linie in Schritten abgetastet - kurz, lesbar und
+ * bei dieser Kartengroesse genau genug.
+ *
+ * STAND BIS PHASE 9 IN `enemies.ts`. Umgezogen, weil sie dort einen Import-
+ * Zyklus erzwungen haette: `boss.ts` braucht sie, und `enemies.ts` braucht
+ * `boss.ts`. Sie ist ohnehin reine Geometrie und gehoert damit hierher.
+ */
+export function hasLineOfSight(walls: readonly Rect[], from: Vec2, to: Vec2): boolean {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const distance = Math.hypot(dx, dy);
+  const steps = Math.ceil(distance / 24);
+
+  for (let i = 1; i < steps; i += 1) {
+    const x = from.x + (dx * i) / steps;
+    const y = from.y + (dy * i) / steps;
+    for (const wall of walls) {
+      if (x >= wall.x && x <= wall.x + wall.width && y >= wall.y && y <= wall.y + wall.height) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}

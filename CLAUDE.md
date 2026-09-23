@@ -21,14 +21,17 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
-**Phase 1 bis 7 sind umgesetzt, dazu Phase 8 des neuen Plans.** Am 2026-09-23
-hat der Nutzer `BRIEFING.md` grundlegend überarbeitet: Aus dem Wellen-Survival
-wird ein **Koop-Roguelike mit Extraction-Loot**. Phase 8 (prozedurale offene
-Welt statt fester Arena, Gegner nach Distanz statt nach Wellen) ist gebaut.
+**Phase 1 bis 7 sind umgesetzt, dazu Phase 8 und 9 des neuen Plans.** Am
+2026-09-23 hat der Nutzer `BRIEFING.md` grundlegend überarbeitet: Aus dem
+Wellen-Survival wird ein **Koop-Roguelike mit Extraction-Loot**. Gebaut sind:
 
-**Als Nächstes laut Plan: Phase 9** – Mini-Boss-Encounter und
-Extraktionspunkte. Bis dahin endet ein Run nur durch den Tod; aussteigen kann
-man noch nicht.
+- **Phase 8** – prozedurale offene Welt statt fester Arena, Gegner nach Distanz
+  statt nach Wellen.
+- **Phase 9** – Mini-Boss- und Ende-Boss-Encounter, Extraktionspunkte, drei
+  Ausgänge statt nur Game Over.
+
+**Als Nächstes laut Plan: Phase 10** – das Loot-Grundsystem. Bis dahin
+belohnt ein geschaffter Encounter noch nichts ausser Punkten.
 
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
@@ -864,6 +867,111 @@ auf der Grenze herumläuft, die Musik im Sekundentakt um.
 
 In der offenen Welt ist das sogar besser als vorher: Die Musik sagt einem, dass
 etwas kommt, **bevor** man es sieht.
+
+### Phase 9: Bosse, Encounter und der erste gute Ausgang
+
+Bis Phase 8 endete ein Run nur auf eine Art: alle am Boden. Jetzt sind es drei.
+
+| Ausgang | Auslöser | Ergebnisbildschirm |
+| --- | --- | --- |
+| `wipe` | alle gleichzeitig am Boden | „Team am Boden" (rot) |
+| `extracted` | 5 s gemeinsam in einer Ausstiegszone | „Extrahiert" (grün) |
+| `bossDefeated` | Ende-Boss besiegt | „Wächter besiegt" (gold) |
+
+Deshalb heisst die Phase im Code jetzt `"ended"` und nicht mehr `"gameover"` –
+ein Run kann gut ausgehen, und `WorldState.outcome` sagt wie.
+
+#### Encounter stecken im Seed, ihr Zustand im Protokoll
+
+`generateWorld` liefert zusätzlich `encounters` und `extractions`, gewürfelt
+**nach** Wänden und Büschen. Diese Reihenfolge ist Teil der Zusicherung: Host
+und Clients ziehen dieselben Zufallszahlen in derselben Folge und bekommen
+dieselben Stellen – **übers Netz geht keine einzige Koordinate**, nur der
+Zustand (`0 schlafend, 1 aktiv, 2 geschafft`) und der Extraktions-Countdown.
+
+- Ein **Mini-Boss je Zone** ab Zone 2, auf dem Ring in der Zonenmitte.
+- **Ein Ende-Boss** auf dem äussersten Ring, den die Karte hergibt.
+- **Sechs Ausstiegszonen**, verteilt über Zone 1 bis 8.
+
+**Der Startpunkt ist bewusst keine Ausstiegszone.** Sonst wäre die
+Entscheidung, um die sich der Run dreht, geschenkt: hinauslaufen, umdrehen,
+raus.
+
+**Ein Test hat hier einen echten Fehler gefunden:** Der Ende-Boss sass bei 85 %
+des Maximalradius, die Mini-Bosse reichten aber bis 95 % – er war also *näher*
+am Start als seine eigenen Vorstufen. Jetzt gehört ihm der äusserste Ring, und
+die Mini-Bosse hören eine Zone davor auf.
+
+#### Der Boss ist ein vierter Gegnertyp, kein neues System
+
+`ENEMIES.boss` sind die Werte des **Mini-Bosses**; derselbe Typ mit
+`isBoss: true` ist der **Ende-Boss** und bekommt über die längst vorhandene
+Maschinerie fünffaches Leben, fünffache Punkte und doppelte Grösse. Eine zweite
+Skalierungslogik wäre nur eine Stelle mehr, an der zwei Zahlen auseinanderlaufen.
+
+**Zwei Angriffsmuster, die sich gegenseitig die Lücke schliessen:**
+
+| Muster | Wirkung | Wann |
+| --- | --- | --- |
+| **Schockwelle** | 0,8 s Warnkreis, dann 900 Schaden im Radius 260 plus Rückstoss | jemand näher als 320 px |
+| **Salve** | Fächer aus 5 langsamen Geschossen (300 px/s), 260 Schaden | alle weiter weg |
+
+Mit nur einem der beiden hätte er einen toten Winkel: Bei bloss Fläche bliebe
+man auf Abstand und er wäre harmlos, bei bloss Salve käme der Tank mit seinen
+250 px Reichweite nie heran.
+
+**Der Warnkreis ist der eigentliche Inhalt der Schockwelle.** In
+`abilities.ts` steht die Regel „eine Fähigkeit muss binnen einer Sekunde
+sichtbar sein"; beim Gegner gilt sie gespiegelt. Ein Treffer, den man nicht
+kommen sieht, fühlt sich nicht schwer an, sondern unfair – man lernt nichts
+daraus. Der angezeigte Radius **ist** der wirkende, und eine Betäubung bricht
+eine begonnene Welle ab (sonst wäre der Kreis weg und der Schaden käme doch).
+
+#### Vier Entscheidungen, die im Code stehen
+
+- **Der Boss entsteht erst beim Betreten.** Läge er schlafend in
+  `state.enemies`, hätte ihn `despawnDistant` sofort weggeräumt, und die
+  Obergrenze von 40 Gegnern hätte sich mit Schläfern gefüllt. Bis dahin ist er
+  nur ein Eintrag in einer Liste – sichtbar über den Ring am Boden.
+- **Ein aktiver Boss wird nie despawnt und zählt nicht gegen die Obergrenze.**
+  Sonst liesse sich jeder Encounter durch Weglaufen erledigen, und der
+  Ende-Boss wäre gar nicht mehr zu besiegen.
+- **Der Bosstod wird abgelesen, nicht gemeldet.** `killEnemy` Bescheid sagen zu
+  lassen hätte einen Import-Zyklus ergeben (combat → encounters → enemies →
+  boss → combat) und nur *einen* Weg abgedeckt. Jetzt zählt, was der Fall ist:
+  Ist der Gegner weg, ist der Encounter geschafft.
+- **Extrahieren geht nur, wenn ALLE in der Zone stehen – auch die Gefallenen.**
+  „Alle Lebenden" hätte geheissen, dass man einen am Boden Liegenden einfach
+  zurücklassen kann. So muss man ihn erst aufheben.
+
+#### Zwei Fehler, die erst das Bild gezeigt hat
+
+1. **Der Warnring war enger als seine Wirkung.** Ring 300, Auslöser 420 – der
+   Boss erwachte, während man noch ausserhalb des Kreises stand. Es ist jetzt
+   **eine** Zahl für beides.
+2. **Die Boss-Kachel war ein Möbelstück.** `tile(30, 16)` sah im Sheet
+   plausibel aus; Reihe 16 enthält aber keine Figuren. Im Spiel war der Boss
+   ein dunkler Klotz. **Figuren liegen ausschliesslich in den Spalten 28–33 und
+   den Reihen 0–15.** Der Boss ist jetzt violett (32, 4) – die einzige Farbe,
+   die weder ein Spieler noch ein Gegner belegt.
+
+#### Nebenbei: ein Schadensfaktor, der aus dem Leben abgeleitet war
+
+`damageScale()` rechnete den Schadensfaktor als `maxHealth / Grundleben`. Das
+ging gut, solange beide dasselbe waren – war aber schon vorher falsch (Leben
+wächst 8 % je Zone, Schaden laut Briefing nur 4 %) und wäre beim Boss richtig
+schiefgegangen: Dessen Leben ist zusätzlich verfünffacht, er hätte also mit
+**fünffachem** Schaden geschossen. Der Faktor steht jetzt als eigenes Feld
+`damageMultiplier` am Gegner.
+
+**Folge:** Schützen machen etwas weniger Schaden als vorher, und der Bot kommt
+entsprechend tiefer (Scout 5,4 → 7,0 Zonen).
+
+#### Neu zum Nachstellen: `?seed=`
+
+`.../Holdout/?seed=4242` erzwingt eine bestimmte Welt. Ohne das liesse sich ein
+Fehler „beim Boss weiter draussen" nicht nachstellen – beim nächsten Start ist
+die Karte eine andere. **Nur solo:** Im Koop gibt der Host den Seed vor.
 
 ### Bewegung: Kennlinie statt Schwelle, Achsen getrennt
 

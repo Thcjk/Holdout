@@ -333,6 +333,115 @@ export const ENEMIES = {
      */
     preferredRange: 340,
   },
+
+  /**
+   * Der Boss - Mini-Boss und Ende-Boss in einem Typ.
+   *
+   * WARUM NUR EIN EINTRAG FUER BEIDE: `EnemyState` kennt schon ein Feld
+   * `isBoss`, und `createEnemy` macht daraus seit jeher funffaches Leben,
+   * funffache Punkte und doppelte Groesse. Diese Werte hier sind also der
+   * MINI-Boss; derselbe Typ mit `isBoss: true` ist der Ende-Boss. Eine zweite
+   * Skalierungslogik daneben waere nur eine Stelle mehr, an der zwei Zahlen
+   * auseinanderlaufen koennen.
+   *
+   * Zum Einordnen: 9000 Leben sind gut dreimal der Brocken (2800). Ein Scout
+   * macht rechnerisch rund 1500 Schaden je Sekunde, braucht also etwa sechs
+   * Sekunden Dauerfeuer - beim Ende-Boss (45000) eine gute halbe Minute, in
+   * der man ausweichen muss.
+   */
+  boss: {
+    name: "Wächter",
+    health: 9000,
+    /** Langsamer als der Spieler: Weglaufen muss moeglich bleiben. */
+    speed: 105,
+    contactDamage: 600,
+    score: 300,
+    radius: 34,
+  },
+} as const;
+
+/**
+ * ================================================================
+ * DIE ANGRIFFE DES BOSSES
+ * ================================================================
+ *
+ * Zwei Muster, und sie ergaenzen sich absichtlich:
+ *
+ *   SCHOCKWELLE  Flaechenschaden rundherum, wenn jemand nah ist.
+ *   SALVE        Faecher aus Geschossen, wenn alle weiter weg sind.
+ *
+ * Nur das eine oder das andere waere ein Boss mit einem toten Winkel: Mit
+ * blosser Flaeche bliebe man einfach auf Abstand und er waere harmlos, mit
+ * blosser Salve kaeme der Tank (250 px Reichweite) nie heran. Zusammen gibt es
+ * keine Ecke, in der man sicher steht.
+ *
+ * DER VORWARNKREIS IST NICHT VERHANDELBAR. In `systems/abilities.ts` steht die
+ * Regel "eine Faehigkeit muss binnen einer Sekunde sichtbar sein". Beim Gegner
+ * gilt sie gespiegelt: Ein Treffer, den man nicht kommen sieht, fuehlt sich
+ * nicht schwer an, sondern unfair. Die 0,8 Sekunden Vorwarnung sind das, was
+ * aus "ich bin gestorben" ein "ich haette ausweichen koennen" macht.
+ */
+export const BOSS = {
+  /** Flaechenangriff. */
+  slam: {
+    /** Ab diesem Abstand zum naechsten Spieler stampft der Boss statt zu schiessen. */
+    triggerRange: 320,
+    /** Wie lange der Warnkreis steht, bevor es wehtut. */
+    windupSeconds: 0.8,
+    /** Wirkradius - genau der Kreis, der vorher angezeigt wird. */
+    radius: 260,
+    damage: 900,
+    /** Rueckstoss, damit man aus der Flaeche herausgeschoben wird. */
+    knockback: 520,
+    cooldown: 4.5,
+  },
+
+  /** Einzelzielangriff auf Distanz. */
+  salvo: {
+    bullets: 5,
+    /** Gesamter Faecherwinkel in Grad. */
+    spread: 30,
+    damage: 260,
+    /** Langsamer als ein Spielerschuss - man soll ausweichen koennen. */
+    speed: 300,
+    cooldown: 3.0,
+  },
+} as const;
+
+/**
+ * ================================================================
+ * ENCOUNTER UND EXTRAKTION
+ * ================================================================
+ *
+ * Beides wird aus demselben Seed platziert wie die Karte selbst
+ * (`systems/WorldGenerator.ts`), und zwar NACH Waenden und Bueschen. Die
+ * Reihenfolge ist Teil der Zusicherung: Host und Clients ziehen dieselben
+ * Zufallszahlen in derselben Folge und bekommen dadurch dieselben Positionen,
+ * ohne dass eine einzige Koordinate uebers Netz geht.
+ */
+export const ENCOUNTERS = {
+  /** Ab dieser Zone steht je Zone ein Mini-Boss. Naeher am Start waere er eine Falle. */
+  miniFromZone: 2,
+  /**
+   * Wie nah man kommen muss, damit der Boss erwacht - UND der Radius des
+   * Warnrings auf dem Boden.
+   *
+   * EINE ZAHL FUER BEIDES, und das ist der Punkt. Im ersten Versuch waren es
+   * zwei (Ring 300, Ausloeser 420). Im Bild sah man dann einen Kreis, der
+   * enger war als seine Wirkung: Der Boss erwachte, waehrend man noch ausserhalb
+   * des Rings stand. Eine Warnung, die zu spaet kommt, ist keine - dieselbe
+   * Regel wie beim Zielhinweis der Faehigkeiten (siehe CLAUDE.md).
+   */
+  triggerRadius: 420,
+
+  /** Anzahl Extraktionspunkte und die Zonen, ueber die sie verteilt werden. */
+  extractionCount: 6,
+  extractionFromZone: 1,
+  extractionToZone: 8,
+  /** Radius der betretbaren Zone. */
+  extractionRadius: 220,
+  /** So lange muss das Team drinstehen. */
+  extractionSeconds: 5,
 } as const;
 
 /** Wie oft ein Gegner durch Beruehrung Schaden macht (Sekunden). */

@@ -37,7 +37,7 @@ describe("Kosten eines Simulationsschritts", () => {
     // Projektile in der Luft. Ein Tick auf einer leeren Welt misst nichts.
     for (let i = 0; i < TICK_RATE * 40; i += 1) {
       stepWorld(state, bot(state), TICK_SECONDS);
-      if (state.phase === "gameover") {
+      if (state.phase === "ended") {
         break;
       }
     }
@@ -83,7 +83,7 @@ describe("Kosten eines Simulationsschritts", () => {
     const bot = createBot();
 
     let worst = 0;
-    for (let i = 0; i < TICK_RATE * 240 && state.phase !== "gameover"; i += 1) {
+    for (let i = 0; i < TICK_RATE * 240 && state.phase !== "ended"; i += 1) {
       for (const player of state.players) {
         player.health = player.maxHealth;
       }

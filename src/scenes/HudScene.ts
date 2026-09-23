@@ -10,12 +10,16 @@
  */
 
 import Phaser from "phaser";
+import { ENCOUNTERS } from "../config/balance";
 import { COLORS, DEPTH, SAFE, VIEWPORT } from "../config/constants";
 import { audio } from "../audio/AudioEngine";
 import { InputManager } from "../input/InputManager";
 import { Button } from "../ui/Button";
 import { SkillPanel } from "../ui/SkillPanel";
 import type { HudModel } from "../ui/HudModel";
+
+/** Dauer des Extraktions-Countdowns, fuer die Restzeit in der Anzeige. */
+const EXTRACTION_SECONDS = ENCOUNTERS.extractionSeconds;
 
 export interface HudSceneData {
   model: HudModel;
@@ -276,8 +280,8 @@ export class HudScene extends Phaser.Scene {
     if (showHint) {
       this.skillHint.setText(
         this.model.skillPoints === 1
-          ? "1 Punkt frei - in der Pause verteilen"
-          : `${this.model.skillPoints} Punkte frei - in der Pause verteilen`,
+          ? "1 Punkt frei - in der sicheren Zone verteilen"
+          : `${this.model.skillPoints} Punkte frei - in der sicheren Zone verteilen`,
       );
     }
   }
@@ -483,6 +487,20 @@ export class HudScene extends Phaser.Scene {
     if (this.model.down) {
       this.announceText.setText("Am Boden - ein Mitspieler kann dich aufheben");
       this.announceText.setColor("#ff5470");
+      return;
+    }
+
+    /*
+     * Die Extraktion geht allem anderen vor.
+     *
+     * Sie ist der einzige Moment im Run, in dem eine Sekunde zaehlt: Wer die
+     * Zone verlaesst, faengt von vorn an. Ein Hinweis zur sicheren Zone waere
+     * daneben bestenfalls egal.
+     */
+    if (this.model.extraction >= 0) {
+      const seconds = Math.ceil(EXTRACTION_SECONDS * (1 - this.model.extraction));
+      this.announceText.setText(`Extraktion läuft - ${seconds}\nAlle müssen in der Zone bleiben`);
+      this.announceText.setColor("#7ee08a");
       return;
     }
 

@@ -52,13 +52,13 @@ describe("Zustandspaket", () => {
     state.zone = 7;
     state.deepestZone = 9;
     state.score = 1234;
-    state.phase = "gameover";
+    state.phase = "ended";
 
     const encoded = encodeState(state);
 
     expect(encoded.zone).toBe(7);
     expect(encoded.deepestZone).toBe(9);
     expect(encoded.score).toBe(1234);
-    expect(encoded.phase).toBe("gameover");
+    expect(encoded.phase).toBe("ended");
   });
 });

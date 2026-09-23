@@ -32,7 +32,7 @@ describe("Balancing-Messung", () => {
       for (let seed = 1; seed <= 5; seed += 1) {
         const state = createWorld([{ id: "p", name: "Bot", character }], seed * 7919);
         const bot = createBot();
-        for (let i = 0; i < TICK_RATE * 900 && state.phase !== "gameover"; i += 1) {
+        for (let i = 0; i < TICK_RATE * 900 && state.phase !== "ended"; i += 1) {
           stepWorld(state, bot(state), TICK_SECONDS);
         }
         zones.push(state.deepestZone);

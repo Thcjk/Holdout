@@ -9,6 +9,7 @@ import { Simulation } from "../systems/Simulation";
 import type { PlayerSetup } from "../systems/world";
 import type { InputState } from "../systems/types";
 import type { GameSession, WorldView } from "./GameSession";
+import { FORCED_SEED } from "../platform/debugFlags";
 
 export class SoloSession implements GameSession {
   readonly selfId: string;
@@ -18,7 +19,7 @@ export class SoloSession implements GameSession {
   private readonly simulation: Simulation;
   private readonly inputs = new Map<string, InputState>();
 
-  constructor(setup: PlayerSetup, seed = Date.now() & 0x7fffffff) {
+  constructor(setup: PlayerSetup, seed = FORCED_SEED ?? Date.now() & 0x7fffffff) {
     this.selfId = setup.id;
     this.simulation = new Simulation([setup], seed);
   }

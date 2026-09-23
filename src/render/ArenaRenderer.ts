@@ -32,7 +32,8 @@ import {
   WALL_TILE,
   WORLD_SCALE,
 } from "../config/assets";
-import { DEPTH } from "../config/constants";
+import { ENCOUNTERS } from "../config/balance";
+import { COLORS, DEPTH } from "../config/constants";
 import type { Rect, WorldState } from "../systems/types";
 
 /**
@@ -63,12 +64,20 @@ export class ArenaRenderer {
   private readonly coverBlocks: Rect[] = [];
   private readonly outline: Phaser.GameObjects.Graphics;
 
+  /** Die Ringe von Encounter- und Ausstiegszonen, je Bild neu gezeichnet. */
+  private readonly markers: Phaser.GameObjects.Graphics;
+
   constructor(
     private readonly scene: Phaser.Scene,
-    state: WorldState,
+    private readonly state: WorldState,
   ) {
     this.outline = scene.add.graphics().setDepth(DEPTH.walls + 1);
     this.parts.push(this.outline);
+
+    // UNTER den Figuren, aber ueber dem Boden: Die Ringe liegen auf dem Boden
+    // und duerfen niemanden verdecken, den man gerade bekaempft.
+    this.markers = scene.add.graphics().setDepth(DEPTH.floor + 1);
+    this.parts.push(this.markers);
 
     this.drawFloor(state);
     this.drawWalls(state);
@@ -110,6 +119,58 @@ export class ArenaRenderer {
     }
 
     this.drawOutlines(left, top, right, bottom);
+    this.drawMarkers(left, top, right, bottom);
+  }
+
+  /**
+   * Die Ringe auf dem Boden: rot fuer einen Boss, gruen fuer einen Ausstieg.
+   *
+   * SIE SIND DIE WARNUNG, DIE DEN ENCOUNTER FAIR MACHT. Der Boss schlaeft, bis
+   * jemand seinen Radius betritt - ohne sichtbaren Ring liefe man ahnungslos
+   * hinein und haette sich nicht entschieden, sondern waere gestolpert.
+   *
+   * Ein geschaffter Encounter wird blass statt zu verschwinden: So sieht man
+   * beim Zurueckkommen, wo man schon war.
+   */
+  private drawMarkers(left: number, top: number, right: number, bottom: number): void {
+    this.markers.clear();
+
+    const visible = (x: number, y: number, radius: number): boolean =>
+      x + radius > left && x - radius < right && y + radius > top && y - radius < bottom;
+
+    for (const spot of this.state.encounters) {
+      const { x, y } = spot.position;
+      if (!visible(x, y, ENCOUNTERS.triggerRadius)) {
+        continue;
+      }
+
+      const cleared = spot.status === "cleared";
+      // Der Ende-Boss bekommt einen groesseren Ring - man soll von weitem
+      // sehen, dass dort etwas anderes wartet als an den acht davor.
+      // Genau der Radius, bei dem der Boss erwacht. Wer den Ring ueberschreitet,
+      // hat sich entschieden - vorher passiert nichts.
+      const radius = ENCOUNTERS.triggerRadius * (spot.isFinal ? 1.35 : 1);
+
+      this.markers.lineStyle(cleared ? 2 : 4, COLORS.danger, cleared ? 0.25 : 0.75);
+      this.markers.strokeCircle(x, y, radius);
+
+      if (!cleared) {
+        this.markers.fillStyle(COLORS.danger, 0.06);
+        this.markers.fillCircle(x, y, radius);
+      }
+    }
+
+    for (const zone of this.state.extractions) {
+      const { x, y } = zone.position;
+      if (!visible(x, y, zone.radius)) {
+        continue;
+      }
+
+      this.markers.lineStyle(4, COLORS.mate, 0.8);
+      this.markers.strokeCircle(x, y, zone.radius);
+      this.markers.fillStyle(COLORS.mate, 0.1);
+      this.markers.fillCircle(x, y, zone.radius);
+    }
   }
 
   /**

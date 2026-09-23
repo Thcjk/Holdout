@@ -21,7 +21,8 @@ import { Juice } from "../render/Juice";
 import { setReloadSafe } from "../platform/update";
 import { hideValuesOverlay, updateValuesOverlay } from "../platform/valuesOverlay";
 import { loadHighscore } from "../storage/highscore";
-import { distanceFromStart } from "../systems/spawning";
+import { extractionFraction } from "../systems/encounters";
+import { distanceFromStart } from "../systems/zones";
 import { nearestEnemy } from "../systems/targeting";
 import { emptyInput } from "../systems/types";
 import type { CharacterId, InputState, PlayerState, Vec2 } from "../systems/types";
@@ -361,7 +362,7 @@ export class GameScene extends Phaser.Scene {
       if (event.type === "hit") {
         this.entities.flashEnemy(event.enemyId);
       }
-      if (event.type === "gameOver" && !this.finished) {
+      if (event.type === "runEnded" && !this.finished) {
         this.finished = true;
         // Kurz warten, damit der letzte Effekt noch zu sehen ist.
         this.time.delayedCall(900, () => {
@@ -369,6 +370,7 @@ export class GameScene extends Phaser.Scene {
           this.scene.start("GameOver", {
             score: event.score,
             zone: event.zone,
+            outcome: event.outcome,
             character: this.character,
           });
         });
@@ -561,6 +563,7 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.deepestZone = state.deepestZone;
     this.hudModel.inSafeZone =
       distanceFromStart(state, player.position) <= WORLD.safeRadius;
+    this.hudModel.extraction = state.extractionIndex < 0 ? -1 : extractionFraction(state);
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
     this.hudModel.runTime = state.runTime;

@@ -121,6 +121,9 @@ export class Juice {
           this.hitstop(80);
           this.shake(0.008, 200);
           break;
+        case "bossWindup":
+          this.bossWarning(event.x, event.y, event.radius, event.seconds);
+          break;
         case "blast":
           this.blastRing(event.x, event.y, event.radius);
           this.deathParticles.emitParticleAt(event.x, event.y, 16);
@@ -158,6 +161,35 @@ export class Juice {
       alpha: { from: 1, to: 0 },
       duration: 320,
       ease: "Quad.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  /**
+   * Der Warnkreis des Bosses, bevor er zuschlaegt.
+   *
+   * DIESER KREIS IST DER EIGENTLICHE INHALT DES ANGRIFFS. Ohne ihn waere die
+   * Schockwelle ein Treffer aus dem Nichts - man haette nichts gelernt und
+   * nichts anders machen koennen. Mit ihm ist sie eine Frage: rechtzeitig raus
+   * oder nicht?
+   *
+   * Deshalb wird er GEFUELLT und nicht nur umrandet, und er waechst auf seinen
+   * vollen Radius an: Das Auge nimmt eine wachsende Flaeche schneller wahr als
+   * eine duenne Linie, gerade wenn daneben gerade zwanzig Gegner stehen. Der
+   * Endradius ist exakt der, in dem der Schaden wirkt - alles andere waere eine
+   * Anzeige, die luegt.
+   */
+  bossWarning(x: number, y: number, radius: number, seconds: number): void {
+    const ring = this.scene.add.circle(x, y, radius, COLORS.danger, 0.18);
+    ring.setStrokeStyle(4, COLORS.danger, 0.9);
+    ring.setDepth(DEPTH.floor + 1);
+
+    this.scene.tweens.add({
+      targets: ring,
+      scale: { from: 0.25, to: 1 },
+      alpha: { from: 0.55, to: 1 },
+      duration: seconds * 1000,
+      ease: "Quad.easeIn",
       onComplete: () => ring.destroy(),
     });
   }

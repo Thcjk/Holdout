@@ -31,6 +31,7 @@ const ENEMY_FRAMES: Record<EnemyType, number> = {
   runner: ENEMY_TILES.runner,
   brute: ENEMY_TILES.brute,
   shooter: ENEMY_TILES.shooter,
+  boss: ENEMY_TILES.boss,
 };
 
 const CHARACTER_FRAMES: Record<CharacterId, number> = {

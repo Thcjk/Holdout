@@ -76,7 +76,7 @@ function runOnce(character: CharacterId, seed: number, maxZone: number): ZoneRec
   const bot = createBot();
   const byZone = new Map<number, ZoneRecord>();
 
-  for (let i = 0; i < TICK_RATE * 900 && state.phase !== "gameover"; i += 1) {
+  for (let i = 0; i < TICK_RATE * 900 && state.phase !== "ended"; i += 1) {
     stepWorld(state, bot(state), TICK_SECONDS);
 
     const zone = state.zone;

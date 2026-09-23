@@ -36,9 +36,9 @@
  * `gameplaySeed()` leitet deshalb einen zweiten, unabhaengigen Startwert ab.
  */
 
-import { WORLD } from "../config/balance";
+import { DIFFICULTY, ENCOUNTERS, WORLD } from "../config/balance";
 import { randomRange, type RngHolder } from "./rng";
-import type { Rect, Vec2 } from "./types";
+import type { EncounterSpot, ExtractionZone, Rect, Vec2 } from "./types";
 
 /** Das Ergebnis der Generierung - genau die Daten, die der Weltzustand braucht. */
 export interface GeneratedWorld {
@@ -50,6 +50,10 @@ export interface GeneratedWorld {
   bushes: Rect[];
   /** Wo die Spieler starten. */
   spawnPoint: Vec2;
+  /** Die Boss-Stellen: Mini-Bosse und der eine Ende-Boss. */
+  encounters: EncounterSpot[];
+  /** Die Zonen, in denen das Team den Run beenden kann. */
+  extractions: ExtractionZone[];
 }
 
 /**
@@ -136,7 +140,146 @@ export function generateWorld(seed: number): GeneratedWorld {
     }
   }
 
-  return { bounds, walls, bushes, spawnPoint };
+  /*
+   * Encounter und Extraktion kommen NACH Waenden und Bueschen, und diese
+   * Reihenfolge ist Teil der Zusicherung: Host und Clients ziehen dieselben
+   * Zufallszahlen in derselben Folge und bekommen dadurch dieselben Stellen,
+   * ohne dass eine einzige Koordinate uebers Netz geht. Wer hier etwas
+   * DAVOR einfuegt, verschiebt jede spaetere Position.
+   */
+  const encounters = placeEncounters(rng, spawnPoint, walls, size);
+  const extractions = placeExtractions(rng, spawnPoint, walls, size);
+
+  return { bounds, walls, bushes, spawnPoint, encounters, extractions };
+}
+
+/** Die aeusserste Zone, die auf dieser Karte ueberhaupt Platz hat. */
+export function maxZone(size: number): number {
+  const usable = size / 2 - WORLD.wallThickness - ENCOUNTERS.triggerRadius;
+  return Math.max(1, Math.floor(usable / DIFFICULTY.zoneSize));
+}
+
+/**
+ * Sucht eine freie Stelle auf einem Ring um den Startpunkt.
+ *
+ * Auf einem RING und nicht irgendwo: Die Schwierigkeit haengt an der Entfernung
+ * zum Start, also bestimmt der Radius, wie stark der Boss dort ist. Ein Punkt
+ * "irgendwo im Rechteck" haette keine verlaessliche Zone.
+ */
+function findSpotOnRing(
+  rng: RngHolder,
+  spawnPoint: Vec2,
+  walls: readonly Rect[],
+  size: number,
+  radius: number,
+  clearance: number,
+): Vec2 | null {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const angle = randomRange(rng, 0, Math.PI * 2);
+    const point = {
+      x: Math.round(spawnPoint.x + Math.cos(angle) * radius),
+      y: Math.round(spawnPoint.y + Math.sin(angle) * radius),
+    };
+
+    const margin = WORLD.wallThickness + clearance;
+    if (
+      point.x < margin ||
+      point.y < margin ||
+      point.x > size - margin ||
+      point.y > size - margin
+    ) {
+      continue;
+    }
+
+    // Genug Platz drumherum: Ein Boss von 68 Pixeln Durchmesser soll sich
+    // bewegen koennen, und der Warnring soll nicht halb in einer Wand liegen.
+    if (walls.some((wall) => distanceToRect(wall, point.x, point.y) < clearance)) {
+      continue;
+    }
+
+    return point;
+  }
+
+  return null;
+}
+
+/**
+ * Die Boss-Stellen: je eine Zone ab `miniFromZone`, dazu der Ende-Boss.
+ *
+ * Der Mini-Boss einer Zone sitzt in deren MITTE (Zone 3 also bei 2,5 x
+ * Zonenbreite). Damit liegt er verlaesslich in der Zone, nach der seine Staerke
+ * berechnet wird - an der Kante koennte ein Pixel darueber entscheiden.
+ */
+function placeEncounters(
+  rng: RngHolder,
+  spawnPoint: Vec2,
+  walls: readonly Rect[],
+  size: number,
+): EncounterSpot[] {
+  const spots: EncounterSpot[] = [];
+  const clearance = 140;
+  const outermost = maxZone(size);
+
+  /*
+   * Die Mini-Bosse hoeren EINE Zone vor dem Rand auf - die aeusserste gehoert
+   * dem Ende-Boss.
+   *
+   * Der erste Versuch setzte ihn stattdessen auf 85 % des Maximalradius. Ein
+   * Test hat gezeigt, warum das falsch war: Die Mini-Bosse reichten bis 95 %,
+   * der Ende-Boss sass also NAEHER am Start als seine eigenen Vorstufen. Wer
+   * nach aussen laeuft, soll ihn zuletzt treffen, nicht zwischendurch.
+   */
+  for (let zone = ENCOUNTERS.miniFromZone; zone < outermost; zone += 1) {
+    const radius = (zone + 0.5) * DIFFICULTY.zoneSize;
+    const point = findSpotOnRing(rng, spawnPoint, walls, size, radius, clearance);
+    if (point) {
+      spots.push({ position: point, isFinal: false, zone, status: "sleeping", enemyId: null });
+    }
+  }
+
+  // Der Ende-Boss auf dem aeussersten Ring, den die Karte hergibt.
+  const finalRadius = (outermost + 0.5) * DIFFICULTY.zoneSize;
+  const finalPoint = findSpotOnRing(rng, spawnPoint, walls, size, finalRadius, clearance);
+  if (finalPoint) {
+    spots.push({
+      position: finalPoint,
+      isFinal: true,
+      zone: outermost,
+      status: "sleeping",
+      enemyId: null,
+    });
+  }
+
+  return spots;
+}
+
+/**
+ * Die Ausstiegszonen, verteilt ueber die Distanzbaender.
+ *
+ * Der Startpunkt ist bewusst KEINE Extraktion. Sonst waere die Entscheidung,
+ * um die sich der ganze Run dreht, geschenkt: hinauslaufen, umdrehen, raus.
+ */
+function placeExtractions(
+  rng: RngHolder,
+  spawnPoint: Vec2,
+  walls: readonly Rect[],
+  size: number,
+): ExtractionZone[] {
+  const zones: ExtractionZone[] = [];
+  const clearance = ENCOUNTERS.extractionRadius * 0.6;
+  const outermost = Math.min(ENCOUNTERS.extractionToZone, maxZone(size));
+  const span = Math.max(1, outermost - ENCOUNTERS.extractionFromZone);
+
+  for (let i = 0; i < ENCOUNTERS.extractionCount; i += 1) {
+    const zone = ENCOUNTERS.extractionFromZone + (span * i) / (ENCOUNTERS.extractionCount - 1);
+    const radius = (zone + 0.5) * DIFFICULTY.zoneSize;
+    const point = findSpotOnRing(rng, spawnPoint, walls, size, radius, clearance);
+    if (point) {
+      zones.push({ position: point, radius: ENCOUNTERS.extractionRadius });
+    }
+  }
+
+  return zones;
 }
 
 /** Die vier Aussenmauern. Sie halten Spieler und Gegner im Feld. */

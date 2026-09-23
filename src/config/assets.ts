@@ -124,6 +124,21 @@ export const ENEMY_TILES: Record<EnemyType, number> = {
   brute: tile(29, 15),
   /** Tarnfarben mit Gewehr - der einzige Gegner mit Waffe. */
   shooter: tile(31, 6),
+  /**
+   * Der Waechter: violett, schwerste Waffe.
+   *
+   * GEMESSEN STATT GERATEN, und beim ersten Versuch danebengegriffen: Dort
+   * stand `tile(30, 16)`. Reihe 16 enthaelt aber keine Figuren, sondern Moebel
+   * - im Spiel war der Boss ein dunkler Klotz. Die Figuren liegen
+   * ausschliesslich in den SPALTEN 28 bis 33 und den REIHEN 0 bis 15.
+   *
+   * Violett, weil es die einzige Farbe im Paket ist, die weder ein Spieler
+   * (blau, orange, gruen) noch ein Gegner (braun-gruen, tarnfarben, dunkel)
+   * schon belegt. Bei 16 Pixeln und einem Dutzend Figuren im Bild ist die
+   * Farbe das Erste, was man liest - ein Boss, der aussieht wie ein Laeufer,
+   * geht darin unter. Spalte 32 traegt die breiteste Waffe.
+   */
+  boss: tile(32, 4),
 };
 
 /**

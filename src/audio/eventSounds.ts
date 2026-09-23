@@ -34,7 +34,9 @@ function soundFor(event: GameEvent): SoundName | null {
       return event.amount > 0 ? "healed" : null;
     case "zoneReached":
       return "zoneReached";
-    case "gameOver":
+    case "runEnded":
+      // Denselben Klang fuer alle drei Ausgaenge - der Ergebnisbildschirm sagt
+      // ohnehin sofort, welcher es war. Eigene Fanfaren waeren Phase 17.
       return "gameOver";
     default:
       return null;
