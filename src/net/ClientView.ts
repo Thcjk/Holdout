@@ -337,23 +337,21 @@ export class ClientView implements WorldView {
       });
 
       /*
-       * Vom Rucksack kommt nur die ANZAHL uebers Netz.
+       * Der Rucksack kommt vollstaendig vom Host und wird hier neu aufgebaut.
        *
-       * Die Liste auf diese Laenge zu bringen ist eine Notluege, und sie ist
-       * hier vertretbar: Gebraucht wird in dieser Phase ausschliesslich
-       * `items.length` fuer den HUD-Zaehler. Welche Gegenstaende es sind,
-       * weiss der Host - und ab Phase 11 braucht der eigene Client sie
-       * wirklich, dann kommt die Liste selbst mit.
-       *
-       * `def: -1` macht sichtbar, dass diese Eintraege KEIN echter Gegenstand
-       * sind: Jeder Index ausserhalb des Katalogs liefert beim Nachschlagen
-       * `null`, statt still auf Schrott zu zeigen.
+       * NEU AUFGEBAUT statt abgeglichen: Ein Rucksack aendert sich selten und
+       * hat hoechstens ein paar Dutzend Eintraege - ein Vergleich Eintrag fuer
+       * Eintrag waere mehr Code fuer weniger Verlaesslichkeit. Und vorhergesagt
+       * wird hier nichts: Ob etwas hineinpasst, entscheidet der Host.
        */
-      while (player.items.length > netPlayer.items) {
-        player.items.pop();
-      }
-      while (player.items.length < netPlayer.items) {
-        player.items.push({ id: -1, def: -1 });
+      player.backpack.items.length = 0;
+      for (let i = 0; i + 3 < netPlayer.bp.length; i += 4) {
+        player.backpack.items.push({
+          item: { id: i / 4 + 1, def: netPlayer.bp[i] as number },
+          x: netPlayer.bp[i + 1] as number,
+          y: netPlayer.bp[i + 2] as number,
+          rotated: netPlayer.bp[i + 3] === 1,
+        });
       }
 
       // Nachladeuhren gibt es auf dem Client nicht - nur die Anzahl voller

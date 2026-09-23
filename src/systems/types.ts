@@ -99,6 +99,46 @@ export interface ItemInstance {
 }
 
 /**
+ * Ein Gegenstand an seinem Platz im Rucksackgitter.
+ *
+ * Steht HIER und nicht in `InventoryGridSystem.ts`, obwohl die Logik dort
+ * liegt: In dieser Datei stehen alle Datentypen der Simulation, und
+ * `PlayerState` braucht das Gitter. Andersherum entstuende ein Import-Zyklus
+ * (types -> InventoryGridSystem -> types), den man nur mit `import type`
+ * entschaerfen koennte - eine Falle, die beim naechsten Umbau zuschnappt.
+ */
+export interface PlacedItem {
+  item: ItemInstance;
+  /** Linke obere Ecke in Zellen. */
+  x: number;
+  y: number;
+  /** Um 90 Grad gedreht? Vertauscht Breite und Hoehe. */
+  rotated: boolean;
+}
+
+/** Ein Rucksackgitter: Groesse plus was darin liegt. */
+export interface InventoryGrid {
+  width: number;
+  height: number;
+  items: PlacedItem[];
+}
+
+/**
+ * Ein gepackter Gegenstand, wie er vom Loadout-Bildschirm in den Run geht.
+ *
+ * Bewusst OHNE laufende Nummer: Die vergibt die Simulation beim Aufbau des
+ * Runs. Und bewusst MIT Position und Drehung - sonst ginge die Anordnung
+ * verloren, die der Spieler gerade von Hand gelegt hat, und der Rucksack
+ * saehe beim Start anders aus als beim Packen.
+ */
+export interface PackedItem {
+  def: number;
+  x: number;
+  y: number;
+  rotated: boolean;
+}
+
+/**
  * Ein Gegenstand, der in der Welt liegt.
  *
  * `fromWorld` unterscheidet zwei Herkuenfte mit unterschiedlichen Regeln:
@@ -113,6 +153,13 @@ export interface GroundItem {
   /** Restliche Liegezeit in Sekunden. Unendlich fuer Fundorte der Karte. */
   lifetime: number;
   fromWorld: boolean;
+  /**
+   * Wurde fuer diesen Gegenstand schon "Rucksack voll" gemeldet?
+   *
+   * Ohne dieses Merkmal kaeme die Meldung dreissigmal je Sekunde, solange man
+   * danebensteht - aus einem Hinweis wuerde ein Alarm.
+   */
+  refused?: boolean;
 }
 
 export interface PlayerState {
@@ -158,16 +205,19 @@ export interface PlayerState {
   /** Stufe je Faehigkeit, 0 bis SKILLS[...].maxLevel. */
   skills: Record<SkillId, number>;
   /**
-   * Was dieser Spieler im Run eingesammelt hat.
+   * Der Rucksack dieses Spielers.
    *
-   * JEDER HAT SEINE EIGENE LISTE, nicht das Team eine gemeinsame. So wie es
-   * im Briefing steht - und es macht das Aufheben zu einer Entscheidung:
-   * Wer zuerst da ist, bekommt es.
+   * JEDER HAT SEINEN EIGENEN, nicht das Team einen gemeinsamen. So steht es
+   * im Briefing - und es macht das Aufheben zu einer Entscheidung: Wer zuerst
+   * da ist, bekommt es.
    *
-   * Noch OHNE Platzgrenze. Das Gitter kommt in Phase 11; bis dahin waere
-   * eine Zahl als Grenze nur geraten.
+   * Ein GITTER und keine flache Liste. Das war bis Phase 10 anders, und die
+   * flache Liste hatte einen stillen Haken: Sie war unbegrenzt. Damit gab es
+   * beim Aufsammeln nichts zu entscheiden, und der Loadout-Bildschirm war
+   * folgenlos - man konnte packen, was man wollte, und im Run passte ohnehin
+   * alles hinein.
    */
-  items: ItemInstance[];
+  backpack: InventoryGrid;
 }
 
 export interface EnemyState {
@@ -307,8 +357,16 @@ export type GameEvent =
   | { type: "encounterCleared"; index: number; isFinal: boolean }
   /** Ein Ausstieg ist zum ersten Mal in Sichtweite gekommen. */
   | { type: "extractionFound"; x: number; y: number }
-  /** Jemand hat etwas aufgehoben. `own` sagt, ob man selbst es war. */
+  /** Jemand hat etwas aufgehoben. */
   | { type: "itemPicked"; playerId: string; def: number; x: number; y: number }
+  /**
+   * Jemand konnte NICHT aufheben, weil kein Platz mehr ist.
+   *
+   * Ein eigenes Ereignis, damit die Darstellung es sagen kann. Ohne diese
+   * Meldung laeuft man ueber einen Gegenstand und nichts passiert - das
+   * sieht nach einem Fehler aus, nicht nach einer vollen Tasche.
+   */
+  | { type: "backpackFull"; playerId: string; def: number; x: number; y: number }
   /** Der Boss holt aus: Warnkreis an dieser Stelle, mit diesem Radius. */
   | { type: "bossWindup"; x: number; y: number; radius: number; seconds: number }
   | { type: "runEnded"; outcome: RunOutcome; score: number; zone: number };

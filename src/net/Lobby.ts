@@ -10,7 +10,7 @@
  * zurueckkommt, `start` bis jeder Client sich gemeldet hat.
  */
 
-import type { CharacterId } from "../systems/types";
+import type { CharacterId, PackedItem } from "../systems/types";
 import type { PlayerSetup } from "../systems/world";
 import type { NetMessage, NetPlayerInfo } from "./protocol";
 import type { Transport } from "./Transport";
@@ -24,6 +24,8 @@ export const MAX_PLAYERS = 4;
 export interface LobbyIdentity {
   name: string;
   character: CharacterId;
+  /** Der gepackte Rucksack, flach als je vier Zahlen (def, x, y, gedreht). */
+  backpack?: number[];
 }
 
 export class Lobby {
@@ -47,7 +49,13 @@ export class Lobby {
 
     if (transport.isHost) {
       this.players = [
-        { id: transport.selfId, name: identity.name, character: identity.character, isHost: true },
+        {
+          id: transport.selfId,
+          name: identity.name,
+          character: identity.character,
+          isHost: true,
+          backpack: identity.backpack,
+        },
       ];
       this.timers.push(
         window.setInterval(() => {
@@ -61,6 +69,7 @@ export class Lobby {
             t: "hello",
             name: identity.name,
             character: identity.character,
+            backpack: identity.backpack,
           });
         }
       };
@@ -156,7 +165,13 @@ export class Lobby {
         }
         this.players = [
           ...this.players,
-          { id: from, name: message.name, character: message.character, isHost: false },
+          {
+            id: from,
+            name: message.name,
+            character: message.character,
+            isHost: false,
+            backpack: message.backpack,
+          },
         ];
         this.transport.broadcast({ t: "lobby", players: this.players });
         this.playersChanged(this.players);
@@ -218,5 +233,30 @@ function toSetups(players: readonly NetPlayerInfo[]): PlayerSetup[] {
     id: player.id,
     name: player.name,
     character: player.character,
+    backpack: unpack(player.backpack),
   }));
+}
+
+/**
+ * Macht aus der flachen Zahlenreihe wieder gepackte Gegenstaende.
+ *
+ * Unvollstaendige Viererbloecke werden stillschweigend verworfen (`i + 3 <
+ * length`). Das ist kein Schlampen: Die Reihe kommt vom Netz, und ein halber
+ * Block waere ein Gegenstand ohne Position - besser einer weniger als ein
+ * Rucksack, der bei Host und Client verschieden aussieht.
+ */
+function unpack(flat: readonly number[] | undefined): PackedItem[] | undefined {
+  if (!flat || flat.length === 0) {
+    return undefined;
+  }
+  const items: PackedItem[] = [];
+  for (let i = 0; i + 3 < flat.length; i += 4) {
+    items.push({
+      def: flat[i] as number,
+      x: flat[i + 1] as number,
+      y: flat[i + 2] as number,
+      rotated: flat[i + 3] === 1,
+    });
+  }
+  return items;
 }

@@ -25,7 +25,14 @@ import { extractionFraction } from "../systems/encounters";
 import { distanceFromStart } from "../systems/zones";
 import { nearestEnemy } from "../systems/targeting";
 import { emptyInput } from "../systems/types";
-import type { CharacterId, InputState, PlayerState, Vec2, WorldState } from "../systems/types";
+import type {
+  CharacterId,
+  InputState,
+  PackedItem,
+  PlayerState,
+  Vec2,
+  WorldState,
+} from "../systems/types";
 import { createHudModel } from "../ui/HudModel";
 import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
@@ -60,6 +67,18 @@ export interface GameSceneData {
   character?: CharacterId;
   /** Gesetzt, wenn die Runde aus der Lobby kommt. Sonst wird solo gespielt. */
   session?: GameSession;
+  /**
+   * Was im Loadout-Bildschirm eingepackt wurde.
+   *
+   * DAS HAT BIS HIERHER GEFEHLT, und es war der Grund, warum das Packen
+   * folgenlos blieb: `startRun` gab nur den Charakter weiter, die Spielszene
+   * legte eine `SoloSession` ohne Rucksack an, und im HUD stand "Beute 0",
+   * obwohl man gerade vier Gegenstaende eingeraeumt hatte.
+   *
+   * Im Koop steht hier nichts - dort reist der Rucksack ueber die Lobby zum
+   * Host (`PlayerSetup.backpack`), weil er die Runde fuer alle rechnet.
+   */
+  backpack?: PackedItem[];
 }
 
 export class GameScene extends Phaser.Scene {
@@ -106,7 +125,13 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.highscore = loadHighscore()?.score ?? 0;
 
     this.session =
-      data.session ?? new SoloSession({ id: "local", name: "Du", character: this.character });
+      data.session ??
+      new SoloSession({
+        id: "local",
+        name: "Du",
+        character: this.character,
+        backpack: data.backpack,
+      });
   }
 
   create(): void {
@@ -386,7 +411,7 @@ export class GameScene extends Phaser.Scene {
              * behaelt" stuende dann dort, statt an der einen Stelle in
              * `storage/carried.ts`.
              */
-            loot: finishRun(event.outcome, this.selfPlayer()?.items ?? []),
+            loot: finishRun(event.outcome, (this.selfPlayer()?.backpack.items ?? []).map((entry) => entry.item)),
           });
         });
       }
@@ -581,7 +606,7 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.extraction = state.extractionIndex < 0 ? -1 : extractionFraction(state);
     this.hudModel.extractionCompass = nearestKnownExtraction(state, player.position);
     this.fillMinimap(state, player);
-    this.hudModel.carriedItems = player.items.length;
+    this.hudModel.carriedItems = player.backpack.items.length;
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
     this.hudModel.runTime = state.runTime;

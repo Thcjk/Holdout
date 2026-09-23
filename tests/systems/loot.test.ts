@@ -20,10 +20,11 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { LOOT } from "../../src/config/balance";
-import { ITEMS } from "../../src/config/items";
+import { ITEMS, itemIndex } from "../../src/config/items";
 import { TICK_SECONDS } from "../../src/config/constants";
 import { createEnemy } from "../../src/systems/enemies";
 import { dropItem, stepLoot } from "../../src/systems/loot";
+import { findFreeSpot, place, removeAt } from "../../src/systems/InventoryGridSystem";
 import { killEnemy } from "../../src/systems/combat";
 import { generateWorld } from "../../src/systems/WorldGenerator";
 import { createWorld } from "../../src/systems/world";
@@ -34,11 +35,17 @@ import type { WorldState } from "../../src/systems/types";
 const SEEDS = [1, 42, 4242, 20260918, 999999];
 
 /** Stellt den Spieler an eine bestimmte Stelle. */
-function place(state: WorldState, x: number, y: number, index = 0): void {
+function place_player(state: WorldState, x: number, y: number, index = 0): void {
   const player = state.players[index];
   if (!player) throw new Error("Testaufbau");
   player.position.x = x;
   player.position.y = y;
+}
+
+/** Stellt den Spieler hin und legt einen Gegenstand direkt vor seine Fuesse. */
+function place_ground(state: WorldState, x: number, y: number): void {
+  place_player(state, x, y);
+  dropItem(state, itemIndex("scrap"), { x: x + 10, y });
 }
 
 /** Eine Welt ohne Bodenfunde aus der Karte - damit nur zaehlt, was der Test legt. */
@@ -86,7 +93,7 @@ describe("Fundorte aus dem Seed", () => {
     expect(fromWorld.length).toBeGreaterThan(0);
 
     // Weit weg vom Team, damit nichts aufgehoben wird - nur die Zeit laeuft.
-    place(state, 10, 10);
+    place_player(state, 10, 10);
     for (let i = 0; i < 200; i += 1) {
       stepLoot(state, 1);
     }
@@ -171,25 +178,25 @@ describe("Drops von Gegnern", () => {
 describe("Aufsammeln", () => {
   it("hebt auf, was nah genug liegt", () => {
     const state = emptyWorld();
-    place(state, 5000, 5000);
+    place_player(state, 5000, 5000);
     dropItem(state, 0, { x: 5020, y: 5000 });
 
     stepLoot(state, TICK_SECONDS);
 
     expect(state.groundItems.length).toBe(0);
-    expect(state.players[0]?.items.length).toBe(1);
+    expect(state.players[0]?.backpack.items.length).toBe(1);
     expect(state.events.some((event) => event.type === "itemPicked")).toBe(true);
   });
 
   it("laesst liegen, was zu weit weg ist", () => {
     const state = emptyWorld();
-    place(state, 5000, 5000);
+    place_player(state, 5000, 5000);
     dropItem(state, 0, { x: 5000 + LOOT.pickupRadius + 30, y: 5000 });
 
     stepLoot(state, TICK_SECONDS);
 
     expect(state.groundItems.length).toBe(1);
-    expect(state.players[0]?.items.length).toBe(0);
+    expect(state.players[0]?.backpack.items.length).toBe(0);
   });
 
   it("laesst niemanden aufheben, der am Boden liegt", () => {
@@ -199,13 +206,13 @@ describe("Aufsammeln", () => {
     const player = state.players[0];
     if (!player) throw new Error("Testaufbau");
     player.down = true;
-    place(state, 5000, 5000);
+    place_player(state, 5000, 5000);
     dropItem(state, 0, { x: 5005, y: 5000 });
 
     stepLoot(state, TICK_SECONDS);
 
     expect(state.groundItems.length).toBe(1);
-    expect(player.items.length).toBe(0);
+    expect(player.backpack.items.length).toBe(0);
   });
 
   it("hebt MEHRERE Gegenstaende im selben Tick auf", () => {
@@ -216,7 +223,7 @@ describe("Aufsammeln", () => {
      * Drei auf einmal deckt das auf, zwei nicht zuverlaessig.
      */
     const state = emptyWorld();
-    place(state, 5000, 5000);
+    place_player(state, 5000, 5000);
     dropItem(state, 0, { x: 4990, y: 5000 });
     dropItem(state, 1, { x: 5000, y: 5000 });
     dropItem(state, 2, { x: 5010, y: 5000 });
@@ -224,7 +231,7 @@ describe("Aufsammeln", () => {
     stepLoot(state, TICK_SECONDS);
 
     expect(state.groundItems.length).toBe(0);
-    expect(state.players[0]?.items.length).toBe(3);
+    expect(state.players[0]?.backpack.items.length).toBe(3);
   });
 
   it("gibt einen Gegenstand nur EINEM Spieler", () => {
@@ -237,26 +244,158 @@ describe("Aufsammeln", () => {
       { id: "b", name: "B", character: "tank" },
     ]);
 
-    place(state, 4990, 5000, 0);
-    place(state, 5010, 5000, 1);
+    place_player(state, 4990, 5000, 0);
+    place_player(state, 5010, 5000, 1);
     dropItem(state, 0, { x: 5000, y: 5000 });
 
     stepLoot(state, TICK_SECONDS);
 
     const total =
-      (state.players[0]?.items.length ?? 0) + (state.players[1]?.items.length ?? 0);
+      (state.players[0]?.backpack.items.length ?? 0) + (state.players[1]?.backpack.items.length ?? 0);
     expect(total).toBe(1);
     expect(state.groundItems.length).toBe(0);
   });
 
   it("laesst einen Gegner-Drop nach einer Weile verschwinden", () => {
     const state = emptyWorld();
-    place(state, 10, 10);
+    place_player(state, 10, 10);
     dropItem(state, 0, { x: 5000, y: 5000 });
 
     for (let i = 0; i < LOOT.dropLifetime + 2; i += 1) {
       stepLoot(state, 1);
     }
+
+    expect(state.groundItems.length).toBe(0);
+  });
+});
+
+describe("Der gepackte Rucksack im Run", () => {
+  it("kommt mit in die Runde, statt verworfen zu werden", () => {
+    /*
+     * GENAU DAS HAT GEFEHLT. Der Loadout-Bildschirm gab nur den Charakter
+     * weiter; im Spiel stand danach "Beute 0", obwohl man gerade vier
+     * Gegenstaende eingeraeumt hatte. Das Packen war damit folgenlos.
+     */
+    const state = createWorld(
+      [
+        {
+          id: "p",
+          name: "Du",
+          character: "scout",
+          backpack: [
+            { def: itemIndex("pistol"), x: 0, y: 0, rotated: false },
+            { def: itemIndex("medkit"), x: 3, y: 1, rotated: false },
+          ],
+        },
+      ],
+      4242,
+    );
+
+    const backpack = state.players[0]?.backpack;
+    expect(backpack?.items.length).toBe(2);
+  });
+
+  it("behaelt die Anordnung, die von Hand gelegt wurde", () => {
+    // Ein Rucksack, der sich beim Start selbst umsortiert, waere eine kleine
+    // Unverschaemtheit - man hat gerade eingeraeumt.
+    const state = createWorld(
+      [
+        {
+          id: "p",
+          name: "Du",
+          character: "scout",
+          backpack: [{ def: itemIndex("rifle"), x: 4, y: 2, rotated: false }],
+        },
+      ],
+      4242,
+    );
+
+    const entry = state.players[0]?.backpack.items[0];
+    expect(entry?.x).toBe(4);
+    expect(entry?.y).toBe(2);
+  });
+
+  it("startet ohne Angabe mit leerem Rucksack", () => {
+    // Kein Fehlerfall: Wer direkt ins Spiel springt, soll nicht daran
+    // scheitern.
+    const state = createWorld(soloSetup(), 4242);
+    expect(state.players[0]?.backpack.items.length).toBe(0);
+  });
+});
+
+describe("Voller Rucksack", () => {
+  it("laesst den Gegenstand liegen, statt ihn verschwinden zu lassen", () => {
+    /*
+     * Die Zusicherung, die das Gitter ueberhaupt erst zu einer Entscheidung
+     * macht. Ihn trotzdem aufzunehmen hiesse, das Gitter waere Zierde; ihn
+     * verschwinden zu lassen waere stiller Verlust. Man kann zurueckkommen,
+     * nachdem man Platz gemacht hat.
+     */
+    const state = emptyWorld();
+    const player = state.players[0];
+    if (!player) throw new Error("Testaufbau");
+
+    // Rucksack randvoll mit 1x1-Gegenstaenden.
+    const cells = player.backpack.width * player.backpack.height;
+    for (let i = 0; i < cells; i += 1) {
+      const spot = findFreeSpot(player.backpack, itemIndex("scrap"));
+      if (!spot) break;
+      place(player.backpack, { id: 1000 + i, def: itemIndex("scrap") }, spot.x, spot.y, spot.rotated);
+    }
+    expect(findFreeSpot(player.backpack, itemIndex("scrap"))).toBeNull();
+
+    place_ground(state, 5000, 5000);
+    stepLoot(state, TICK_SECONDS);
+
+    expect(state.groundItems.length).toBe(1);
+    expect(state.events.some((event) => event.type === "backpackFull")).toBe(true);
+  });
+
+  it("meldet 'voll' nur EINMAL je Gegenstand", () => {
+    // Sonst kaeme die Meldung dreissigmal je Sekunde, solange man daneben
+    // steht - aus einem Hinweis wuerde ein Alarm.
+    const state = emptyWorld();
+    const player = state.players[0];
+    if (!player) throw new Error("Testaufbau");
+
+    const cells = player.backpack.width * player.backpack.height;
+    for (let i = 0; i < cells; i += 1) {
+      const spot = findFreeSpot(player.backpack, itemIndex("scrap"));
+      if (!spot) break;
+      place(player.backpack, { id: 2000 + i, def: itemIndex("scrap") }, spot.x, spot.y, spot.rotated);
+    }
+
+    place_ground(state, 5000, 5000);
+
+    let warnings = 0;
+    for (let i = 0; i < 30; i += 1) {
+      state.events.length = 0;
+      stepLoot(state, TICK_SECONDS);
+      warnings += state.events.filter((event) => event.type === "backpackFull").length;
+    }
+
+    expect(warnings).toBe(1);
+  });
+
+  it("nimmt es wieder auf, sobald Platz gemacht wurde", () => {
+    const state = emptyWorld();
+    const player = state.players[0];
+    if (!player) throw new Error("Testaufbau");
+
+    const cells = player.backpack.width * player.backpack.height;
+    for (let i = 0; i < cells; i += 1) {
+      const spot = findFreeSpot(player.backpack, itemIndex("scrap"));
+      if (!spot) break;
+      place(player.backpack, { id: 3000 + i, def: itemIndex("scrap") }, spot.x, spot.y, spot.rotated);
+    }
+
+    place_ground(state, 5000, 5000);
+    stepLoot(state, TICK_SECONDS);
+    expect(state.groundItems.length).toBe(1);
+
+    // Platz schaffen.
+    removeAt(player.backpack, 0);
+    stepLoot(state, TICK_SECONDS);
 
     expect(state.groundItems.length).toBe(0);
   });

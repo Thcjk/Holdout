@@ -37,6 +37,7 @@
 
 import { ITEMS } from "../config/items";
 import { LOOT } from "../config/balance";
+import { findFreeSpot, place } from "./InventoryGridSystem";
 import { nextRandom } from "./rng";
 import { distanceFromStart, zoneAt } from "./zones";
 import type { EnemyState, GroundItem, PlayerState, Vec2, WorldState } from "./types";
@@ -175,13 +176,28 @@ function expireDrops(state: WorldState, dt: number): void {
 }
 
 /**
- * Hebt auf, was nah genug liegt.
+ * Hebt auf, was nah genug liegt - wenn es in den Rucksack passt.
  *
- * Der NAECHSTE stehende Spieler bekommt es. Am Boden Liegende nicht: Wer
- * nicht laufen kann, kann auch nichts aufheben - und im Koop waere es sonst
- * moeglich, Loot einzusammeln, waehrend man auf Wiederbelebung wartet.
+ * Der NAECHSTE stehende Spieler bekommt es. Am Boden Liegende nicht: Wer nicht
+ * laufen kann, kann auch nichts aufheben - und im Koop waere es sonst
+ * moeglich, Beute einzusammeln, waehrend man auf Wiederbelebung wartet.
  *
- * Auch hier rueckwaerts durch die Liste.
+ * ================================================================
+ * SEIT PHASE 11 KANN DAS AUFHEBEN SCHEITERN
+ * ================================================================
+ *
+ * Der Platz wird ueber `findFreeSpot` gesucht - dieselbe Funktion, die auch
+ * der Loadout-Bildschirm benutzt. Das ist der Grund, warum die
+ * Platzierungslogik phaserfrei in `systems/` liegt: Hier laeuft sie beim
+ * Host, ohne Bildschirm, mitten im Gefecht.
+ *
+ * Passt nichts mehr, BLEIBT DER GEGENSTAND LIEGEN und es gibt ein Ereignis.
+ * Ihn verschwinden zu lassen waere stiller Verlust; ihn trotzdem aufzunehmen
+ * hiesse, das Gitter waere eine Zierde. Man kann zurueckkommen, nachdem man
+ * Platz gemacht hat.
+ *
+ * Eine VOLLE Tasche wird nur EINMAL je Gegenstand gemeldet (`refused`), sonst
+ * kaeme die Meldung dreissigmal je Sekunde, solange man daneben steht.
  */
 function pickUp(state: WorldState): void {
   const standing = state.players.filter((player) => !player.down);
@@ -213,7 +229,22 @@ function pickUp(state: WorldState): void {
       continue;
     }
 
-    best.items.push({ id: state.nextItemId++, def: item.def });
+    const spot = findFreeSpot(best.backpack, item.def);
+    if (!spot) {
+      if (!item.refused) {
+        item.refused = true;
+        state.events.push({
+          type: "backpackFull",
+          playerId: best.id,
+          def: item.def,
+          x: item.position.x,
+          y: item.position.y,
+        });
+      }
+      continue;
+    }
+
+    place(best.backpack, { id: state.nextItemId++, def: item.def }, spot.x, spot.y, spot.rotated);
     state.groundItems.splice(i, 1);
     state.events.push({
       type: "itemPicked",

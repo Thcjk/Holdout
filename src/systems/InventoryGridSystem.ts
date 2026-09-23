@@ -39,29 +39,14 @@
 
 import { INVENTORY } from "../config/balance";
 import { itemAt } from "../config/items";
-import type { ItemInstance } from "./types";
+import type { InventoryGrid, ItemInstance } from "./types";
 
-/** Ein Gegenstand an seinem Platz im Gitter. */
-export interface PlacedItem {
-  item: ItemInstance;
-  /** Linke obere Ecke in Zellen. */
-  x: number;
-  y: number;
-  /**
-   * Um 90 Grad gedreht?
-   *
-   * Ein eigenes Feld statt vertauschter Breite und Hoehe: So bleibt jederzeit
-   * ablesbar, WIE der Gegenstand liegt - und beim Zeichnen braucht man genau
-   * das, nicht nur die Masse.
-   */
-  rotated: boolean;
-}
-
-export interface InventoryGrid {
-  width: number;
-  height: number;
-  items: PlacedItem[];
-}
+/*
+ * Die Datentypen `InventoryGrid` und `PlacedItem` stehen in `types.ts`, bei
+ * allen anderen Daten der Simulation - `PlayerState` traegt ein Gitter, und
+ * andersherum gaebe es einen Import-Zyklus. Hier steht nur, was man damit
+ * TUN kann.
+ */
 
 /** Ein leeres Gitter in der eingestellten Groesse. */
 export function createGrid(

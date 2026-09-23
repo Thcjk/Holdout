@@ -41,8 +41,8 @@ import {
   footprint,
   itemIndexAt,
   move,
-  type InventoryGrid as GridData,
 } from "../systems/InventoryGridSystem";
+import type { InventoryGrid as GridData } from "../systems/types";
 
 /**
  * Ab dieser Zugstrecke gilt eine Beruehrung als Ziehen und nicht als Tipp.

@@ -40,6 +40,16 @@ export interface NetPlayerInfo {
   name: string;
   character: CharacterId;
   isHost: boolean;
+  /**
+   * Der vor dem Run gepackte Rucksack, flach als je vier Zahlen
+   * (def, x, y, gedreht).
+   *
+   * Reist in der Spielerliste mit, also im `lobby`- und im `start`-Paket.
+   * Damit baut jedes Geraet fuer jeden Spieler denselben Rucksack auf, bevor
+   * die Runde beginnt - waehrend des Runs muss dafuer nichts mehr uebertragen
+   * werden ausser dem, was sich aendert.
+   */
+  backpack?: number[];
 }
 
 export interface InputMessage {
@@ -81,8 +91,29 @@ export interface NetPlayer {
   sp: number;
   /** Stufen der Faehigkeiten in der Reihenfolge von SKILL_ORDER. */
   sk: number[];
-  /** Wie viele Gegenstaende dieser Spieler traegt. Nur die Anzahl. */
-  items: number;
+  /**
+   * Der Rucksackinhalt, flach als je vier Zahlen: def, x, y, gedreht (0/1).
+   *
+   * ================================================================
+   * WARUM JETZT DER GANZE INHALT UND NICHT MEHR NUR DIE ANZAHL
+   * ================================================================
+   *
+   * Bis Phase 10 reichte eine Zahl fuer den HUD-Zaehler. Mit dem Gitter
+   * reicht sie nicht mehr: Wer im Run seinen Rucksack oeffnet, muss sehen,
+   * WAS und WO darin liegt - und diese Wahrheit hat nur der Host, weil er
+   * das Aufsammeln entscheidet.
+   *
+   * Flach als Zahlenreihe statt als Objektliste: vier Zahlen je Gegenstand
+   * statt vier benannter Felder. Bei bis zu 32 Gegenstaenden je Spieler ist
+   * das spuerbar kuerzer, und die Reihenfolge steht fest.
+   *
+   * KOSTEN, ehrlich benannt: Das sind bei vier vollen Rucksaecken rund 500
+   * Zahlen je Zustandspaket. Der Schnappschuss traegt ohnehin bis zu 40
+   * Gegner mit je zwoelf Feldern, der Anteil bleibt also klein - aber er ist
+   * nicht null. Sollte es je knapp werden, waere der naechste Schritt, den
+   * Rucksack nur bei Aenderung zu schicken statt in jedem Paket.
+   */
+  bp: number[];
 }
 
 export interface NetEnemy {
@@ -171,6 +202,8 @@ export interface HelloMessage {
   t: "hello";
   name: string;
   character: CharacterId;
+  /** Was dieser Client eingepackt hat, flach wie in `NetPlayerInfo`. */
+  backpack?: number[];
 }
 
 export interface LobbyMessage {
@@ -302,9 +335,11 @@ function encodePlayer(player: PlayerState): NetPlayer {
     sp: player.skillPoints,
     // Als Zahlenliste statt als Objekt: kuerzer, und die Reihenfolge steht fest.
     sk: SKILL_ORDER.map((skill) => player.skills[skill] ?? 0),
-    // Nur die ANZAHL, nicht die Liste: Das HUD zeigt eine Zahl, und die
-    // Rucksaecke der anderen gehen niemanden etwas an (Briefing, Abschnitt 4).
-    // Ab Phase 11 braucht der eigene Client mehr - dann kommt es dazu.
-    items: player.items.length,
+    bp: player.backpack.items.flatMap((entry) => [
+      entry.item.def,
+      entry.x,
+      entry.y,
+      entry.rotated ? 1 : 0,
+    ]),
   };
 }

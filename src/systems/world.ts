@@ -20,15 +20,38 @@ import { stepAbilities, tryAbility } from "./abilities";
 import { stepDashDamage, trySuper } from "./supers";
 import { stepEncounters } from "./encounters";
 import { stepLoot } from "./loot";
+import { createGrid, findFreeSpot, place } from "./InventoryGridSystem";
 import { stepRound } from "./spawning";
 import { gameplaySeed, generateWorld } from "./WorldGenerator";
 import { emptyInput } from "./types";
-import type { CharacterId, InputState, PlayerState, Vec2, WorldState } from "./types";
+import type {
+  CharacterId,
+  InputState,
+  InventoryGrid,
+  ItemInstance,
+  PackedItem,
+  PlayerState,
+  Vec2,
+  WorldState,
+} from "./types";
 
 export interface PlayerSetup {
   id: string;
   name: string;
   character: CharacterId;
+  /**
+   * Was dieser Spieler vor dem Run eingepackt hat.
+   *
+   * Reist den ganzen Weg mit: Loadout-Bildschirm -> Sitzung -> `createWorld`.
+   * Im Koop geht die Liste im `hello` des Clients an den Host und von dort im
+   * `start` an alle - so baut jedes Geraet denselben Rucksack auf, ohne dass
+   * waehrend des Runs Inhalte uebertragen werden muessten.
+   *
+   * Fehlt sie, startet man mit leerem Rucksack. Das ist kein Fehlerfall: Wer
+   * direkt ins Spiel springt (etwa aus dem Ergebnisbildschirm), soll nicht
+   * daran scheitern.
+   */
+  backpack?: readonly PackedItem[];
 }
 
 /**
@@ -48,6 +71,39 @@ function spawnPosition(index: number, total: number, origin: Vec2): Vec2 {
     x: origin.x + Math.cos(angle) * offset,
     y: origin.y + Math.sin(angle) * offset,
   };
+}
+
+/**
+ * Baut den Rucksack aus dem, was vor dem Run gepackt wurde.
+ *
+ * Die ANORDNUNG wird uebernommen, nicht neu gesucht: Der Spieler hat sie
+ * gerade von Hand gelegt, und ein Rucksack, der sich beim Start selbst
+ * umsortiert, waere eine kleine Unverschaemtheit.
+ *
+ * Passt ein Eintrag trotzdem nicht - etwa weil sich die Gittergroesse oder
+ * eine Itemform geaendert hat -, sucht `findFreeSpot` einen Platz. Erst wenn
+ * auch das scheitert, faellt er weg. Lieber ein Gegenstand weniger als ein
+ * Rucksack, der nicht aufgebaut werden kann.
+ */
+function buildBackpack(packed: readonly PackedItem[] | undefined): InventoryGrid {
+  const grid = createGrid();
+  if (!packed) {
+    return grid;
+  }
+
+  let nextId = 1;
+  for (const entry of packed) {
+    const item: ItemInstance = { id: nextId++, def: entry.def };
+    if (place(grid, item, entry.x, entry.y, entry.rotated)) {
+      continue;
+    }
+    const spot = findFreeSpot(grid, entry.def);
+    if (spot) {
+      place(grid, item, spot.x, spot.y, spot.rotated);
+    }
+  }
+
+  return grid;
 }
 
 export function createPlayer(
@@ -83,7 +139,7 @@ export function createPlayer(
     abilityCooldown: 0,
     skillPoints: 0,
     skills: emptySkills(),
-    items: [],
+    backpack: buildBackpack(setup.backpack),
   };
 }
 

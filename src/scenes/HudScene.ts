@@ -33,6 +33,15 @@ export interface HudSceneData {
 }
 
 
+/**
+ * Abstand der Knopfreihe (Karte, Pause, Ton) von der oberen Kante.
+ *
+ * 88 -> 106: Die Punkteanzeige darueber hat seit der Beute VIER Zeilen statt
+ * drei. Im Emulator war "Beute 4" halb hinter den Knoepfen - eine Anzeige,
+ * die man nicht ganz lesen kann, ist keine.
+ */
+const BUTTON_ROW_Y = 106;
+
 export class HudScene extends Phaser.Scene {
   /** Erst wenn das hier `true` ist, darf die Spielszene Eingaben abholen. */
   ready = false;
@@ -152,7 +161,7 @@ export class HudScene extends Phaser.Scene {
     this.muteButton = new Button(
       this,
       rightEdge - 44,
-      topEdge + 88,
+      topEdge + BUTTON_ROW_Y,
       audio.isMuted ? "Ton aus" : "Ton an",
       () => {
         const muted = audio.toggleMuted();
@@ -181,7 +190,7 @@ export class HudScene extends Phaser.Scene {
     this.menuButton = new Button(
       this,
       rightEdge - 146,
-      topEdge + 88,
+      topEdge + BUTTON_ROW_Y,
       this.canPause ? "Pause" : "Menü",
       () => this.onPause(),
       { width: 80, height: 30, fontSize: 13, color: COLORS.hudDim },
@@ -201,7 +210,7 @@ export class HudScene extends Phaser.Scene {
     this.mapButton = new Button(
       this,
       rightEdge - 226,
-      topEdge + 88,
+      topEdge + BUTTON_ROW_Y,
       "Karte",
       () => {
         const open = this.minimap.toggle();
@@ -592,9 +601,9 @@ export class HudScene extends Phaser.Scene {
     this.mateText.setPosition(leftEdge, topEdge + 28);
     this.skillHint.setPosition(leftEdge, topEdge + 50);
     this.announceText.setPosition(VIEWPORT.width / 2, 132);
-    this.muteButton.setPosition(rightEdge - 44, topEdge + 88);
-    this.menuButton.setPosition(rightEdge - 146, topEdge + 88);
-    this.mapButton.setPosition(rightEdge - 226, topEdge + 88);
+    this.muteButton.setPosition(rightEdge - 44, topEdge + BUTTON_ROW_Y);
+    this.menuButton.setPosition(rightEdge - 146, topEdge + BUTTON_ROW_Y);
+    this.mapButton.setPosition(rightEdge - 226, topEdge + BUTTON_ROW_Y);
     this.minimap.layout();
 
     // Das Pausenbild sitzt in der Mitte - die verschiebt sich mit der Breite.

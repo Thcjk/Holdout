@@ -40,12 +40,12 @@ import {
   findFreeSpot,
   place,
   usedCells,
-  type InventoryGrid as GridData,
 } from "../systems/InventoryGridSystem";
+import type { InventoryGrid as GridData } from "../systems/types";
 import { Button } from "../ui/Button";
 import { InventoryGrid } from "../ui/InventoryGrid";
 import { setReloadSafe } from "../platform/update";
-import type { CharacterId, ItemInstance } from "../systems/types";
+import type { CharacterId, ItemInstance, PackedItem } from "../systems/types";
 
 export interface LoadoutData {
   character: CharacterId;
@@ -173,12 +173,32 @@ export class LoadoutScene extends Phaser.Scene {
     );
   }
 
+  /**
+   * Der gepackte Rucksack in der Form, die durch den Run reist.
+   *
+   * Position und Drehung kommen mit, nicht nur die Gegenstaende: Wer gerade
+   * von Hand eingeraeumt hat, soll seinen Rucksack im Run genauso vorfinden.
+   */
+  private packed(): PackedItem[] {
+    return this.backpack.items.map((entry) => ({
+      def: entry.item.def,
+      x: entry.x,
+      y: entry.y,
+      rotated: entry.rotated,
+    }));
+  }
+
   private startRun(): void {
     audio.unlock();
+    const backpack = this.packed();
+
     if (this.setup.coop) {
-      this.scene.start("Lobby", { character: this.setup.character });
+      // Im Koop geht der Rucksack ueber die Lobby: Der Client meldet ihn im
+      // `hello`, der Host nimmt ihn in die Spielerliste und schickt sie im
+      // `start` an alle. So baut jedes Geraet denselben Rucksack auf.
+      this.scene.start("Lobby", { character: this.setup.character, backpack });
       return;
     }
-    this.scene.start("Game", { character: this.setup.character });
+    this.scene.start("Game", { character: this.setup.character, backpack });
   }
 }
