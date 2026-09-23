@@ -15,6 +15,7 @@ import { COLORS, DEPTH, SAFE, VIEWPORT } from "../config/constants";
 import { audio } from "../audio/AudioEngine";
 import { InputManager } from "../input/InputManager";
 import { Button } from "../ui/Button";
+import { Minimap } from "../ui/Minimap";
 import { SkillPanel } from "../ui/SkillPanel";
 import type { HudModel } from "../ui/HudModel";
 
@@ -77,6 +78,8 @@ export class HudScene extends Phaser.Scene {
     this.onQuit = data.onQuit;
   }
 
+  private mapButton!: Button;
+  private minimap!: Minimap;
   private compass!: Phaser.GameObjects.Graphics;
   private compassText!: Phaser.GameObjects.Text;
 
@@ -186,6 +189,31 @@ export class HudScene extends Phaser.Scene {
     this.menuButton.setDepth(DEPTH.hud);
 
     /*
+     * Der Kartenknopf - und er sitzt bewusst NEBEN Pause und Ton, nicht unten.
+     *
+     * Unten rechts liegt der Knopfbogen (FEUER, Faehigkeit, SUPER), unten
+     * links der Joystick. Ein vierter Knopf in Daumennaehe waere genau der
+     * Knopf, den man im Gefecht versehentlich trifft - und eine Karte, die
+     * sich mitten im Kampf oeffnet, nimmt die Sicht.
+     *
+     * Hier oben kommt man mit Absicht hin, aber nicht aus Versehen.
+     */
+    this.mapButton = new Button(
+      this,
+      rightEdge - 226,
+      topEdge + 88,
+      "Karte",
+      () => {
+        const open = this.minimap.toggle();
+        this.mapButton.setText(open ? "Karte zu" : "Karte");
+      },
+      { width: 76, height: 30, fontSize: 13, color: COLORS.hudDim },
+    );
+    this.mapButton.setDepth(DEPTH.hud);
+
+    this.minimap = new Minimap(this);
+
+    /*
      * Ton beim ersten Antippen freigeben - Browser verweigern Klang, bevor der
      * Nutzer etwas beruehrt hat.
      *
@@ -250,6 +278,7 @@ export class HudScene extends Phaser.Scene {
       this.model.inSafeZone ? "Sichere Zone" : `Zone ${this.model.zone}`,
     );
     this.drawCompass();
+    this.minimap.update(this.model.minimap);
     this.scoreText.setText(
       `Score ${this.model.score}\nRekord ${this.model.highscore}\nGegner ${this.model.enemiesLeft}`,
     );
@@ -415,6 +444,19 @@ export class HudScene extends Phaser.Scene {
      */
     this.announceText.setVisible(!visible);
     this.skillHint.setVisible(false);
+
+    /*
+     * Die Karte macht beim Pausenbild zu.
+     *
+     * Beides gleichzeitig offen waere ein Widerspruch: Die Karte sagt unten
+     * ausdruecklich "Die Runde laeuft weiter", der Pausenbildschirm sagt solo
+     * das Gegenteil - und beide saessen uebereinander in der Bildmitte.
+     */
+    if (visible && this.minimap.isOpen) {
+      this.minimap.toggle();
+      this.mapButton.setText("Karte");
+    }
+
     this.overlayOpen = visible;
     this.paused = visible && this.canPause;
   }
@@ -544,6 +586,8 @@ export class HudScene extends Phaser.Scene {
     this.announceText.setPosition(VIEWPORT.width / 2, 132);
     this.muteButton.setPosition(rightEdge - 44, topEdge + 88);
     this.menuButton.setPosition(rightEdge - 146, topEdge + 88);
+    this.mapButton.setPosition(rightEdge - 226, topEdge + 88);
+    this.minimap.layout();
 
     // Das Pausenbild sitzt in der Mitte - die verschiebt sich mit der Breite.
     this.pauseTitle.setPosition(VIEWPORT.width / 2, VIEWPORT.height / 2 - 96);

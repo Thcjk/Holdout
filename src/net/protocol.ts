@@ -139,6 +139,8 @@ export interface StateMessage {
    * entdeckter Ausstieg nie wieder unbekannt wird, kann die Liste nur wachsen.
    */
   found: number[];
+  /** Welche Encounter-Punkte aufgedeckt sind, ebenfalls als Indexliste. */
+  seen: number[];
   /** In welcher Ausstiegszone das Team steht (-1 = in keiner) und wie weit. */
   extractionIndex: number;
   extractionProgress: number;
@@ -215,6 +217,7 @@ export function encodeState(state: WorldState): StateMessage {
     runTime: round1(state.runTime),
     encounters: state.encounters.map((spot) => ENCOUNTER_STATUS_ORDER.indexOf(spot.status)),
     found: state.extractions.flatMap((zone, index) => (zone.discovered ? [index] : [])),
+    seen: state.encounters.flatMap((spot, index) => (spot.discovered ? [index] : [])),
     extractionIndex: state.extractionIndex,
     extractionProgress: round1(state.extractionProgress),
     pending: state.pendingSpawns.length,

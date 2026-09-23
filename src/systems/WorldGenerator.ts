@@ -262,7 +262,14 @@ function placeEncounters(
     const radius = (zone + 0.5) * DIFFICULTY.zoneSize;
     const point = findSpotOnRing(rng, spawnPoint, walls, size, radius, clearance);
     if (point) {
-      spots.push({ position: point, isFinal: false, zone, status: "sleeping", enemyId: null });
+      spots.push({
+        position: point,
+        isFinal: false,
+        zone,
+        status: "sleeping",
+        enemyId: null,
+        discovered: false,
+      });
     }
   }
 
@@ -276,6 +283,7 @@ function placeEncounters(
       zone: outermost,
       status: "sleeping",
       enemyId: null,
+      discovered: false,
     });
   }
 

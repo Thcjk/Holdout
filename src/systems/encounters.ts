@@ -91,6 +91,17 @@ function discoverExtractions(state: WorldState): void {
       });
     }
   }
+
+  // Encounter genauso - nur ohne Ereignis: Ein Boss meldet sich selbst, indem
+  // er aufwacht. Eine zweite Ankuendigung dafuer waere Laerm.
+  for (const spot of state.encounters) {
+    if (spot.discovered) {
+      continue;
+    }
+    if (living.some((player) => distance(player.position, spot.position) <= ENCOUNTERS.discoverRadius)) {
+      spot.discovered = true;
+    }
+  }
 }
 
 /**

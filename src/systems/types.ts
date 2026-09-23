@@ -301,6 +301,15 @@ export interface EncounterSpot {
   status: EncounterStatus;
   /** Id des aktiven Gegners, solange gekaempft wird. */
   enemyId: number | null;
+  /**
+   * Ist dieser Punkt schon aufgedeckt?
+   *
+   * Dasselbe Prinzip wie bei den Ausstiegen: Die Karte zeigt nur, wo jemand
+   * schon war. Eine Minimap, die von Anfang an jeden Mini-Boss und den
+   * Ende-Boss anzeigt, nimmt dem Erkunden seinen Sinn - man liefe die Punkte
+   * ab wie eine Liste.
+   */
+  discovered: boolean;
 }
 
 /** Eine Zone, in der das Team den Run beenden kann. */

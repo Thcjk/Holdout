@@ -15,6 +15,41 @@ export interface HudMate {
   down: boolean;
 }
 
+/**
+ * Was die Uebersichtskarte braucht - und nur das.
+ *
+ * Eigenes Objekt statt eines Durchgriffs auf den Weltzustand: Die HUD-Szene
+ * kennt den Weltzustand nicht (Begruendung in `HudScene.ts`), und ein schmales
+ * Modell macht sichtbar, wie wenig die Karte wirklich wissen muss.
+ */
+export interface MinimapModel {
+  /** Kantenlaenge der Welt in Weltpixeln. Die Welt ist quadratisch. */
+  worldSize: number;
+  startX: number;
+  startY: number;
+  safeRadius: number;
+  selfX: number;
+  selfY: number;
+  mates: { x: number; y: number; down: boolean }[];
+  /** Nur die schon aufgedeckten. */
+  extractions: { x: number; y: number }[];
+  encounters: { x: number; y: number; isFinal: boolean; cleared: boolean }[];
+}
+
+export function emptyMinimap(): MinimapModel {
+  return {
+    worldSize: 1,
+    startX: 0,
+    startY: 0,
+    safeRadius: 0,
+    selfX: 0,
+    selfY: 0,
+    mates: [],
+    extractions: [],
+    encounters: [],
+  };
+}
+
 export interface HudModel {
   characterName: string;
   health: number;
@@ -61,6 +96,8 @@ export interface HudModel {
    * Der Winkel ist im Bogenmass, die Entfernung in Weltpixeln.
    */
   extractionCompass: { angle: number; distance: number } | null;
+  /** Stand fuer die Uebersichtskarte. */
+  minimap: MinimapModel;
   enemiesLeft: number;
   down: boolean;
   reviveProgress: number;
@@ -88,6 +125,7 @@ export function createHudModel(): HudModel {
     score: 0,
     highscore: 0,
     extractionCompass: null,
+    minimap: emptyMinimap(),
     phase: "running",
     runTime: 0,
     inSafeZone: true,

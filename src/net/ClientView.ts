@@ -236,6 +236,12 @@ export class ClientView implements WorldView {
         zone.discovered = true;
       }
     }
+    for (const index of to.seen) {
+      const spot = this.state.encounters[index];
+      if (spot) {
+        spot.discovered = true;
+      }
+    }
     this.pendingCount = to.pending;
 
     this.rebuildPlayers(from, to, t);

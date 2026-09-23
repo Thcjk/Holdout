@@ -569,6 +569,7 @@ export class GameScene extends Phaser.Scene {
       distanceFromStart(state, player.position) <= WORLD.safeRadius;
     this.hudModel.extraction = state.extractionIndex < 0 ? -1 : extractionFraction(state);
     this.hudModel.extractionCompass = nearestKnownExtraction(state, player.position);
+    this.fillMinimap(state, player);
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
     this.hudModel.runTime = state.runTime;
@@ -585,6 +586,57 @@ export class GameScene extends Phaser.Scene {
         down: entry.down,
       }));
   }
+
+  /**
+   * Fuellt das Modell der Uebersichtskarte.
+   *
+   * Jedes Bild neu, aber IN DIE VORHANDENEN ARRAYS statt in neue: Bei 60
+   * Bildern je Sekunde waeren neue Listen sonst Muell, den der Browser
+   * dauernd wegraeumen muss - und zwar genau dann, wenn es gerade eng wird.
+   *
+   * Gefiltert wird hier und nicht in der Karte: Was die Karte zeigen DARF,
+   * entscheidet der Weltzustand (`discovered`), und diese Entscheidung soll
+   * nicht in der Darstellung noch einmal getroffen werden.
+   */
+  private fillMinimap(state: WorldState, player: PlayerState): void {
+    const map = this.hudModel.minimap;
+    map.worldSize = state.bounds.width;
+    // Der Startpunkt ist die Weltmitte - dieselbe Rechnung wie in
+    // `distanceFromStart`, aus der auch die Distanzzonen entstehen. Eine
+    // zweite Quelle dafuer waere eine zweite Wahrheit.
+    map.startX = state.bounds.width / 2;
+    map.startY = state.bounds.height / 2;
+    map.safeRadius = WORLD.safeRadius;
+    map.selfX = player.position.x;
+    map.selfY = player.position.y;
+
+    map.mates.length = 0;
+    for (const mate of state.players) {
+      if (mate.id !== player.id) {
+        map.mates.push({ x: mate.position.x, y: mate.position.y, down: mate.down });
+      }
+    }
+
+    map.extractions.length = 0;
+    for (const zone of state.extractions) {
+      if (zone.discovered) {
+        map.extractions.push({ x: zone.position.x, y: zone.position.y });
+      }
+    }
+
+    map.encounters.length = 0;
+    for (const spot of state.encounters) {
+      if (spot.discovered) {
+        map.encounters.push({
+          x: spot.position.x,
+          y: spot.position.y,
+          isFinal: spot.isFinal,
+          cleared: spot.status === "cleared",
+        });
+      }
+    }
+  }
+
 }
 
 /**
