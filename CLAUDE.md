@@ -38,7 +38,7 @@ Run).
 Jede Etappe: was gebaut wurde, **wie** geprüft wurde, was nicht wie geplant
 lief. Neueste unten.
 
-#### Etappe 0 – Bestandsaudit · 2026-09-23 21:30 UTC
+#### Etappe 0 – Bestandsaudit · 2026-09-23 21:17 UTC
 
 - **Gebaut:** `AUDIT.md` mit allen 19 Punkten der Checkliste.
 - **Geprüft wie:** Jede Aufrufkette im Code verfolgt (Datei geöffnet,
@@ -49,6 +49,31 @@ lief. Neueste unten.
   Sniper-Aufklärung, Auto-Aim). Pinke Linie geklärt: der Encounter-Ring.
 - **Nicht wie geplant:** Der durchsichtige Doppel-Charakter liess sich beim
   Lesen nicht eindeutig finden – wird in Etappe 2 nachgestellt.
+
+#### Etappe 1 – Skillpunkte-System entfernt · 2026-09-23 21:22 UTC
+
+- **Gebaut:** „X Punkte frei – in der sicheren Zone verteilen“ vollständig
+  entfernt: `systems/skills.ts`, `ui/SkillPanel.ts`, `tests/systems/skills.test.ts`
+  gelöscht; Eingabe `levelUp`, Protokollfelder `sp`/`sk`, `PlayerState.skills`
+  und `skillPoints`, `SKILLS`/`SKILL_ORDER`/`SKILL_POINTS_PER_ZONE`, die
+  `?tune=skills.*`-Wurzel, die HUD-Hinweiszeile und der Zusatz „…und du kannst
+  aufwerten“ in der sicheren Zone.
+- **Grundwerte unverändert:** Die Faktoren `damageFactor`, `speedFor`,
+  `superChargeFor` waren auf Stufe 0 genau 1. Schaden, Tempo und
+  Superaufladung rechnen jetzt direkt mit den Grundwerten – für einen Spieler,
+  der nie aufgewertet hat, ändert sich nichts. `superChargeFor` ist als
+  Rechnung erhalten und nach `combat.ts` gezogen.
+- **Geprüft wie:** `grep -i "skill|punkte frei|aufwert|levelUp"` über `src/`
+  und `tests/` liefert nur noch Kommentare, die die Entfernung erklären.
+  Typecheck, Lint, 217 Tests grün. Im Emulator bis Zone 2 gelaufen: oben links
+  steht nur „Zone 2“, kein Panel, keine Hinweiszeile, keine Seitenfehler.
+- **Tests umgebaut statt gelöscht:** Die zwei Fortschritts-Tests prüften
+  Skillpunkte, meinten aber etwas Wichtigeres – dass ein Dash über mehrere
+  Zonengrenzen keinen Fortschritt verschluckt und dieselbe Zone nicht doppelt
+  zählt. Sie prüfen das jetzt an den `zoneReached`-Ereignissen.
+- **Nebenwirkung, gemessen:** Der Bot verteilte bisher Punkte. Ohne sie:
+  Scout 5,6 · Tank 3,4 · Sniper 6,0 Zonen (vorher 5,4 · 3,6 · 7,8).
+- **Nicht wie geplant:** nichts.
 
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
@@ -297,13 +322,9 @@ Zwei Änderungen nach dem ersten Spieltest, beide über das Briefing hinaus:
   bis die Simulation ihn gesehen hat. Genau einer pro Druck, kein Doppelschuss.
   Wird gezogen, bekommt er beim Loslassen noch die gezogene Richtung mit - so
   trifft auch ein schnelles Wischen dorthin, wohin gezielt wurde.
-- **Fähigkeiten lassen sich aufwerten** (`src/systems/skills.ts`,
-  `src/ui/SkillPanel.ts`): ein Punkt je geschaffter Welle, verteilbar auf Waffe,
-  Panzerung, Tempo und Super, je fünf Stufen. Die Auswahl erscheint nur in der
-  Pause - ein Menü mitten im Gefecht wäre im Weg. Wichtig für den Koop: Die
-  Stufen werden **nicht** in die Grundwerte hineingerechnet, sondern bei jeder
-  Benutzung frisch angewendet. Sonst summieren sich Rundungsfehler, und Host
-  und Client laufen auseinander.
+- ~~**Fähigkeiten lassen sich aufwerten**~~ – **am 2026-09-23 entfernt**
+  (Etappe 1 der Überarbeitung): steht nicht im Briefing. Wiederherstellbar
+  über die Git-Historie vor Commit „Etappe 1“.
 
 ### Die Knöpfe liegen im Bogen – und der Basisangriff zielt nicht mehr von Hand
 
@@ -867,10 +888,10 @@ auseinanderlaufen.
   jeder Run endete zwangsläufig nach wenigen Minuten. Jetzt heilt der sichere
   Ring um den Startpunkt (10 % je Sekunde). Der Weg zurück kostet Zeit – und
   ist damit die kleine Schwester der Entscheidung, um die sich alles dreht.
-- **Skillpunkte verteilen.** Ging nur in der Pause. Der Ersatz ist bewusst kein
-  Zeitfenster, sondern ein **Ort**: die sichere Zone.
+- ~~**Skillpunkte verteilen.**~~ – mitsamt dem Skillpunkte-System in Etappe 1
+  entfernt.
 
-**Diese beiden sind meine Ergänzungen, nicht aus dem Briefing.** Sie füllen
+**Die Heilung ist meine Ergänzung, nicht aus dem Briefing.** Sie füllen
 Lücken, die der Wegfall der Wellen gerissen hat. Wenn sie nicht gefallen, ist
 das kein Widerspruch zum Plan – dann raus damit.
 
@@ -1280,7 +1301,6 @@ src/
     projectiles.ts        Projektile mit Object Pooling
     enemies.ts            Gegner-KI, Sichtlinie
     supers.ts             die drei Super-Fähigkeiten
-    skills.ts             Aufwertungen je erreichter Distanzzone
     WorldGenerator.ts     die Karte aus einem Seed (deterministisch)
     spawning.ts           Distanzformel, Zielbevölkerung, Rundenablauf
     targeting.ts          wer sieht wen

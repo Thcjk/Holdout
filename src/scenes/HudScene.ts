@@ -16,7 +16,6 @@ import { audio } from "../audio/AudioEngine";
 import { InputManager } from "../input/InputManager";
 import { Button } from "../ui/Button";
 import { Minimap } from "../ui/Minimap";
-import { SkillPanel } from "../ui/SkillPanel";
 import type { HudModel } from "../ui/HudModel";
 
 /** Dauer des Extraktions-Countdowns, fuer die Restzeit in der Anzeige. */
@@ -55,13 +54,9 @@ export class HudScene extends Phaser.Scene {
   private announceText!: Phaser.GameObjects.Text;
   private mateText!: Phaser.GameObjects.Text;
   private muteButton!: Button;
-  private skillPanel!: SkillPanel;
-  private skillHint!: Phaser.GameObjects.Text;
   private menuButton!: Button;
 
   private canPause = false;
-  /** Zwischenbildschirm zu sehen? Dann bleibt die Hinweiszeile unten. */
-  private overlayOpen = false;
   /** Welt steht wirklich still (nur solo)? Dann bringt das HUD nichts nach. */
   private paused = false;
   private onPause: () => void = () => {};
@@ -236,23 +231,10 @@ export class HudScene extends Phaser.Scene {
 
     this.inputManager = new InputManager(this);
 
-    // Die Auswahl schickt den Wunsch durch denselben Kanal wie jede andere
-    // Eingabe - im Koop entscheidet dann der Host darueber.
-    this.skillPanel = new SkillPanel(this, (skill) => this.inputManager.requestLevelUp(skill));
-
-    this.skillHint = this.add
-      .text(leftEdge, topEdge + 50, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "14px",
-        color: "#ffd166",
-        fontStyle: "bold",
-      })
-      .setDepth(DEPTH.hud);
-
     // GANZ ZUM SCHLUSS: `createPauseScreen` blendet am Ende alles aus, was in
-    // der Pause nicht sichtbar sein darf - dazu gehoert die Hinweiszeile oben.
-    // Frueher aufgerufen, gaebe es die noch gar nicht, und der Aufbau des HUD
-    // braeche mit "Cannot read properties of undefined" ab.
+    // der Pause nicht sichtbar sein darf. Frueher aufgerufen, gaebe es das
+    // noch gar nicht, und der Aufbau des HUD braeche mit "Cannot read
+    // properties of undefined" ab.
     this.createPauseScreen();
 
     this.ready = true;
@@ -261,7 +243,6 @@ export class HudScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
       this.ready = false;
       this.inputManager.destroy();
-      this.skillPanel.destroy();
     });
   }
 
@@ -269,9 +250,9 @@ export class HudScene extends Phaser.Scene {
     /*
      * In der Pause steht die Welt still, also gibt es nichts nachzufuehren.
      *
-     * Das ist nicht nur gespart: Ohne diese Zeile wuerde `updateSkills` jedes
-     * Bild die Hinweiszeile wieder einblenden, die `setPauseVisible` gerade
-     * ausgeblendet hat - sie flackerte mitten durch das Pausenbild.
+     * Das ist nicht nur gespart: Weiterlaufende Anzeigen wuerden jedes Bild
+     * wieder einblenden, was das Pausenbild gerade ausgeblendet hat - sie
+     * flackerten mitten durch die Pausenschrift.
      */
     if (!this.model || this.paused) {
       return;
@@ -310,7 +291,6 @@ export class HudScene extends Phaser.Scene {
 
     this.drawPlayerBars();
     this.updateAnnouncement();
-    this.updateSkills();
     this.inputManager.setStatus({
       // `ammo` sind Fuellstaende 0 bis 1 - voll ist, was 1 erreicht hat.
       ammo: this.model.ammo.filter((fraction) => fraction >= 1).length,
@@ -320,33 +300,6 @@ export class HudScene extends Phaser.Scene {
       superCharge: this.model.superCharge,
       abilityLabel: this.model.abilityLabel,
     });
-  }
-
-  /**
-   * Punkte verteilt man in der sicheren Zone. Draussen erinnert nur eine
-   * kleine Zeile daran - ein Menue mitten im Gefecht waere im Weg.
-   *
-   * FRUEHER WAR DAS DIE PAUSE zwischen zwei Wellen. Die gibt es nicht mehr, und
-   * der Ersatz ist bewusst kein Zeitfenster, sondern ein ORT: Wer aufwerten
-   * will, geht zum Start zurueck. Das kostet den Weg und passt damit zu der
-   * Entscheidung, um die sich der ganze Run dreht - weiter vorruecken oder
-   * erst einmal zurueck.
-   */
-  private updateSkills(): void {
-    const canSpend = this.model.inSafeZone;
-    this.skillPanel.update(this.model.skillPoints, this.model.skillLevels, canSpend);
-
-    // Nicht durch den Zwischenbildschirm blinken lassen - im Koop laeuft das
-    // HUD dahinter weiter und wuerde die Zeile jedes Bild neu einblenden.
-    const showHint = this.model.skillPoints > 0 && !canSpend && !this.overlayOpen;
-    this.skillHint.setVisible(showHint);
-    if (showHint) {
-      this.skillHint.setText(
-        this.model.skillPoints === 1
-          ? "1 Punkt frei - in der sicheren Zone verteilen"
-          : `${this.model.skillPoints} Punkte frei - in der sicheren Zone verteilen`,
-      );
-    }
   }
 
   /**
@@ -460,7 +413,6 @@ export class HudScene extends Phaser.Scene {
      * Pausenschrift. Zwei Ueberschriften uebereinander liest niemand.
      */
     this.announceText.setVisible(!visible);
-    this.skillHint.setVisible(false);
 
     /*
      * Die Karte macht beim Pausenbild zu.
@@ -474,7 +426,6 @@ export class HudScene extends Phaser.Scene {
       this.mapButton.setText("Karte");
     }
 
-    this.overlayOpen = visible;
     this.paused = visible && this.canPause;
   }
 
@@ -599,7 +550,6 @@ export class HudScene extends Phaser.Scene {
     this.waveText.setPosition(leftEdge, topEdge);
     this.scoreText.setPosition(rightEdge, topEdge);
     this.mateText.setPosition(leftEdge, topEdge + 28);
-    this.skillHint.setPosition(leftEdge, topEdge + 50);
     this.announceText.setPosition(VIEWPORT.width / 2, 132);
     this.muteButton.setPosition(rightEdge - 44, topEdge + BUTTON_ROW_Y);
     this.menuButton.setPosition(rightEdge - 146, topEdge + BUTTON_ROW_Y);
@@ -687,17 +637,12 @@ export class HudScene extends Phaser.Scene {
     /*
      * In der sicheren Zone steht hier, was dort gilt - sonst nichts.
      *
-     * Der Hinweis ersetzt kein Tutorial, aber er erklaert die beiden Regeln,
-     * die man sonst nirgends ablesen koennte: dass man hier heilt, und dass
-     * man hier aufwertet. Draussen bleibt die Zeile leer, damit sie nicht im
-     * Gefecht im Weg steht.
+     * Der Hinweis ersetzt kein Tutorial, aber er erklaert die Regel, die man
+     * sonst nirgends ablesen koennte: dass man hier heilt. Draussen bleibt die
+     * Zeile leer, damit sie nicht im Gefecht im Weg steht.
      */
     if (this.model.inSafeZone) {
-      const hint =
-        this.model.skillPoints > 0
-          ? "Sichere Zone - du heilst, und du kannst aufwerten"
-          : "Sichere Zone - hier heilst du";
-      this.announceText.setText(hint);
+      this.announceText.setText("Sichere Zone - hier heilst du");
       this.announceText.setColor("#7ee08a");
       return;
     }

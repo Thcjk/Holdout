@@ -26,7 +26,7 @@
  * Die Zahlen stammen alle aus `config/balance.ts`.
  */
 
-import { DIFFICULTY, PLAYER, SKILL_POINTS_PER_ZONE, WORLD } from "../config/balance";
+import { DIFFICULTY, PLAYER, WORLD } from "../config/balance";
 import { TICK_RATE } from "../config/constants";
 import { createEnemy } from "./enemies";
 import { nextRandom, randomRange } from "./rng";
@@ -183,12 +183,6 @@ function updateZone(state: WorldState): void {
   while (state.deepestZone < deepest) {
     state.deepestZone += 1;
     state.events.push({ type: "zoneReached", zone: state.deepestZone });
-
-    for (const player of state.players) {
-      // Auch Gefallene bekommen ihren Punkt - wie frueher bei den Wellen. Ein
-      // schlechter Moment soll nicht zusaetzlich den Fortschritt kosten.
-      player.skillPoints += SKILL_POINTS_PER_ZONE;
-    }
   }
 }
 

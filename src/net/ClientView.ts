@@ -15,7 +15,7 @@
  *    Host ab, wird sanft korrigiert statt hart gesetzt.
  */
 
-import { CHARACTERS, SKILL_ORDER } from "../config/balance";
+import { CHARACTERS } from "../config/balance";
 import { TICK_MS, TICK_SECONDS } from "../config/constants";
 import { stepPlayerMovement } from "../systems/movement";
 import { createPlayer, createWorld, isInBush } from "../systems/world";
@@ -331,10 +331,6 @@ export class ClientView implements WorldView {
       player.down = netPlayer.down;
       player.reviveProgress = netPlayer.revive;
       player.invulnerable = netPlayer.inv;
-      player.skillPoints = netPlayer.sp;
-      SKILL_ORDER.forEach((skill, index) => {
-        player.skills[skill] = netPlayer.sk[index] ?? 0;
-      });
 
       /*
        * Der Rucksack kommt vollstaendig vom Host und wird hier neu aufgebaut.

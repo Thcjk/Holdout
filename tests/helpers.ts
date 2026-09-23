@@ -11,7 +11,6 @@ export function makeInput(move: Vec2, extra: Partial<InputState> = {}): InputSta
     useSuper: false,
     useAbility: false,
     abilityAim: null,
-    levelUp: null,
     ...extra,
   };
 }

@@ -5,8 +5,7 @@
  * testbar (siehe tests/systems/) und im Koop auf Host und Client identisch.
  */
 
-import { PLAYER, SUPERS } from "../config/balance";
-import { speedFor } from "./skills";
+import { CHARACTERS, PLAYER, SUPERS } from "../config/balance";
 import { moveAndCollide } from "./collision";
 import type { InputState, PlayerState, Rect, Vec2 } from "./types";
 
@@ -58,7 +57,7 @@ export function stepPlayerMovement(
     return;
   }
 
-  const speed = speedFor(player);
+  const speed = CHARACTERS[player.character].speed;
   const direction = normalizeInput(input.move);
 
   // Beschleunigung in Pixel pro Sekunde im Quadrat: In `accelerationTime`
@@ -96,7 +95,7 @@ function stepDash(player: PlayerState, walls: readonly Rect[], dt: number): void
   if (blocked || player.dashTime <= 0) {
     player.dashTime = 0;
     // Nach dem Dash nicht mit voller Dashgeschwindigkeit weiterschlittern.
-    const speed = speedFor(player);
+    const speed = CHARACTERS[player.character].speed;
     player.velocity.x = player.dashDirection.x * speed;
     player.velocity.y = player.dashDirection.y * speed;
   }

@@ -8,7 +8,6 @@
 
 import { SUPERS } from "../config/balance";
 import { damageEnemy, isSuperReady } from "./combat";
-import { damageFactor } from "./skills";
 import { nearestEnemy } from "./targeting";
 import type { InputState, PlayerState, Vec2, WorldState } from "./types";
 
@@ -92,7 +91,7 @@ export function stepDashDamage(state: WorldState, player: PlayerState): void {
     player.dashHits.push(enemy.id);
     enemy.velocity.x += player.dashDirection.x * SUPERS.scout.knockback;
     enemy.velocity.y += player.dashDirection.y * SUPERS.scout.knockback;
-    damageEnemy(state, enemy, Math.round(SUPERS.scout.damage * damageFactor(player)), player.id);
+    damageEnemy(state, enemy, SUPERS.scout.damage, player.id);
   }
 }
 
@@ -113,7 +112,7 @@ function groundSlam(state: WorldState, player: PlayerState): void {
     enemy.stunned = SUPERS.tank.stunDuration;
     enemy.velocity.x += (dx / distance) * SUPERS.tank.knockback;
     enemy.velocity.y += (dy / distance) * SUPERS.tank.knockback;
-    damageEnemy(state, enemy, Math.round(SUPERS.tank.damage * damageFactor(player)), player.id);
+    damageEnemy(state, enemy, SUPERS.tank.damage, player.id);
   }
 }
 

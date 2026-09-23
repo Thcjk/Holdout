@@ -186,7 +186,7 @@ export class AudioEngine {
       case "zoneReached":
         /*
          * Eine neue Distanzzone ist zweierlei auf einmal, und der Klang muss
-         * beides sagen: Man hat etwas geschafft (es gibt einen Skillpunkt),
+         * beides sagen: Man hat etwas geschafft (man ist tiefer als je zuvor),
          * und es wird ab hier gefaehrlicher.
          *
          * Deshalb erst hinauf (440-554-659, das alte Wellensignal - "Schwelle

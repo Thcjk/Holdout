@@ -42,8 +42,8 @@ import type { MinimapModel } from "./HudModel";
  * Abstand des Panels zur oberen Kante, zusaetzlich zum Geraeterand.
  *
  * 86 statt 46: Darueber stehen die Zonenanzeige, die Mitspielerzeile und die
- * Skill-Hinweiszeile. Bei 70 schnitt das Panel die Hinweiszeile an - im
- * Emulator stand "2 Punkte frei ..." halb hinter der Karte. Die Karte wird
+ * damalige Hinweiszeile. Bei 70 schnitt das Panel sie an - im Emulator stand
+ * der Text halb hinter der Karte. Die Karte wird
  * dadurch nicht kleiner: Ihre Kantenlaenge ist ohnehin auf 250 begrenzt, und
  * darunter bleibt genug Platz.
  */

@@ -1,6 +1,6 @@
 # AUDIT.md – Bestandsaufnahme vor der grossen Überarbeitung
 
-**Erstellt:** 2026-09-23 21:30 UTC, auf Stand `54875ac`
+**Erstellt:** 2026-09-23 21:17 UTC, auf Stand `54875ac`
 **Methode:** Jede Zeile im tatsächlichen Code geprüft – Datei geöffnet, Aufrufstelle
 gesucht, Aufrufkette bis zur laufenden Szene verfolgt. Nicht aus CLAUDE.md
 übernommen. Zusätzlich ein Durchlauf im Browser-Emulator (iPhone 13 quer):
@@ -217,5 +217,10 @@ entfernt; über die Git-Historie bleibt es wiederherstellbar.
 ---
 
 ## Nachträge je Etappe
+
+### Etappe 1 · 2026-09-23 21:22 UTC
+
+Punkt 19 erledigt: Skillpunkte-System vollständig entfernt. Siehe CLAUDE.md,
+Protokoll Etappe 1.
 
 *(wird fortgeschrieben)*

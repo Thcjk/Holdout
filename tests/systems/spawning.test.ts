@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { DIFFICULTY, LIMITS, SKILL_POINTS_PER_ZONE, WORLD } from "../../src/config/balance";
+import { DIFFICULTY, LIMITS, WORLD } from "../../src/config/balance";
 import { TICK_RATE, TICK_SECONDS } from "../../src/config/constants";
 import { stepRound } from "../../src/systems/spawning";
 import {
@@ -141,30 +141,28 @@ describe("Gegner erscheinen rund um die Spieler", () => {
 });
 
 describe("Fortschritt", () => {
-  it("gibt Skillpunkte fuer jede neu erreichte Zone - auch fuer Gefallene", () => {
+  it("meldet jede neu erreichte Zone einzeln - auch wenn mehrere auf einmal kommen", () => {
+    /*
+     * Frueher hing hier ein Skillpunkt je Zone dran. Das System ist entfernt
+     * (Etappe 1), die Zusicherung darunter bleibt wichtig: Ein Dash ueber eine
+     * Zonengrenze darf keinen Fortschritt verschlucken.
+     */
     const state = createWorld(soloSetup(), 5);
-    const player = state.players[0];
-    if (!player) throw new Error("Testaufbau");
-
-    expect(player.skillPoints).toBe(0);
+    state.events.length = 0;
 
     placeAt(state, DIFFICULTY.zoneSize * 3 + 10);
     stepRound(state, TICK_SECONDS);
 
-    // Drei Zonen auf einmal uebersprungen: Es muss drei Punkte geben, nicht
-    // einen. Sonst verschluckt ein Dash ueber eine Zonengrenze den Fortschritt.
     expect(state.deepestZone).toBe(3);
-    expect(player.skillPoints).toBe(3 * SKILL_POINTS_PER_ZONE);
+    expect(state.events.filter((event) => event.type === "zoneReached").length).toBe(3);
   });
 
-  it("vergibt fuer dieselbe Zone nicht zweimal Punkte", () => {
+  it("meldet dieselbe Zone nicht zweimal", () => {
     const state = createWorld(soloSetup(), 6);
-    const player = state.players[0];
-    if (!player) throw new Error("Testaufbau");
 
     placeAt(state, DIFFICULTY.zoneSize * 2 + 10);
     stepRound(state, TICK_SECONDS);
-    const afterFirst = player.skillPoints;
+    state.events.length = 0;
 
     // Zurueck in die sichere Zone und wieder hinaus - das ist kein neuer
     // Fortschritt, sondern derselbe Weg.
@@ -173,7 +171,7 @@ describe("Fortschritt", () => {
     placeAt(state, DIFFICULTY.zoneSize * 2 + 10);
     stepRound(state, TICK_SECONDS);
 
-    expect(player.skillPoints).toBe(afterFirst);
+    expect(state.events.filter((event) => event.type === "zoneReached").length).toBe(0);
   });
 
   it("heilt in der sicheren Zone und sonst nicht", () => {

@@ -15,7 +15,6 @@ import { stepReload, stepRevive, tryShoot } from "./combat";
 import { stepEnemies } from "./enemies";
 import { clampToArena, stepPlayerMovement } from "./movement";
 import { stepProjectiles } from "./projectiles";
-import { applyLevelUp, emptySkills } from "./skills";
 import { stepAbilities, tryAbility } from "./abilities";
 import { stepDashDamage, trySuper } from "./supers";
 import { stepEncounters } from "./encounters";
@@ -137,8 +136,6 @@ export function createPlayer(
     inBush: false,
     shootCooldown: 0,
     abilityCooldown: 0,
-    skillPoints: 0,
-    skills: emptySkills(),
     backpack: buildBackpack(setup.backpack),
   };
 }
@@ -227,9 +224,6 @@ export function stepWorld(
   for (const player of state.players) {
     const input = inputs.get(player.id) ?? emptyInput();
 
-    if (input.levelUp) {
-      applyLevelUp(state, player, input.levelUp);
-    }
 
     stepReload(player, dt);
     stepPlayerMovement(player, input, state.walls, dt);

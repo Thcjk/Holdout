@@ -51,8 +51,6 @@ export interface InputState {
    * kurzen Antippen ohne Ziehen.
    */
   abilityAim: Vec2 | null;
-  /** Einmaliger Wunsch, einen Skillpunkt in diese Faehigkeit zu stecken. */
-  levelUp: SkillId | null;
 }
 
 export function emptyInput(): InputState {
@@ -63,14 +61,11 @@ export function emptyInput(): InputState {
     useSuper: false,
     useAbility: false,
     abilityAim: null,
-    levelUp: null,
   };
 }
 
 export type CharacterId = "scout" | "tank" | "sniper";
 
-/** Die vier Fähigkeiten, die sich zwischen den Wellen aufwerten lassen. */
-export type SkillId = "weapon" | "armor" | "speed" | "super";
 /**
  * Die Gegnertypen.
  *
@@ -200,10 +195,6 @@ export interface PlayerState {
   shootCooldown: number;
   /** Restliche Abklingzeit der zweiten Faehigkeit in Sekunden. 0 = bereit. */
   abilityCooldown: number;
-  /** Noch nicht verteilte Skillpunkte. Einer pro geschaffter Welle. */
-  skillPoints: number;
-  /** Stufe je Faehigkeit, 0 bis SKILLS[...].maxLevel. */
-  skills: Record<SkillId, number>;
   /**
    * Der Rucksack dieses Spielers.
    *
@@ -341,14 +332,13 @@ export type GameEvent =
   | { type: "abilityUsed"; playerId: string; character: CharacterId; x: number; y: number }
   | { type: "blast"; x: number; y: number; radius: number }
   | { type: "healed"; playerId: string; amount: number; x: number; y: number }
-  | { type: "levelUp"; playerId: string; skill: SkillId; level: number }
   | { type: "spawnWarning"; x: number; y: number }
   /**
    * Das Team hat zum ersten Mal eine neue Distanzzone erreicht.
    *
    * Nachfolger von "waveStart"/"waveCleared": Der Fortschritt haengt jetzt an
-   * der Entfernung zum Start, nicht mehr an der Zeit. Daran haengen Klang,
-   * Anzeige und die Skillpunkte.
+   * der Entfernung zum Start, nicht mehr an der Zeit. Daran haengen Klang
+   * und Anzeige.
    */
   | { type: "zoneReached"; zone: number }
   /** Ein Boss ist erwacht - jemand hat seinen Encounter betreten. */
@@ -463,7 +453,7 @@ export interface WorldState {
   runTime: number;
   /** Distanzzone, in der das Team gerade unterwegs ist (0 = sicherer Start). */
   zone: number;
-  /** Tiefste je erreichte Zone. Daran haengen Skillpunkte und Ergebnis. */
+  /** Tiefste je erreichte Zone. Daran haengt das Ergebnis. */
   deepestZone: number;
   /** Wie der Run ausgegangen ist. `null`, solange er laeuft. */
   outcome: RunOutcome | null;

@@ -16,7 +16,7 @@
  * zum Treffen, weit genug, um nicht im Nahkampf zu stehen.
  */
 
-import { CHARACTERS, SKILL_ORDER } from "../src/config/balance";
+import { CHARACTERS } from "../src/config/balance";
 import { nearestEnemy } from "../src/systems/targeting";
 import type { InputState, Vec2, WorldState } from "../src/systems/types";
 import { makeInput } from "./helpers";
@@ -157,14 +157,7 @@ function botInput(
   const length = Math.hypot(moveX, moveY);
   const move = length > 0.05 ? { x: moveX / length, y: moveY / length } : { x: 0, y: 0 };
 
-  // Punkte reihum verteilen - ein Bot, der Aufwertungen liegen liesse, wuerde
-  // das Spiel schwerer messen, als es ist.
-  const levelUp =
-    player.skillPoints > 0
-      ? (SKILL_ORDER[player.skills.weapon % SKILL_ORDER.length] ?? null)
-      : null;
-
   return new Map([
-    [player.id, makeInput(move, { aim, fire: true, useSuper: player.superCharge >= 100, levelUp })],
+    [player.id, makeInput(move, { aim, fire: true, useSuper: player.superCharge >= 100 })],
   ]);
 }

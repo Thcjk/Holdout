@@ -9,7 +9,7 @@ import { INPUT_RATE } from "./protocol";
 import type { NetMessage } from "./protocol";
 import { ClientView } from "./ClientView";
 import type { GameSession, WorldView } from "./GameSession";
-import type { InputState, SkillId, Vec2 } from "../systems/types";
+import type { InputState, Vec2 } from "../systems/types";
 import type { PlayerSetup } from "../systems/world";
 import type { Transport } from "./Transport";
 
@@ -28,7 +28,6 @@ export class ClientSession implements GameSession {
   private pendingSuper = false;
   private pendingAbility = false;
   private pendingAbilityAim: Vec2 | null = null;
-  private pendingLevelUp: SkillId | null = null;
 
   constructor(
     private readonly transport: Transport,
@@ -63,7 +62,6 @@ export class ClientSession implements GameSession {
       this.pendingAbility = true;
       this.pendingAbilityAim = input.abilityAim;
     }
-    this.pendingLevelUp = input.levelUp ?? this.pendingLevelUp;
 
     this.sinceLastInput += deltaMs;
     let sent = false;
@@ -82,12 +80,10 @@ export class ClientSession implements GameSession {
         super: this.pendingSuper,
         ability: this.pendingAbility,
         abilityAim: this.pendingAbilityAim,
-        levelUp: this.pendingLevelUp,
       });
       this.pendingSuper = false;
       this.pendingAbility = false;
       this.pendingAbilityAim = null;
-      this.pendingLevelUp = null;
       sent = true;
     }
 

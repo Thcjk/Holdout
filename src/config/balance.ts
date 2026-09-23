@@ -6,7 +6,7 @@
  * Modul darf Spielwerte fest verdrahten - sonst sucht man sie spaeter an zwanzig Stellen.
  */
 
-import type { CharacterId, SkillId } from "../systems/types";
+import type { CharacterId } from "../systems/types";
 
 export const PLAYER = {
   /** Grundtempo in Pixel pro Sekunde (je Charakter ueberschrieben). */
@@ -799,36 +799,6 @@ export const DIFFICULTY = {
    */
   despawnRadius: 2600,
 } as const;
-
-export interface SkillDefinition {
-  id: SkillId;
-  name: string;
-  /** Kurztext auf dem Knopf - was eine Stufe bringt. */
-  effect: string;
-  maxLevel: number;
-  /** Zuwachs je Stufe als Anteil, 0.08 heisst plus 8 Prozent. */
-  perLevel: number;
-}
-
-/**
- * Fähigkeiten, die sich zwischen den Wellen aufwerten lassen.
- *
- * Bewusst vier klare Werte statt eigener Zauber: Man sieht sofort, was eine
- * Stufe bringt, und jede Wahl ist ein echter Verzicht auf die anderen drei.
- * Fünf Stufen sind die Obergrenze - voll ausgebaut ist eine Fähigkeit dann
- * spürbar, aber nicht allmächtig.
- */
-export const SKILLS: Record<SkillId, SkillDefinition> = {
-  weapon: { id: "weapon", name: "Waffe", effect: "+10 % Schaden", maxLevel: 5, perLevel: 0.1 },
-  armor: { id: "armor", name: "Panzerung", effect: "+12 % Leben", maxLevel: 5, perLevel: 0.12 },
-  speed: { id: "speed", name: "Tempo", effect: "+5 % Laufweg", maxLevel: 5, perLevel: 0.05 },
-  super: { id: "super", name: "Super", effect: "+25 % Aufladung", maxLevel: 5, perLevel: 0.25 },
-};
-
-export const SKILL_ORDER: SkillId[] = ["weapon", "armor", "speed", "super"];
-
-/** Skillpunkte je neu erreichter Distanzzone (frueher: je geschaffter Welle). */
-export const SKILL_POINTS_PER_ZONE = 1;
 
 /** Harte Obergrenzen fuer die Handy-Leistung (Briefing, Abschnitt 7). */
 export const LIMITS = {

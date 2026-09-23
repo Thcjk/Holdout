@@ -11,13 +11,11 @@
  * Unterschied zwischen ein paar KB/s und einem Vielfachen davon.
  */
 
-import { SKILL_ORDER } from "../config/balance";
 import type {
   CharacterId,
   GameEvent,
   PlayerState,
   RoundPhase,
-  SkillId,
   Vec2,
   WorldState,
 } from "../systems/types";
@@ -68,8 +66,6 @@ export interface InputMessage {
    * zielt als den Schuss.
    */
   abilityAim: Vec2 | null;
-  /** Gewuenschte Aufwertung, sonst null. */
-  levelUp: SkillId | null;
 }
 
 export interface NetPlayer {
@@ -87,10 +83,6 @@ export interface NetPlayer {
   inv: number;
   character: CharacterId;
   name: string;
-  /** Noch nicht verteilte Skillpunkte. */
-  sp: number;
-  /** Stufen der Faehigkeiten in der Reihenfolge von SKILL_ORDER. */
-  sk: number[];
   /**
    * Der Rucksackinhalt, flach als je vier Zahlen: def, x, y, gedreht (0/1).
    *
@@ -332,9 +324,6 @@ function encodePlayer(player: PlayerState): NetPlayer {
     down: player.down,
     revive: round1(player.reviveProgress),
     inv: round1(player.invulnerable),
-    sp: player.skillPoints,
-    // Als Zahlenliste statt als Objekt: kuerzer, und die Reihenfolge steht fest.
-    sk: SKILL_ORDER.map((skill) => player.skills[skill] ?? 0),
     bp: player.backpack.items.flatMap((entry) => [
       entry.item.def,
       entry.x,

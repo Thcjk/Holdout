@@ -8,7 +8,6 @@
 
 import { CHARACTERS, PLAYER, PROJECTILE, SUPERS } from "../config/balance";
 import { spawnProjectile } from "./projectiles";
-import { damageFactor, superChargeFor } from "./skills";
 import { nearestEnemy } from "./targeting";
 import type { EnemyState, InputState, PlayerState, Vec2, WorldState } from "./types";
 import { dropFromEnemy } from "./loot";
@@ -105,7 +104,7 @@ export function tryShoot(state: WorldState, player: PlayerState, input: InputSta
       position: player.position,
       direction: { x: Math.cos(angle), y: Math.sin(angle) },
       speed: PROJECTILE.speed,
-      damage: Math.round(definition.shot.damage * damageFactor(player)),
+      damage: definition.shot.damage,
       range: definition.shot.range,
       radius: PROJECTILE.radius,
       piercing: definition.shot.piercing,
@@ -168,6 +167,21 @@ export function damageEnemy(
   }
 }
 
+/**
+ * Super-Aufladung in Prozent fuer einen Treffer mit `damage` Schaden.
+ *
+ * Bewusst am Schaden statt an der Trefferzahl: Sonst laedt ein Charakter mit
+ * fuenf Kugeln je Schuss fuenfmal so schnell wie einer mit einer Kugel, ganz
+ * unabhaengig davon, wie viel er tatsaechlich anrichtet.
+ *
+ * Stand frueher in `skills.ts` und wurde dort mit der Super-Stufe
+ * multipliziert. Mit dem Skillpunkte-System ist dieser Faktor weggefallen
+ * (er war auf Stufe 0 ohnehin 1) - die Rechnung selbst bleibt.
+ */
+function superChargeFor(damage: number): number {
+  return (PLAYER.superChargePerDamage * damage) / 1000;
+}
+
 function chargeSuper(state: WorldState, playerId: string, damage: number): void {
   const player = state.players.find((entry) => entry.id === playerId);
   if (!player) {
@@ -175,7 +189,7 @@ function chargeSuper(state: WorldState, playerId: string, damage: number): void 
   }
 
   const wasReady = isSuperReady(player);
-  player.superCharge = Math.min(100, player.superCharge + superChargeFor(player, damage));
+  player.superCharge = Math.min(100, player.superCharge + superChargeFor(damage));
 
   if (!wasReady && isSuperReady(player)) {
     state.events.push({ type: "superReady", playerId: player.id });

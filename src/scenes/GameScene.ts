@@ -611,8 +611,6 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.phase = state.phase;
     this.hudModel.runTime = state.runTime;
     this.hudModel.enemiesLeft = state.enemies.length + this.session.view.pendingCount;
-    this.hudModel.skillPoints = player.skillPoints;
-    this.hudModel.skillLevels = player.skills;
     this.hudModel.down = player.down;
     this.hudModel.reviveProgress = player.reviveProgress / PLAYER.reviveTime;
     this.hudModel.mates = state.players

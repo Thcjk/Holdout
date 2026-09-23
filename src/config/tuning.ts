@@ -30,7 +30,6 @@ import {
   LOOT,
   PLAYER,
   PROJECTILE,
-  SKILLS,
   SUPERS,
   WORLD,
 } from "./balance";
@@ -45,7 +44,6 @@ const ROOTS: Record<string, unknown> = {
   enemies: ENEMIES,
   world: WORLD,
   difficulty: DIFFICULTY,
-  skills: SKILLS,
   limits: LIMITS,
   // Auch das Steuerungsgefuehl laesst sich so ausprobieren, ohne neu zu bauen:
   // ?tune=touch.responseCurve=1.5,touch.stickRadius=70
