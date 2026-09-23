@@ -1,0 +1,200 @@
+/**
+ * Das Spawning nach Distanz - Nachfolger von `waves.test.ts`.
+ *
+ * Geprueft wird die eine Aussage, auf der der ganze Umbau steht: WEITER DRAUSSEN
+ * IST ES GEFAEHRLICHER. Mehr Gegner, staerkere Gegner. Stimmt das nicht, ist die
+ * Entscheidung "aussteigen oder weiter" keine Entscheidung mehr, sondern
+ * Geschmackssache.
+ */
+
+import { describe, expect, it } from "vitest";
+import { DIFFICULTY, LIMITS, SKILL_POINTS_PER_ZONE, WORLD } from "../../src/config/balance";
+import { TICK_RATE, TICK_SECONDS } from "../../src/config/constants";
+import {
+  distanceFromStart,
+  stepRound,
+  targetPopulation,
+  zoneAt,
+  zoneScaling,
+} from "../../src/systems/spawning";
+import { createWorld, stepWorld } from "../../src/systems/world";
+import { makeInput, soloSetup } from "../helpers";
+import type { WorldState } from "../../src/systems/types";
+
+/** Setzt den Spieler auf eine bestimmte Entfernung vom Start, nach rechts. */
+function placeAt(state: WorldState, distance: number): void {
+  const player = state.players[0];
+  if (!player) throw new Error("Testaufbau");
+  player.position.x = state.bounds.width / 2 + distance;
+  player.position.y = state.bounds.height / 2;
+}
+
+/**
+ * Laesst die Welt ohne Eingaben weiterlaufen.
+ *
+ * Der Spieler wird dabei am Leben gehalten. Ohne das ging der Testaufbau
+ * schief, und zwar auf eine Art, die man leicht uebersieht: Ein stillstehender
+ * Spieler geht in zwanzig Sekunden zu Boden, der Run endet - und `stepRound`
+ * steigt danach sofort aus, raeumt also auch nicht mehr auf. Der Test mass dann
+ * nicht das Aufraeumen, sondern das Rundenende.
+ */
+function idle(state: WorldState, seconds: number): void {
+  const inputs = new Map([[state.players[0]?.id ?? "p1", makeInput({ x: 0, y: 0 })]]);
+  for (let i = 0; i < TICK_RATE * seconds; i += 1) {
+    const player = state.players[0];
+    if (player) {
+      player.health = player.maxHealth;
+    }
+    stepWorld(state, inputs, TICK_SECONDS);
+  }
+}
+
+describe("Distanzzonen", () => {
+  it("rechnet Entfernung in Zonen um", () => {
+    expect(zoneAt(0)).toBe(0);
+    expect(zoneAt(DIFFICULTY.zoneSize - 1)).toBe(0);
+    expect(zoneAt(DIFFICULTY.zoneSize)).toBe(1);
+    expect(zoneAt(DIFFICULTY.zoneSize * 3.5)).toBe(3);
+  });
+
+  it("misst die Entfernung vom Startpunkt, nicht von der Kartenecke", () => {
+    const state = createWorld(soloSetup(), 1);
+    placeAt(state, 1500);
+    const player = state.players[0];
+    if (!player) throw new Error("Testaufbau");
+
+    expect(distanceFromStart(state, player.position)).toBeCloseTo(1500, 0);
+  });
+});
+
+describe("Schwierigkeit nach Distanz", () => {
+  it("stellt weiter draussen mehr Gegner auf", () => {
+    const nah = targetPopulation(0, 1);
+    const mittel = targetPopulation(5, 1);
+    const weit = targetPopulation(10, 1);
+
+    expect(mittel).toBeGreaterThan(nah);
+    expect(weit).toBeGreaterThan(mittel);
+  });
+
+  it("macht Gegner weiter draussen staerker", () => {
+    expect(zoneScaling(5).health).toBeGreaterThan(zoneScaling(0).health);
+    expect(zoneScaling(10).damage).toBeGreaterThan(zoneScaling(5).damage);
+    // Zone 0 ist der Grundwert, nicht etwas Abgeschwaechtes.
+    expect(zoneScaling(0).health).toBe(1);
+    expect(zoneScaling(0).damage).toBe(1);
+  });
+
+  it("bleibt auch tief draussen unter der Gegner-Obergrenze", () => {
+    // Die Grenze aus dem Briefing (Abschnitt 7) ist eine Zusage an die
+    // Handy-Leistung. Eine Formel, die sie irgendwann reisst, waere ein
+    // Zeitzuender - deshalb wird das hier bis weit jenseits des Spielbaren
+    // geprueft.
+    expect(targetPopulation(100, 4)).toBeLessThanOrEqual(LIMITS.maxEnemies);
+  });
+
+  it("gibt vier Spielern mehr Gegner als einem, aber nicht das Vierfache", () => {
+    const allein = targetPopulation(3, 1);
+    const zuViert = targetPopulation(3, 4);
+
+    expect(zuViert).toBeGreaterThan(allein);
+    expect(zuViert).toBeLessThan(allein * 4);
+  });
+});
+
+describe("Gegner erscheinen rund um die Spieler", () => {
+  it("stellt niemanden mitten in eine Wand", () => {
+    const state = createWorld(soloSetup(), 777);
+    placeAt(state, 3000);
+    idle(state, 30);
+
+    expect(state.enemies.length).toBeGreaterThan(0);
+
+    for (const enemy of state.enemies) {
+      for (const wall of state.walls) {
+        const inside =
+          enemy.position.x > wall.x &&
+          enemy.position.x < wall.x + wall.width &&
+          enemy.position.y > wall.y &&
+          enemy.position.y < wall.y + wall.height;
+        expect(inside).toBe(false);
+      }
+    }
+  });
+
+  it("laesst Gegner zurueck, die weit hinter dem Team liegen", () => {
+    const state = createWorld(soloSetup(), 4242);
+    placeAt(state, 3000);
+    idle(state, 20);
+
+    const before = state.enemies.length;
+    expect(before).toBeGreaterThan(0);
+
+    // Der Spieler verschwindet auf die andere Seite der Karte. Ohne Aufraeumen
+    // bliebe die alte Meute fuer immer bestehen und wuerde die Obergrenze
+    // belegen - vorne erschiene dann nichts mehr.
+    placeAt(state, -3000);
+    stepRound(state, TICK_SECONDS);
+
+    expect(state.enemies.length).toBe(0);
+  });
+});
+
+describe("Fortschritt", () => {
+  it("gibt Skillpunkte fuer jede neu erreichte Zone - auch fuer Gefallene", () => {
+    const state = createWorld(soloSetup(), 5);
+    const player = state.players[0];
+    if (!player) throw new Error("Testaufbau");
+
+    expect(player.skillPoints).toBe(0);
+
+    placeAt(state, DIFFICULTY.zoneSize * 3 + 10);
+    stepRound(state, TICK_SECONDS);
+
+    // Drei Zonen auf einmal uebersprungen: Es muss drei Punkte geben, nicht
+    // einen. Sonst verschluckt ein Dash ueber eine Zonengrenze den Fortschritt.
+    expect(state.deepestZone).toBe(3);
+    expect(player.skillPoints).toBe(3 * SKILL_POINTS_PER_ZONE);
+  });
+
+  it("vergibt fuer dieselbe Zone nicht zweimal Punkte", () => {
+    const state = createWorld(soloSetup(), 6);
+    const player = state.players[0];
+    if (!player) throw new Error("Testaufbau");
+
+    placeAt(state, DIFFICULTY.zoneSize * 2 + 10);
+    stepRound(state, TICK_SECONDS);
+    const afterFirst = player.skillPoints;
+
+    // Zurueck in die sichere Zone und wieder hinaus - das ist kein neuer
+    // Fortschritt, sondern derselbe Weg.
+    placeAt(state, 0);
+    stepRound(state, TICK_SECONDS);
+    placeAt(state, DIFFICULTY.zoneSize * 2 + 10);
+    stepRound(state, TICK_SECONDS);
+
+    expect(player.skillPoints).toBe(afterFirst);
+  });
+
+  it("heilt in der sicheren Zone und sonst nicht", () => {
+    const state = createWorld(soloSetup(), 7);
+    const player = state.players[0];
+    if (!player) throw new Error("Testaufbau");
+
+    player.health = 100;
+
+    // Weit draussen passiert nichts.
+    placeAt(state, WORLD.safeRadius + 500);
+    for (let i = 0; i < TICK_RATE; i += 1) {
+      stepRound(state, TICK_SECONDS);
+    }
+    expect(player.health).toBe(100);
+
+    // Am Start kommt Leben zurueck.
+    placeAt(state, 0);
+    for (let i = 0; i < TICK_RATE; i += 1) {
+      stepRound(state, TICK_SECONDS);
+    }
+    expect(player.health).toBeGreaterThan(100);
+  });
+});

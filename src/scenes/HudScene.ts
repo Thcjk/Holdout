@@ -220,7 +220,15 @@ export class HudScene extends Phaser.Scene {
       return;
     }
 
-    this.waveText.setText(this.model.wave > 0 ? `Welle ${this.model.wave}` : "Gleich geht es los");
+    /*
+     * Die Zone ist der Nachfolger der Wellennummer - aber sie sagt etwas
+     * anderes: nicht "wie lange haeltst du durch", sondern "wie tief bist du
+     * drin". In der sicheren Zone steht das ausdruecklich da, weil dort die
+     * Regeln andere sind (man heilt, man verteilt Punkte).
+     */
+    this.waveText.setText(
+      this.model.inSafeZone ? "Sichere Zone" : `Zone ${this.model.zone}`,
+    );
     this.scoreText.setText(
       `Score ${this.model.score}\nRekord ${this.model.highscore}\nGegner ${this.model.enemiesLeft}`,
     );
@@ -248,16 +256,22 @@ export class HudScene extends Phaser.Scene {
   }
 
   /**
-   * Punkte verteilt man in der Pause. Waehrend einer Welle erinnert nur eine
+   * Punkte verteilt man in der sicheren Zone. Draussen erinnert nur eine
    * kleine Zeile daran - ein Menue mitten im Gefecht waere im Weg.
+   *
+   * FRUEHER WAR DAS DIE PAUSE zwischen zwei Wellen. Die gibt es nicht mehr, und
+   * der Ersatz ist bewusst kein Zeitfenster, sondern ein ORT: Wer aufwerten
+   * will, geht zum Start zurueck. Das kostet den Weg und passt damit zu der
+   * Entscheidung, um die sich der ganze Run dreht - weiter vorruecken oder
+   * erst einmal zurueck.
    */
   private updateSkills(): void {
-    const inBreak = this.model.phase === "break" || this.model.phase === "preparing";
-    this.skillPanel.update(this.model.skillPoints, this.model.skillLevels, inBreak);
+    const canSpend = this.model.inSafeZone;
+    this.skillPanel.update(this.model.skillPoints, this.model.skillLevels, canSpend);
 
     // Nicht durch den Zwischenbildschirm blinken lassen - im Koop laeuft das
     // HUD dahinter weiter und wuerde die Zeile jedes Bild neu einblenden.
-    const showHint = this.model.skillPoints > 0 && !inBreak && !this.overlayOpen;
+    const showHint = this.model.skillPoints > 0 && !canSpend && !this.overlayOpen;
     this.skillHint.setVisible(showHint);
     if (showHint) {
       this.skillHint.setText(
@@ -472,20 +486,24 @@ export class HudScene extends Phaser.Scene {
       return;
     }
 
-    switch (this.model.phase) {
-      case "preparing":
-        this.announceText.setText(`Bereitmachen\n${Math.ceil(Math.max(0, this.model.phaseTime))}`);
-        this.announceText.setColor("#ffd166");
-        break;
-      case "break":
-        this.announceText.setText(
-          `Welle ${this.model.wave} geschafft\nNächste in ${Math.ceil(Math.max(0, this.model.phaseTime))}`,
-        );
-        this.announceText.setColor("#7ee08a");
-        break;
-      default:
-        this.announceText.setText("");
-        break;
+    /*
+     * In der sicheren Zone steht hier, was dort gilt - sonst nichts.
+     *
+     * Der Hinweis ersetzt kein Tutorial, aber er erklaert die beiden Regeln,
+     * die man sonst nirgends ablesen koennte: dass man hier heilt, und dass
+     * man hier aufwertet. Draussen bleibt die Zeile leer, damit sie nicht im
+     * Gefecht im Weg steht.
+     */
+    if (this.model.inSafeZone) {
+      const hint =
+        this.model.skillPoints > 0
+          ? "Sichere Zone - du heilst, und du kannst aufwerten"
+          : "Sichere Zone - hier heilst du";
+      this.announceText.setText(hint);
+      this.announceText.setColor("#7ee08a");
+      return;
     }
+
+    this.announceText.setText("");
   }
 }

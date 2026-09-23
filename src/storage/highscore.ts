@@ -12,7 +12,17 @@ const STORAGE_KEY = "arena-shooter.highscore";
 
 export interface HighscoreEntry {
   score: number;
-  wave: number;
+  /**
+   * Tiefste erreichte Distanzzone.
+   *
+   * OPTIONAL, und das ist keine Schlamperei: Rekorde aus der Zeit vor Phase 8
+   * liegen im selben Speicher und haben stattdessen ein Feld `wave`. Der
+   * Speicherschluessel darf sich nicht aendern (sonst waere der Rekord weg -
+   * siehe CLAUDE.md, "Der Name"), also liegen beide Formen nebeneinander.
+   * Eine alte Wellennummer als Zone auszugeben waere gelogen - Welle 10 und
+   * Zone 10 bedeuten voellig Verschiedenes. Deshalb fehlt sie dort lieber.
+   */
+  zone?: number;
   date: string;
 }
 
@@ -37,7 +47,7 @@ export function loadHighscore(): HighscoreEntry | null {
 }
 
 /** Speichert nur, wenn der neue Wert besser ist. Gibt zurueck, ob es ein Rekord war. */
-export function saveHighscore(score: number, wave: number): boolean {
+export function saveHighscore(score: number, zone: number): boolean {
   const current = loadHighscore();
   // Null Punkte sind kein Rekord - auch nicht beim allerersten Versuch.
   if (score <= (current?.score ?? 0)) {
@@ -47,7 +57,7 @@ export function saveHighscore(score: number, wave: number): boolean {
   try {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ score, wave, date: new Date().toISOString() }),
+      JSON.stringify({ score, zone, date: new Date().toISOString() }),
     );
   } catch {
     // Kein Speicher verfuegbar - der Punktestand der Runde gilt trotzdem.

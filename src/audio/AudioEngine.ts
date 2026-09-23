@@ -38,8 +38,7 @@ export type SoundName =
   | "superUsed"
   | "blast"
   | "healed"
-  | "waveStart"
-  | "waveCleared"
+  | "zoneReached"
   | "gameOver";
 
 export class AudioEngine {
@@ -171,21 +170,22 @@ export class AudioEngine {
         this.tone(520, 0.14, "sine", 0.16, 700);
         this.tone(780, 0.22, "sine", 0.12, 980, 0.1);
         break;
-      case "waveStart":
+      case "zoneReached":
+        /*
+         * Eine neue Distanzzone ist zweierlei auf einmal, und der Klang muss
+         * beides sagen: Man hat etwas geschafft (es gibt einen Skillpunkt),
+         * und es wird ab hier gefaehrlicher.
+         *
+         * Deshalb erst hinauf (440-554-659, das alte Wellensignal - "Schwelle
+         * ueberschritten"), dann ein tiefer Nachschlag, der offen stehen
+         * bleibt. Ein reiner Dur-Dreiklang nach oben klaenge nach "geschafft,
+         * durchatmen" - und genau das stimmt hier nicht, denn vor einem liegt
+         * das schwerere Gebiet, nicht hinter einem.
+         */
         this.tone(440, 0.12, "square", 0.13);
         this.tone(554, 0.12, "square", 0.13, 554, 0.1);
-        this.tone(659, 0.2, "square", 0.13, 659, 0.2);
-        break;
-      case "waveCleared":
-        /*
-         * Gegenstueck zum Wellenstart: Der faehrt hinauf (440-554-659), dieser
-         * loest nach OBEN auf und bleibt stehen (523-659-784, ein C-Dur-
-         * Dreiklang). Aufwaerts heisst "geschafft"; abwaerts klaenge nach
-         * Niederlage, und das waere hier genau das falsche Signal.
-         */
-        this.tone(523, 0.12, "triangle", 0.14);
-        this.tone(659, 0.14, "triangle", 0.14, 659, 0.09);
-        this.tone(784, 0.3, "triangle", 0.15, 784, 0.18);
+        this.tone(659, 0.18, "square", 0.13, 659, 0.2);
+        this.tone(330, 0.34, "triangle", 0.12, 294, 0.3);
         break;
       case "gameOver":
         this.tone(440, 0.3, "triangle", 0.2, 220);

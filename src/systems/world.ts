@@ -10,8 +10,7 @@
  * des letzten.
  */
 
-import { ARENA_BOUNDS, SPAWN_POINT, createArenaBushes, createArenaWalls } from "../config/arena";
-import { CHARACTERS, PLAYER, WAVES } from "../config/balance";
+import { CHARACTERS, PLAYER } from "../config/balance";
 import { stepReload, stepRevive, tryShoot } from "./combat";
 import { stepEnemies } from "./enemies";
 import { clampToArena, stepPlayerMovement } from "./movement";
@@ -19,7 +18,8 @@ import { stepProjectiles } from "./projectiles";
 import { applyLevelUp, emptySkills } from "./skills";
 import { stepAbilities, tryAbility } from "./abilities";
 import { stepDashDamage, trySuper } from "./supers";
-import { stepRound } from "./waves";
+import { stepRound } from "./spawning";
+import { gameplaySeed, generateWorld } from "./WorldGenerator";
 import { emptyInput } from "./types";
 import type { CharacterId, InputState, PlayerState, Vec2, WorldState } from "./types";
 
@@ -30,24 +30,32 @@ export interface PlayerSetup {
 }
 
 /**
- * Startpositionen im Kreis um die Mitte, damit mehrere Spieler nicht
+ * Startpositionen im Kreis um den Startpunkt, damit mehrere Spieler nicht
  * uebereinander stehen.
+ *
+ * Der Startpunkt wird uebergeben statt importiert: Seit Phase 8 steht er nicht
+ * mehr fest in einer Konstanten, sondern kommt aus der generierten Welt.
  */
-function spawnPosition(index: number, total: number): Vec2 {
+function spawnPosition(index: number, total: number, origin: Vec2): Vec2 {
   if (total <= 1) {
-    return { x: SPAWN_POINT.x, y: SPAWN_POINT.y };
+    return { x: origin.x, y: origin.y };
   }
   const angle = (index / total) * Math.PI * 2;
   const offset = 70;
   return {
-    x: SPAWN_POINT.x + Math.cos(angle) * offset,
-    y: SPAWN_POINT.y + Math.sin(angle) * offset,
+    x: origin.x + Math.cos(angle) * offset,
+    y: origin.y + Math.sin(angle) * offset,
   };
 }
 
-export function createPlayer(setup: PlayerSetup, index: number, total: number): PlayerState {
+export function createPlayer(
+  setup: PlayerSetup,
+  index: number,
+  total: number,
+  origin: Vec2,
+): PlayerState {
   const definition = CHARACTERS[setup.character];
-  const position = spawnPosition(index, total);
+  const position = spawnPosition(index, total, origin);
 
   return {
     id: setup.id,
@@ -76,23 +84,40 @@ export function createPlayer(setup: PlayerSetup, index: number, total: number): 
   };
 }
 
+/**
+ * Baut eine frische Welt aus einem Seed.
+ *
+ * WICHTIG FUER DEN KOOP: Host und Client rufen das mit DERSELBEN Zahl auf und
+ * bekommen dadurch dieselbe Karte. Uebertragen wird die Karte nie - dafuer
+ * waere sie viel zu gross. Wer diesen Aufruf ohne Seed macht, bekommt die Welt
+ * zu Seed 1 und damit eine andere als alle anderen.
+ */
 export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldState {
+  const world = generateWorld(seed);
+
   return {
     tick: 0,
-    // Die Runde beginnt mit dem Countdown, nicht mitten im Gefecht.
-    phase: "preparing",
-    phaseTime: WAVES.preparationSeconds,
-    wave: 0,
+    // Es gibt keinen Countdown mehr: Der Start liegt in einer sicheren Zone,
+    // man kann also sofort losgehen, ohne ins Gefecht zu fallen.
+    phase: "running",
+    seed: seed | 0,
+    runTime: 0,
+    zone: 0,
+    deepestZone: 0,
     score: 0,
-    players: setups.map((setup, index) => createPlayer(setup, index, setups.length)),
+    players: setups.map((setup, index) =>
+      createPlayer(setup, index, setups.length, world.spawnPoint),
+    ),
     enemies: [],
     projectiles: [],
     pendingSpawns: [],
-    walls: createArenaWalls(),
-    bushes: createArenaBushes(),
-    bounds: { ...ARENA_BOUNDS },
+    walls: world.walls,
+    bushes: world.bushes,
+    bounds: world.bounds,
     events: [],
-    rngState: seed | 0,
+    // Eigener Strom, getrennt von dem der Weltgenerierung - siehe
+    // `WorldGenerator.ts`, Abschnitt "Zwei Zufallsstroeme aus einem Seed".
+    rngState: gameplaySeed(seed),
     nextEnemyId: 1,
     nextProjectileId: 1,
   };

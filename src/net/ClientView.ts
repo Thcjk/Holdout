@@ -68,8 +68,19 @@ export class ClientView implements WorldView {
   constructor(
     private readonly selfId: string,
     setups: readonly PlayerSetup[],
+    seed: number,
   ) {
-    this.state = createWorld(setups);
+    /*
+     * DER SEED MUSS HIER ANKOMMEN - sonst baut der Client eine andere Welt.
+     *
+     * Hier stand frueher `createWorld(setups)`, also der Standardwert 1. Das
+     * war harmlos, solange die Arena eine Konstante war: Jeder hatte dieselben
+     * zwoelf Rechtecke, egal welcher Seed. Seit Phase 8 entsteht die Karte aus
+     * dem Seed - mit dem falschen Wert liefe dieser Spieler gegen unsichtbare
+     * Waende, waehrend die anderen ihn durch Deckung laufen saehen. Uebertragen
+     * wird die Karte nie, nur diese eine Zahl.
+     */
+    this.state = createWorld(setups, seed);
     for (const player of this.state.players) {
       this.playerById.set(player.id, player);
     }
@@ -77,7 +88,13 @@ export class ClientView implements WorldView {
     const own = this.state.players.find((entry) => entry.id === selfId);
     const index = setups.findIndex((entry) => entry.id === selfId);
     this.predicted =
-      own ?? createPlayer(setups[Math.max(0, index)] as PlayerSetup, 0, setups.length);
+      own ??
+      createPlayer(
+        setups[Math.max(0, index)] as PlayerSetup,
+        0,
+        setups.length,
+        this.spawnOrigin(),
+      );
   }
 
   get events(): readonly GameEvent[] {
@@ -195,10 +212,11 @@ export class ClientView implements WorldView {
     const { from, to, t } = pair;
 
     this.state.tick = to.tick;
-    this.state.wave = to.wave;
+    this.state.zone = to.zone;
+    this.state.deepestZone = to.deepestZone;
     this.state.score = to.score;
     this.state.phase = to.phase;
-    this.state.phaseTime = to.phaseTime;
+    this.state.runTime = to.runTime;
     this.pendingCount = to.pending;
 
     this.rebuildPlayers(from, to, t);
@@ -285,6 +303,16 @@ export class ClientView implements WorldView {
     this.state.players = players;
   }
 
+  /**
+   * Der Startpunkt der generierten Welt - die Mitte der Karte.
+   *
+   * Nur ein Platzhalter fuer neu auftauchende Figuren: Ihre echte Position
+   * kommt im naechsten Zustandspaket vom Host.
+   */
+  private spawnOrigin(): Vec2 {
+    return { x: this.state.bounds.width / 2, y: this.state.bounds.height / 2 };
+  }
+
   private ensurePlayer(netPlayer: NetPlayer): PlayerState {
     const existing = this.playerById.get(netPlayer.id);
     if (existing) {
@@ -295,6 +323,7 @@ export class ClientView implements WorldView {
       { id: netPlayer.id, name: netPlayer.name, character: netPlayer.character },
       0,
       1,
+      this.spawnOrigin(),
     );
     this.playerById.set(netPlayer.id, created);
     return created;

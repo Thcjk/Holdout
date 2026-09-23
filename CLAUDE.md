@@ -21,21 +21,36 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
-**Phase 1 bis 7 sind umgesetzt**, dazu eine Erweiterung nach Phase 7: Das Spiel
-läuft ausschliesslich auf Touchgeräten und wird installiert statt im Browser
-gespielt (siehe „Nur Handy" weiter unten). Der V1-Umfang aus dem Briefing steht
-vollständig im Code. Was aussteht, ist kein Code, sondern dein Urteil:
+**Phase 1 bis 7 sind umgesetzt, dazu Phase 8 des neuen Plans.** Am 2026-09-23
+hat der Nutzer `BRIEFING.md` grundlegend überarbeitet: Aus dem Wellen-Survival
+wird ein **Koop-Roguelike mit Extraction-Loot**. Phase 8 (prozedurale offene
+Welt statt fester Arena, Gegner nach Distanz statt nach Wellen) ist gebaut.
+
+**Als Nächstes laut Plan: Phase 9** – Mini-Boss-Encounter und
+Extraktionspunkte. Bis dahin endet ein Run nur durch den Tod; aussteigen kann
+man noch nicht.
+
+Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut
   anfühlt, lässt sich nicht messen. Fühlt sie sich zäh an: Werte in
   `src/config/balance.ts` (`speed`, `accelerationTime`) und
   `src/config/constants.ts` (`TOUCH`) anpassen.
 - **Phase 6 ist bestanden.** Der Nutzer hat am 2026-09-18 auf echten Geräten
-  bestätigt, dass Koop über das Internet funktioniert. Hier geprüft ist
-  ausserdem: zwei Browser-Tabs über den lokalen Transport, Host plus Client mit
-  30 % künstlichem Paketverlust, und der Ausfallweg, wenn kein
-  Signalisierungsserver erreichbar ist.
+  bestätigt, dass Koop über das Internet funktioniert.
 - **Balancing ist ein Vorschlag, kein Ergebnis.** Siehe unten.
+
+### Vier Stellen, an denen BRIEFING.md einen älteren Stand beschreibt
+
+Bewusst unverändert übernommen – das Briefing ist das Dokument des Nutzers.
+Hier nur festgehalten, damit niemand danach baut:
+
+| Abschnitt | Was dort steht | Was wirklich im Code ist |
+| --- | --- | --- |
+| 3 | Rechter Joystick zum Zielen, WASD-Desktop-Fallback | Fester FEUER-Knopf, Desktop gesperrt – beides auf Wunsch des Nutzers |
+| 4 | Scout: **Blendgranate** | Splittergranate – die Blendgranate wurde als wirkungslos zurückgemeldet |
+| 4 | Tank-Super = Team-Heilung | Seine *zweite* Fähigkeit ist bereits eine Selbstheilung → zwei Heilungen an einem Charakter, zu klären in Phase 14 |
+| 5 | Projektstruktur mit `entities/`, `WaveManager` | Die echte Struktur steht weiter unten |
 
 ## Nur Handy, und installiert statt im Browser
 
@@ -583,9 +598,10 @@ erwiesen:
 - **„Die Buschflächen wirken zufällig platziert."** Sie stehen an vier
   symmetrischen Stellen und sind seit dem Wechsel auf Graskacheln geschlossene
   Rechtecke. Eine separate Tiled-Datei würde die Arena ein zweites Mal
-  beschreiben – `config/arena.ts` ist die Quelle, aus der die Simulation
-  rechnet, und zwei Beschreibungen derselben Karte laufen früher oder später
-  auseinander.
+  beschreiben – die Arena war die Quelle, aus der die Simulation rechnete, und
+  zwei Beschreibungen derselben Karte laufen früher oder später auseinander.
+  *(Seit Phase 8 gibt es überhaupt keine feste Karte mehr; sie entsteht aus
+  einem Seed.)*
 
 #### Was sonst noch dranhing
 
@@ -620,9 +636,13 @@ Zwei Stücke, vom Nutzer geliefert (`public/assets/audio/`), Pfade in
 | Wann | Stück | Lautstärke |
 | --- | --- | --- |
 | Menü und Lobby | `menu.ogg` (Retro Mystic) | voll |
-| **Während einer Welle** | `wave.ogg` (Retro Comedy) | voll |
-| Vorbereitung und Pause zwischen den Wellen | `menu.ogg`, das ruhige Stück | **leise** (35 %) |
+| **Gegner in der Nähe** | `wave.ogg` (Retro Comedy) | voll |
+| Länger kein Gegner in der Nähe | `menu.ogg`, das ruhige Stück | **leise** (35 %) |
 | Pausenbildschirm (nur solo) | nichts | – |
+
+*(Bis Phase 8 hing die Regel an der Rundenphase – „leise in der Pause zwischen
+zwei Wellen". Mit den Wellen ist dieser Auslöser weggefallen, siehe „Phase 8"
+weiter unten.)*
 
 **Zwei Korrekturen des Nutzers stecken in dieser Tabelle**, und beide waren
 Annahmen von mir, keine Vorgaben:
@@ -670,7 +690,7 @@ Code, beide Fallen:
 (die synthetisierten, wie vorher): `waveStart` als tiefer Stoss, `waveCleared`
 als steigender Dreiklang (523/659/784 Hz). Dafür meldet die Simulation ein
 eigenes Ereignis `waveCleared` – die Darstellung liest es nur ab, entschieden
-wird es in `systems/waves.ts` (Architektur-Grundregel).
+wird es in `systems/spawning.ts` (Architektur-Grundregel).
 
 **Eine Stelle statt zwei.** Früher gab es `startMusic()` und `stopMusic()`;
 mit zwei Schaltern und vier Szenen, die sie rufen, war schwer zu sagen, was
@@ -705,6 +725,145 @@ mehrere Wellen in eine Messung passen:
 
 0,17 ist 0,5 × 0,35 – Grundlautstärke mal `BREAK_MUSIC_VOLUME` aus
 `GameScene`.
+
+### Phase 8: die Welt entsteht aus einer Zahl
+
+Die feste Arena (1600×1200, acht Deckungsblöcke von Hand gesetzt) ist weg.
+Jeder Run bekommt einen **Seed**, und daraus entsteht die komplette Karte:
+`src/systems/WorldGenerator.ts`, phaserfrei wie alles unter `systems/`.
+
+| | alt | neu |
+| --- | --- | --- |
+| Welt | 1600×1200, fest | **16000×16000**, generiert |
+| Schwierigkeit | Wellennummer (Zeit) | **Distanz zum Start** (Ort) |
+| Gegner | Wellenliste, dann Pause | **Zielbevölkerung** rund um die Spieler |
+| Fortschritt | Welle geschafft | **neue Distanzzone erreicht** |
+| Heilen | Pause zwischen den Wellen | **sichere Zone** um den Start |
+| Punkte verteilen | in der Pause | **in der sicheren Zone** |
+
+**Warum Distanz statt Zeit die eigentliche Änderung ist:** Früher stieg die
+Schwierigkeit von selbst, und man konnte nichts dagegen tun ausser besser zu
+spielen. Jetzt entscheidet das Team, wie gefährlich es wird – aus einem
+Schicksal wird eine Entscheidung. Das ist der Kern des ganzen Umbaus.
+
+#### Der Seed war schon halb verdrahtet – und genau dort lag eine Falle
+
+`Lobby.ts` würfelte längst einen Seed und schickte ihn im `start`-Paket an
+alle; Host und Solo reichten ihn an `createWorld` weiter. **Der Client nicht.**
+`ClientSession` erzeugte seine `ClientView` ohne Seed, und die rief
+`createWorld(setups)` mit dem Standardwert 1.
+
+Solange die Arena eine Konstante war, war das harmlos – jeder hatte dieselben
+zwölf Rechtecke. Mit der Generierung hätte derselbe Code dazu geführt, dass der
+Client **eine andere Karte baut als der Host**: Er liefe gegen unsichtbare
+Wände, während die anderen ihn durch Deckung laufen sähen. Eine Zeile, aber
+eine, die erst in Phase 16 aufgefallen wäre.
+
+#### Zwei Zufallsströme aus einem Seed
+
+Der Generator hat einen **eigenen** Zufallszustand und fasst den des Spiels
+(`WorldState.rngState`) nicht an. `gameplaySeed()` leitet den zweiten ab.
+
+Würfelte die Weltgenerierung aus demselben Strom, würde **ein zusätzlicher
+Deckungsblock jede spätere Zufallszahl im Spiel verschieben** – Streuung,
+Spawnpositionen, alles. Und Host und Client müssten für immer exakt gleich
+viele Zahlen ziehen, auch in Code, der mit der Welt nichts zu tun hat.
+
+Der Generator selbst ist weiterhin **Mulberry32 aus `systems/rng.ts`** – kein
+neues Paket. `seedrandom` wäre eine Abhängigkeit für sechs Zeilen gewesen, die
+schon dastanden und getestet waren.
+
+#### Der Zusammenhang der Karte ist gebaut, nicht gehofft
+
+Zufällig gestreute Rechtecke können eine Fläche einschliessen – ab Phase 10
+läge dort Loot, an das niemand herankommt. Statt hinterher zu prüfen und neu zu
+würfeln, macht es der **Aufbau unmöglich**: Jedes Hindernis liegt vollständig
+in einer Rasterzelle (800 px) und hält `minGap/2` Abstand zu deren Rand.
+Zwischen zwei Zellen bleibt damit immer eine Gasse von 160 px – der Spieler ist
+36 px dick.
+
+Geprüft wird es trotzdem, mit einer **Flutfüllung** über fünf Seeds
+(`tests/systems/worldGenerator.test.ts`):
+
+```
+Seed        1: 93.3 % der Karte begehbar, davon erreichbar 100.0 %
+Seed       42: 93.4 % der Karte begehbar, davon erreichbar 100.0 %
+Seed     4242: 93.7 % der Karte begehbar, davon erreichbar 100.0 %
+```
+
+Die erste Zahl ist **die Absicherung gegen einen stillen Fehlschlag**: Wäre
+fast alles blockiert, bestünde die zweite Prüfung trivial. Eine Karte, auf der
+man sich nicht bewegen kann, ist kein bestandener Test.
+
+#### Drei Zahlen, die gemessen und dann korrigiert wurden
+
+1. **Weltgrösse 9600 → 16000.** Bei 9600 lagen vom Start in der Mitte nur 4800
+   px bis zum Rand, also sechs Zonen – der Bot erreichte in **allen fünf**
+   Durchläufen genau Zone 5 und stand dann an der Mauer. Gemessen wurde damit
+   nicht die Schwierigkeit, sondern die Kartengrösse. 16000 ergibt zehn Zonen,
+   beim tiefsten Gegner also Faktor 1,08¹⁰ = 2,16 auf das Leben – genau das,
+   was früher Welle 10 war.
+2. **Gegnerzahl 3+1,6 → 4+2,5 je Zone.** Vorher waren zu keinem Zeitpunkt mehr
+   als neun Gegner gleichzeitig unterwegs; die alten Wellen brachten über
+   zwanzig. Die Welt wirkte leer.
+3. **Deckungsdichte.** Die alte Arena hatte einen Block je 0,24 Mio. px². Der
+   erste Wurf ergab einen je 0,82 Mio. – gut dreimal so dünn, und im Bild
+   deutlich zu sehen. Jetzt liegt sie wieder in derselben Grössenordnung.
+
+#### Der Verdacht, der sich als falsch erwies
+
+Aus 12 Rechtecken wurden über 500, und Wände werden in den heissesten
+Schleifen **linear** durchlaufen (`collision.ts`, `projectiles.ts`). Das klang
+nach einem Leistungsproblem, das einen Wandindex nötig macht.
+
+Gemessen (`tests/systems/tickCost.test.ts`):
+
+```
+Welt 16000 px, 552 Waende, 7 Gegner: 0.157 ms je Tick (Budget 33 ms)
+```
+
+Ein halbes Prozent des Budgets. **Der Index wäre reine Beschäftigung gewesen.**
+Die Grenze aus dem Briefing (Abschnitt 7) ist die Anzahl gleichzeitig aktiver
+Objekte, nicht die Fläche – und die bleibt bei 40 Gegnern.
+
+#### Was mit der Fläche wirklich wächst: das Zeichnen
+
+Der Boden wird in Felder von 1200 px zerlegt, und `ArenaRenderer.update()`
+blendet je Bild ein, was im Sichtfeld liegt. Damit hängen die Zeichenkosten an
+der Bildschirmgrösse statt an der Weltgrösse. Dasselbe gilt für Deckung und
+Büsche; die Umrisse der Deckungsblöcke werden nur für sichtbare Blöcke neu
+gezeichnet.
+
+**Aussenmauer und Deckung unterscheidet der Renderer jetzt an der Lage:** Was
+den Kartenrand berührt, ist Mauer, alles andere ist Deckung. Früher gab es dafür
+die feste Liste `COVER_BLOCKS`; die ist mit der Generierung verschwunden. Der
+neue Weg braucht keine zusätzlichen Daten und kann deshalb nicht mit ihnen
+auseinanderlaufen.
+
+#### Zwei Ersatzteile für Dinge, die mit den Wellen weggefallen sind
+
+- **Heilen.** Die Pause zwischen zwei Wellen heilte 60 % des Lebens. Ohne
+  Ersatz gäbe es im ganzen Run keine Heilung ausser der Tank-Fähigkeit, und
+  jeder Run endete zwangsläufig nach wenigen Minuten. Jetzt heilt der sichere
+  Ring um den Startpunkt (10 % je Sekunde). Der Weg zurück kostet Zeit – und
+  ist damit die kleine Schwester der Entscheidung, um die sich alles dreht.
+- **Skillpunkte verteilen.** Ging nur in der Pause. Der Ersatz ist bewusst kein
+  Zeitfenster, sondern ein **Ort**: die sichere Zone.
+
+**Diese beiden sind meine Ergänzungen, nicht aus dem Briefing.** Sie füllen
+Lücken, die der Wegfall der Wellen gerissen hat. Wenn sie nicht gefallen, ist
+das kein Widerspruch zum Plan – dann raus damit.
+
+#### Die Musikregel hing an den Wellen und hängt jetzt am Gefecht
+
+„Leise in der Pause, treibend in der Welle" hatte keinen Auslöser mehr. Jetzt
+entscheidet die Lage: Gegner nah → treibendes Stück, volle Lautstärke; länger
+keiner in der Nähe → ruhiges Stück, leise. **Zwei Schwellen statt einer** (900
+px hinein, 1300 px und vier Sekunden hinaus), sonst schaltete ein Gegner, der
+auf der Grenze herumläuft, die Musik im Sekundentakt um.
+
+In der offenen Welt ist das sogar besser als vorher: Die Musik sagt einem, dass
+etwas kommt, **bevor** man es sieht.
 
 ### Bewegung: Kennlinie statt Schwelle, Achsen getrennt
 
@@ -985,7 +1144,7 @@ src/
     balance.ts            ALLE Spielwerte
     assets.ts             ALLE Sprites: Kachelnummern, Massstab, Zuordnung
     constants.ts          Arena, Bildschirm, Tickrate, Kamera, Touch, Farben
-    arena.ts              Arena als reine Daten: Wände, Büsche, Spawnzonen
+    tuning.ts             ?tune= aus der Adresszeile
   systems/                PHASER-FREI - die Simulation
     types.ts              Datentypen und Ereignisse
     world.ts              Weltzustand, ein Tick
@@ -996,8 +1155,9 @@ src/
     projectiles.ts        Projektile mit Object Pooling
     enemies.ts            Gegner-KI, Sichtlinie
     supers.ts             die drei Super-Fähigkeiten
-    skills.ts             Aufwertungen zwischen den Wellen
-    waves.ts              Wellenformel und Rundenablauf
+    skills.ts             Aufwertungen je erreichter Distanzzone
+    WorldGenerator.ts     die Karte aus einem Seed (deterministisch)
+    spawning.ts           Distanzformel, Zielbevölkerung, Rundenablauf
     targeting.ts          wer sieht wen
     rng.ts                wiederholbarer Zufall (Mulberry32)
   net/                    Koop
@@ -1053,16 +1213,28 @@ mittelmässig, muss aber zwei Dinge können, sonst misst er Unsinn:
    obwohl Gegner leben, steht eine Wand dazwischen – dann geht er stur nach
    vorne, statt Abstand zu halten.
 
-### Stand nach der Messung vom 2026-09-18
+### Stand nach der Messung vom 2026-09-23 (Phase 8)
 
-| Charakter | Wellen (Bot) |
-| --------- | ------------ |
-| Scout     | 10,2         |
-| Tank      | 9,8          |
-| Sniper    | 7,2          |
+Gemessen wird jetzt die **Tiefe**, nicht die Zeit: Wie weit kommt der Bot,
+bevor er stirbt? Das ist dieselbe Zahl, die ab Phase 10 über die Loot-Qualität
+entscheidet.
 
-Vor der Balancing-Runde vom 2026-09-17: Scout 5,0 · Tank 10,4 · Sniper 9,0.
-Der Scout starb damals in **allen fünf** Durchläufen in Welle 5.
+| Charakter | Zonen (Bot) | überlebt |
+| --------- | ----------- | -------- |
+| Scout     | 5,4         | 99 s     |
+| Tank      | 3,4         | 85 s     |
+| Sniper    | 8,6         | 109 s    |
+
+Bei zehn möglichen Zonen. **Die Zahlen sind nicht mit den alten Wellenzahlen
+vergleichbar** – eine Welle war ein Zeitabschnitt, eine Zone ist ein Ort.
+
+Der Tank liegt deutlich hinten, und das ist plausibel statt überraschend: Seine
+Reichweite ist 250 px, er muss also mitten hinein, während die Gegnerdichte mit
+der Tiefe steigt. Ob das ein Problem ist, zeigt erst eigenes Spielen – der Bot
+nutzt weder Deckung noch Büsche noch eine der beiden Fähigkeiten.
+
+*Zum Vergleich der alte Stand (Wellen, bis 2026-09-18): Scout 10,2 · Tank 9,8
+· Sniper 7,2.*
 
 **Die Zahlen sind seit der zweiten aktiven Fähigkeit noch deutlicher eine
 Untergrenze:** Der Bot benutzt sie nicht. Er wirft keine Granate und heilt sich
@@ -1220,9 +1392,18 @@ Zwei Konsequenzen, beide im Code:
   Secrets dafür stehen im README.
 - **Die APK ist auf keinem echten Gerät installiert worden.** Dass sie baut,
   heisst noch nicht, dass sie startet - das zeigt erst das Handy.
-- **Arena ist keine Tilemap**, sondern eine Liste von Rechtecken in
-  `config/arena.ts`. Die Schnittstelle zur Simulation bleibt dieselbe, eine
-  Tilemap kann sie später füllen.
+- **Die Welt ist keine Tilemap**, sondern eine Liste von Rechtecken aus
+  `systems/WorldGenerator.ts`. Die Schnittstelle zur Simulation bleibt
+  dieselbe, eine Tilemap könnte sie später füllen.
+- **Phase 8 hat noch keinen Ausstieg.** Ein Run endet nur durch den Tod –
+  Extraktionspunkte und Mini-Bosse kommen in Phase 9. Bis dahin fühlt sich ein
+  Run bewusst unfertig an.
+- **Die neuen Balancing-Zahlen sind Erstmessungen.** Scout 5,4 · Tank 3,4 ·
+  Sniper 8,6 Zonen von zehn. Der Tank liegt deutlich hinten. Ob das stört,
+  zeigt erst eigenes Spielen.
+- **Die Buschfelder sind harte Rechtecke.** Bei Feldern bis 380 px fällt die
+  gerade Kante mehr auf als in der alten Arena. Rein optisch, keine Auswirkung
+  aufs Spiel.
 
 ## Was bewusst NICHT gebaut wird (V1)
 

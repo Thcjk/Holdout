@@ -21,8 +21,14 @@ import { nearestEnemy } from "../src/systems/targeting";
 import type { InputState, Vec2, WorldState } from "../src/systems/types";
 import { makeInput } from "./helpers";
 
-/** Arenamitte - dorthin zieht es den Bot, damit er sich nicht in einer Ecke verkriecht. */
-const ARENA_CENTER: Vec2 = { x: 800, y: 600 };
+/**
+ * Abstand zur Aussenmauer, den der Bot haelt.
+ *
+ * Er laeuft nach AUSSEN, weil dort seit Phase 8 der Fortschritt liegt - aber
+ * nicht bis an die Mauer. Dort gaebe es kein Ausweichen mehr, und gemessen
+ * wuerde dann das Sterben an einer Wand statt an der Schwierigkeit.
+ */
+const BORDER_KEEPOUT = 700;
 
 /**
  * Ein Bot mit Gedaechtnis.
@@ -127,9 +133,26 @@ function botInput(
     }
   }
 
-  // Sanft zur Mitte, damit er sich nicht in einer Ecke festfaehrt.
-  moveX += (ARENA_CENTER.x - player.position.x) / 1200;
-  moveY += (ARENA_CENTER.y - player.position.y) / 1200;
+  /*
+   * Sanft nach aussen - das ist die groesste Aenderung am Bot seit Phase 8.
+   *
+   * Frueher zog es ihn zur Arenamitte, damit er sich nicht in einer Ecke
+   * verkriecht. In einer offenen Welt waere das genau falsch: Er bliebe fuer
+   * immer in Zone 0 stehen, und die Messung saegte, das Spiel sei leicht -
+   * obwohl er nie irgendwo war, wo es schwer wird.
+   *
+   * Vor der Aussenmauer dreht der Zug um, sonst drueckt er dort nur noch
+   * dagegen.
+   */
+  const center: Vec2 = { x: state.bounds.width / 2, y: state.bounds.height / 2 };
+  const outX = player.position.x - center.x;
+  const outY = player.position.y - center.y;
+  const radius = Math.hypot(outX, outY) || 1;
+  const maxRadius = state.bounds.width / 2 - BORDER_KEEPOUT;
+  const direction = radius < maxRadius ? 1 : -1;
+
+  moveX += (outX / radius) * 0.6 * direction;
+  moveY += (outY / radius) * 0.6 * direction;
 
   const length = Math.hypot(moveX, moveY);
   const move = length > 0.05 ? { x: moveX / length, y: moveY / length } : { x: 0, y: 0 };

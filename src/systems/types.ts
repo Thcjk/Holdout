@@ -184,8 +184,15 @@ export interface ProjectileState {
   hitEnemies: number[];
 }
 
-/** Ablaufphase einer Runde. */
-export type RoundPhase = "preparing" | "wave" | "break" | "gameover";
+/**
+ * Ablaufphase eines Runs.
+ *
+ * Frueher gab es hier vier Phasen (Vorbereitung, Welle, Pause, Ende). Mit dem
+ * Wegfall der Wellen bleiben zwei: Man spielt, oder der Run ist vorbei. Eine
+ * Pause gibt es nicht mehr - die Verschnaufpause holt man sich, indem man in
+ * Richtung Startpunkt zurueckgeht, wo weniger und schwaechere Gegner stehen.
+ */
+export type RoundPhase = "running" | "gameover";
 
 /**
  * Ereignisse eines Ticks. Die Simulation beschreibt damit, was passiert ist;
@@ -206,10 +213,15 @@ export type GameEvent =
   | { type: "healed"; playerId: string; amount: number; x: number; y: number }
   | { type: "levelUp"; playerId: string; skill: SkillId; level: number }
   | { type: "spawnWarning"; x: number; y: number }
-  | { type: "waveStart"; wave: number }
-  /** Welle geschafft - der Moment, in dem die Pause beginnt. */
-  | { type: "waveCleared"; wave: number }
-  | { type: "gameOver"; score: number; wave: number };
+  /**
+   * Das Team hat zum ersten Mal eine neue Distanzzone erreicht.
+   *
+   * Nachfolger von "waveStart"/"waveCleared": Der Fortschritt haengt jetzt an
+   * der Entfernung zum Start, nicht mehr an der Zeit. Daran haengen Klang,
+   * Anzeige und die Skillpunkte.
+   */
+  | { type: "zoneReached"; zone: number }
+  | { type: "gameOver"; score: number; zone: number };
 
 export interface SpawnOrder {
   type: EnemyType;
@@ -223,14 +235,25 @@ export interface WorldState {
   /** Fortlaufende Nummer des Simulationsschritts. */
   tick: number;
   phase: RoundPhase;
-  /** Restzeit der aktuellen Phase in Sekunden. */
-  phaseTime: number;
-  wave: number;
+  /**
+   * Der Seed, aus dem die Karte entstanden ist.
+   *
+   * Steht im Weltzustand, damit man beim Nachstellen eines Fehlers dieselbe
+   * Welt wiederbekommt - und damit ab Phase 15 ein gespeicherter Run die Karte
+   * nicht mitspeichern muss, sondern neu erzeugen kann.
+   */
+  seed: number;
+  /** Laufzeit des Runs in Sekunden. */
+  runTime: number;
+  /** Distanzzone, in der das Team gerade unterwegs ist (0 = sicherer Start). */
+  zone: number;
+  /** Tiefste je erreichte Zone. Daran haengen Skillpunkte und Ergebnis. */
+  deepestZone: number;
   score: number;
   players: PlayerState[];
   enemies: EnemyState[];
   projectiles: ProjectileState[];
-  /** Noch nicht erschienene Gegner der laufenden Welle. */
+  /** Angekuendigte, aber noch nicht erschienene Gegner. */
   pendingSpawns: SpawnOrder[];
   /** Alles, was Bewegung blockiert: Aussenmauern und Deckungsbloecke. */
   walls: Rect[];

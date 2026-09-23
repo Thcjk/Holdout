@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { CHARACTERS, SKILLS, SKILL_POINTS_PER_WAVE } from "../../src/config/balance";
+import {
+  CHARACTERS,
+  DIFFICULTY,
+  SKILLS,
+  SKILL_POINTS_PER_ZONE,
+} from "../../src/config/balance";
 import { TICK_SECONDS } from "../../src/config/constants";
 import { tryShoot } from "../../src/systems/combat";
 import { stepPlayerMovement } from "../../src/systems/movement";
@@ -10,7 +15,7 @@ import {
   maxHealthFor,
   speedFor,
 } from "../../src/systems/skills";
-import { startWave, stepRound } from "../../src/systems/waves";
+import { stepRound } from "../../src/systems/spawning";
 import { createWorld } from "../../src/systems/world";
 import { makeInput, soloSetup } from "../helpers";
 
@@ -23,14 +28,17 @@ function world() {
 }
 
 describe("Skillpunkte", () => {
-  it("gibt pro geschaffter Welle einen Punkt", () => {
+  it("gibt pro neu erreichter Distanzzone einen Punkt", () => {
     const { state, player } = world();
-    startWave(state, 1);
-    state.pendingSpawns.length = 0;
+
+    // Frueher war der Ausloeser "Welle geschafft". Seit Phase 8 ist es "eine
+    // Zone tiefer" - der Fortschritt haengt am Weg, nicht an der Zeit.
+    player.position.x = state.bounds.width / 2 + DIFFICULTY.zoneSize + 10;
+    player.position.y = state.bounds.height / 2;
 
     stepRound(state, TICK_SECONDS);
 
-    expect(player.skillPoints).toBe(SKILL_POINTS_PER_WAVE);
+    expect(player.skillPoints).toBe(SKILL_POINTS_PER_ZONE);
   });
 
   it("verteilt ohne Punkt nichts", () => {

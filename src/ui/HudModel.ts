@@ -28,12 +28,22 @@ export interface HudModel {
   abilityCooldownMax: number;
   /** Kurzname der Faehigkeit fuer die Beschriftung des Knopfs. */
   abilityLabel: string;
-  wave: number;
+  /** Distanzzone, in der das Team gerade unterwegs ist. 0 = sicherer Start. */
+  zone: number;
+  /** Tiefste je erreichte Zone. */
+  deepestZone: number;
   score: number;
   highscore: number;
   phase: RoundPhase;
-  /** Restzeit der Phase in Sekunden (nur bei Vorbereitung und Pause sinnvoll). */
-  phaseTime: number;
+  /** Laufzeit des Runs in Sekunden. */
+  runTime: number;
+  /**
+   * Steht der eigene Spieler in der sicheren Zone um den Startpunkt?
+   *
+   * Dort heilt man, und dort verteilt man Skillpunkte. Frueher war beides an
+   * die Pause zwischen zwei Wellen gebunden - die gibt es nicht mehr.
+   */
+  inSafeZone: boolean;
   enemiesLeft: number;
   down: boolean;
   reviveProgress: number;
@@ -56,11 +66,13 @@ export function createHudModel(): HudModel {
     abilityCooldown: 0,
     abilityCooldownMax: 1,
     abilityLabel: "",
-    wave: 0,
+    zone: 0,
+    deepestZone: 0,
     score: 0,
     highscore: 0,
-    phase: "preparing",
-    phaseTime: 0,
+    phase: "running",
+    runTime: 0,
+    inSafeZone: true,
     enemiesLeft: 0,
     down: false,
     reviveProgress: 0,

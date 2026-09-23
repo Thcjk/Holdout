@@ -10,7 +10,7 @@ const SPEED = CHARACTERS.scout.speed;
 
 function makePlayer(x = 800, y = 600): PlayerState {
   return {
-    ...createPlayer({ id: "test", name: "Test", character: "scout" }, 0, 1),
+    ...createPlayer({ id: "test", name: "Test", character: "scout" }, 0, 1, { x, y }),
     position: { x, y },
   };
 }

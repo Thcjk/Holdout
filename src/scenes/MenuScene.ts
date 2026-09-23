@@ -106,7 +106,7 @@ export class MenuScene extends Phaser.Scene {
     this.centeredText(
       76,
       best
-        ? `Dein Rekord: ${best.score} Punkte, Welle ${best.wave}`
+        ? `Dein Rekord: ${best.score} Punkte${best.zone === undefined ? "" : `, Zone ${best.zone}`}`
         : "Halte durch, solange du kannst.",
       15,
       "#8ea6c4",

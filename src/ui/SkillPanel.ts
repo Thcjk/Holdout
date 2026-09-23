@@ -1,5 +1,5 @@
 /**
- * Die Auswahl zwischen den Wellen: einen Punkt in eine Fähigkeit stecken.
+ * Die Auswahl in der sicheren Zone: einen Punkt in eine Fähigkeit stecken.
  *
  * Erscheint nur in der Pause und in der Vorbereitung - mitten im Gefecht wäre
  * ein Menü über dem halben Bildschirm genau das Falsche. Wer den Punkt liegen

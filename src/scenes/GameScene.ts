@@ -10,8 +10,8 @@
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import { playEventSounds } from "../audio/eventSounds";
-import { ABILITIES, CHARACTERS, PLAYER, SUPERS } from "../config/balance";
-import { ARENA, COLORS, DEPTH } from "../config/constants";
+import { ABILITIES, CHARACTERS, PLAYER, SUPERS, WORLD } from "../config/balance";
+import { COLORS, DEPTH } from "../config/constants";
 import type { GameSession } from "../net/GameSession";
 import { SoloSession } from "../net/SoloSession";
 import { ArenaRenderer } from "../render/ArenaRenderer";
@@ -21,6 +21,7 @@ import { Juice } from "../render/Juice";
 import { setReloadSafe } from "../platform/update";
 import { hideValuesOverlay, updateValuesOverlay } from "../platform/valuesOverlay";
 import { loadHighscore } from "../storage/highscore";
+import { distanceFromStart } from "../systems/spawning";
 import { nearestEnemy } from "../systems/targeting";
 import { emptyInput } from "../systems/types";
 import type { CharacterId, InputState, PlayerState, Vec2 } from "../systems/types";
@@ -29,11 +30,29 @@ import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
 
 /**
- * Wie laut die Musik zwischen den Wellen ist, als Anteil der vollen
- * Lautstaerke. Deutlich leiser, aber nicht weg: Der Sprung auf volle
- * Lautstaerke ist das Zeichen, dass die naechste Welle beginnt.
+ * ================================================================
+ * MUSIK: DER WECHSEL IST DAS SIGNAL - NUR HAENGT ER JETZT WORANDERS
+ * ================================================================
+ *
+ * Frueher war die Regel an die Rundenphase geknuepft: leise in der Pause,
+ * treibend waehrend der Welle. Seit Phase 8 gibt es keine Wellen und keine
+ * Pause mehr - die Regel haette gar keinen Ausloeser mehr.
+ *
+ * Jetzt entscheidet die Lage: Ist ein Gegner nah, laeuft das treibende Stueck
+ * in voller Lautstaerke; ist laengere Zeit keiner in der Naehe, wird es leise
+ * und ruhig. Der Gedanke bleibt derselbe, und er passt sogar besser zur
+ * offenen Welt: Die Musik sagt einem, dass etwas kommt, bevor man es sieht.
+ *
+ * ZWEI SCHWELLEN STATT EINER, und das ist der ganze Trick: Mit nur einer
+ * Grenze wuerde ein Gegner, der genau auf ihr herumlaeuft, die Musik im
+ * Sekundentakt umschalten lassen. Einschalten passiert nah und sofort,
+ * ausschalten erst weiter weg und erst nach ein paar ruhigen Sekunden.
  */
-const BREAK_MUSIC_VOLUME = 0.35;
+const COMBAT_ENTER_RANGE = 900;
+const COMBAT_LEAVE_RANGE = 1300;
+const COMBAT_LEAVE_SECONDS = 4;
+/** Lautstaerke des ruhigen Stuecks, als Anteil der vollen. */
+const CALM_MUSIC_VOLUME = 0.35;
 
 export interface GameSceneData {
   character?: CharacterId;
@@ -50,6 +69,8 @@ export class GameScene extends Phaser.Scene {
 
   private aimLine!: Phaser.GameObjects.Graphics;
   private hudModel: HudModel = createHudModel();
+  /** Wie lange schon kein Gegner mehr in der Naehe war - steuert die Musik. */
+  private calmSeconds = COMBAT_LEAVE_SECONDS;
   private hud?: HudScene;
   private character: CharacterId = "scout";
   private finished = false;
@@ -90,7 +111,10 @@ export class GameScene extends Phaser.Scene {
     this.arena = new ArenaRenderer(this, this.session.view.state);
     this.juice = new Juice(this);
     this.entities = new EntityRenderer(this, this.session.view, this.session.selfId);
-    this.cameraController = new CameraController(this, ARENA.width, ARENA.height);
+    // Grenzen aus der GENERIERTEN Welt, nicht aus der alten Konstanten: Jeder
+    // Run hat seine eigene Karte, und die Kamera darf genau bis an deren Rand.
+    const bounds = this.session.view.state.bounds;
+    this.cameraController = new CameraController(this, bounds.width, bounds.height);
     this.aimLine = this.add.graphics().setDepth(DEPTH.projectiles);
 
     this.scene.launch("Hud", {
@@ -189,6 +213,11 @@ export class GameScene extends Phaser.Scene {
     this.entities.update();
     this.drawAim(player, input);
     this.updateHudModel(player);
+    this.updateMusic(delta);
+
+    // Boden, Deckung und Buesche nach Kamerasicht ein- und ausblenden. In einer
+    // Welt dieser Groesse ist das der Unterschied zwischen "laeuft" und "ruckelt".
+    this.arena.update();
 
     this.cameraController.update(
       this.session.view.state.players.map((entry) => ({
@@ -202,15 +231,16 @@ export class GameScene extends Phaser.Scene {
   /**
    * Welche Musik gerade laufen soll.
    *
-   *   Welle              das treibende Stueck, volle Lautstaerke
+   *   Gefecht            das treibende Stueck, volle Lautstaerke
    *   dazwischen         das ruhige Stueck, deutlich leiser
    *   angehalten (solo)  nichts
    *
-   * Der WECHSEL ist das Signal, nicht die Stille: Zwischen zwei Wellen laeuft
-   * leise das ruhige Stueck; setzt das treibende in voller Lautstaerke ein,
-   * beginnt die naechste Welle. Das hoert man auch dann, wenn man gerade nicht
-   * auf den Bildschirm schaut - und anders als bei voelliger Stille wirkt die
-   * Pause nicht wie ein Aussetzer.
+   * Der WECHSEL ist das Signal, nicht die Stille: Solange niemand in der Naehe
+   * ist, laeuft leise das ruhige Stueck; setzt das treibende in voller
+   * Lautstaerke ein, ist etwas im Anmarsch. Das hoert man auch dann, wenn man
+   * gerade nicht auf den Bildschirm schaut - in einer offenen Welt sogar,
+   * BEVOR man den Gegner sieht. Und anders als bei voelliger Stille wirkt die
+   * ruhige Phase nicht wie ein Aussetzer.
    *
    * Angehalten bleibt es still: Musik, die weiterlaeuft, waehrend das Bild
    * steht, klingt nach Absturz.
@@ -218,19 +248,43 @@ export class GameScene extends Phaser.Scene {
    * `setMusic` prueft selbst, ob sich ueberhaupt etwas aendert - deshalb darf
    * das hier jedes Bild gerufen werden.
    */
-  private updateMusic(): void {
+  private updateMusic(delta: number): void {
     if (this.paused || this.finished) {
       audio.setMusic(null);
       return;
     }
 
-    if (this.session.view.state.phase === "wave") {
-      audio.setMusic("wave", 1);
-      return;
+    const distance = this.nearestEnemyDistance();
+
+    if (distance < COMBAT_ENTER_RANGE) {
+      this.calmSeconds = 0;
+    } else if (distance > COMBAT_LEAVE_RANGE) {
+      this.calmSeconds += delta / 1000;
     }
 
-    // Vorbereitung und Pause zwischen den Wellen.
-    audio.setMusic("menu", BREAK_MUSIC_VOLUME);
+    if (this.calmSeconds >= COMBAT_LEAVE_SECONDS) {
+      audio.setMusic("menu", CALM_MUSIC_VOLUME);
+    } else {
+      audio.setMusic("wave", 1);
+    }
+  }
+
+  /** Abstand zum naechsten Gegner - oder unendlich, wenn keiner da ist. */
+  private nearestEnemyDistance(): number {
+    const state = this.session.view.state;
+    const self = state.players.find((entry) => entry.id === this.session.selfId);
+    if (!self) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    let nearest = Number.POSITIVE_INFINITY;
+    for (const enemy of state.enemies) {
+      nearest = Math.min(
+        nearest,
+        Math.hypot(enemy.position.x - self.position.x, enemy.position.y - self.position.y),
+      );
+    }
+    return nearest;
   }
 
   /**
@@ -255,7 +309,9 @@ export class GameScene extends Phaser.Scene {
     // Der Ton geht nur mit, wenn wirklich angehalten wird. Im Koop laeuft die
     // Runde weiter - stille Musik waere dort ein falsches Signal.
     if (this.session.canPause) {
-      this.updateMusic();
+      // Kein Zeitfortschritt: Hier geht es nur darum, die Musik sofort
+      // anzuhalten oder wieder zu starten.
+      this.updateMusic(0);
     }
   }
 
@@ -273,7 +329,7 @@ export class GameScene extends Phaser.Scene {
   /** Fuettert die Zahlenanzeige aus `?debug=werte`. Ohne den Schalter ein No-op. */
   private updateValues(player: PlayerState, delta: number): void {
     const state = this.session.view.state;
-    if (state.phase === "wave") {
+    if (state.enemies.length > 0) {
       this.fightSeconds += delta / 1000;
     }
     for (const event of this.session.view.events) {
@@ -285,7 +341,7 @@ export class GameScene extends Phaser.Scene {
     updateValuesOverlay(
       {
         fps: this.game.loop.actualFps,
-        wave: state.wave,
+        zone: state.zone,
         enemies: state.enemies.length,
         projectiles: state.projectiles.filter((entry) => entry.active).length,
         ammo: player.reloadTimers.filter((timer) => timer <= 0).length,
@@ -312,7 +368,7 @@ export class GameScene extends Phaser.Scene {
           this.scene.stop("Hud");
           this.scene.start("GameOver", {
             score: event.score,
-            wave: event.wave,
+            zone: event.zone,
             character: this.character,
           });
         });
@@ -501,11 +557,13 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.abilityCooldown = player.abilityCooldown;
     this.hudModel.abilityCooldownMax = ABILITIES[player.character].cooldown;
     this.hudModel.abilityLabel = ABILITIES[player.character].short;
-    this.hudModel.wave = state.wave;
+    this.hudModel.zone = state.zone;
+    this.hudModel.deepestZone = state.deepestZone;
+    this.hudModel.inSafeZone =
+      distanceFromStart(state, player.position) <= WORLD.safeRadius;
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
-    this.updateMusic();
-    this.hudModel.phaseTime = state.phaseTime;
+    this.hudModel.runTime = state.runTime;
     this.hudModel.enemiesLeft = state.enemies.length + this.session.view.pendingCount;
     this.hudModel.skillPoints = player.skillPoints;
     this.hudModel.skillLevels = player.skills;

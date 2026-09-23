@@ -4,6 +4,7 @@ import { TICK_SECONDS } from "../../src/config/constants";
 import { createEnemy, hasLineOfSight, stepEnemies } from "../../src/systems/enemies";
 import { createWorld } from "../../src/systems/world";
 import { soloSetup } from "../helpers";
+import type { Rect } from "../../src/systems/types";
 
 function world() {
   const state = createWorld(soloSetup());
@@ -104,15 +105,23 @@ describe("Laeufer", () => {
 });
 
 describe("Sichtlinie", () => {
+  /*
+   * Eigene Waende statt der Karte.
+   *
+   * Hier stand frueher "quer durch den linken Deckungsblock bei x 220..280" -
+   * eine feste Stelle der alten Arena. Seit Phase 8 wird die Karte generiert,
+   * und dort steht an dieser Stelle nichts mehr; der Test fiel durch, obwohl an
+   * der Sichtlinie nichts kaputt war. Geprueft werden soll die Rechnung, nicht
+   * ein Kartenlayout - also bringt der Test seine Wand selbst mit.
+   */
+  const wall: Rect = { x: 220, y: 500, width: 60, height: 200 };
+
   it("erkennt eine Wand zwischen zwei Punkten", () => {
-    const state = world();
-    // Quer durch den linken Deckungsblock bei x 220..280, y 500..700.
-    expect(hasLineOfSight(state.walls, { x: 150, y: 600 }, { x: 400, y: 600 })).toBe(false);
+    expect(hasLineOfSight([wall], { x: 150, y: 600 }, { x: 400, y: 600 })).toBe(false);
   });
 
-  it("meldet freie Sicht in der offenen Mitte", () => {
-    const state = world();
-    expect(hasLineOfSight(state.walls, { x: 760, y: 600 }, { x: 860, y: 600 })).toBe(true);
+  it("meldet freie Sicht, wo nichts im Weg steht", () => {
+    expect(hasLineOfSight([wall], { x: 760, y: 600 }, { x: 860, y: 600 })).toBe(true);
   });
 });
 

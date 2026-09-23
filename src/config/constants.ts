@@ -5,7 +5,18 @@
  * Dort steht, wie es sich anfuehlt.
  */
 
-/** Groesse des Spielfelds in Pixeln (Briefing, Abschnitt 2 "Kennzahlen"). */
+/**
+ * Notfallgroesse des Spielfelds.
+ *
+ * Seit Phase 8 entsteht die Welt pro Run aus einem Seed, und ihre echte Groesse
+ * steht in `WORLD.size` (`config/balance.ts`) beziehungsweise im Weltzustand
+ * unter `bounds`. Diese Konstante bleibt nur als Rueckfall fuer Code, der eine
+ * Groesse braucht, bevor eine Welt existiert.
+ *
+ * WER HIER LIEST, LIEST WAHRSCHEINLICH FALSCH: Kamera, Boden und Kollision
+ * muessen `state.bounds` verwenden - sonst zeigen sie die Welt eines anderen
+ * Seeds an als die, in der gespielt wird.
+ */
 export const ARENA = {
   width: 1600,
   height: 1200,

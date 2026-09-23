@@ -34,9 +34,12 @@ export class ClientSession implements GameSession {
     private readonly transport: Transport,
     setups: readonly PlayerSetup[],
     selfId: string,
+    seed: number,
   ) {
     this.selfId = selfId;
-    this.clientView = new ClientView(selfId, setups);
+    // Der Seed kommt aus dem "start"-Paket der Lobby und MUSS weitergereicht
+    // werden: Aus ihm baut der Client seine Karte. Siehe `ClientView`.
+    this.clientView = new ClientView(selfId, setups, seed);
 
     transport.onMessage((_from, message) => this.receive(message));
     transport.onPeerLeave(() => {

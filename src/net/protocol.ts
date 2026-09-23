@@ -115,15 +115,19 @@ export interface StateMessage {
   players: NetPlayer[];
   enemies: NetEnemy[];
   projectiles: NetProjectile[];
-  wave: number;
+  /** Distanzzone, in der das Team gerade unterwegs ist. */
+  zone: number;
+  /** Tiefste je erreichte Zone - daran haengt das Ergebnis. */
+  deepestZone: number;
   score: number;
   phase: RoundPhase;
-  phaseTime: number;
+  /** Laufzeit des Runs in Sekunden. */
+  runTime: number;
   /** Noch nicht erschienene Gegner - damit das HUD bei allen dasselbe zeigt. */
   pending: number;
 }
 
-/** Ereignisse, die nicht in jeden Zustand gehoeren: Treffer, Tod, Wellenstart. */
+/** Ereignisse, die nicht in jeden Zustand gehoeren: Treffer, Tod, neue Zone. */
 export interface EventMessage {
   t: "events";
   events: GameEvent[];
@@ -177,10 +181,11 @@ export function encodeState(state: WorldState): StateMessage {
   return {
     t: "state",
     tick: state.tick,
-    wave: state.wave,
+    zone: state.zone,
+    deepestZone: state.deepestZone,
     score: state.score,
     phase: state.phase,
-    phaseTime: round1(state.phaseTime),
+    runTime: round1(state.runTime),
     pending: state.pendingSpawns.length,
     players: state.players.map(encodePlayer),
     enemies: state.enemies.map((enemy) => ({

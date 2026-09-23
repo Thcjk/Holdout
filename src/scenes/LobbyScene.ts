@@ -299,7 +299,7 @@ export class LobbyScene extends Phaser.Scene {
 
       const session = transport.isHost
         ? new HostSession(transport, setups, transport.selfId, seed)
-        : new ClientSession(transport, setups, transport.selfId);
+        : new ClientSession(transport, setups, transport.selfId, seed);
 
       this.scene.start("Game", { character: this.character, session });
     });

@@ -52,8 +52,20 @@ export const PLAYER = {
   superChargePerDamage: 26,
   /** Mindestabstand zwischen zwei Schuessen in Sekunden. */
   shootCooldown: 0.18,
-  /** Anteil des Lebens, der in der Pause zwischen zwei Wellen zurueckkommt. */
-  breakHealFraction: 0.6,
+  /**
+   * Anteil des Lebens, der je Sekunde in der sicheren Startzone zurueckkommt.
+   *
+   * NACHFOLGER DER PAUSENHEILUNG: Frueher heilte die Pause zwischen zwei Wellen
+   * 60 % des Lebens. Ohne Wellen gibt es diese Pause nicht mehr - und ohne
+   * Ersatz gaebe es im ganzen Run keine Heilung ausser der Tank-Faehigkeit.
+   * Ein Run waere dann nach wenigen Minuten zwangslaeufig vorbei.
+   *
+   * Jetzt heilt der sichere Ring um den Startpunkt. Das kostet den Weg zurueck
+   * und passt damit genau zur Entscheidung, um die sich der Run dreht: weiter
+   * vorruecken oder erst einmal durchatmen. 0,1 heisst rund zehn Sekunden fuer
+   * volles Leben.
+   */
+  safeZoneHealPerSecond: 0.1,
 } as const;
 
 /** Startwerte fuer Projektile. */
@@ -326,28 +338,175 @@ export const ENEMIES = {
 /** Wie oft ein Gegner durch Beruehrung Schaden macht (Sekunden). */
 export const ENEMY_CONTACT_INTERVAL = 1.0;
 
-/** Wellenformel aus dem Briefing, Abschnitt 4. */
-export const WAVES = {
-  preparationSeconds: 5,
-  breakSeconds: 10,
-  runnerBase: 3,
-  runnerPerWave: 2,
-  shooterFromWave: 3,
-  bruteFromWave: 5,
-  /** Gegnerleben steigt um 8 % pro Welle, Schaden um 4 %. */
+/**
+ * ================================================================
+ * DIE WELT - was der Generator hineinstreut
+ * ================================================================
+ *
+ * Seit Phase 8 gibt es keine feste Arena mehr, sondern eine Karte, die pro Run
+ * aus einem Seed entsteht (`systems/WorldGenerator.ts`).
+ *
+ * WARUM DIESE GROESSE: 9600 Pixel sind 200 Kacheln a 48 Pixel - 48-mal die
+ * Flaeche der alten Arena (1600x1200). Das klingt nach einem Leistungsproblem,
+ * ist aber keins: Die Grenze aus dem Briefing (Abschnitt 7) ist die ANZAHL
+ * Objekte, nicht die Flaeche, und die steht weiterhin bei 40 Gegnern. Eine
+ * groessere Welt erzeugt keine zusaetzlichen Gegner, sie verteilt sie nur.
+ * Was wirklich mit der Flaeche waechst, ist das Zeichnen des Bodens - deshalb
+ * blendet `ArenaRenderer` ihn kachelweise nach Kamerasicht ein und aus.
+ *
+ * Der Start liegt in der MITTE, nicht am Rand: Weil die Schwierigkeit mit der
+ * Entfernung waechst, hat das Team so in alle Richtungen die Wahl, wie viel
+ * Risiko es nimmt. Am Rand gaebe es nur eine sinnvolle Richtung.
+ */
+export const WORLD = {
+  /**
+   * Kantenlaenge der quadratischen Welt in Pixeln.
+   *
+   * GEMESSEN NACHGEBESSERT: Der erste Versuch waren 9600. Damit lagen vom Start
+   * in der Mitte nur 4800 Pixel bis zum Rand, also sechs Zonen - der Bot
+   * erreichte in ALLEN fuenf Durchlaeufen genau Zone 5 und stand dann an der
+   * Mauer. Gemessen wurde damit nicht mehr die Schwierigkeit, sondern die
+   * Kartengroesse.
+   *
+   * 16000 ergibt 8000 Pixel Radius und damit zehn Zonen - beim tiefsten Gegner
+   * also Faktor 1,08^10 = 2,16 auf das Leben. Das entspricht genau dem, was
+   * frueher Welle 10 war, und die galt als gute Runde.
+   *
+   * Die Flaeche ist damit 133-mal die der alten Arena. Das ist gemessen
+   * unbedenklich: Der Boden wird kachelweise nach Kamerasicht gezeichnet, und
+   * ein Tick kostete bei 124 Waenden 0,057 ms von 33 ms Budget.
+   */
+  size: 16000,
+  /** Dicke der Aussenmauer. Sie haelt Spieler und Gegner im Feld. */
+  wallThickness: 40,
+
+  /**
+   * DAS RASTER IST DIE GARANTIE, DASS DIE KARTE ZUSAMMENHAENGT.
+   *
+   * Zufaellig gestreute Rechtecke koennen eine Flaeche einschliessen - dann
+   * steht Loot (ab Phase 10) hinter einer Mauer, an die niemand herankommt.
+   * Statt hinterher zu pruefen und neu zu wuerfeln, macht es der Aufbau
+   * unmoeglich: Jedes Hindernis liegt vollstaendig in einer Rasterzelle und
+   * haelt zu deren Rand mindestens `minGap / 2` Abstand. Zwischen zwei
+   * benachbarten Zellen bleibt damit IMMER eine Gasse von `minGap` Breite -
+   * der Spieler ist 36 Pixel dick, es passen also gut drei nebeneinander.
+   *
+   * `tests/systems/worldGenerator.test.ts` prueft es trotzdem mit einer
+   * Flutfuellung nach: Eine Zusicherung, die man nur behauptet, ist keine.
+   */
+  cellSize: 800,
+  /** Kleinste Gasse zwischen zwei Hindernissen. */
+  minGap: 160,
+
+  /** Radius um den Start, in dem weder Deckung steht noch Gegner erscheinen. */
+  safeRadius: 700,
+
+  /**
+   * Anteil der Rasterzellen mit Deckung, und wie viele Bloecke je Zelle.
+   *
+   * GEMESSEN AN DER ALTEN ARENA: Die hatte 8 Deckungsbloecke auf 1600 x 1200,
+   * also einen je 0,24 Millionen Pixel. Der erste Versuch (0,62 und hoechstens
+   * zwei je Zelle) ergab einen je 0,82 Millionen - gut dreimal so duenn. Im
+   * Bild war das deutlich zu sehen: eine weite, leere Flaeche mit einem
+   * einzelnen Block am Rand.
+   *
+   * Das ist kein Geschmacksurteil, sondern ein Rueckschritt gegenueber einem
+   * Stand, der sich gut angefuehlt hat - Deckung ist das, was einen Top-down-
+   * Shooter taktisch macht. Mit 0,85 und drei Bloecken je Zelle liegt die
+   * Dichte wieder in der Groessenordnung der Arena.
+   */
+  coverChance: 0.85,
+  coverPerCell: 3,
+  /** Laenge und Dicke eines Deckungsblocks - wie in der alten Arena. */
+  coverLongMin: 140,
+  coverLongMax: 320,
+  coverShort: 60,
+
+  /**
+   * Anteil der Zellen mit einem Buschfeld, und dessen Kantenlaengen.
+   *
+   * Aus demselben Grund angehoben wie die Deckung: Die alte Arena hatte vier
+   * Buschfelder auf 1,92 Millionen Pixel, also eines je 0,48 Millionen. 0,4 je
+   * Zelle waeren eines je 1,6 Millionen gewesen.
+   */
+  bushChance: 0.75,
+  bushMin: 180,
+  bushMax: 380,
+} as const;
+
+/**
+ * ================================================================
+ * SCHWIERIGKEIT NACH DISTANZ - die Formel, die die Wellen ersetzt
+ * ================================================================
+ *
+ * Frueher stieg die Schwierigkeit mit der WELLENNUMMER, also mit der Zeit. Man
+ * konnte nichts dagegen tun ausser besser zu spielen. Jetzt steigt sie mit der
+ * ENTFERNUNG zum Start - und damit entscheidet das Team selbst, wie gefaehrlich
+ * es gerade wird. Das ist der Kern des Umbaus: aus einem Schicksal wird eine
+ * Entscheidung.
+ *
+ * Eine "Zone" ist ein Ring um den Startpunkt. Zone 0 ist der sichere Anfang,
+ * jede weitere ist `zoneSize` Pixel weiter draussen.
+ *
+ * Statt einer Welle mit fester Gegnerzahl gibt es eine ZIELBEVOELKERUNG rund um
+ * die Spieler: So viele Gegner sollen gleichzeitig unterwegs sein. Faellt die
+ * Zahl darunter, erscheint Nachschub knapp ausserhalb des Sichtfelds; wer weit
+ * genug wegläuft, laesst Gegner hinter sich zurueck.
+ */
+export const DIFFICULTY = {
+  /** Breite einer Distanzzone in Pixeln. */
+  zoneSize: 800,
+
+  /**
+   * Zielbevoelkerung in Zone 0, und wieviel je weiterer Zone dazukommt.
+   *
+   * GEMESSEN NACHGEBESSERT: Mit 3 + 1,6 je Zone waren zu keinem Zeitpunkt mehr
+   * als neun Gegner gleichzeitig unterwegs - die Welt wirkte leer, wo die alten
+   * Wellen ueber zwanzig gleichzeitig brachten. Jetzt: Zone 0 vier Gegner,
+   * Zone 5 rund sechzehn, Zone 10 rund neunundzwanzig. Die Obergrenze von 40
+   * aus dem Briefing wird damit erst jenseits von Zone 14 ueberhaupt erreicht.
+   */
+  baseEnemies: 4,
+  enemiesPerZone: 2.5,
+
+  /** Ab welcher Zone es Schuetzen bzw. Brocken gibt. */
+  shooterFromZone: 2,
+  bruteFromZone: 4,
+  /** Anteil Schuetzen und Brocken an der Bevoelkerung, sobald sie auftauchen. */
+  shooterShare: 0.3,
+  bruteShare: 0.2,
+
+  /** Leben +8 % je Zone, Schaden +4 % - dieselben Zahlen wie frueher je Welle. */
   healthGrowth: 1.08,
   damageGrowth: 1.04,
-  /** Gegnerzahl * (0.6 + 0.4 * Spielerzahl), damit vier Spieler nicht durchrauschen. */
+
+  /** Gegnerzahl * (0.6 + 0.4 * Spielerzahl) - unveraendert aus der Wellenformel. */
   playerCountBase: 0.6,
   playerCountFactor: 0.4,
-  /** Alle 5 Wellen ein Brocken mit fuenffachem Leben und doppelter Groesse. */
-  bossEveryWaves: 5,
-  bossHealthMultiplier: 5,
-  bossScaleMultiplier: 2,
+
+  /**
+   * Ring, in dem Nachschub erscheint: knapp ausserhalb des Sichtfelds.
+   *
+   * Die Kamera zeigt rund 1170 Entwurfseinheiten Breite, also etwa 585 nach
+   * jeder Seite. 700 liegt sicher dahinter - Gegner sollen auftauchen, aber
+   * nicht vor den Augen des Spielers aus dem Nichts erscheinen.
+   */
+  spawnRadiusMin: 700,
+  spawnRadiusMax: 1200,
+
+  /** Abstand zwischen zwei Spawns in Sekunden. */
+  spawnIntervalSeconds: 1.2,
   /** Vorwarnzeit der Spawnmarkierung in Sekunden. */
   spawnWarningSeconds: 1,
-  /** Abstand zwischen zwei Gegnern derselben Welle in Sekunden. */
-  spawnIntervalSeconds: 0.6,
+
+  /**
+   * Weiter als das entfernt, wird ein Gegner wieder entfernt.
+   *
+   * Ohne diese Zeile sammelt sich die halbe Karte hinter dem Team an und
+   * stoesst an die Obergrenze von 40 - dann erschiene vorne nichts mehr,
+   * obwohl man tief im gefaehrlichen Gebiet steht.
+   */
+  despawnRadius: 2600,
 } as const;
 
 export interface SkillDefinition {
@@ -377,8 +536,8 @@ export const SKILLS: Record<SkillId, SkillDefinition> = {
 
 export const SKILL_ORDER: SkillId[] = ["weapon", "armor", "speed", "super"];
 
-/** Skillpunkte je geschaffter Welle. */
-export const SKILL_POINTS_PER_WAVE = 1;
+/** Skillpunkte je neu erreichter Distanzzone (frueher: je geschaffter Welle). */
+export const SKILL_POINTS_PER_ZONE = 1;
 
 /** Harte Obergrenzen fuer die Handy-Leistung (Briefing, Abschnitt 7). */
 export const LIMITS = {

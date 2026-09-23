@@ -1,12 +1,11 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { TICK_SECONDS } from "../../src/config/constants";
 import { CHARACTERS } from "../../src/config/balance";
 import { stepPlayerMovement } from "../../src/systems/movement";
 import { createWorld } from "../../src/systems/world";
 import { makeInput, soloSetup } from "../helpers";
+import { generateWorld } from "../../src/systems/WorldGenerator";
 import type { Rect } from "../../src/systems/types";
-
-import { createArenaWalls } from "../../src/config/arena";
 
 describe("Gleiten an Waenden", () => {
   it("laeuft einmal um einen Deckungsblock herum", () => {
@@ -71,8 +70,10 @@ describe("Gleiten an Waenden", () => {
     );
   });
 
-  it("laeuft an der echten Arena entlang, ohne haengenzubleiben", () => {
-    const walls = createArenaWalls();
+  it("laeuft an der echten Welt entlang, ohne haengenzubleiben", () => {
+    // Seit Phase 8 gibt es keine feste Arena mehr - geprueft wird an einer
+    // generierten Welt, inklusive der Deckungsbloecke, die dabei entstehen.
+    const walls = generateWorld(4242).walls;
     const speed = CHARACTERS.scout.speed;
 
     // Acht Richtungen, jeweils aus der Mitte der Arena heraus bis an den Rand
@@ -85,10 +86,28 @@ describe("Gleiten an Waenden", () => {
     ] as [string, { x: number; y: number }, { x: number; y: number }][]) {
       const state = createWorld(soloSetup());
       const player = state.players[0]!;
-      // Erst an die Wand fahren.
-      for (let i = 0; i < 200; i += 1) {
+      /*
+       * Erst an die Aussenmauer fahren. Deutlich mehr Ticks als frueher: Vom
+       * Start in der Mitte sind es jetzt rund 7960 Pixel bis zum Rand, nicht
+       * mehr 560.
+       *
+       * DIESE ZAHL IST SCHON EINMAL ZU KLEIN GEWESEN, und der Test bestand
+       * trotzdem - er mass dann einen Spieler, der frei durch die Gegend lief
+       * und an gar nichts entlangglitt (8,33 px/Tick, also volles Tempo). Die
+       * Zusicherung unten prueft deshalb ausdruecklich, dass er wirklich
+       * angekommen ist.
+       */
+      for (let i = 0; i < 1600; i += 1) {
         stepPlayerMovement(player, makeInput(push), walls, TICK_SECONDS);
       }
+
+      const distanceToBorder = Math.min(
+        player.position.x,
+        player.position.y,
+        state.bounds.width - player.position.x,
+        state.bounds.height - player.position.y,
+      );
+      expect(distanceToBorder).toBeLessThan(200);
       // Dann 60 Ticks schraeg daran entlang; den kleinsten Fortschritt merken.
       let worst = Infinity;
       let total = 0;
@@ -102,7 +121,7 @@ describe("Gleiten an Waenden", () => {
       }
       const idealStep = speed * TICK_SECONDS * 0.707;
       console.log(
-        `Arena ${name.padEnd(7)} Schnitt ${(total / 60).toFixed(2)} px/Tick, ` +
+        `Welt ${name.padEnd(7)} Schnitt ${(total / 60).toFixed(2)} px/Tick, ` +
           `schlechtester ${worst.toFixed(2)} px/Tick (ideal ${idealStep.toFixed(2)})`,
       );
     }

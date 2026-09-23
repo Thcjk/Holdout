@@ -196,20 +196,23 @@ export const BUSH_TILE = tile(0, 0);
  * Zwei Stuecke, vom Nutzer geliefert. Die Zuordnung hat er festgelegt:
  *
  *   Menue   Retro Mystic  - getragen, man waehlt in Ruhe aus.
- *   Welle   Retro Comedy  - treibend, waehrend gekaempft wird.
+ *   Gefecht Retro Comedy  - treibend, waehrend gekaempft wird.
  *
  * (Ich hatte sie zuerst andersherum eingebaut - das war eine Annahme von mir,
  * keine Vorgabe.)
  *
- * WICHTIG FUERS SPIELGEFUEHL: Zwischen den Wellen laeuft das MENUESTUECK, und
- * zwar leise (siehe `BREAK_MUSIC_VOLUME` in `GameScene`). Der WECHSEL ist das
- * Signal - springt die Musik auf das treibende Stueck in voller Lautstaerke,
- * beginnt die naechste Welle. Das hoert man auch dann, wenn man gerade nicht
- * auf den Bildschirm schaut.
+ * WICHTIG FUERS SPIELGEFUEHL: Der WECHSEL ist das Signal, nicht die Stille.
+ * Ist kein Gegner in der Naehe, laeuft das ruhige Stueck leise; kommt einer
+ * heran, setzt das treibende in voller Lautstaerke ein. Das hoert man auch
+ * dann, wenn man gerade nicht auf den Bildschirm schaut - in einer offenen
+ * Welt sogar, BEVOR man den Gegner sieht.
  *
- * Zuerst war dort Stille vorgesehen; der Nutzer wollte leise Musik statt
- * nichts. Der Unterschied zur Welle muss aber hoerbar bleiben - deshalb ein
- * ANDERES Stueck UND eine andere Lautstaerke, nicht nur eins von beidem.
+ * Die Regel hing bis Phase 8 an der Rundenphase ("leise in der Pause zwischen
+ * zwei Wellen"). Mit den Wellen ist dieser Ausloeser verschwunden; die Schwellen
+ * stehen jetzt in `GameScene` (COMBAT_ENTER_RANGE und CALM_MUSIC_VOLUME).
+ *
+ * Der Unterschied muss hoerbar bleiben - deshalb ein ANDERES Stueck UND eine
+ * andere Lautstaerke, nicht nur eins von beidem.
  */
 export const MUSIC_MENU = `${import.meta.env.BASE_URL}assets/audio/menu.ogg`;
 export const MUSIC_WAVE = `${import.meta.env.BASE_URL}assets/audio/wave.ogg`;

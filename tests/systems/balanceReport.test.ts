@@ -1,12 +1,17 @@
 /**
- * Balancing-Protokoll: was ein Durchlauf pro Charakter und Welle wirklich tut.
+ * Balancing-Protokoll: was ein Durchlauf pro Charakter und ZONE wirklich tut.
  *
- * Die kurze Messung in `balanceProbe.test.ts` sagt nur, wie weit ein Bot kommt.
+ * Die kurze Messung in `balanceProbe.test.ts` sagt nur, wie tief ein Bot kommt.
  * Das hier beantwortet die Fragen dahinter:
  *
  *   - Wie schnell stirbt ein durchschnittlicher Gegner pro Charakter?
- *   - Ab welcher Welle wird es spuerbar schwer?
+ *   - Ab welcher Zone wird es spuerbar schwer?
  *   - Ist einer der drei deutlich staerker oder schwaecher?
+ *
+ * Seit Phase 8 ist die Zeile eine Zone statt einer Welle. Der Unterschied ist
+ * nicht nur eine Beschriftung: Eine Welle war ein abgeschlossener Abschnitt mit
+ * Anfang und Ende, eine Zone ist ein Ort, den man betritt und wieder verlaesst.
+ * Gemessen wird deshalb die Zeit, die der Bot IN dieser Zone verbracht hat.
  *
  * Zwei Sorten Zahlen, und der Unterschied ist wichtig:
  *
@@ -21,7 +26,7 @@
  */
 
 import { describe, it } from "vitest";
-import { CHARACTERS, ENEMIES, PLAYER, WAVES } from "../../src/config/balance";
+import { CHARACTERS, DIFFICULTY, ENEMIES, PLAYER } from "../../src/config/balance";
 import { TICK_RATE, TICK_SECONDS } from "../../src/config/constants";
 import { createWorld, stepWorld } from "../../src/systems/world";
 import { createBot } from "../bot";
@@ -44,13 +49,13 @@ function paperDps(character: CharacterId): number {
   return sustainedShotsPerSecond(character) * shot.bullets * shot.damage;
 }
 
-/** Gegnerleben in einer bestimmten Welle - Wachstum aus der Wellenformel. */
-function enemyHealth(type: EnemyType, wave: number): number {
-  return Math.round(ENEMIES[type].health * Math.pow(WAVES.healthGrowth, Math.max(0, wave - 1)));
+/** Gegnerleben in einer bestimmten Zone - Wachstum aus der Distanzformel. */
+function enemyHealth(type: EnemyType, zone: number): number {
+  return Math.round(ENEMIES[type].health * Math.pow(DIFFICULTY.healthGrowth, Math.max(0, zone)));
 }
 
-interface WaveRecord {
-  wave: number;
+interface ZoneRecord {
+  zone: number;
   seconds: number;
   damageDealt: number;
   damageTaken: number;
@@ -59,57 +64,58 @@ interface WaveRecord {
   wentDown: boolean;
 }
 
-/** Ein Durchlauf mit Aufzeichnung je Welle. */
-function runOnce(character: CharacterId, seed: number, maxWave: number): WaveRecord[] {
+/**
+ * Ein Durchlauf mit Aufzeichnung je Zone.
+ *
+ * Anders als bei den Wellen kann der Bot eine Zone mehrfach betreten - er
+ * laeuft ja frei herum. Die Zeilen werden deshalb je Zone aufsummiert, nicht
+ * je Besuch: Was interessiert, ist "wie teuer war Zone 4 insgesamt".
+ */
+function runOnce(character: CharacterId, seed: number, maxZone: number): ZoneRecord[] {
   const state = createWorld([{ id: "p", name: "Bot", character }], seed);
-      const bot = createBot();
-  const records: WaveRecord[] = [];
-
-  let current: WaveRecord | null = null;
-  let seenWave = 0;
+  const bot = createBot();
+  const byZone = new Map<number, ZoneRecord>();
 
   for (let i = 0; i < TICK_RATE * 900 && state.phase !== "gameover"; i += 1) {
     stepWorld(state, bot(state), TICK_SECONDS);
 
-    if (state.phase === "wave") {
-      if (state.wave !== seenWave) {
-        seenWave = state.wave;
-        current = {
-          wave: state.wave,
-          seconds: 0,
-          damageDealt: 0,
-          damageTaken: 0,
-          kills: 0,
-          healthAfterPercent: 100,
-          wentDown: false,
-        };
-        records.push(current);
-      }
-      if (current) {
-        current.seconds += TICK_SECONDS;
-        for (const event of state.events) {
-          if (event.type === "hit") current.damageDealt += event.damage;
-          if (event.type === "playerHit") current.damageTaken += event.damage;
-          if (event.type === "enemyDied") current.kills += 1;
-          if (event.type === "playerDown") current.wentDown = true;
-        }
-        const player = state.players[0];
-        if (player) {
-          current.healthAfterPercent = (player.health / player.maxHealth) * 100;
-        }
-      }
+    const zone = state.zone;
+    let current = byZone.get(zone);
+    if (!current) {
+      current = {
+        zone,
+        seconds: 0,
+        damageDealt: 0,
+        damageTaken: 0,
+        kills: 0,
+        healthAfterPercent: 100,
+        wentDown: false,
+      };
+      byZone.set(zone, current);
     }
 
-    if (records.length >= maxWave && state.phase === "break" && seenWave >= maxWave) {
+    current.seconds += TICK_SECONDS;
+    for (const event of state.events) {
+      if (event.type === "hit") current.damageDealt += event.damage;
+      if (event.type === "playerHit") current.damageTaken += event.damage;
+      if (event.type === "enemyDied") current.kills += 1;
+      if (event.type === "playerDown") current.wentDown = true;
+    }
+    const player = state.players[0];
+    if (player) {
+      current.healthAfterPercent = (player.health / player.maxHealth) * 100;
+    }
+
+    if (state.deepestZone > maxZone) {
       break;
     }
   }
 
-  return records;
+  return [...byZone.values()].sort((a, b) => a.zone - b.zone);
 }
 
 describe("Balancing-Protokoll", () => {
-  it("misst alle drei Charaktere ueber acht Wellen", () => {
+  it("misst alle drei Charaktere ueber acht Zonen", () => {
     const characters: CharacterId[] = ["scout", "tank", "sniper"];
     const seeds = [7919, 15837, 23755];
 
@@ -119,16 +125,16 @@ describe("Balancing-Protokoll", () => {
     lines.push("Charakter  Schuss/s  Schaden/s   Laeufer(600)  Schuetze(900)  Brocken(2800)");
     for (const character of characters) {
       const dps = paperDps(character);
-      const ttk = (type: EnemyType, wave: number) => (enemyHealth(type, wave) / dps).toFixed(2);
+      const ttk = (type: EnemyType, zone: number) => (enemyHealth(type, zone) / dps).toFixed(2);
       lines.push(
         `${character.padEnd(10)} ${sustainedShotsPerSecond(character).toFixed(2).padStart(8)} ` +
           `${Math.round(dps).toString().padStart(9)}   ` +
-          `${ttk("runner", 1).padStart(10)} s  ${ttk("shooter", 1).padStart(11)} s  ` +
-          `${ttk("brute", 1).padStart(11)} s`,
+          `${ttk("runner", 0).padStart(10)} s  ${ttk("shooter", 0).padStart(11)} s  ` +
+          `${ttk("brute", 0).padStart(11)} s`,
       );
     }
     lines.push("");
-    lines.push("Dieselben Gegner in Welle 8 (Leben waechst 8 % je Welle, also x1,71):");
+    lines.push("Dieselben Gegner in Zone 8 (Leben waechst 8 % je Zone, also x1,85):");
     for (const character of characters) {
       const dps = paperDps(character);
       const ttk = (type: EnemyType) => (enemyHealth(type, 8) / dps).toFixed(2);
@@ -142,33 +148,33 @@ describe("Balancing-Protokoll", () => {
     for (const character of characters) {
       lines.push("");
       lines.push(`=== GEMESSEN: ${character} (Schnitt aus ${seeds.length} Durchlaeufen) ===`);
-      lines.push("Welle  Dauer   Schaden/s  erlitten  Kills  Leben danach  am Boden");
+      lines.push("Zone   Dauer   Schaden/s  erlitten  Kills  Leben danach  am Boden");
 
-      const perWave = new Map<number, WaveRecord[]>();
-      let reached = 0;
+      const perZone = new Map<number, ZoneRecord[]>();
+      let deepest = 0;
       for (const seed of seeds) {
         const records = runOnce(character, seed, 8);
-        reached += records.length;
+        deepest += records.length > 0 ? (records[records.length - 1]?.zone ?? 0) : 0;
         for (const record of records) {
-          const list = perWave.get(record.wave) ?? [];
+          const list = perZone.get(record.zone) ?? [];
           list.push(record);
-          perWave.set(record.wave, list);
+          perZone.set(record.zone, list);
         }
       }
 
-      for (let wave = 1; wave <= 8; wave += 1) {
-        const list = perWave.get(wave);
+      for (let zone = 0; zone <= 8; zone += 1) {
+        const list = perZone.get(zone);
         if (!list || list.length === 0) {
-          lines.push(`${String(wave).padStart(5)}  - nicht erreicht -`);
+          lines.push(`${String(zone).padStart(5)}  - nicht erreicht -`);
           continue;
         }
-        const avg = (pick: (r: WaveRecord) => number) =>
+        const avg = (pick: (r: ZoneRecord) => number) =>
           list.reduce((sum, r) => sum + pick(r), 0) / list.length;
         const seconds = avg((r) => r.seconds);
         const dps = seconds > 0 ? avg((r) => r.damageDealt) / seconds : 0;
         const downs = list.filter((r) => r.wentDown).length;
         lines.push(
-          `${String(wave).padStart(5)}  ${seconds.toFixed(1).padStart(5)}s  ` +
+          `${String(zone).padStart(5)}  ${seconds.toFixed(1).padStart(5)}s  ` +
             `${Math.round(dps).toString().padStart(9)}  ` +
             `${Math.round(avg((r) => r.damageTaken))
               .toString()
@@ -178,7 +184,7 @@ describe("Balancing-Protokoll", () => {
             `${downs > 0 ? `${downs}/${list.length}` : "-"}`,
         );
       }
-      lines.push(`Erreichte Wellen im Schnitt: ${(reached / seeds.length).toFixed(1)}`);
+      lines.push(`Tiefste Zone im Schnitt: ${(deepest / seeds.length).toFixed(1)}`);
     }
 
     console.log(lines.join("\n"));

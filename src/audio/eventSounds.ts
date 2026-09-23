@@ -32,10 +32,8 @@ function soundFor(event: GameEvent): SoundName | null {
     case "healed":
       // Bei vollem Leben ist nichts angekommen - dann auch kein Ton.
       return event.amount > 0 ? "healed" : null;
-    case "waveStart":
-      return "waveStart";
-    case "waveCleared":
-      return "waveCleared";
+    case "zoneReached":
+      return "zoneReached";
     case "gameOver":
       return "gameOver";
     default:

@@ -1,16 +1,26 @@
 /**
- * Zeichnet die unbewegliche Arena: Boden, Waende, Deckung und Buesche.
- *
- * Alles hier wird einmal aufgebaut und danach nicht mehr angefasst - das ist
- * billiger, als jedes Bild neu zu zeichnen.
+ * Zeichnet die unbewegliche Welt: Boden, Waende, Deckung und Buesche.
  *
  * WARUM `tileSprite` UND NICHT VIELE EINZELBILDER: Eine Kachel ist 16 Pixel
- * gross, die Arena 1600 x 1200 - das waeren 7500 einzelne Bilder, jedes mit
- * eigener Position und eigenem Zeichenaufruf. Ein `tileSprite` ist EIN Objekt,
- * das seine Kachel selbst wiederholt. Es passt ausserdem auf beliebige Masse:
- * Die Deckungsbloecke sind 200 x 60 Pixel gross, was kein glattes Vielfaches
- * von 16 ist - ein `tileSprite` schneidet die letzte Kachel einfach ab, statt
- * ueber den Rand zu stehen.
+ * gross. Ein `tileSprite` ist EIN Objekt, das seine Kachel selbst wiederholt,
+ * und es passt auf beliebige Masse - es schneidet die letzte Kachel einfach ab,
+ * statt ueber den Rand zu stehen.
+ *
+ * ================================================================
+ * SEIT PHASE 8: DIE WELT IST 48-MAL SO GROSS
+ * ================================================================
+ *
+ * Frueher war die Arena 1600 x 1200 und der Boden bestand aus vier
+ * `tileSprite`. Jetzt ist die Welt 9600 x 9600 - dieselbe Bauweise haette eine
+ * einzelne Zeichenflaeche von 92 Millionen Pixeln ergeben.
+ *
+ * Deshalb wird alles Unbewegliche in KACHELFELDER zerlegt und nach Kamerasicht
+ * ein- und ausgeblendet (`update()`). Sichtbar ist immer nur, was auch wirklich
+ * im Bild liegt - die Kosten haengen damit an der Bildschirmgroesse und nicht
+ * mehr an der Weltgroesse. Genau deshalb darf die Welt ueberhaupt so gross
+ * sein, ohne die Grenzen aus dem Briefing (Abschnitt 7) zu verletzen: Die
+ * beziehen sich auf die Anzahl gleichzeitig aktiver Objekte, und die bleibt
+ * gleich.
  */
 
 import Phaser from "phaser";
@@ -22,21 +32,48 @@ import {
   WALL_TILE,
   WORLD_SCALE,
 } from "../config/assets";
-import { COVER_BLOCKS } from "../config/arena";
-import { ARENA, DEPTH } from "../config/constants";
+import { DEPTH } from "../config/constants";
 import type { Rect, WorldState } from "../systems/types";
+
+/**
+ * Kantenlaenge eines Bodenfelds in Weltpixeln.
+ *
+ * Kompromiss: Kleine Felder heissen viele Objekte (9600/600 = 16x16 = 256),
+ * grosse Felder heissen, dass man mehr zeichnet, als man sieht. 1200 ergibt
+ * 8x8 = 64 Felder, von denen je nach Zoom zwei bis sechs sichtbar sind.
+ */
+const FLOOR_CHUNK = 1200;
+
+/** Sicherheitsrand um das Sichtfeld, damit am Bildrand nichts aufpoppt. */
+const CULL_MARGIN = 300;
+
+interface CullablePart {
+  object: Phaser.GameObjects.TileSprite;
+  rect: Rect;
+}
 
 export class ArenaRenderer {
   /** Alles, was beim Verlassen der Szene wieder wegmuss. */
   private readonly parts: Phaser.GameObjects.GameObject[] = [];
 
+  /** Was nach Kamerasicht ein- und ausgeblendet wird. */
+  private readonly cullable: CullablePart[] = [];
+
+  /** Die Deckungsbloecke mit ihrem Umriss - der wird je Bild neu gezeichnet. */
+  private readonly coverBlocks: Rect[] = [];
+  private readonly outline: Phaser.GameObjects.Graphics;
+
   constructor(
     private readonly scene: Phaser.Scene,
     state: WorldState,
   ) {
-    this.drawFloor();
+    this.outline = scene.add.graphics().setDepth(DEPTH.walls + 1);
+    this.parts.push(this.outline);
+
+    this.drawFloor(state);
     this.drawWalls(state);
     this.drawBushes(state);
+    this.update();
   }
 
   destroy(): void {
@@ -44,90 +81,151 @@ export class ArenaRenderer {
       part.destroy();
     }
     this.parts.length = 0;
+    this.cullable.length = 0;
+    this.coverBlocks.length = 0;
   }
 
   /**
-   * Der Boden.
+   * Blendet ein, was im Bild liegt, und den Rest aus.
    *
-   * Vier Steinkacheln in grossen Feldern statt einer einzigen ueber alles:
-   * Eine einzelne Kachel ueber 1600 Pixel wiederholt ergibt ein sichtbares
-   * Streifenmuster, weil das Auge die Wiederholung findet. Vier Felder
-   * unterschiedlicher Kachel brechen das auf, ohne dass es unruhig wird.
+   * Wird jedes Bild aus der Spielszene gerufen. Der Vergleich ist eine reine
+   * Rechteckpruefung je Teil - bei rund 300 Teilen kostet das nichts, spart
+   * aber das Zeichnen von fast allem.
    */
-  private drawFloor(): void {
-    const half = { w: ARENA.width / 2, h: ARENA.height / 2 };
-    const felder: [number, number, number][] = [
-      [0, 0, 0],
-      [half.w, 0, 1],
-      [0, half.h, 2],
-      [half.w, half.h, 3],
-    ];
+  update(): void {
+    const view = this.scene.cameras.main.worldView;
+    const left = view.x - CULL_MARGIN;
+    const top = view.y - CULL_MARGIN;
+    const right = view.right + CULL_MARGIN;
+    const bottom = view.bottom + CULL_MARGIN;
 
-    for (const [x, y, index] of felder) {
-      this.add(
-        this.scene.add
-          .tileSprite(x, y, half.w, half.h, SHEET_KEY, FLOOR_TILES[index % FLOOR_TILES.length])
+    for (const part of this.cullable) {
+      const { rect } = part;
+      const visible =
+        rect.x < right &&
+        rect.x + rect.width > left &&
+        rect.y < bottom &&
+        rect.y + rect.height > top;
+      part.object.setVisible(visible);
+    }
+
+    this.drawOutlines(left, top, right, bottom);
+  }
+
+  /**
+   * Der Umriss um jeden Deckungsblock - und der ist nicht Zierde, sondern die
+   * Loesung eines sichtbaren Fehlers.
+   *
+   * Eine Kachel erscheint mit 48 Pixeln (16 x WORLD_SCALE), ein Deckungsblock
+   * ist aber beliebig breit - die letzte Kachel wird also fast immer
+   * angeschnitten. Bei einer nahtlosen Textur faellt der Schnitt nicht auf, und
+   * der Umriss gibt dem Block seine Kante zurueck. Er liegt IMMER genau auf der
+   * Kollisionsgrenze: Was man sieht, ist auch das, wogegen man laeuft.
+   *
+   * Neu gezeichnet statt einmal gefuellt: Bei 150 Bloecken in der ganzen Welt
+   * waeren das 150 Rechtecke je Bild, obwohl hoechstens ein Dutzend sichtbar
+   * ist. Loeschen und neu zeichnen ist hier billiger als alles zu behalten.
+   */
+  private drawOutlines(left: number, top: number, right: number, bottom: number): void {
+    this.outline.clear();
+    this.outline.lineStyle(3, 0x1b2430, 0.9);
+
+    for (const block of this.coverBlocks) {
+      if (
+        block.x >= right ||
+        block.x + block.width <= left ||
+        block.y >= bottom ||
+        block.y + block.height <= top
+      ) {
+        continue;
+      }
+      this.outline.strokeRect(block.x, block.y, block.width, block.height);
+    }
+  }
+
+  /**
+   * Der Boden, in Feldern.
+   *
+   * Die Kachel wechselt je Feld zwischen den verfuegbaren Bodenkacheln. Eine
+   * einzige Kachel ueber 9600 Pixel wiederholt ergibt ein sichtbares
+   * Streifenmuster, weil das Auge die Wiederholung findet; der Wechsel bricht
+   * das auf, ohne dass es unruhig wird.
+   */
+  private drawFloor(state: WorldState): void {
+    const { width, height } = state.bounds;
+    const columns = Math.ceil(width / FLOOR_CHUNK);
+    const rows = Math.ceil(height / FLOOR_CHUNK);
+
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const x = column * FLOOR_CHUNK;
+        const y = row * FLOOR_CHUNK;
+        const chunkWidth = Math.min(FLOOR_CHUNK, width - x);
+        const chunkHeight = Math.min(FLOOR_CHUNK, height - y);
+        const tile = FLOOR_TILES[(row + column) % FLOOR_TILES.length];
+
+        const sprite = this.scene.add
+          .tileSprite(x, y, chunkWidth, chunkHeight, SHEET_KEY, tile)
           .setOrigin(0)
           // Die Kachel selbst vergroessern, nicht das Sprite: `setScale` wuerde
-          // auch die Flaeche strecken und ueber die Arena hinausragen.
+          // auch die Flaeche strecken und ueber die Welt hinausragen.
           .setTileScale(WORLD_SCALE, WORLD_SCALE)
-          .setDepth(DEPTH.floor),
-      );
+          .setDepth(DEPTH.floor);
+
+        this.addCullable(sprite, { x, y, width: chunkWidth, height: chunkHeight });
+      }
     }
   }
 
   /**
    * Waende - und zwar zweierlei.
    *
-   * Die Aussenmauer haelt das Spielfeld zusammen und bekommt die Steinwand aus
-   * dem Sheet. Die Deckungsbloecke stehen mitten im Feld und bekommen
-   * Holzkisten: Sie sollen sich vom Rand abheben, weil sie taktisch etwas ganz
-   * anderes bedeuten - hinter der Aussenmauer steht nie jemand, hinter einer
-   * Kiste staendig.
+   * Die Aussenmauer haelt die Welt zusammen und bekommt die Steinwand aus dem
+   * Sheet. Die Deckungsbloecke stehen im Feld und bekommen Ziegel: Sie sollen
+   * sich vom Rand abheben, weil sie taktisch etwas ganz anderes bedeuten -
+   * hinter der Aussenmauer steht nie jemand, hinter einem Block staendig.
    *
-   * Die Simulation kennt diesen Unterschied nicht; fuer sie ist beides
-   * dasselbe Rechteck. Das ist Absicht - es ist ein rein optischer
-   * Unterschied, und die Spiellogik soll davon nichts wissen muessen.
+   * WORAN DER UNTERSCHIED ERKANNT WIRD: Frueher gab es dafuer die feste Liste
+   * `COVER_BLOCKS` aus `config/arena.ts`. Die ist mit der Weltgenerierung
+   * verschwunden - jetzt entscheidet die Lage: Was die Aussenkante der Welt
+   * beruehrt, ist Mauer, alles andere ist Deckung. Das braucht keine
+   * zusaetzlichen Daten und kann deshalb auch nicht mit ihnen auseinanderlaufen.
+   *
+   * Die Simulation kennt diesen Unterschied weiterhin nicht; fuer sie ist
+   * beides dasselbe Rechteck. Das ist Absicht - er ist rein optisch.
    */
   private drawWalls(state: WorldState): void {
-    /*
-     * Ein Umriss um jeden Block - und der ist nicht Zierde, sondern die
-     * Loesung eines sichtbaren Fehlers.
-     *
-     * Ein Deckungsblock ist 60 Pixel breit, eine Kachel erscheint mit 48:
-     * 60/48 = 1,25, die letzte Kachel wird also angeschnitten. Frueher lag
-     * dort eine gerahmte Holzkiste, und der Schnitt sah aus wie ein zufaelliger
-     * Streifen neben dem Block. Jetzt liegen dort nahtlose Ziegel, bei denen
-     * der Schnitt nicht auffaellt - und der Umriss gibt dem Block seine Kante
-     * zurueck. Er liegt IMMER genau auf der Kollisionsgrenze, egal wo die
-     * Kachel endet: Was man sieht, ist auch das, wogegen man laeuft.
-     */
-    const umriss = this.scene.add.graphics().setDepth(DEPTH.walls + 1);
-    this.add(umriss);
-
     for (const wall of state.walls) {
-      const deckung = this.istDeckung(wall);
-      this.add(
-        this.scene.add
-          .tileSprite(wall.x, wall.y, wall.width, wall.height, SHEET_KEY, deckung ? COVER_TILE : WALL_TILE)
-          .setOrigin(0)
-          .setTileScale(WORLD_SCALE, WORLD_SCALE)
-          .setDepth(DEPTH.walls),
-      );
+      const deckung = !this.touchesBorder(wall, state);
 
-      umriss.lineStyle(3, 0x1b2430, deckung ? 0.9 : 0.55);
-      umriss.strokeRect(wall.x, wall.y, wall.width, wall.height);
+      const sprite = this.scene.add
+        .tileSprite(
+          wall.x,
+          wall.y,
+          wall.width,
+          wall.height,
+          SHEET_KEY,
+          deckung ? COVER_TILE : WALL_TILE,
+        )
+        .setOrigin(0)
+        .setTileScale(WORLD_SCALE, WORLD_SCALE)
+        .setDepth(DEPTH.walls);
+
+      this.addCullable(sprite, wall);
+
+      if (deckung) {
+        this.coverBlocks.push(wall);
+      }
     }
   }
 
-  /** Ist dieses Rechteck einer der Deckungsbloecke aus `config/arena.ts`? */
-  private istDeckung(wall: Rect): boolean {
-    return COVER_BLOCKS.some(
-      (block) =>
-        block.x === wall.x &&
-        block.y === wall.y &&
-        block.width === wall.width &&
-        block.height === wall.height,
+  /** Beruehrt dieses Rechteck den Rand der Welt? Dann ist es Aussenmauer. */
+  private touchesBorder(wall: Rect, state: WorldState): boolean {
+    return (
+      wall.x <= state.bounds.x ||
+      wall.y <= state.bounds.y ||
+      wall.x + wall.width >= state.bounds.x + state.bounds.width ||
+      wall.y + wall.height >= state.bounds.y + state.bounds.height
     );
   }
 
@@ -135,26 +233,26 @@ export class ArenaRenderer {
    * Buesche liegen UEBER den Figuren: Wer drinsteht, ist halb verdeckt - genau
    * das ist ja der Sinn eines Verstecks.
    *
-   * Zwei Anlaeufe waren noetig, beide aus demselben Grund falsch - die Kacheln
-   * waren zu klein und zu luecken­haft. Warum es jetzt GRAS ist und nicht die
-   * Buschkacheln des Pakets, steht bei `BUSH_TILE` in `config/assets.ts`.
+   * Warum GRAS und nicht die Buschkacheln des Pakets, steht bei `BUSH_TILE` in
+   * `config/assets.ts` - die sind Viertelstuecke und decken einzeln nur 54 %.
    */
   private drawBushes(state: WorldState): void {
     for (const bush of state.bushes) {
-      this.add(
-        this.scene.add
-          .tileSprite(bush.x, bush.y, bush.width, bush.height, SHEET_KEY, BUSH_TILE)
-          .setOrigin(0)
-          .setTileScale(WORLD_SCALE, WORLD_SCALE)
-          // Leicht durchscheinend: Man soll erkennen, dass da jemand drin
-          // steht, ohne ihn genau zu sehen.
-          .setAlpha(0.85)
-          .setDepth(DEPTH.bushesAbove),
-      );
+      const sprite = this.scene.add
+        .tileSprite(bush.x, bush.y, bush.width, bush.height, SHEET_KEY, BUSH_TILE)
+        .setOrigin(0)
+        .setTileScale(WORLD_SCALE, WORLD_SCALE)
+        // Leicht durchscheinend: Man soll erkennen, dass da jemand drin steht,
+        // ohne ihn genau zu sehen.
+        .setAlpha(0.85)
+        .setDepth(DEPTH.bushesAbove);
+
+      this.addCullable(sprite, bush);
     }
   }
 
-  private add(part: Phaser.GameObjects.GameObject): void {
-    this.parts.push(part);
+  private addCullable(object: Phaser.GameObjects.TileSprite, rect: Rect): void {
+    this.parts.push(object);
+    this.cullable.push({ object, rect });
   }
 }

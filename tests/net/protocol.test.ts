@@ -47,16 +47,18 @@ describe("Zustandspaket", () => {
     expect(ENEMY_TYPE_ORDER[type]).toBe("shooter");
   });
 
-  it("uebertraegt Welle, Score und Phase", () => {
+  it("uebertraegt Zone, Score und Phase", () => {
     const state = createWorld(soloSetup());
-    state.wave = 7;
+    state.zone = 7;
+    state.deepestZone = 9;
     state.score = 1234;
-    state.phase = "break";
+    state.phase = "gameover";
 
     const encoded = encodeState(state);
 
-    expect(encoded.wave).toBe(7);
+    expect(encoded.zone).toBe(7);
+    expect(encoded.deepestZone).toBe(9);
     expect(encoded.score).toBe(1234);
-    expect(encoded.phase).toBe("break");
+    expect(encoded.phase).toBe("gameover");
   });
 });

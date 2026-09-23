@@ -74,19 +74,19 @@ describe("Host und Client", () => {
   it("bringt dem Client die Welt des Hosts", () => {
     const { hostTransport, clientTransport } = pair();
     const host = new HostSession(hostTransport, SETUPS, "host", 42);
-    const client = new ClientSession(clientTransport, SETUPS, "client");
+    const client = new ClientSession(clientTransport, SETUPS, "client", 42);
 
     host.view.state.enemies.push(createEnemy(1, "runner", { x: 400, y: 400 }, 1, 1, false));
     run(40, host, client, 0);
 
     expect(client.view.state.enemies.length).toBe(1);
-    expect(client.view.state.wave).toBe(host.view.state.wave);
+    expect(client.view.state.zone).toBe(host.view.state.zone);
   });
 
   it("bewegt die eigene Figur sofort, ohne auf den Host zu warten", () => {
     const { hostTransport, clientTransport } = pair();
     const host = new HostSession(hostTransport, SETUPS, "host", 42);
-    const client = new ClientSession(clientTransport, SETUPS, "client");
+    const client = new ClientSession(clientTransport, SETUPS, "client", 42);
 
     expect(host.view.state.tick).toBe(0);
 
@@ -100,7 +100,7 @@ describe("Host und Client", () => {
   it("laeuft nicht auseinander: Vorhersage bleibt nah an der Wahrheit des Hosts", () => {
     const { hostTransport, clientTransport } = pair();
     const host = new HostSession(hostTransport, SETUPS, "host", 42);
-    const client = new ClientSession(clientTransport, SETUPS, "client");
+    const client = new ClientSession(clientTransport, SETUPS, "client", 42);
 
     run(120, host, client, 1);
 
@@ -121,7 +121,7 @@ describe("Host und Client", () => {
     clientTransport.dropRate = 0.3;
 
     const host = new HostSession(hostTransport, SETUPS, "host", 42);
-    const client = new ClientSession(clientTransport, SETUPS, "client");
+    const client = new ClientSession(clientTransport, SETUPS, "client", 42);
 
     run(150, host, client, 1);
 
@@ -133,7 +133,7 @@ describe("Host und Client", () => {
   it("meldet dem Client, wenn der Host die Runde beendet", () => {
     const { hostTransport, clientTransport } = pair();
     const host = new HostSession(hostTransport, SETUPS, "host", 42);
-    const client = new ClientSession(clientTransport, SETUPS, "client");
+    const client = new ClientSession(clientTransport, SETUPS, "client", 42);
 
     host.destroy();
 

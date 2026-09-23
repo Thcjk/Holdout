@@ -15,8 +15,25 @@ import { setReloadSafe } from "../platform/update";
 
 export interface GameOverData {
   score: number;
-  wave: number;
+  /** Tiefste erreichte Distanzzone - Nachfolger der Wellennummer. */
+  zone: number;
   character: CharacterId;
+}
+
+/**
+ * Die Rekordzeile.
+ *
+ * Alte Rekorde aus der Wellen-Zeit haben keine Zone. Statt eine zu erfinden,
+ * steht dort nur die Punktzahl - sie ist das Einzige, was ueber beide Fassungen
+ * hinweg dasselbe bedeutet.
+ */
+function recordLine(best: ReturnType<typeof loadHighscore>): string {
+  if (!best) {
+    return "Dein Rekord: 0 Punkte";
+  }
+  return best.zone === undefined
+    ? `Dein Rekord: ${best.score} Punkte`
+    : `Dein Rekord: ${best.score} Punkte (Zone ${best.zone})`;
 }
 
 export class GameOverScene extends Phaser.Scene {
@@ -33,7 +50,7 @@ export class GameOverScene extends Phaser.Scene {
   create(): void {
     // Hier nicht neu laden: Das wuerde diesen Bildschirm wegwischen.
     setReloadSafe(false);
-    const isRecord = saveHighscore(this.result.score, this.result.wave);
+    const isRecord = saveHighscore(this.result.score, this.result.zone);
     const best = loadHighscore();
 
     this.cameras.main.setBackgroundColor(COLORS.background);
@@ -51,7 +68,7 @@ export class GameOverScene extends Phaser.Scene {
       .text(
         VIEWPORT.width / 2,
         190,
-        `Welle ${this.result.wave}   ·   ${this.result.score} Punkte`,
+        `Zone ${this.result.zone}   ·   ${this.result.score} Punkte`,
         { fontFamily: "system-ui, sans-serif", fontSize: "26px", color: "#ffd166" },
       )
       .setOrigin(0.5);
@@ -62,7 +79,7 @@ export class GameOverScene extends Phaser.Scene {
         240,
         isRecord
           ? "Neuer Rekord!"
-          : `Dein Rekord: ${best?.score ?? 0} Punkte (Welle ${best?.wave ?? 0})`,
+          : recordLine(best),
         {
           fontFamily: "system-ui, sans-serif",
           fontSize: "18px",

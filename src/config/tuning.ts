@@ -21,7 +21,17 @@
  * und wird unten aufgelistet, statt still etwas kaputtzumachen.
  */
 
-import { CHARACTERS, ENEMIES, LIMITS, PLAYER, PROJECTILE, SKILLS, SUPERS, WAVES } from "./balance";
+import {
+  CHARACTERS,
+  DIFFICULTY,
+  ENEMIES,
+  LIMITS,
+  PLAYER,
+  PROJECTILE,
+  SKILLS,
+  SUPERS,
+  WORLD,
+} from "./balance";
 import { CAMERA, TOUCH } from "./constants";
 
 /** Die Wurzeln, unter denen gesucht wird. */
@@ -31,7 +41,8 @@ const ROOTS: Record<string, unknown> = {
   characters: CHARACTERS,
   supers: SUPERS,
   enemies: ENEMIES,
-  waves: WAVES,
+  world: WORLD,
+  difficulty: DIFFICULTY,
   skills: SKILLS,
   limits: LIMITS,
   // Auch das Steuerungsgefuehl laesst sich so ausprobieren, ohne neu zu bauen:

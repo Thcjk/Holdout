@@ -15,7 +15,7 @@ let lastUpdate = 0;
 
 export interface OverlayValues {
   fps: number;
-  wave: number;
+  zone: number;
   enemies: number;
   projectiles: number;
   ammo: number;
@@ -73,7 +73,7 @@ export function updateValuesOverlay(values: OverlayValues, now: number): void {
     // dann liegt es nicht am Spiel.
     `Flaeche ${VIEWPORT.width}x${VIEWPORT.height}  Schirm ${window.innerWidth}x${window.innerHeight}`,
     `Rand o${SAFE.top} r${SAFE.right} u${SAFE.bottom} l${SAFE.left}`,
-    `fps ${values.fps.toFixed(0).padStart(3)}   Welle ${values.wave}`,
+    `fps ${values.fps.toFixed(0).padStart(3)}   Zone ${values.zone}`,
     `Gegner ${String(values.enemies).padStart(2)}  Projektile ${String(values.projectiles).padStart(2)}`,
     `Leben ${Math.round(values.health)}/${values.maxHealth}  Munition ${values.ammo}`,
     `Super ${values.superCharge.toFixed(0)}%   Schaden/s ${values.dps.toFixed(0)}`,
