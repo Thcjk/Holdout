@@ -15,6 +15,7 @@ import { COLORS, DEPTH, SAFE, VIEWPORT } from "../config/constants";
 import { audio } from "../audio/AudioEngine";
 import { InputManager } from "../input/InputManager";
 import { Button } from "../ui/Button";
+import { Minimap } from "../ui/Minimap";
 import { SkillPanel } from "../ui/SkillPanel";
 import type { HudModel } from "../ui/HudModel";
 
@@ -31,6 +32,15 @@ export interface HudSceneData {
   onQuit: () => void;
 }
 
+
+/**
+ * Abstand der Knopfreihe (Karte, Pause, Ton) von der oberen Kante.
+ *
+ * 88 -> 106: Die Punkteanzeige darueber hat seit der Beute VIER Zeilen statt
+ * drei. Im Emulator war "Beute 4" halb hinter den Knoepfen - eine Anzeige,
+ * die man nicht ganz lesen kann, ist keine.
+ */
+const BUTTON_ROW_Y = 106;
 
 export class HudScene extends Phaser.Scene {
   /** Erst wenn das hier `true` ist, darf die Spielszene Eingaben abholen. */
@@ -77,6 +87,11 @@ export class HudScene extends Phaser.Scene {
     this.onQuit = data.onQuit;
   }
 
+  private mapButton!: Button;
+  private minimap!: Minimap;
+  private compass!: Phaser.GameObjects.Graphics;
+  private compassText!: Phaser.GameObjects.Text;
+
   create(): void {
     // Randabstaende: Grundabstand plus das, was das Geraet selbst als verdeckt
     // meldet (Notch, Home-Indikator, runde Ecken). Siehe platform/safeArea.ts.
@@ -90,6 +105,19 @@ export class HudScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
 
     this.bars = this.add.graphics().setDepth(DEPTH.hud);
+
+    // Der Ausstiegs-Kompass. Eigenes Graphics-Objekt, weil er jedes Bild neu
+    // gezeichnet wird und die Balken daneben nicht mitloeschen soll.
+    this.compass = this.add.graphics().setDepth(DEPTH.hud);
+    this.compassText = this.add
+      .text(0, 0, "", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "13px",
+        color: "#7ee08a",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.hud);
 
     this.waveText = this.add
       .text(leftEdge, topEdge, "", {
@@ -133,7 +161,7 @@ export class HudScene extends Phaser.Scene {
     this.muteButton = new Button(
       this,
       rightEdge - 44,
-      topEdge + 88,
+      topEdge + BUTTON_ROW_Y,
       audio.isMuted ? "Ton aus" : "Ton an",
       () => {
         const muted = audio.toggleMuted();
@@ -162,12 +190,37 @@ export class HudScene extends Phaser.Scene {
     this.menuButton = new Button(
       this,
       rightEdge - 146,
-      topEdge + 88,
+      topEdge + BUTTON_ROW_Y,
       this.canPause ? "Pause" : "Menü",
       () => this.onPause(),
       { width: 80, height: 30, fontSize: 13, color: COLORS.hudDim },
     );
     this.menuButton.setDepth(DEPTH.hud);
+
+    /*
+     * Der Kartenknopf - und er sitzt bewusst NEBEN Pause und Ton, nicht unten.
+     *
+     * Unten rechts liegt der Knopfbogen (FEUER, Faehigkeit, SUPER), unten
+     * links der Joystick. Ein vierter Knopf in Daumennaehe waere genau der
+     * Knopf, den man im Gefecht versehentlich trifft - und eine Karte, die
+     * sich mitten im Kampf oeffnet, nimmt die Sicht.
+     *
+     * Hier oben kommt man mit Absicht hin, aber nicht aus Versehen.
+     */
+    this.mapButton = new Button(
+      this,
+      rightEdge - 226,
+      topEdge + BUTTON_ROW_Y,
+      "Karte",
+      () => {
+        const open = this.minimap.toggle();
+        this.mapButton.setText(open ? "Karte zu" : "Karte");
+      },
+      { width: 76, height: 30, fontSize: 13, color: COLORS.hudDim },
+    );
+    this.mapButton.setDepth(DEPTH.hud);
+
+    this.minimap = new Minimap(this);
 
     /*
      * Ton beim ersten Antippen freigeben - Browser verweigern Klang, bevor der
@@ -233,8 +286,18 @@ export class HudScene extends Phaser.Scene {
     this.waveText.setText(
       this.model.inSafeZone ? "Sichere Zone" : `Zone ${this.model.zone}`,
     );
+    this.drawCompass();
+    this.minimap.update(this.model.minimap);
+    /*
+     * Die Beute steht bei der Punktzahl und nicht unten.
+     *
+     * Eine Zahl reicht - was genau man traegt, gehoert ab Phase 11 in den
+     * Rucksack und nicht ins Gefechts-HUD. Der untere Rand ist ohnehin der
+     * knappste Platz im Bild; dort sitzen Leben, Super und der Knopfbogen.
+     */
     this.scoreText.setText(
-      `Score ${this.model.score}\nRekord ${this.model.highscore}\nGegner ${this.model.enemiesLeft}`,
+      `Score ${this.model.score}\nRekord ${this.model.highscore}\n` +
+        `Gegner ${this.model.enemiesLeft}\nBeute ${this.model.carriedItems}`,
     );
     this.mateText.setText(
       this.model.mates
@@ -398,6 +461,19 @@ export class HudScene extends Phaser.Scene {
      */
     this.announceText.setVisible(!visible);
     this.skillHint.setVisible(false);
+
+    /*
+     * Die Karte macht beim Pausenbild zu.
+     *
+     * Beides gleichzeitig offen waere ein Widerspruch: Die Karte sagt unten
+     * ausdruecklich "Die Runde laeuft weiter", der Pausenbildschirm sagt solo
+     * das Gegenteil - und beide saessen uebereinander in der Bildmitte.
+     */
+    if (visible && this.minimap.isOpen) {
+      this.minimap.toggle();
+      this.mapButton.setText("Karte");
+    }
+
     this.overlayOpen = visible;
     this.paused = visible && this.canPause;
   }
@@ -410,6 +486,108 @@ export class HudScene extends Phaser.Scene {
    * geht es um die Texte und Knoepfe, die ihre Position nur einmal bekommen
    * haben.
    */
+  /**
+   * Der Pfeil zum naechsten bekannten Ausstieg.
+   *
+   * ================================================================
+   * WARUM ER AM BILDSCHIRMRAND SITZT UND NICHT IN DER MITTE
+   * ================================================================
+   *
+   * Ein Kompass soll im Augenwinkel liegen, nicht im Blickfeld. Waehrend man
+   * kaempft, schaut man auf die eigene Figur und auf das, was auf sie zulaeuft
+   * - alles, was dort zusaetzlich steht, verdeckt genau das.
+   *
+   * Deshalb laeuft der Pfeil auf einer ELLIPSE um die Bildmitte und sitzt
+   * immer dort, wo der Ausstieg liegt. Eine Ellipse und kein Kreis, weil das
+   * Bild breiter als hoch ist: Auf einem Kreis waere der Pfeil oben und unten
+   * am Rand, links und rechts aber mitten im Bild.
+   *
+   * Die Zahl daneben ist der Abstand in Metern (100 Weltpixel = 1 m, dieselbe
+   * Umrechnung wie sonst nirgends - sie muss nur in sich stimmig sein und eine
+   * Groessenordnung vermitteln, die man mit dem Laufweg vergleichen kann).
+   *
+   * Gezeichnet wird nur, was es zu zeigen gibt: Ohne entdeckten Ausstieg
+   * bleibt die Flaeche leer.
+   */
+  private drawCompass(): void {
+    this.compass.clear();
+
+    const target = this.model?.extractionCompass ?? null;
+    if (!target) {
+      this.compassText.setVisible(false);
+      return;
+    }
+
+    const centerX = VIEWPORT.width / 2;
+    const centerY = VIEWPORT.height / 2;
+    /*
+     * Die Halbachsen - und die sind kleiner, als man zuerst denkt.
+     *
+     * Im ersten Versuch lief der Pfeil ganz aussen am Bildrand. Im Emulator
+     * sass er dann prompt auf dem Knopf "Ton an", und die Entfernung war
+     * halb verdeckt. Der Bildrand ist hier naemlich schon vergeben: oben
+     * rechts Punktzahl und Knoepfe, unten rechts der Knopfbogen, unten links
+     * Leben und Super, oben links die Zone.
+     *
+     * Deshalb kreist der Pfeil jetzt INNERHALB dieser Anzeigen. Er ist damit
+     * naeher an der Figur, was sogar besser ist: Der Blick liegt beim Spielen
+     * ohnehin dort, und ein Kompass am aeussersten Rand wird uebersehen.
+     *
+     * Eine Ellipse und kein Kreis, weil das Bild doppelt so breit wie hoch
+     * ist - auf einem Kreis waere der Pfeil nach links und rechts viel zu
+     * dicht an der Figur.
+     */
+    const radiusX = Math.min(300, (VIEWPORT.width - SAFE.left - SAFE.right) / 2 - 60);
+    const radiusY = Math.min(150, (VIEWPORT.height - SAFE.top - SAFE.bottom) / 2 - 60);
+
+    const x = centerX + Math.cos(target.angle) * radiusX;
+    const y = centerY + Math.sin(target.angle) * radiusY;
+
+    // Steht man schon drin, waere ein Pfeil nur Verwirrung - dann sagt es der
+    // Extraktionsbalken, nicht der Kompass.
+    const meters = Math.round(target.distance / 100);
+    if (meters <= 2) {
+      this.compassText.setVisible(false);
+      return;
+    }
+
+    // Ein Dreieck in Zielrichtung, dahinter ein dunkler Kreis als Untergrund:
+    // Auf hellem Sand waere ein gruener Pfeil allein schwer zu sehen.
+    this.compass.fillStyle(0x0d1420, 0.55);
+    this.compass.fillCircle(x, y, 17);
+    this.compass.lineStyle(2, COLORS.mate, 0.9);
+    this.compass.strokeCircle(x, y, 17);
+
+    const tip = 11;
+    const back = 7;
+    const spread = 2.5;
+    this.compass.fillStyle(COLORS.mate, 1);
+    this.compass.beginPath();
+    this.compass.moveTo(x + Math.cos(target.angle) * tip, y + Math.sin(target.angle) * tip);
+    this.compass.lineTo(
+      x + Math.cos(target.angle + spread) * back,
+      y + Math.sin(target.angle + spread) * back,
+    );
+    this.compass.lineTo(
+      x + Math.cos(target.angle - spread) * back,
+      y + Math.sin(target.angle - spread) * back,
+    );
+    this.compass.closePath();
+    this.compass.fillPath();
+
+    // Die Zahl nach INNEN versetzt, nie nach aussen: Sonst rutscht sie bei
+    // einem Pfeil am Rand aus dem Bild.
+    // 36 statt knapp 20: Der Kreis hat 17 Pixel Radius, die Schrift noch
+    // einmal rund 7 - bei zu kleinem Abstand stand die Entfernung halb hinter
+    // dem Pfeil, genau so im Emulator gesehen.
+    this.compassText.setPosition(
+      x - Math.cos(target.angle) * 36,
+      y - Math.sin(target.angle) * 36,
+    );
+    this.compassText.setText(`${meters} m`);
+    this.compassText.setVisible(true);
+  }
+
   private layout(): void {
     if (!this.ready) {
       return;
@@ -423,8 +601,10 @@ export class HudScene extends Phaser.Scene {
     this.mateText.setPosition(leftEdge, topEdge + 28);
     this.skillHint.setPosition(leftEdge, topEdge + 50);
     this.announceText.setPosition(VIEWPORT.width / 2, 132);
-    this.muteButton.setPosition(rightEdge - 44, topEdge + 88);
-    this.menuButton.setPosition(rightEdge - 146, topEdge + 88);
+    this.muteButton.setPosition(rightEdge - 44, topEdge + BUTTON_ROW_Y);
+    this.menuButton.setPosition(rightEdge - 146, topEdge + BUTTON_ROW_Y);
+    this.mapButton.setPosition(rightEdge - 226, topEdge + BUTTON_ROW_Y);
+    this.minimap.layout();
 
     // Das Pausenbild sitzt in der Mitte - die verschiebt sich mit der Breite.
     this.pauseTitle.setPosition(VIEWPORT.width / 2, VIEWPORT.height / 2 - 96);

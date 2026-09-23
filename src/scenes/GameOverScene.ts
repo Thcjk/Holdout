@@ -20,6 +20,22 @@ export interface GameOverData {
   /** Wie der Run ausgegangen ist. Seit Phase 9 kann er auch gut enden. */
   outcome: RunOutcome;
   character: CharacterId;
+  /**
+   * Wurde im Koop gespielt?
+   *
+   * DAS WAR EIN ECHTER FEHLER, kein Schoenheitsfehler. "Nochmal" startete die
+   * Spielszene ohne Sitzung - und die legt sich dann eine `SoloSession` an.
+   * Nach einem Koop-Run landete man also stillschweigend allein in einer neuen
+   * Welt, waehrend die Mitspieler noch dasassen. Nichts sagte das an.
+   *
+   * Im Koop darf ein neuer Run nur vom Host ausgehen: Er wuerfelt den Seed und
+   * schickt ihn an alle (`Lobby.start()`). Deshalb fuehrt der Knopf dort
+   * zurueck in die Lobby, statt einen zweiten Startweg zu erfinden, der
+   * dasselbe noch einmal anders macht.
+   */
+  coop: boolean;
+  /** Wie viele Gegenstaende der Run eingebracht oder gekostet hat. */
+  loot: { kept: number; lost: number };
 }
 
 /**
@@ -77,6 +93,8 @@ export class GameOverScene extends Phaser.Scene {
     this.result = data;
   }
 
+  private restartButton!: Button;
+
   create(): void {
     // Hier nicht neu laden: Das wuerde diesen Bildschirm wegwischen.
     setReloadSafe(false);
@@ -128,9 +146,60 @@ export class GameOverScene extends Phaser.Scene {
       )
       .setOrigin(0.5);
 
-    new Button(this, VIEWPORT.width / 2 - 132, 380, "Nochmal", () => this.restart(), {
-      width: 230,
-    });
+    /*
+     * Der Hinweis, dass die naechste Welt eine andere ist.
+     *
+     * Jeder Run zieht einen frischen Seed, die Karte ist also wirklich neu -
+     * nur sieht man das einer prozeduralen Welt nicht sofort an, weil sie
+     * ueberall aus denselben Bausteinen besteht. Ein Satz kostet nichts und
+     * beantwortet die Frage, bevor sie entsteht.
+     */
+    /*
+     * Die Beutezeile - und sie sagt beides aus, auch das Unangenehme.
+     *
+     * Nach einem Wipe steht dort ausdruecklich, WIE VIEL verloren ist. Das
+     * ist der Moment, in dem die Entscheidung "noch tiefer oder raus"
+     * nachtraeglich ihren Preis bekommt; ihn zu verschweigen waere, den
+     * ganzen Sinn des Aussteigens zu verschweigen.
+     */
+    const loot = this.result.loot;
+    this.add
+      .text(
+        VIEWPORT.width / 2,
+        272,
+        loot.lost > 0
+          ? `${loot.lost} Gegenstände verloren`
+          : loot.kept > 0
+            ? `${loot.kept} Gegenstände gesichert`
+            : "Keine Beute gemacht",
+        {
+          fontFamily: "system-ui, sans-serif",
+          fontSize: "17px",
+          color: loot.lost > 0 ? "#ff5470" : loot.kept > 0 ? "#7ee08a" : "#8ea6c4",
+          fontStyle: "bold",
+        },
+      )
+      .setOrigin(0.5);
+
+    this.add
+      .text(
+        VIEWPORT.width / 2,
+        300,
+        this.result.coop
+          ? "Neue Welt, neuer Raum - die Verbindung endet mit dem Run."
+          : "Ein neuer Run bekommt eine neue Welt.",
+        { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#8ea6c4" },
+      )
+      .setOrigin(0.5);
+
+    this.restartButton = new Button(
+      this,
+      VIEWPORT.width / 2 - 132,
+      380,
+      this.result.coop ? "Zur Lobby" : "Neuer Run",
+      () => this.restart(),
+      { width: 230 },
+    );
 
     new Button(
       this,
@@ -142,8 +211,47 @@ export class GameOverScene extends Phaser.Scene {
     );
   }
 
+  /**
+   * Startet den naechsten Run - und zeigt dabei, dass etwas passiert.
+   *
+   * Die Welt entsteht aus einem Seed: ueber 500 Deckungsbloecke, Buschfelder,
+   * Encounter und Ausstiege. Das dauert zwar nur Millisekunden, blockiert aber
+   * das Bild - ohne Rueckmeldung sieht ein Antippen deshalb aus, als waere es
+   * nicht angekommen, und man tippt ein zweites Mal.
+   *
+   * `delayedCall` statt eines direkten Aufrufs, damit Phaser den geaenderten
+   * Text noch EINMAL zeichnet, bevor die Arbeit beginnt. Ohne diese Pause
+   * wuerde die Beschriftung nie sichtbar - die neue Szene ist schneller da.
+   */
   private restart(): void {
     audio.unlock();
-    this.scene.start("Game", { character: this.result.character });
+    this.restartButton.setText("Welt wird gebaut ...");
+    this.restartButton.setEnabled(false);
+
+    this.time.delayedCall(60, () => {
+      if (this.result.coop) {
+        /*
+         * Zurueck in die Lobby: Dort zieht der Host den neuen Seed und
+         * schickt ihn an alle - derselbe Weg wie beim allerersten Start.
+         *
+         * WAS DABEI NICHT GEHT, und die Beschriftung sagt es deshalb auch:
+         * Die Verbindung ueberlebt den Run nicht. `GameScene` raeumt beim
+         * Verlassen die Sitzung ab, und die schliesst den Transport - der
+         * Host schickt sogar ein "bye". Der Raum ist danach zu, alle
+         * brauchen einen neuen Code.
+         *
+         * Das liesse sich aendern, waere aber kein kleiner Eingriff: Der
+         * Transport muesste die Szene ueberleben, also jemand anderem
+         * gehoeren als der Spielszene. Solange das nicht so ist, ist eine
+         * ehrliche Beschriftung besser als ein Knopf, der Nahtlosigkeit
+         * verspricht und dann in einer leeren Lobby endet.
+         */
+        this.scene.start("Lobby");
+        return;
+      }
+      // Solo: `SoloSession` wuerfelt beim Anlegen einen neuen Seed, und
+      // `createWorld` setzt Position, Leben und Munition ohnehin neu.
+      this.scene.start("Game", { character: this.result.character });
+    });
   }
 }

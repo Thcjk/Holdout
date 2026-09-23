@@ -442,6 +442,141 @@ export const ENCOUNTERS = {
   extractionRadius: 220,
   /** So lange muss das Team drinstehen. */
   extractionSeconds: 5,
+  /**
+   * Ab dieser Entfernung gilt ein Ausstieg als entdeckt.
+   *
+   * 1400 px ist knapp eine Bildschirmbreite bei Zoom 0,8 (1461 px). Das ist
+   * Absicht: Entdeckt wird, was man tatsaechlich haette sehen koennen - nicht
+   * mehr und nicht weniger. Waere der Wert groesser, bekaeme man Punkte
+   * geschenkt, die nie im Bild waren; waere er kleiner, stuende man davor,
+   * ohne dass der Kompass es merkt.
+   */
+  discoverRadius: 1400,
+} as const;
+
+/**
+ * ================================================================
+ * LOOT - was faellt, wo es liegt und wie man es aufhebt
+ * ================================================================
+ *
+ * Der Katalog selbst steht in `config/items.ts`. Hier stehen nur die Zahlen,
+ * mit denen gerechnet wird - wie bei allem anderen auch.
+ */
+export const LOOT = {
+  /**
+   * Wahrscheinlichkeit, dass ein Gegner beim Tod etwas fallen laesst.
+   *
+   * Nach Typ gestaffelt statt einheitlich: Ein Laeufer ist Kanonenfutter und
+   * kommt zu Dutzenden - waere seine Chance so hoch wie die eines Brockens,
+   * laege der Boden nach einer Minute voll, und Aufheben waere kein Fund
+   * mehr, sondern Hausarbeit.
+   */
+  dropChance: {
+    runner: 0.08,
+    brute: 0.28,
+    shooter: 0.16,
+    // Ein Boss laesst IMMER etwas fallen. Ein Encounter, der nach zwei
+    // Minuten Kampf nichts hergibt, waere die Enttaeuschung, die einen davon
+    // abhaelt, es noch einmal zu versuchen.
+    boss: 1,
+  } as Record<string, number>,
+
+  /** Wie viele Gegenstaende ein Boss hinterlaesst. */
+  bossDrops: 2,
+  finalBossDrops: 4,
+
+  /**
+   * Wie stark die Tiefe die Seltenheit anhebt.
+   *
+   * Das ist die Belohnung fuer genau die Entscheidung, um die sich der ganze
+   * Umbau dreht: weitergehen oder aussteigen. Ohne besseres Loot weiter
+   * draussen waere Tiefe nur Risiko ohne Gegenwert.
+   *
+   * Gerechnet wird als Gewichtsverschiebung, nicht als harte Stufe: Auch in
+   * Zone 9 faellt noch Schrott, nur seltener.
+   */
+  rarityPerZone: 0.16,
+
+  /** Aufsammelradius in Pixeln. */
+  pickupRadius: 46,
+
+  /**
+   * Fundorte auf der Karte, je Gebaeude.
+   *
+   * Sie liegen INNERHALB der Gebaeude - das ist der Grund, warum ein Haus
+   * mehr ist als Deckung. Wer hineingeht, ist drinnen in der Falle (ein
+   * Ausgang, enge Raeume) und bekommt dafuer etwas.
+   */
+  spotsPerBuildingMin: 1,
+  spotsPerBuildingMax: 3,
+
+  /**
+   * Wie lange ein liegengebliebener Gegenstand sichtbar bleibt (Sekunden).
+   *
+   * 0 hiesse "fuer immer", und das waere kein Geschenk: Nach einer halben
+   * Stunde laegen hunderte Punkte herum, jeder davon im Netzprotokoll und in
+   * der Aufsammelpruefung. Drei Minuten sind lang genug, um zurueckzukommen.
+   * Fundorte aus der Weltgenerierung verfallen NICHT - sie gehoeren zum Ort.
+   */
+  dropLifetime: 180,
+} as const;
+
+/**
+ * ================================================================
+ * DER RUCKSACK - Gittergroesse und das unverlierbare Starter-Set
+ * ================================================================
+ *
+ * DIE GROESSE IST GEMESSEN, NICHT GESCHAETZT. Ein Bot-Durchlauf ueber drei
+ * Charaktere und vier Seeds ergab pro Run im Schnitt 2,4 Gegenstaende und
+ * 6,2 belegte Zellen, im besten Lauf 15 Zellen. Der Bot betritt allerdings
+ * keine Gebaeude - und genau dort liegen die Fundorte. Ein Mensch, der
+ * durchsucht, kommt also deutlich hoeher.
+ *
+ * 8 x 4 = 32 Zellen geben darauf das Zwei- bis Fuenffache Luft. Zwei Grenzen
+ * sind dabei hart:
+ *
+ *  - Der groesste Gegenstand (Gewehr und Railgun, 4x2) muss in BEIDE
+ *    Richtungen passen. Gedreht ist er 2x4, also braucht das Gitter
+ *    mindestens 4 Zellen Hoehe - sonst waere die Drehung fuer genau die
+ *    Gegenstaende unmoeglich, bei denen sie am meisten brachte.
+ *  - Voll ausgereizt soll der Rucksack sein. Waere er so gross, dass alles
+ *    hineinpasst, gaebe es nichts zu entscheiden - und die Entscheidung ist
+ *    der Sinn des Gitters.
+ */
+export const INVENTORY = {
+  width: 8,
+  height: 4,
+
+  /**
+   * Kantenlaenge einer Zelle in Entwurfseinheiten.
+   *
+   * GEGEN DEN DAUMEN GERECHNET, nicht gegen die Maus. Apple nennt 44 x 44
+   * Punkte als kleinstes Ziel, das sich zuverlaessig treffen laesst. Auf
+   * einem iPhone 13 quer werden 540 Entwurfseinheiten auf 390 Bildschirmpunkte
+   * abgebildet, der Faktor ist also 0,722:
+   *
+   *     44 Punkte / 0,722 = 61 Entwurfseinheiten Mindestgroesse
+   *
+   * 64 liegt knapp darueber - ein 1x1-Gegenstand ist damit rund 46 Punkte
+   * gross und bleibt auch fuer einen breiten Daumen treffbar. Das ganze
+   * Gitter misst 8 x 64 = 512 auf 4 x 64 = 256 Einheiten und passt damit
+   * neben die Liste der verfuegbaren Gegenstaende.
+   */
+  cellSize: 64,
+
+  /**
+   * Das Starter-Set: die unverlierbare Grundausruestung.
+   *
+   * Laut Briefing (Abschnitt 4) das Sicherheitsnetz gegen komplettes
+   * Leerlaufen - ohne es koennte ein Team nach einem Wipe ohne alles
+   * dastehen und haette keinen Weg zurueck.
+   *
+   * Fest im Code, weil es das dauerhafte Lager erst in Phase 13 gibt. Steht
+   * hier als Liste von Katalog-Schluesseln und nicht als Indizes: Ein Index
+   * verschiebt sich, wenn jemand im Katalog etwas einfuegt, ein Schluessel
+   * nicht.
+   */
+  starterSet: ["pistol", "bandage", "bandage", "ammoBox"] as readonly string[],
 } as const;
 
 /** Wie oft ein Gegner durch Beruehrung Schaden macht (Sekunden). */
@@ -541,6 +676,53 @@ export const WORLD = {
   bushChance: 0.75,
   bushMin: 180,
   bushMax: 380,
+
+  /*
+   * ================================================================
+   * GEBAEUDE - gegen "die Welt fuehlt sich zu leer an"
+   * ================================================================
+   *
+   * Deckungsbloecke sind Hindernisse, mehr nicht: Man laeuft daran vorbei und
+   * merkt sich nichts. Ein Gebaeude ist ein ORT - es hat ein Innen und ein
+   * Aussen, einen Eingang, und man kann sagen "wir treffen uns beim Haus mit
+   * dem Loch in der Wand". Genau das hat der offenen Welt gefehlt.
+   *
+   * Ab Phase 10 liegt darin auch das Loot, dann ist das Hineingehen eine
+   * Entscheidung: drinnen ist man in Deckung, aber auch in der Falle.
+   */
+
+  /** Erst ab dieser Distanzzone stehen Gebaeude. Um den Start bleibt es offen. */
+  buildingFromZone: 1,
+  /**
+   * Wahrscheinlichkeit je Zelle, Grundwert und Zuwachs je Zone.
+   *
+   * Steigend mit der Distanz, wie Gegnerdichte und Boss-Staerke auch: Je
+   * tiefer man kommt, desto mehr gibt es zu durchsuchen - und desto weniger
+   * Uebersicht hat man. Bei 0,55 ist Schluss, sonst entstuende eine
+   * geschlossene Stadt statt einzelner Ruinen.
+   */
+  buildingChance: 0.09,
+  buildingChancePerZone: 0.022,
+  buildingChanceMax: 0.30,
+  /**
+   * Kantenlaenge. Untergrenze 280, damit innen mindestens 208 px bleiben -
+   * der Spieler ist 36 px dick, und drinnen soll man sich noch bewegen und
+   * ausweichen koennen, nicht nur stehen.
+   */
+  buildingMin: 280,
+  buildingMax: 420,
+  /** Dicke der Gebaeudewaende. */
+  buildingWall: 36,
+  /**
+   * Breite des Eingangs.
+   *
+   * 130 px bei 36 px Spielerdicke - grosszuegig, und das ist Absicht. Eine
+   * Tuer, die man im Gefecht auf den ersten Versuch trifft, ist eine Tuer;
+   * eine, an der man haengenbleibt, waehrend hinter einem drei Laeufer
+   * ankommen, ist eine Falle. Ausserdem haengt daran der Zusammenhang der
+   * Karte: Passt hier niemand durch, ist der Innenraum unerreichbar.
+   */
+  buildingDoor: 130,
 } as const;
 
 /**

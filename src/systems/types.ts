@@ -80,6 +80,88 @@ export type SkillId = "weapon" | "armor" | "speed" | "super";
  */
 export type EnemyType = "runner" | "brute" | "shooter" | "boss";
 
+/**
+ * Ein Gegenstand, wie ihn ein Spieler mit sich traegt.
+ *
+ * Bewusst duenn: eine laufende Nummer und der Index im Katalog
+ * (`config/items.ts`). Alles Weitere - Name, Typ, Form, Seltenheit - steht
+ * dort und wird nachgeschlagen.
+ *
+ * WARUM NICHT DIE GANZE DEFINITION KOPIEREN: Dann gaebe es zwei Wahrheiten
+ * ueber dasselbe Item. Aendert sich eine Groesse im Katalog, traegt ein
+ * Spieler sonst weiterhin die alte mit sich herum - und ab Phase 11 haette
+ * sein Rucksack dann eine andere Belegung, als das Gitter berechnet.
+ */
+export interface ItemInstance {
+  id: number;
+  /** Index in `ITEMS` aus `config/items.ts`. */
+  def: number;
+}
+
+/**
+ * Ein Gegenstand an seinem Platz im Rucksackgitter.
+ *
+ * Steht HIER und nicht in `InventoryGridSystem.ts`, obwohl die Logik dort
+ * liegt: In dieser Datei stehen alle Datentypen der Simulation, und
+ * `PlayerState` braucht das Gitter. Andersherum entstuende ein Import-Zyklus
+ * (types -> InventoryGridSystem -> types), den man nur mit `import type`
+ * entschaerfen koennte - eine Falle, die beim naechsten Umbau zuschnappt.
+ */
+export interface PlacedItem {
+  item: ItemInstance;
+  /** Linke obere Ecke in Zellen. */
+  x: number;
+  y: number;
+  /** Um 90 Grad gedreht? Vertauscht Breite und Hoehe. */
+  rotated: boolean;
+}
+
+/** Ein Rucksackgitter: Groesse plus was darin liegt. */
+export interface InventoryGrid {
+  width: number;
+  height: number;
+  items: PlacedItem[];
+}
+
+/**
+ * Ein gepackter Gegenstand, wie er vom Loadout-Bildschirm in den Run geht.
+ *
+ * Bewusst OHNE laufende Nummer: Die vergibt die Simulation beim Aufbau des
+ * Runs. Und bewusst MIT Position und Drehung - sonst ginge die Anordnung
+ * verloren, die der Spieler gerade von Hand gelegt hat, und der Rucksack
+ * saehe beim Start anders aus als beim Packen.
+ */
+export interface PackedItem {
+  def: number;
+  x: number;
+  y: number;
+  rotated: boolean;
+}
+
+/**
+ * Ein Gegenstand, der in der Welt liegt.
+ *
+ * `fromWorld` unterscheidet zwei Herkuenfte mit unterschiedlichen Regeln:
+ * Ein Fundort aus der Weltgenerierung gehoert zum ORT und verfaellt nie; was
+ * ein Gegner fallen laesst, verschwindet nach einer Weile wieder, damit sich
+ * die Karte nicht mit Kleinkram zusetzt.
+ */
+export interface GroundItem {
+  id: number;
+  def: number;
+  position: Vec2;
+  /** Restliche Liegezeit in Sekunden. Unendlich fuer Fundorte der Karte. */
+  lifetime: number;
+  fromWorld: boolean;
+  /**
+   * Wurde fuer diesen Gegenstand schon "Rucksack voll" gemeldet?
+   *
+   * Ohne dieses Merkmal kaeme die Meldung dreissigmal je Sekunde, solange man
+   * danebensteht - aus einem Hinweis wuerde ein Alarm.
+   */
+  refused?: boolean;
+}
+
 export interface PlayerState {
   id: string;
   name: string;
@@ -122,6 +204,20 @@ export interface PlayerState {
   skillPoints: number;
   /** Stufe je Faehigkeit, 0 bis SKILLS[...].maxLevel. */
   skills: Record<SkillId, number>;
+  /**
+   * Der Rucksack dieses Spielers.
+   *
+   * JEDER HAT SEINEN EIGENEN, nicht das Team einen gemeinsamen. So steht es
+   * im Briefing - und es macht das Aufheben zu einer Entscheidung: Wer zuerst
+   * da ist, bekommt es.
+   *
+   * Ein GITTER und keine flache Liste. Das war bis Phase 10 anders, und die
+   * flache Liste hatte einen stillen Haken: Sie war unbegrenzt. Damit gab es
+   * beim Aufsammeln nichts zu entscheiden, und der Loadout-Bildschirm war
+   * folgenlos - man konnte packen, was man wollte, und im Run passte ohnehin
+   * alles hinein.
+   */
+  backpack: InventoryGrid;
 }
 
 export interface EnemyState {
@@ -259,6 +355,18 @@ export type GameEvent =
   | { type: "encounterStarted"; index: number; isFinal: boolean; x: number; y: number }
   /** Der Boss dieses Encounters ist besiegt. */
   | { type: "encounterCleared"; index: number; isFinal: boolean }
+  /** Ein Ausstieg ist zum ersten Mal in Sichtweite gekommen. */
+  | { type: "extractionFound"; x: number; y: number }
+  /** Jemand hat etwas aufgehoben. */
+  | { type: "itemPicked"; playerId: string; def: number; x: number; y: number }
+  /**
+   * Jemand konnte NICHT aufheben, weil kein Platz mehr ist.
+   *
+   * Ein eigenes Ereignis, damit die Darstellung es sagen kann. Ohne diese
+   * Meldung laeuft man ueber einen Gegenstand und nichts passiert - das
+   * sieht nach einem Fehler aus, nicht nach einer vollen Tasche.
+   */
+  | { type: "backpackFull"; playerId: string; def: number; x: number; y: number }
   /** Der Boss holt aus: Warnkreis an dieser Stelle, mit diesem Radius. */
   | { type: "bossWindup"; x: number; y: number; radius: number; seconds: number }
   | { type: "runEnded"; outcome: RunOutcome; score: number; zone: number };
@@ -299,12 +407,36 @@ export interface EncounterSpot {
   status: EncounterStatus;
   /** Id des aktiven Gegners, solange gekaempft wird. */
   enemyId: number | null;
+  /**
+   * Ist dieser Punkt schon aufgedeckt?
+   *
+   * Dasselbe Prinzip wie bei den Ausstiegen: Die Karte zeigt nur, wo jemand
+   * schon war. Eine Minimap, die von Anfang an jeden Mini-Boss und den
+   * Ende-Boss anzeigt, nimmt dem Erkunden seinen Sinn - man liefe die Punkte
+   * ab wie eine Liste.
+   */
+  discovered: boolean;
 }
 
 /** Eine Zone, in der das Team den Run beenden kann. */
 export interface ExtractionZone {
   position: Vec2;
   radius: number;
+  /**
+   * War schon einmal jemand nah genug dran, um sie zu sehen?
+   *
+   * DAS IST DIE ANTWORT AUF "AUSSTIEGE FINDET MAN NICHT". Ein Punkt, von dem
+   * man nichts weiss, ist kein Angebot - er ist eine Falle, in die man
+   * zufaellig hineinlaeuft oder eben nicht. Einmal entdeckt, zeigt der
+   * Kompass am Bildschirmrand dorthin und die Karte merkt ihn sich.
+   *
+   * Nicht von Anfang an alle zeigen: Dann waere die Karte sofort geloest und
+   * das Erkunden bedeutungslos. Entdecken ist der Fortschritt.
+   *
+   * Gehoert in die Simulation und nicht in die Darstellung, weil es im Koop
+   * fuer ALLE gilt: Wer einen Ausstieg findet, findet ihn fuer das Team.
+   */
+  discovered: boolean;
 }
 
 /**
@@ -351,10 +483,23 @@ export interface WorldState {
   projectiles: ProjectileState[];
   /** Angekuendigte, aber noch nicht erschienene Gegner. */
   pendingSpawns: SpawnOrder[];
+  /** Alles, was gerade in der Welt herumliegt und aufgehoben werden kann. */
+  groundItems: GroundItem[];
+  /** Fortlaufende Nummern fuer Bodenfunde und getragene Gegenstaende. */
+  nextItemId: number;
   /** Alles, was Bewegung blockiert: Aussenmauern und Deckungsbloecke. */
   walls: Rect[];
   /** Buschfelder: Gegner sehen Spieler darin nicht. */
   bushes: Rect[];
+  /**
+   * Die Grundrisse der Gebaeude.
+   *
+   * Reine Anzeige- und Platzierungsinformation: Was wirklich blockiert, steht
+   * als Wandsegmente in `walls`. Die Simulation liest diese Liste nicht -
+   * saehe sie hier eine zweite Wahrheit ueber dieselben Mauern, wuerden beide
+   * frueher oder spaeter auseinanderlaufen.
+   */
+  buildings: Rect[];
   bounds: Rect;
   /** Ereignisse dieses Ticks. Die Darstellung leert die Liste nach dem Auswerten. */
   events: GameEvent[];

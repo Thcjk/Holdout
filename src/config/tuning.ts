@@ -24,8 +24,10 @@
 import {
   CHARACTERS,
   DIFFICULTY,
+  ENCOUNTERS,
   ENEMIES,
   LIMITS,
+  LOOT,
   PLAYER,
   PROJECTILE,
   SKILLS,
@@ -49,6 +51,17 @@ const ROOTS: Record<string, unknown> = {
   // ?tune=touch.responseCurve=1.5,touch.stickRadius=70
   touch: TOUCH,
   camera: CAMERA,
+  /*
+   * Encounter und Loot kamen mit Phase 9 und 10 dazu und fehlten hier
+   * zunaechst - aufgefallen ist es beim Pruefen im Emulator, als
+   * `?tune=encounters.extractionFromZone=0` wirkungslos blieb.
+   *
+   * Gerade diese beiden gehoeren dazu: Wie weit der naechste Ausstieg weg ist
+   * und wie oft etwas faellt, sind Gefuehlswerte - die stellt man beim
+   * Spielen ein, nicht beim Rechnen.
+   */
+  encounters: ENCOUNTERS,
+  loot: LOOT,
 };
 
 /** Was tatsaechlich gesetzt wurde - fuer die Anzeige im Spiel. */

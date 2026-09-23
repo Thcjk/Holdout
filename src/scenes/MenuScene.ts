@@ -139,7 +139,9 @@ export class MenuScene extends Phaser.Scene {
       () => {
         audio.unlock();
         audio.setMusic("menu");
-        this.scene.start("Game", { character: this.selected });
+        // Ueber den Rucksack statt direkt ins Spiel: Was man mitnimmt, ist
+        // seit Phase 11 eine Entscheidung vor dem Run.
+        this.scene.start("Loadout", { character: this.selected });
       },
       { width },
     );
@@ -151,7 +153,7 @@ export class MenuScene extends Phaser.Scene {
       "Zusammen spielen",
       () => {
         audio.unlock();
-        this.scene.start("Lobby", { character: this.selected });
+        this.scene.start("Loadout", { character: this.selected, coop: true });
       },
       { width, color: COLORS.mate },
     );

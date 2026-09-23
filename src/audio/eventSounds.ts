@@ -32,6 +32,8 @@ function soundFor(event: GameEvent): SoundName | null {
     case "healed":
       // Bei vollem Leben ist nichts angekommen - dann auch kein Ton.
       return event.amount > 0 ? "healed" : null;
+    case "itemPicked":
+      return "pickup";
     case "zoneReached":
       return "zoneReached";
     case "runEnded":

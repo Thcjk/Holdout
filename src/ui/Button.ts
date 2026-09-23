@@ -70,6 +70,23 @@ export class Button {
     this.label.setText(text);
   }
 
+  /**
+   * Schaltet den Knopf scharf oder stellt ihn ab.
+   *
+   * Abgestellt heisst: blass UND nicht mehr anklickbar. Beides zusammen, denn
+   * nur blass waere eine Luege (man kann ihn ja doch druecken), und nur
+   * unklickbar sieht nach einem kaputten Knopf aus.
+   */
+  setEnabled(enabled: boolean): void {
+    this.background.setAlpha(enabled ? 1 : 0.45);
+    this.label.setAlpha(enabled ? 1 : 0.6);
+    if (enabled) {
+      this.background.setInteractive({ useHandCursor: true });
+    } else {
+      this.background.disableInteractive();
+    }
+  }
+
   setVisible(visible: boolean): void {
     this.background.setVisible(visible);
     this.label.setVisible(visible);

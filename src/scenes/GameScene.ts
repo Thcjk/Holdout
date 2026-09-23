@@ -25,10 +25,18 @@ import { extractionFraction } from "../systems/encounters";
 import { distanceFromStart } from "../systems/zones";
 import { nearestEnemy } from "../systems/targeting";
 import { emptyInput } from "../systems/types";
-import type { CharacterId, InputState, PlayerState, Vec2 } from "../systems/types";
+import type {
+  CharacterId,
+  InputState,
+  PackedItem,
+  PlayerState,
+  Vec2,
+  WorldState,
+} from "../systems/types";
 import { createHudModel } from "../ui/HudModel";
 import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
+import { finishRun } from "../storage/carried";
 
 /**
  * ================================================================
@@ -59,6 +67,18 @@ export interface GameSceneData {
   character?: CharacterId;
   /** Gesetzt, wenn die Runde aus der Lobby kommt. Sonst wird solo gespielt. */
   session?: GameSession;
+  /**
+   * Was im Loadout-Bildschirm eingepackt wurde.
+   *
+   * DAS HAT BIS HIERHER GEFEHLT, und es war der Grund, warum das Packen
+   * folgenlos blieb: `startRun` gab nur den Charakter weiter, die Spielszene
+   * legte eine `SoloSession` ohne Rucksack an, und im HUD stand "Beute 0",
+   * obwohl man gerade vier Gegenstaende eingeraeumt hatte.
+   *
+   * Im Koop steht hier nichts - dort reist der Rucksack ueber die Lobby zum
+   * Host (`PlayerSetup.backpack`), weil er die Runde fuer alle rechnet.
+   */
+  backpack?: PackedItem[];
 }
 
 export class GameScene extends Phaser.Scene {
@@ -105,7 +125,13 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.highscore = loadHighscore()?.score ?? 0;
 
     this.session =
-      data.session ?? new SoloSession({ id: "local", name: "Du", character: this.character });
+      data.session ??
+      new SoloSession({
+        id: "local",
+        name: "Du",
+        character: this.character,
+        backpack: data.backpack,
+      });
   }
 
   create(): void {
@@ -372,6 +398,20 @@ export class GameScene extends Phaser.Scene {
             zone: event.zone,
             outcome: event.outcome,
             character: this.character,
+            // Ob solo oder im Koop gespielt wurde, weiss nur die Sitzung -
+            // und sie ist gleich weg. Deshalb wird die Antwort jetzt
+            // mitgegeben statt spaeter erfragt.
+            coop: !this.session.canPause,
+            /*
+             * Beute abrechnen, SOLANGE DER ZUSTAND NOCH DA IST.
+             *
+             * Gleich wird die Szene abgeraeumt und mit ihr die Sitzung. Wer
+             * das dem Ergebnisbildschirm ueberliesse, muesste ihm die ganze
+             * Item-Liste mitgeben - und die Regel "Wipe leert, Erfolg
+             * behaelt" stuende dann dort, statt an der einen Stelle in
+             * `storage/carried.ts`.
+             */
+            loot: finishRun(event.outcome, (this.selfPlayer()?.backpack.items ?? []).map((entry) => entry.item)),
           });
         });
       }
@@ -564,6 +604,9 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.inSafeZone =
       distanceFromStart(state, player.position) <= WORLD.safeRadius;
     this.hudModel.extraction = state.extractionIndex < 0 ? -1 : extractionFraction(state);
+    this.hudModel.extractionCompass = nearestKnownExtraction(state, player.position);
+    this.fillMinimap(state, player);
+    this.hudModel.carriedItems = player.backpack.items.length;
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
     this.hudModel.runTime = state.runTime;
@@ -580,4 +623,87 @@ export class GameScene extends Phaser.Scene {
         down: entry.down,
       }));
   }
+
+  /**
+   * Fuellt das Modell der Uebersichtskarte.
+   *
+   * Jedes Bild neu, aber IN DIE VORHANDENEN ARRAYS statt in neue: Bei 60
+   * Bildern je Sekunde waeren neue Listen sonst Muell, den der Browser
+   * dauernd wegraeumen muss - und zwar genau dann, wenn es gerade eng wird.
+   *
+   * Gefiltert wird hier und nicht in der Karte: Was die Karte zeigen DARF,
+   * entscheidet der Weltzustand (`discovered`), und diese Entscheidung soll
+   * nicht in der Darstellung noch einmal getroffen werden.
+   */
+  private fillMinimap(state: WorldState, player: PlayerState): void {
+    const map = this.hudModel.minimap;
+    map.worldSize = state.bounds.width;
+    // Der Startpunkt ist die Weltmitte - dieselbe Rechnung wie in
+    // `distanceFromStart`, aus der auch die Distanzzonen entstehen. Eine
+    // zweite Quelle dafuer waere eine zweite Wahrheit.
+    map.startX = state.bounds.width / 2;
+    map.startY = state.bounds.height / 2;
+    map.safeRadius = WORLD.safeRadius;
+    map.selfX = player.position.x;
+    map.selfY = player.position.y;
+
+    map.mates.length = 0;
+    for (const mate of state.players) {
+      if (mate.id !== player.id) {
+        map.mates.push({ x: mate.position.x, y: mate.position.y, down: mate.down });
+      }
+    }
+
+    map.extractions.length = 0;
+    for (const zone of state.extractions) {
+      if (zone.discovered) {
+        map.extractions.push({ x: zone.position.x, y: zone.position.y });
+      }
+    }
+
+    map.encounters.length = 0;
+    for (const spot of state.encounters) {
+      if (spot.discovered) {
+        map.encounters.push({
+          x: spot.position.x,
+          y: spot.position.y,
+          isFinal: spot.isFinal,
+          cleared: spot.status === "cleared",
+        });
+      }
+    }
+  }
+
+}
+
+/**
+ * Richtung und Entfernung zum naechsten schon entdeckten Ausstieg.
+ *
+ * NUR ENTDECKTE ZAEHLEN. Wuerde der Kompass auf alle sechs zeigen, waere die
+ * Karte vom ersten Moment an geloest - man liefe die Pfeile ab, statt zu
+ * erkunden. So ist er das, was er sein soll: ein Gedaechtnis fuer das, was man
+ * schon gesehen hat, und kein Spickzettel.
+ *
+ * Steht hier in der Szene und nicht in `systems/`, weil es reine Anzeige ist:
+ * Die Simulation trifft daraus keine Entscheidung.
+ */
+function nearestKnownExtraction(
+  state: WorldState,
+  from: Vec2,
+): { angle: number; distance: number } | null {
+  let best: { angle: number; distance: number } | null = null;
+
+  for (const zone of state.extractions) {
+    if (!zone.discovered) {
+      continue;
+    }
+    const dx = zone.position.x - from.x;
+    const dy = zone.position.y - from.y;
+    const distance = Math.hypot(dx, dy);
+    if (!best || distance < best.distance) {
+      best = { angle: Math.atan2(dy, dx), distance };
+    }
+  }
+
+  return best;
 }

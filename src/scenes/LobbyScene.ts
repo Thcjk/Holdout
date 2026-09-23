@@ -16,7 +16,7 @@ import { Lobby, MAX_PLAYERS } from "../net/Lobby";
 import { PeerTransport } from "../net/PeerTransport";
 import { createRoomCode, isValidRoomCode, normalizeRoomCode } from "../net/roomCode";
 import type { Transport } from "../net/Transport";
-import type { CharacterId } from "../systems/types";
+import type { CharacterId, PackedItem } from "../systems/types";
 import { Button } from "../ui/Button";
 import { setReloadSafe } from "../platform/update";
 
@@ -25,10 +25,13 @@ const LOCAL_ROOM_CODE = "LOCAL1";
 
 export interface LobbySceneData {
   character: CharacterId;
+  /** Der im Loadout-Bildschirm gepackte Rucksack. */
+  backpack?: PackedItem[];
 }
 
 export class LobbyScene extends Phaser.Scene {
   private character: CharacterId = "scout";
+  private backpack: PackedItem[] = [];
   private lobby: Lobby | null = null;
   private transport: Transport | null = null;
 
@@ -47,6 +50,7 @@ export class LobbyScene extends Phaser.Scene {
 
   init(data: LobbySceneData): void {
     this.character = data.character ?? "scout";
+    this.backpack = data.backpack ?? [];
     this.lobby = null;
     this.transport = null;
     this.startButton = undefined;
@@ -262,6 +266,14 @@ export class LobbyScene extends Phaser.Scene {
     const lobby = new Lobby(transport, {
       name: playerName(transport.isHost),
       character: this.character,
+      // Flach als je vier Zahlen - so reist der Rucksack durch `hello` zum
+      // Host und mit der Spielerliste zurueck an alle.
+      backpack: this.backpack.flatMap((entry) => [
+        entry.def,
+        entry.x,
+        entry.y,
+        entry.rotated ? 1 : 0,
+      ]),
     });
     this.lobby = lobby;
 

@@ -32,6 +32,7 @@ import { BootScene } from "./scenes/BootScene";
 import { GameOverScene } from "./scenes/GameOverScene";
 import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
+import { LoadoutScene } from "./scenes/LoadoutScene";
 import { LobbyScene } from "./scenes/LobbyScene";
 import { MenuScene } from "./scenes/MenuScene";
 
@@ -107,7 +108,7 @@ function buildConfig(): Phaser.Types.Core.GameConfig {
     },
     // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser hier
     // keine eigene Physik-Engine (siehe CLAUDE.md, Architektur-Grundregel).
-    scene: [BootScene, MenuScene, LobbyScene, GameScene, HudScene, GameOverScene],
+    scene: [BootScene, MenuScene, LoadoutScene, LobbyScene, GameScene, HudScene, GameOverScene],
   };
 }
 

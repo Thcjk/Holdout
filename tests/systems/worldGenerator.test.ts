@@ -17,8 +17,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { WORLD } from "../../src/config/balance";
-import { PLAYER } from "../../src/config/balance";
+import { PLAYER, WORLD } from "../../src/config/balance";
 import { generateWorld, gameplaySeed } from "../../src/systems/WorldGenerator";
 import type { Rect } from "../../src/systems/types";
 
@@ -114,6 +113,120 @@ describe("Weltgenerierung", () => {
    * abzueglich zweimal Spielerradius bleiben 124 - da liegen immer mindestens
    * zwei Rasterpunkte drin.
    */
+  /**
+   * Kein Rechteck darf kleiner als ein Pixel sein.
+   *
+   * ================================================================
+   * DAS IST KEINE SCHOENHEITSFRAGE, SONDERN EIN ABSTURZ
+   * ================================================================
+   *
+   * Beim Einbau der Gebaeude entstanden Wandstuecke von 0,24 Pixeln Hoehe -
+   * der Rest, der neben einer Tuer stehenbleibt, wenn sie fast am Ende der
+   * Seite sitzt. In der Simulation war das harmlos. Im Bild nicht: Phaser
+   * legt fuer jedes `tileSprite` eine Leinwand in Objektgroesse an und liest
+   * sie mit `getImageData` aus. Bei Hoehe 0 wirft das "IndexSizeError", und
+   * das Spiel startete gar nicht mehr.
+   *
+   * Der Test prueft deshalb ALLE Rechtecke der Welt, nicht nur die Gebaeude -
+   * die naechste Quelle solcher Splitter waere sonst wieder unentdeckt.
+   */
+  it("erzeugt kein Rechteck, das kleiner als ein Pixel ist", () => {
+    let smallest = Number.POSITIVE_INFINITY;
+
+    for (const seed of SEEDS) {
+      const world = generateWorld(seed);
+      for (const rect of [...world.walls, ...world.bushes, ...world.buildings]) {
+        smallest = Math.min(smallest, rect.width, rect.height);
+      }
+    }
+
+    console.log(`   kleinste Kante ueber alle Rechtecke: ${smallest.toFixed(2)} px`);
+    expect(smallest).toBeGreaterThanOrEqual(1);
+  });
+
+  /**
+   * Die Gegenprobe zur Flutfuellung - und sie ist noetig.
+   *
+   * "100 % erreichbar" klingt gut, sagt aber nichts, solange nicht feststeht,
+   * dass die Pruefung ueberhaupt etwas merkt. Gebaeudewaende sind nur 36 Pixel
+   * dick; springt das Raster darueber hinweg, bestuende der Test auch dann,
+   * wenn jedes Haus zugemauert waere.
+   *
+   * Deshalb hier andersherum: Die Tuer wird zugemauert, und danach MUSS der
+   * Innenraum unerreichbar sein. Faellt dieser Test durch, ist die Zahl oben
+   * wertlos.
+   */
+  it("merkt es, wenn ein Gebaeude zugemauert ist", () => {
+    const step = 50;
+    const world = generateWorld(4242);
+    const house = world.buildings[0];
+    if (!house) throw new Error("kein Gebaeude erzeugt");
+
+    /** Erreicht die Flutfuellung vom Start aus die Mitte dieses Hauses? */
+    const interiorReachable = (walls: readonly typeof world.walls[number][]): boolean => {
+      const cells = Math.floor(world.bounds.width / step);
+      const free = new Uint8Array(cells * cells);
+      for (let row = 0; row < cells; row += 1) {
+        for (let column = 0; column < cells; column += 1) {
+          const x = column * step + step / 2;
+          const y = row * step + step / 2;
+          if (!blocked(x, y, walls, PLAYER.radius)) {
+            free[row * cells + column] = 1;
+          }
+        }
+      }
+
+      const seen = new Uint8Array(cells * cells);
+      const start = Math.floor(world.spawnPoint.y / step) * cells + Math.floor(world.spawnPoint.x / step);
+      const stack = [start];
+      seen[start] = 1;
+      while (stack.length > 0) {
+        const index = stack.pop() as number;
+        const row = Math.floor(index / cells);
+        const column = index % cells;
+        for (const [r, c] of [
+          [row - 1, column],
+          [row + 1, column],
+          [row, column - 1],
+          [row, column + 1],
+        ] as [number, number][]) {
+          if (r < 0 || c < 0 || r >= cells || c >= cells) continue;
+          const next = r * cells + c;
+          if (seen[next] === 1 || free[next] !== 1) continue;
+          seen[next] = 1;
+          stack.push(next);
+        }
+      }
+
+      const midColumn = Math.floor((house.x + house.width / 2) / step);
+      const midRow = Math.floor((house.y + house.height / 2) / step);
+      return seen[midRow * cells + midColumn] === 1;
+    };
+
+    // So, wie der Generator es gebaut hat: Die Tuer ist offen.
+    expect(interiorReachable(world.walls)).toBe(true);
+
+    // Und jetzt zugemauert - ein Rahmen ohne Luecke um denselben Grundriss.
+    const sealed = [
+      ...world.walls,
+      { x: house.x, y: house.y, width: house.width, height: WORLD.buildingWall },
+      {
+        x: house.x,
+        y: house.y + house.height - WORLD.buildingWall,
+        width: house.width,
+        height: WORLD.buildingWall,
+      },
+      { x: house.x, y: house.y, width: WORLD.buildingWall, height: house.height },
+      {
+        x: house.x + house.width - WORLD.buildingWall,
+        y: house.y,
+        width: WORLD.buildingWall,
+        height: house.height,
+      },
+    ];
+    expect(interiorReachable(sealed)).toBe(false);
+  });
+
   it("erzeugt eine Karte ohne eingeschlossene Flaechen", () => {
     const step = 50;
 

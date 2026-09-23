@@ -227,6 +227,42 @@ export class ClientView implements WorldView {
         spot.status = ENCOUNTER_STATUS_ORDER[status] ?? "sleeping";
       }
     });
+    // Entdeckte Ausstiege: Der Host sagt, welche bekannt sind. Nur setzen,
+    // nie zuruecksetzen - ein Kompass, der wieder vergisst, waere schlimmer
+    // als keiner, und ein verlorenes Paket duerfte das nicht ausloesen.
+    for (const index of to.found) {
+      const zone = this.state.extractions[index];
+      if (zone) {
+        zone.discovered = true;
+      }
+    }
+    for (const index of to.seen) {
+      const spot = this.state.encounters[index];
+      if (spot) {
+        spot.discovered = true;
+      }
+    }
+    /*
+     * Bodenfunde: Der Host sagt, was daliegt - der Client rechnet NICHTS
+     * voraus. Ein Gegenstand, der aufploppt und wieder verschwindet, weil
+     * jemand anderes schneller war, saehe nach einem Fehler aus.
+     *
+     * Die Liste wird komplett neu aufgebaut statt abgeglichen: Bodenfunde
+     * bewegen sich nicht, es gibt also nichts zu interpolieren, und bei
+     * hoechstens ein paar Dutzend Eintraegen ist das billiger als ein
+     * Vergleich Eintrag fuer Eintrag.
+     */
+    this.state.groundItems.length = 0;
+    for (const item of to.items) {
+      this.state.groundItems.push({
+        id: item.id,
+        def: item.def,
+        position: { x: item.x, y: item.y },
+        lifetime: Number.POSITIVE_INFINITY,
+        fromWorld: false,
+      });
+    }
+
     this.pendingCount = to.pending;
 
     this.rebuildPlayers(from, to, t);
@@ -299,6 +335,24 @@ export class ClientView implements WorldView {
       SKILL_ORDER.forEach((skill, index) => {
         player.skills[skill] = netPlayer.sk[index] ?? 0;
       });
+
+      /*
+       * Der Rucksack kommt vollstaendig vom Host und wird hier neu aufgebaut.
+       *
+       * NEU AUFGEBAUT statt abgeglichen: Ein Rucksack aendert sich selten und
+       * hat hoechstens ein paar Dutzend Eintraege - ein Vergleich Eintrag fuer
+       * Eintrag waere mehr Code fuer weniger Verlaesslichkeit. Und vorhergesagt
+       * wird hier nichts: Ob etwas hineinpasst, entscheidet der Host.
+       */
+      player.backpack.items.length = 0;
+      for (let i = 0; i + 3 < netPlayer.bp.length; i += 4) {
+        player.backpack.items.push({
+          item: { id: i / 4 + 1, def: netPlayer.bp[i] as number },
+          x: netPlayer.bp[i + 1] as number,
+          y: netPlayer.bp[i + 2] as number,
+          rotated: netPlayer.bp[i + 3] === 1,
+        });
+      }
 
       // Nachladeuhren gibt es auf dem Client nicht - nur die Anzahl voller
       // Ladungen. Das HUD braucht nicht mehr.

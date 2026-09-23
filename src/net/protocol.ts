@@ -40,6 +40,16 @@ export interface NetPlayerInfo {
   name: string;
   character: CharacterId;
   isHost: boolean;
+  /**
+   * Der vor dem Run gepackte Rucksack, flach als je vier Zahlen
+   * (def, x, y, gedreht).
+   *
+   * Reist in der Spielerliste mit, also im `lobby`- und im `start`-Paket.
+   * Damit baut jedes Geraet fuer jeden Spieler denselben Rucksack auf, bevor
+   * die Runde beginnt - waehrend des Runs muss dafuer nichts mehr uebertragen
+   * werden ausser dem, was sich aendert.
+   */
+  backpack?: number[];
 }
 
 export interface InputMessage {
@@ -81,6 +91,29 @@ export interface NetPlayer {
   sp: number;
   /** Stufen der Faehigkeiten in der Reihenfolge von SKILL_ORDER. */
   sk: number[];
+  /**
+   * Der Rucksackinhalt, flach als je vier Zahlen: def, x, y, gedreht (0/1).
+   *
+   * ================================================================
+   * WARUM JETZT DER GANZE INHALT UND NICHT MEHR NUR DIE ANZAHL
+   * ================================================================
+   *
+   * Bis Phase 10 reichte eine Zahl fuer den HUD-Zaehler. Mit dem Gitter
+   * reicht sie nicht mehr: Wer im Run seinen Rucksack oeffnet, muss sehen,
+   * WAS und WO darin liegt - und diese Wahrheit hat nur der Host, weil er
+   * das Aufsammeln entscheidet.
+   *
+   * Flach als Zahlenreihe statt als Objektliste: vier Zahlen je Gegenstand
+   * statt vier benannter Felder. Bei bis zu 32 Gegenstaenden je Spieler ist
+   * das spuerbar kuerzer, und die Reihenfolge steht fest.
+   *
+   * KOSTEN, ehrlich benannt: Das sind bei vier vollen Rucksaecken rund 500
+   * Zahlen je Zustandspaket. Der Schnappschuss traegt ohnehin bis zu 40
+   * Gegner mit je zwoelf Feldern, der Anteil bleibt also klein - aber er ist
+   * nicht null. Sollte es je knapp werden, waere der naechste Schritt, den
+   * Rucksack nur bei Aenderung zu schicken statt in jedem Paket.
+   */
+  bp: number[];
 }
 
 export interface NetEnemy {
@@ -130,11 +163,33 @@ export interface StateMessage {
    * demselben Seed. Uebertragen wird nur, was sich im Spiel aendert.
    */
   encounters: number[];
+  /**
+   * Welche Ausstiege das Team schon entdeckt hat, als Liste ihrer Indizes.
+   *
+   * Als Indexliste statt als Ja/Nein je Zone: Entdeckt wird nach und nach,
+   * am Anfang ist die Liste leer und am Ende hat sie sechs Eintraege - das
+   * ist in jedem Fall kuerzer als sechs Wahrheitswerte. Und weil ein einmal
+   * entdeckter Ausstieg nie wieder unbekannt wird, kann die Liste nur wachsen.
+   */
+  found: number[];
+  /** Welche Encounter-Punkte aufgedeckt sind, ebenfalls als Indexliste. */
+  seen: number[];
   /** In welcher Ausstiegszone das Team steht (-1 = in keiner) und wie weit. */
   extractionIndex: number;
   extractionProgress: number;
   /** Noch nicht erschienene Gegner - damit das HUD bei allen dasselbe zeigt. */
   pending: number;
+  /**
+   * Was gerade in der Welt liegt.
+   *
+   * Die POSITIONEN muessen mit, anders als bei Encountern und Ausstiegen: Die
+   * Fundorte der Karte stehen zwar im Seed, aber was ein Gegner fallen laesst,
+   * entsteht erst im Spiel. Und was schon aufgehoben wurde, weiss nur der Host.
+   *
+   * Ein gemeinsames Format fuer beide Herkuenfte statt zweier Listen: Fuer den
+   * Client ist der Unterschied bedeutungslos - er zeichnet, was daliegt.
+   */
+  items: NetGroundItem[];
 }
 
 /** Ereignisse, die nicht in jeden Zustand gehoeren: Treffer, Tod, neue Zone. */
@@ -147,6 +202,8 @@ export interface HelloMessage {
   t: "hello";
   name: string;
   character: CharacterId;
+  /** Was dieser Client eingepackt hat, flach wie in `NetPlayerInfo`. */
+  backpack?: number[];
 }
 
 export interface LobbyMessage {
@@ -187,6 +244,20 @@ export type NetMessage =
  */
 export const ENEMY_TYPE_ORDER = ["runner", "brute", "shooter", "boss"] as const;
 
+/**
+ * Ein Gegenstand am Boden, wie er uebers Netz geht.
+ *
+ * `def` ist der Index in `ITEMS` aus `config/items.ts` - dieselbe Regel wie
+ * bei den Gegnertypen: Neue Eintraege gehoeren ans Ende der Liste, sonst
+ * sieht ein Geraet mit aelterer Version etwas anderes als der Host.
+ */
+export interface NetGroundItem {
+  id: number;
+  def: number;
+  x: number;
+  y: number;
+}
+
 /** Gleiche Regel wie bei den Gegnertypen: Der Index wandert, nicht das Wort. */
 export const ENCOUNTER_STATUS_ORDER = ["sleeping", "active", "cleared"] as const;
 
@@ -205,9 +276,17 @@ export function encodeState(state: WorldState): StateMessage {
     phase: state.phase,
     runTime: round1(state.runTime),
     encounters: state.encounters.map((spot) => ENCOUNTER_STATUS_ORDER.indexOf(spot.status)),
+    found: state.extractions.flatMap((zone, index) => (zone.discovered ? [index] : [])),
+    seen: state.encounters.flatMap((spot, index) => (spot.discovered ? [index] : [])),
     extractionIndex: state.extractionIndex,
     extractionProgress: round1(state.extractionProgress),
     pending: state.pendingSpawns.length,
+    items: state.groundItems.map((item) => ({
+      id: item.id,
+      def: item.def,
+      x: round1(item.position.x),
+      y: round1(item.position.y),
+    })),
     players: state.players.map(encodePlayer),
     enemies: state.enemies.map((enemy) => ({
       id: enemy.id,
@@ -256,5 +335,11 @@ function encodePlayer(player: PlayerState): NetPlayer {
     sp: player.skillPoints,
     // Als Zahlenliste statt als Objekt: kuerzer, und die Reihenfolge steht fest.
     sk: SKILL_ORDER.map((skill) => player.skills[skill] ?? 0),
+    bp: player.backpack.items.flatMap((entry) => [
+      entry.item.def,
+      entry.x,
+      entry.y,
+      entry.rotated ? 1 : 0,
+    ]),
   };
 }

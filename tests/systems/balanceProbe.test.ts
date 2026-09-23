@@ -26,6 +26,18 @@ import type { CharacterId } from "../../src/systems/types";
  */
 describe("Balancing-Messung", () => {
   for (const character of ["scout", "tank", "sniper"] as CharacterId[]) {
+    /*
+     * Eigenes Zeitlimit statt der fuenf Sekunden von Vitest.
+     *
+     * Das hier ist ein MESSWERKZEUG, kein normaler Test: Es spielt fuenf
+     * volle Runden zu je bis zu 900 Sekunden durch. Seit den Gebaeuden hat
+     * die Welt 800 statt 550 Waende, und die Laeufe dauern entsprechend
+     * laenger - Scout und Sniper lagen bei 4,9 und 5,5 Sekunden und fielen
+     * dadurch abwechselnd durch.
+     *
+     * Am Tick liegt es NICHT, das ist gemessen: 0,366 ms bei einem Budget von
+     * 33 ms (`tickCost.test.ts`). Es ist schlicht viel Simulation.
+     */
     it(`misst ${character}`, () => {
       const zones: number[] = [];
       const seconds: number[] = [];
@@ -48,6 +60,6 @@ describe("Balancing-Messung", () => {
       // Untergrenze: Ein Bot ohne Deckung und Buesche muss mindestens ein paar
       // Zonen weit kommen, sonst stimmt etwas Grundsaetzliches nicht.
       expect(average).toBeGreaterThanOrEqual(2);
-    });
+    }, 60_000);
   }
 });
