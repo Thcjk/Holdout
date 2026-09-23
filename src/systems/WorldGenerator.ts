@@ -48,6 +48,8 @@ export interface GeneratedWorld {
   walls: Rect[];
   /** Buschfelder: Gegner sehen Spieler darin nicht. */
   bushes: Rect[];
+  /** Grundrisse der Gebaeude - nur zum Zeichnen und fuer Loot-Fundorte. */
+  buildings: Rect[];
   /** Wo die Spieler starten. */
   spawnPoint: Vec2;
   /** Die Boss-Stellen: Mini-Bosse und der eine Ende-Boss. */
@@ -104,6 +106,15 @@ export function generateWorld(seed: number): GeneratedWorld {
 
   const walls: Rect[] = [...outerWalls(size)];
   const bushes: Rect[] = [];
+  /**
+   * Die Grundrisse der Gebaeude.
+   *
+   * Nur fuer die Darstellung und (ab Phase 10) fuer die Loot-Fundorte: Die
+   * Kollision steckt in den Wandsegmenten, die in `walls` landen. Zwei
+   * Beschreibungen derselben Sache waeren genau der Fehler, den die feste
+   * Arena schon einmal hatte.
+   */
+  const buildings: Rect[] = [];
 
   const half = WORLD.minGap / 2;
   // Innerhalb dieser Grenzen darf ueberhaupt etwas stehen: nicht in der
@@ -135,8 +146,26 @@ export function generateWorld(seed: number): GeneratedWorld {
         y1: Math.min(cell.y + cell.height - half, playableMax),
       };
 
-      placeCover(rng, area, walls);
-      placeBush(rng, area, bushes);
+      /*
+       * Gebaeude ODER Deckung, nie beides in derselben Zelle.
+       *
+       * Ein Deckungsblock, der zufaellig im Eingang oder mitten im Zimmer
+       * landet, waere kein Hindernis, sondern ein kaputtes Gebaeude - im
+       * schlimmsten Fall eines, in das niemand hineinkommt. Die Zelle
+       * entscheidet sich also: Haus oder Kisten.
+       */
+      const zone = Math.floor(
+        distanceToRect(cell, spawnPoint.x, spawnPoint.y) / DIFFICULTY.zoneSize,
+      );
+      const building = placeBuilding(rng, area, zone, walls, buildings);
+      if (!building) {
+        placeCover(rng, area, walls);
+      }
+      // Kein Buschfeld INNERHALB eines Gebaeudes: Gras, das durch ein
+      // Zimmer waechst, sieht nicht nur falsch aus - Buesche verstecken
+      // Spieler vor Gegnern, und ein Haus, das nebenbei ein Versteck ist,
+      // waere eine Wirkung, die niemand aus dem Bild ablesen kann.
+      placeBush(rng, area, bushes, building);
     }
   }
 
@@ -150,7 +179,7 @@ export function generateWorld(seed: number): GeneratedWorld {
   const encounters = placeEncounters(rng, spawnPoint, walls, size);
   const extractions = placeExtractions(rng, spawnPoint, walls, size);
 
-  return { bounds, walls, bushes, spawnPoint, encounters, extractions };
+  return { bounds, walls, bushes, buildings, spawnPoint, encounters, extractions };
 }
 
 /** Die aeusserste Zone, die auf dieser Karte ueberhaupt Platz hat. */
@@ -335,8 +364,179 @@ function placeCover(rng: RngHolder, area: Area, walls: Rect[]): void {
   }
 }
 
-/** Ein Buschfeld je Zelle. Buesche blockieren nichts, sie verstecken nur. */
-function placeBush(rng: RngHolder, area: Area, bushes: Rect[]): void {
+/**
+ * Ein Gebaeude in diese Zelle, wenn der Wurf es will.
+ *
+ * ================================================================
+ * WIE EIN RAUM ENTSTEHT, DEN MAN NICHT EINSPERREN KANN
+ * ================================================================
+ *
+ * Ein Gebaeude ist ein Rechteck aus vier Waenden mit EINER Luecke. Gebaut
+ * wird es Seite fuer Seite: Drei Seiten sind durchgehende Balken, die vierte
+ * besteht aus zwei Stuecken mit der Tuer dazwischen.
+ *
+ * Der Zusammenhang der Karte haengt an zwei Dingen, und beide sind hier
+ * eingebaut statt hinterher geprueft:
+ *
+ *  1. Das ganze Gebaeude liegt INNERHALB der Zellenflaeche, die schon
+ *     `minGap/2` Abstand zum Zellenrand haelt. Von aussen bleibt also
+ *     dieselbe Gasse frei wie bei einem Deckungsblock.
+ *  2. Die Tuer ist 130 px breit, der Spieler 36 px dick. Der Innenraum ist
+ *     damit erreichbar - und die Flutfuellung in
+ *     `tests/systems/worldGenerator.test.ts` rechnet genau das nach, statt es
+ *     zu glauben.
+ *
+ * Gibt den Grundriss zurueck, oder `null`, wenn nichts gebaut wurde.
+ */
+function placeBuilding(
+  rng: RngHolder,
+  area: Area,
+  zone: number,
+  walls: Rect[],
+  buildings: Rect[],
+): Rect | null {
+  if (zone < WORLD.buildingFromZone) {
+    return null;
+  }
+
+  const chance = Math.min(
+    WORLD.buildingChanceMax,
+    WORLD.buildingChance + (zone - WORLD.buildingFromZone) * WORLD.buildingChancePerZone,
+  );
+  if (randomRange(rng, 0, 1) > chance) {
+    return null;
+  }
+
+  const width = randomRange(rng, WORLD.buildingMin, WORLD.buildingMax);
+  const height = randomRange(rng, WORLD.buildingMin, WORLD.buildingMax);
+  const footprint = randomRect(rng, area, width, height);
+  if (!footprint) {
+    return null;
+  }
+
+  // Auf welcher Seite die Tuer sitzt: 0 oben, 1 rechts, 2 unten, 3 links.
+  const door = Math.floor(randomRange(rng, 0, 4)) % 4;
+  // Wo auf dieser Seite. Nicht ganz in der Ecke - dort waere ein Pfosten von
+  // null Breite uebrig, und die Wand saehe aus, als fehlte ein Stueck.
+  const along = randomRange(rng, 0.25, 0.75);
+
+  for (const segment of buildingWalls(footprint, door, along)) {
+    walls.push(segment);
+  }
+  buildings.push(footprint);
+  return footprint;
+}
+
+/**
+ * Die Wandstuecke eines Gebaeudes.
+ *
+ * Eigene Funktion, damit sich die Geometrie ohne Zufall testen laesst: Bei
+ * vier Seiten und zwei Tuerstuecken ist ein Vorzeichenfehler schnell gemacht,
+ * und er faellt erst auf, wenn ein Haus keine Wand oder keine Tuer hat.
+ */
+export function buildingWalls(footprint: Rect, door: number, along: number): Rect[] {
+  const t = WORLD.buildingWall;
+  const d = WORLD.buildingDoor;
+  const { x, y, width, height } = footprint;
+  const segments: Rect[] = [];
+
+  /** Eine Seite als durchgehender Balken oder als zwei Stuecke mit Luecke. */
+  const side = (
+    index: number,
+    bar: Rect,
+    horizontal: boolean,
+  ): void => {
+    if (index !== door) {
+      segments.push(bar);
+      return;
+    }
+
+    // Die Tuer liegt bei `along` auf der Laenge dieser Seite, bleibt aber
+    // immer ganz auf ihr - sonst raegte sie um die Ecke.
+    const length = horizontal ? bar.width : bar.height;
+    if (length <= d) {
+      // Zu kurz fuer eine Tuer: dann lieber offen lassen als zubauen.
+      return;
+    }
+
+    let start = Math.min(Math.max(along * length - d / 2, 0), length - d);
+
+    /*
+     * ================================================================
+     * SPLITTER WEGSCHNAPPEN - der Fehler, der das Spiel abstuerzen liess
+     * ================================================================
+     *
+     * Ohne diese Zeilen konnte ein Wandstueck 0,24 Pixel hoch werden: Bei
+     * einer Seitenlaenge von 208 und `along` = 0,32 bleiben links der Tuer
+     * genau 1,6 Pixel stehen, und bei anderen Kombinationen noch weniger.
+     *
+     * Im Bild war das kein duenner Strich, sondern ein ABSTURZ: Phaser legt
+     * fuer jedes `tileSprite` eine Leinwand in Objektgroesse an und liest sie
+     * mit `getImageData` aus. Eine Leinwand von 0,24 Pixeln wird auf 0
+     * gerundet, und `getImageData` mit Hoehe 0 wirft "IndexSizeError". Das
+     * Spiel startete dann gar nicht mehr, mit genau dieser Meldung auf dem
+     * Absturzbildschirm.
+     *
+     * Die Loesung ist, den Splitter der TUER zuzuschlagen: Liegt die Tuer
+     * fast am Rand der Seite, ruckt sie ganz an den Rand. Das kann ein Haus
+     * nie zumauern - die Oeffnung wird dabei hoechstens groesser, nie
+     * kleiner -, und es faellt niemandem auf, weil eine Tuer in der Ecke
+     * genauso aussieht wie eine Tuer knapp daneben.
+     */
+    const MIN_PIECE = WORLD.buildingWall;
+    if (start < MIN_PIECE) {
+      start = 0;
+    } else if (length - start - d < MIN_PIECE) {
+      start = length - d;
+    }
+
+    if (horizontal) {
+      segments.push({ x: bar.x, y: bar.y, width: start, height: bar.height });
+      segments.push({
+        x: bar.x + start + d,
+        y: bar.y,
+        width: length - start - d,
+        height: bar.height,
+      });
+    } else {
+      segments.push({ x: bar.x, y: bar.y, width: bar.width, height: start });
+      segments.push({
+        x: bar.x,
+        y: bar.y + start + d,
+        width: bar.width,
+        height: length - start - d,
+      });
+    }
+  };
+
+  side(0, { x, y, width, height: t }, true);
+  side(2, { x, y: y + height - t, width, height: t }, true);
+  // Die senkrechten Seiten lassen oben und unten den Platz der waagerechten
+  // frei - sonst lieferten sich die Ecken doppelte Rechtecke, und ein
+  // Tuerstueck koennte von der Nachbarwand wieder zugebaut werden.
+  const innerY = y + t;
+  const innerHeight = height - 2 * t;
+  side(3, { x, y: innerY, width: t, height: innerHeight }, false);
+  side(1, { x: x + width - t, y: innerY, width: t, height: innerHeight }, false);
+
+  // Stuecke ohne Flaeche entstehen, wenn die Tuer genau an einer Ecke sitzt.
+  return segments.filter((rect) => rect.width > 0 && rect.height > 0);
+}
+
+/**
+ * Ein Buschfeld je Zelle. Buesche blockieren nichts, sie verstecken nur.
+ *
+ * `building` ist der Grundriss in dieser Zelle, falls einer gebaut wurde. Ein
+ * Feld, das ihn beruehrt, wird verworfen statt verschoben: Die Zufallszahlen
+ * sind dann trotzdem gezogen, also bleibt die Folge fuer Host und Clients
+ * gleich - und eine Zelle ohne Busch ist kein Verlust.
+ */
+function placeBush(
+  rng: RngHolder,
+  area: Area,
+  bushes: Rect[],
+  building: Rect | null,
+): void {
   if (randomRange(rng, 0, 1) > WORLD.bushChance) {
     return;
   }
@@ -344,9 +544,23 @@ function placeBush(rng: RngHolder, area: Area, bushes: Rect[]): void {
   const width = randomRange(rng, WORLD.bushMin, WORLD.bushMax);
   const height = randomRange(rng, WORLD.bushMin, WORLD.bushMax);
   const field = randomRect(rng, area, width, height);
-  if (field) {
-    bushes.push(field);
+  if (!field) {
+    return;
   }
+  if (building && overlaps(field, building)) {
+    return;
+  }
+  bushes.push(field);
+}
+
+/** Ueberschneiden sich zwei Rechtecke? */
+function overlaps(a: Rect, b: Rect): boolean {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  );
 }
 
 /**

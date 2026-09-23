@@ -25,6 +25,8 @@
 
 import Phaser from "phaser";
 import {
+  BUILDING_FLOOR_TILE,
+  BUILDING_WALL_TILE,
   BUSH_TILE,
   COVER_TILE,
   FLOOR_TILES,
@@ -80,6 +82,7 @@ export class ArenaRenderer {
     this.parts.push(this.markers);
 
     this.drawFloor(state);
+    this.drawBuildingFloors(state);
     this.drawWalls(state);
     this.drawBushes(state);
     this.update();
@@ -289,26 +292,91 @@ export class ArenaRenderer {
    */
   private drawWalls(state: WorldState): void {
     for (const wall of state.walls) {
-      const deckung = !this.touchesBorder(wall, state);
+      /*
+       * Drei Materialien aus einer einzigen Liste von Rechtecken.
+       *
+       * Die Simulation kennt nur "blockiert". Welches Bild dazugehoert, liest
+       * die Darstellung aus der LAGE ab, nicht aus einem zusaetzlichen Feld:
+       *
+       *   beruehrt den Kartenrand   -> Aussenmauer
+       *   liegt in einem Grundriss  -> Gebaeudewand
+       *   sonst                     -> Deckungsblock
+       *
+       * Ein Feld "material" am Rechteck waere eine zweite Wahrheit ueber
+       * dieselbe Mauer, und zwei Wahrheiten laufen frueher oder spaeter
+       * auseinander. Abgelesen kann das nicht passieren.
+       */
+      const outer = this.touchesBorder(wall, state);
+      const inBuilding = !outer && this.insideBuilding(wall, state);
+      const deckung = !outer && !inBuilding;
+
+      const texture = outer
+        ? WALL_TILE
+        : inBuilding
+          ? BUILDING_WALL_TILE
+          : COVER_TILE;
 
       const sprite = this.scene.add
-        .tileSprite(
-          wall.x,
-          wall.y,
-          wall.width,
-          wall.height,
-          SHEET_KEY,
-          deckung ? COVER_TILE : WALL_TILE,
-        )
+        .tileSprite(wall.x, wall.y, wall.width, wall.height, SHEET_KEY, texture)
         .setOrigin(0)
         .setTileScale(WORLD_SCALE, WORLD_SCALE)
         .setDepth(DEPTH.walls);
 
       this.addCullable(sprite, wall);
 
-      if (deckung) {
+      // Den Umriss bekommen Deckung UND Gebaeudewand: Er liegt genau auf der
+      // Kollisionskante und ist der Grund, warum eine angeschnittene Kachel
+      // nicht als fehlendes Stueck auffaellt (siehe `drawOutlines`).
+      if (deckung || inBuilding) {
         this.coverBlocks.push(wall);
       }
+    }
+  }
+
+  /** Liegt dieses Wandstueck innerhalb eines Gebaeudegrundrisses? */
+  private insideBuilding(wall: Rect, state: WorldState): boolean {
+    return state.buildings.some(
+      (house) =>
+        wall.x >= house.x - 1 &&
+        wall.y >= house.y - 1 &&
+        wall.x + wall.width <= house.x + house.width + 1 &&
+        wall.y + wall.height <= house.y + house.height + 1,
+    );
+  }
+
+  /**
+   * Der Innenboden der Gebaeude.
+   *
+   * ================================================================
+   * DER BODEN IST DAS, WAS EIN GEBAEUDE ERKENNBAR MACHT - NICHT DIE WAND
+   * ================================================================
+   *
+   * Zurueckgemeldet wurde "die Welt ist zu leer und zu unuebersichtlich". Vier
+   * Wandstuecke mehr haetten daran nichts geaendert - sie saehen aus wie
+   * Deckung. Was einen ORT ausmacht, ist, dass er innen anders aussieht als
+   * aussen: dunkles Grau (74,74,74) im hellen Sand (186,127,67). Das liest man
+   * ohne Erklaerung und aus jeder Entfernung, in der das Haus ueberhaupt im
+   * Bild ist.
+   *
+   * Gezeichnet wird der Boden UEBER dem Aussenboden und UNTER den Waenden:
+   * So deckt er den Sand ab, und die Mauern liegen sauber darauf.
+   */
+  private drawBuildingFloors(state: WorldState): void {
+    for (const house of state.buildings) {
+      const sprite = this.scene.add
+        .tileSprite(
+          house.x,
+          house.y,
+          house.width,
+          house.height,
+          SHEET_KEY,
+          BUILDING_FLOOR_TILE,
+        )
+        .setOrigin(0)
+        .setTileScale(WORLD_SCALE, WORLD_SCALE)
+        .setDepth(DEPTH.floor + 2);
+
+      this.addCullable(sprite, house);
     }
   }
 

@@ -188,6 +188,42 @@ export const WALL_TILE = tile(8, 0);
 export const COVER_TILE = tile(14, 2);
 
 /**
+ * ================================================================
+ * GEBAEUDE - Innenboden und Wand
+ * ================================================================
+ *
+ * Ein Gebaeude muss man auf den ersten Blick von einem Deckungsblock
+ * unterscheiden koennen, sonst laeuft man daran vorbei wie an allem anderen.
+ * Was das traegt, ist der BODEN, nicht die Wand: Eine dunkle Flaeche mitten im
+ * hellen Sand sagt ohne Erklaerung "hier ist innen".
+ *
+ * Beide Kacheln sind gemessen und nicht geraten - dieselbe Lehre wie bei der
+ * Boss-Kachel, die sich als Moebelstueck entpuppte:
+ *
+ *   tile(4,3)  256/256 deckend, RGB 74,74,74,  Naht 0,0 / 0,0
+ *   tile(8,0)  256/256 deckend, RGB 155,190,192, Naht 0,0 / 0,8
+ *   Sandboden  RGB 186,127,67 - der Abstand zum Innenboden ist maximal
+ *
+ * Die braunen Ziegel des Pakets (tile(14..19,1), RGB 192,131,69) waeren die
+ * naheliegende Wahl fuer eine Hauswand gewesen und sind genau deshalb
+ * verworfen: Sie liegen farblich zwischen Sandboden und Deckungsziegel - ein
+ * Haus daraus verschwaende im Hintergrund.
+ */
+
+/** Innenboden eines Gebaeudes: gleichmaessiges Dunkelgrau, voellig nahtlos. */
+export const BUILDING_FLOOR_TILE = tile(4, 3);
+
+/**
+ * Gebaeudewand: derselbe kuehle Stein wie die Aussenmauer.
+ *
+ * Bewusst dieselbe Kachel: Beides ist Architektur, gegen die man laeuft, und
+ * beides ist NICHT die rote Ziegeldeckung, hinter der man sich duckt. Dass
+ * man ein Gebaeude trotzdem nie mit dem Kartenrand verwechselt, liegt am
+ * Innenboden und an der Tuer - die hat die Aussenmauer nicht.
+ */
+export const BUILDING_WALL_TILE = tile(8, 0);
+
+/**
  * Buschfelder: GRAS, nicht die Buschkacheln des Pakets.
  *
  * Das klingt verkehrt und ist gemessen. Die Buschkacheln (18,6) und (19,6)

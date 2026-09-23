@@ -551,6 +551,53 @@ export const WORLD = {
   bushChance: 0.75,
   bushMin: 180,
   bushMax: 380,
+
+  /*
+   * ================================================================
+   * GEBAEUDE - gegen "die Welt fuehlt sich zu leer an"
+   * ================================================================
+   *
+   * Deckungsbloecke sind Hindernisse, mehr nicht: Man laeuft daran vorbei und
+   * merkt sich nichts. Ein Gebaeude ist ein ORT - es hat ein Innen und ein
+   * Aussen, einen Eingang, und man kann sagen "wir treffen uns beim Haus mit
+   * dem Loch in der Wand". Genau das hat der offenen Welt gefehlt.
+   *
+   * Ab Phase 10 liegt darin auch das Loot, dann ist das Hineingehen eine
+   * Entscheidung: drinnen ist man in Deckung, aber auch in der Falle.
+   */
+
+  /** Erst ab dieser Distanzzone stehen Gebaeude. Um den Start bleibt es offen. */
+  buildingFromZone: 1,
+  /**
+   * Wahrscheinlichkeit je Zelle, Grundwert und Zuwachs je Zone.
+   *
+   * Steigend mit der Distanz, wie Gegnerdichte und Boss-Staerke auch: Je
+   * tiefer man kommt, desto mehr gibt es zu durchsuchen - und desto weniger
+   * Uebersicht hat man. Bei 0,55 ist Schluss, sonst entstuende eine
+   * geschlossene Stadt statt einzelner Ruinen.
+   */
+  buildingChance: 0.09,
+  buildingChancePerZone: 0.022,
+  buildingChanceMax: 0.30,
+  /**
+   * Kantenlaenge. Untergrenze 280, damit innen mindestens 208 px bleiben -
+   * der Spieler ist 36 px dick, und drinnen soll man sich noch bewegen und
+   * ausweichen koennen, nicht nur stehen.
+   */
+  buildingMin: 280,
+  buildingMax: 420,
+  /** Dicke der Gebaeudewaende. */
+  buildingWall: 36,
+  /**
+   * Breite des Eingangs.
+   *
+   * 130 px bei 36 px Spielerdicke - grosszuegig, und das ist Absicht. Eine
+   * Tuer, die man im Gefecht auf den ersten Versuch trifft, ist eine Tuer;
+   * eine, an der man haengenbleibt, waehrend hinter einem drei Laeufer
+   * ankommen, ist eine Falle. Ausserdem haengt daran der Zusammenhang der
+   * Karte: Passt hier niemand durch, ist der Innenraum unerreichbar.
+   */
+  buildingDoor: 130,
 } as const;
 
 /**

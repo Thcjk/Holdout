@@ -461,10 +461,25 @@ export class HudScene extends Phaser.Scene {
 
     const centerX = VIEWPORT.width / 2;
     const centerY = VIEWPORT.height / 2;
-    // Die Halbachsen: so weit aussen wie moeglich, aber innerhalb der
-    // Geraeteraender - sonst sitzt der Pfeil unter der Notch.
-    const radiusX = (VIEWPORT.width - SAFE.left - SAFE.right) / 2 - 42;
-    const radiusY = (VIEWPORT.height - SAFE.top - SAFE.bottom) / 2 - 42;
+    /*
+     * Die Halbachsen - und die sind kleiner, als man zuerst denkt.
+     *
+     * Im ersten Versuch lief der Pfeil ganz aussen am Bildrand. Im Emulator
+     * sass er dann prompt auf dem Knopf "Ton an", und die Entfernung war
+     * halb verdeckt. Der Bildrand ist hier naemlich schon vergeben: oben
+     * rechts Punktzahl und Knoepfe, unten rechts der Knopfbogen, unten links
+     * Leben und Super, oben links die Zone.
+     *
+     * Deshalb kreist der Pfeil jetzt INNERHALB dieser Anzeigen. Er ist damit
+     * naeher an der Figur, was sogar besser ist: Der Blick liegt beim Spielen
+     * ohnehin dort, und ein Kompass am aeussersten Rand wird uebersehen.
+     *
+     * Eine Ellipse und kein Kreis, weil das Bild doppelt so breit wie hoch
+     * ist - auf einem Kreis waere der Pfeil nach links und rechts viel zu
+     * dicht an der Figur.
+     */
+    const radiusX = Math.min(300, (VIEWPORT.width - SAFE.left - SAFE.right) / 2 - 60);
+    const radiusY = Math.min(150, (VIEWPORT.height - SAFE.top - SAFE.bottom) / 2 - 60);
 
     const x = centerX + Math.cos(target.angle) * radiusX;
     const y = centerY + Math.sin(target.angle) * radiusY;
@@ -503,9 +518,12 @@ export class HudScene extends Phaser.Scene {
 
     // Die Zahl nach INNEN versetzt, nie nach aussen: Sonst rutscht sie bei
     // einem Pfeil am Rand aus dem Bild.
+    // 36 statt knapp 20: Der Kreis hat 17 Pixel Radius, die Schrift noch
+    // einmal rund 7 - bei zu kleinem Abstand stand die Entfernung halb hinter
+    // dem Pfeil, genau so im Emulator gesehen.
     this.compassText.setPosition(
-      x - Math.cos(target.angle) * 27,
-      y - Math.sin(target.angle) * 27,
+      x - Math.cos(target.angle) * 36,
+      y - Math.sin(target.angle) * 36,
     );
     this.compassText.setText(`${meters} m`);
     this.compassText.setVisible(true);

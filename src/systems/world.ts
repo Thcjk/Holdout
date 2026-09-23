@@ -115,6 +115,7 @@ export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldStat
     pendingSpawns: [],
     walls: world.walls,
     bushes: world.bushes,
+    buildings: world.buildings,
     bounds: world.bounds,
     encounters: world.encounters,
     extractions: world.extractions,

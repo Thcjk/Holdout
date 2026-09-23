@@ -21,6 +21,20 @@ function setup(distance: number): { state: WorldState; boss: EnemyState } {
   const state = createWorld(soloSetup(), 4242);
   state.enemies.length = 0;
   state.projectiles.forEach((projectile) => (projectile.active = false));
+  /*
+   * Freies Feld - und das ist kein Weichspuelen des Tests, sondern seine
+   * Voraussetzung.
+   *
+   * Geprueft werden hier die ANGRIFFSMUSTER, nicht die Karte. Steht zufaellig
+   * eine Wand zwischen Boss und Spieler, schiesst er zu Recht nicht - der Test
+   * wuerde dann melden "die Salve ist kaputt", obwohl alles richtig ist.
+   *
+   * Genau das ist beim Einbau der Gebaeude passiert: Der Test fiel durch, weil
+   * eine Hauswand des Seeds 4242 in die Schusslinie geriet. Dass Waende
+   * wirken, prueft der Test "schiesst nicht durch eine Wand" weiter unten -
+   * mit einer Wand, die er selbst hinstellt und deren Lage damit feststeht.
+   */
+  state.walls = [];
 
   const player = state.players[0];
   if (!player) throw new Error("Testaufbau");

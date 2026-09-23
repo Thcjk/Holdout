@@ -372,6 +372,15 @@ export interface WorldState {
   walls: Rect[];
   /** Buschfelder: Gegner sehen Spieler darin nicht. */
   bushes: Rect[];
+  /**
+   * Die Grundrisse der Gebaeude.
+   *
+   * Reine Anzeige- und Platzierungsinformation: Was wirklich blockiert, steht
+   * als Wandsegmente in `walls`. Die Simulation liest diese Liste nicht -
+   * saehe sie hier eine zweite Wahrheit ueber dieselben Mauern, wuerden beide
+   * frueher oder spaeter auseinanderlaufen.
+   */
+  buildings: Rect[];
   bounds: Rect;
   /** Ereignisse dieses Ticks. Die Darstellung leert die Liste nach dem Auswerten. */
   events: GameEvent[];
