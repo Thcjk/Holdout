@@ -30,7 +30,13 @@ import { DIFFICULTY, PLAYER, WORLD } from "../config/balance";
 import { TICK_RATE } from "../config/constants";
 import { createEnemy } from "./enemies";
 import { nextRandom, randomRange } from "./rng";
-import { distanceFromStart, targetPopulation, zoneAt, zoneScaling } from "./zones";
+import {
+  distanceFromStart,
+  safeRadiusOf,
+  targetPopulation,
+  zoneOf,
+  zoneScaling,
+} from "./zones";
 import { enemyBudget, endRun } from "./encounters";
 import type { EnemyType, PlayerState, Vec2, WorldState } from "./types";
 
@@ -96,7 +102,8 @@ function findSpawnPoint(state: WorldState, around: Vec2): Vec2 | null {
      * Mit 120 Pixeln Aufschlag, damit ein Gegner nicht auf der Grenze
      * erscheint und mit dem ersten Schritt schon drin ist.
      */
-    if (distanceFromStart(state, point) < WORLD.safeRadius + 120) {
+    const safe = safeRadiusOf(state);
+    if (safe > 0 && distanceFromStart(state, point) < safe + 120) {
       continue;
     }
 
@@ -160,7 +167,10 @@ function healInSafeZone(state: WorldState, dt: number): void {
     if (player.down || player.health >= player.maxHealth) {
       continue;
     }
-    if (distanceFromStart(state, player.position) > WORLD.safeRadius) {
+    // Radius 0 heisst: keine sichere Zone (Knoten-Gebiet) - auch nicht
+    // genau auf dem Mittelpunkt.
+    const safe = safeRadiusOf(state);
+    if (safe <= 0 || distanceFromStart(state, player.position) > safe) {
       continue;
     }
 
@@ -188,7 +198,7 @@ function updateZone(state: WorldState): void {
 
   let deepest = 0;
   for (const player of living) {
-    deepest = Math.max(deepest, zoneAt(distanceFromStart(state, player.position)));
+    deepest = Math.max(deepest, zoneOf(state, player.position));
   }
   state.zone = deepest;
 
@@ -288,7 +298,7 @@ function queueSpawns(state: WorldState): void {
     return;
   }
 
-  const zone = zoneAt(distanceFromStart(state, position));
+  const zone = zoneOf(state, position);
 
   state.pendingSpawns.push({
     type: pickType(state, zone),
@@ -316,7 +326,7 @@ function spawnDueEnemies(state: WorldState): void {
     }
 
     // Die Staerke haengt am Erscheinungsort, nicht an der Zone des Teams.
-    const scaling = zoneScaling(zoneAt(distanceFromStart(state, order.position)));
+    const scaling = zoneScaling(zoneOf(state, order.position));
 
     state.enemies.push(
       createEnemy(

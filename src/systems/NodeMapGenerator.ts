@@ -56,7 +56,8 @@ import { NODE_MAP } from "../config/balance";
 import { nextRandom, randomIndex } from "./rng";
 import type { RngHolder } from "./rng";
 
-export type NodeType = "start" | "combat" | "loot" | "rest" | "elite" | "boss";
+/** Die Knotentypen aus BRIEFING Abschnitt 4. */
+export type NodeType = "start" | "combat" | "elite" | "rest" | "extraction" | "boss";
 
 export interface MapNode {
   /** Laufende Nummer, von oben nach unten und links nach rechts. */
@@ -66,8 +67,15 @@ export interface MapNode {
   /** Spalte innerhalb der Schicht, 0 = links. */
   column: number;
   type: NodeType;
-  /** Gefahrenstufe, steigt mit der Tiefe. Start = 0. */
+  /** Gefahrenstufe g, steigt mit der Tiefe. Start = 0. */
   danger: number;
+  /**
+   * Kartengroesse des Gebiets: 1 klein, 2 mittel, 3 gross. Eckdaten-Balken
+   * vor der Auswahl (Briefing: "Kartengroesse, Gefahrenlevel, Beute").
+   */
+  arenaSize: 1 | 2 | 3;
+  /** Beute-Potenzial, 0 fuer Knoten ohne Kampf. */
+  loot: number;
   /** IDs der Knoten, zu denen es von hier aus weitergeht (aufsteigend). */
   next: number[];
 }
@@ -86,11 +94,14 @@ export interface NodeMapOptions {
   depth: number;
   columns: number;
   paths: number;
-  typeWeights: Readonly<Record<"combat" | "loot" | "rest" | "elite", number>>;
+  typeWeights: Readonly<Record<"combat" | "elite" | "rest" | "extraction", number>>;
   eliteFromLayer: number;
   restFromLayer: number;
+  extractionFromLayer: number;
   dangerPerLayer: number;
   eliteDangerBonus: number;
+  lootBonus: Readonly<Record<"combat" | "elite" | "boss", number>>;
+  sizeWeights: readonly number[];
 }
 
 /**
@@ -156,7 +167,7 @@ export function generateNodeMap(seed: number, options: NodeMapOptions = NODE_MAP
   const middle = Math.floor((columns - 1) / 2);
   const add = (layer: number, column: number): void => {
     const id = nodes.length;
-    nodes.push({ id, layer, column, type: "combat", danger: 0, next: [] });
+    nodes.push({ id, layer, column, type: "combat", danger: 0, arenaSize: 2, loot: 0, next: [] });
     idAt.set(key(layer, column), id);
   };
 
@@ -197,7 +208,7 @@ export function generateNodeMap(seed: number, options: NodeMapOptions = NODE_MAP
     node.next.sort((a, b) => a - b);
   }
 
-  // --- 4. Typ und Gefahr --------------------------------------------------
+  // --- 4. Typ, Gefahr, Eckdaten -----------------------------------------
   assignTypes(nodes, rng, options, { first, last, depth });
   for (const node of nodes) {
     node.danger = layerDanger(node.layer, options);
@@ -207,6 +218,15 @@ export function generateNodeMap(seed: number, options: NodeMapOptions = NODE_MAP
     if (node.type === "boss") {
       node.danger += options.eliteDangerBonus + 1;
     }
+    node.loot =
+      node.type === "combat" || node.type === "elite" || node.type === "boss"
+        ? node.danger + options.lootBonus[node.type]
+        : 0;
+    // Groesse NACH den Typen wuerfeln, in fester Reihenfolge - so aendert
+    // eine neue Regel fuer Groessen nichts an den Typen.
+    const size = weightedIndex(rng, options.sizeWeights) + 1;
+    node.arenaSize =
+      node.type === "elite" ? 1 : node.type === "boss" ? 3 : (Math.min(3, size) as 1 | 2 | 3);
   }
 
   return { seed, depth, columns, nodes, startId, bossId };
@@ -228,11 +248,10 @@ function crosses(existing: ReadonlyArray<[number, number]>, from: number, to: nu
  * Knotentypen verteilen.
  *
  *   Start / Boss       fest an Anfang und Ende
- *   erste Schicht      immer Kampf - man soll mit dem Spiel anfangen, nicht
- *                      mit einer Truhe
+ *   erste Schicht      immer Kampf - man soll mit dem Spiel anfangen
  *   vorletzte Schicht  immer Rast - Luft holen vor dem Boss
- *   dazwischen         nach Gewicht, mit zwei Sperren:
- *                      Elite erst ab `eliteFromLayer`, Rast erst ab
+ *   dazwischen         nach Gewicht, mit Sperren: Extraktion erst ab
+ *                      `extractionFromLayer`, Elite erst ab `eliteFromLayer`, Rast erst ab
  *                      `restFromLayer`, nie direkt nach einer Rast und nie
  *                      direkt vor der Pflicht-Rast
  *
@@ -265,10 +284,10 @@ function assignTypes(
       node.type = "rest";
     } else {
       const afterRest = (parents.get(node.id) ?? []).some((parent) => parent.type === "rest");
-      const choices: Array<[NodeType, number]> = [
-        ["combat", options.typeWeights.combat],
-        ["loot", options.typeWeights.loot],
-      ];
+      const choices: Array<[NodeType, number]> = [["combat", options.typeWeights.combat]];
+      if (node.layer >= options.extractionFromLayer) {
+        choices.push(["extraction", options.typeWeights.extraction]);
+      }
       if (node.layer >= options.eliteFromLayer) {
         choices.push(["elite", options.typeWeights.elite]);
       }
@@ -279,6 +298,18 @@ function assignTypes(
       node.type = weightedPick(rng, choices);
     }
   }
+}
+
+function weightedIndex(rng: RngHolder, weights: readonly number[]): number {
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let roll = nextRandom(rng) * total;
+  for (let index = 0; index < weights.length; index += 1) {
+    roll -= weights[index] ?? 0;
+    if (roll < 0) {
+      return index;
+    }
+  }
+  return weights.length - 1;
 }
 
 function weightedPick(rng: RngHolder, choices: ReadonlyArray<[NodeType, number]>): NodeType {
@@ -297,17 +328,17 @@ function weightedPick(rng: RngHolder, choices: ReadonlyArray<[NodeType, number]>
 const SYMBOL: Record<NodeType, string> = {
   start: "S",
   combat: "K",
-  loot: "P",
-  rest: "R",
   elite: "E",
+  rest: "R",
+  extraction: "X",
   boss: "B",
 };
 
 /**
  * Die Karte als Text - zum Pruefen auf der Konsole (`npm run nodemap`).
  *
- *   K = Kampf, P = Pluendern, R = Rast, E = Elite, S = Start, B = Boss
- *   die Zahl dahinter ist die Gefahrenstufe
+ *   K = Kampf, E = Elite, R = Rast, X = Extraktion, S = Start, B = Boss
+ *   die Zahl dahinter ist die Gefahrenstufe g
  */
 export function describeNodeMap(map: NodeMap): string {
   const lines = [`Knoten-Karte, Seed ${map.seed}: ${map.nodes.length} Knoten`];
@@ -323,6 +354,6 @@ export function describeNodeMap(map: NodeMap): string {
     }
     lines.push(`${String(layer).padStart(2)} | ${row.join("")}| ${links.join("  ")}`);
   }
-  lines.push("K Kampf  P Pluendern  R Rast  E Elite  S Start  B Boss  Zahl = Gefahr");
+  lines.push("K Kampf  E Elite  R Rast  X Extraktion  S Start  B Boss  Zahl = Gefahr g");
   return lines.join("\n");
 }

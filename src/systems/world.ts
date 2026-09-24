@@ -22,6 +22,7 @@ import { applyInventoryCommand, stepLoot } from "./loot";
 import { createGrid, findFreeSpot, place } from "./InventoryGridSystem";
 import { stepRound } from "./spawning";
 import { gameplaySeed, generateWorld } from "./WorldGenerator";
+import { generateNodeArena } from "./NodeArenaGenerator";
 import { emptyInput } from "./types";
 import type {
   CharacterId,
@@ -143,6 +144,19 @@ export function createPlayer(
 }
 
 /**
+ * Wo ein Run spielt.
+ *
+ *   "open"                   die offene Welt (Phase 8/9) - in Tests und
+ *                            ueber `?welt=offen` (nur solo)
+ *   { nodeId: number|null }  das Gebiet eines Knotens der Knoten-Karte zu
+ *                            diesem Seed; `null` = der erste Kampfknoten
+ *
+ * Host und Clients muessen hier dasselbe angeben, sonst bauen sie
+ * verschiedene Karten. Deshalb nimmt der Koop immer `{ nodeId: null }`.
+ */
+export type WorldPlace = "open" | { nodeId: number | null };
+
+/**
  * Baut eine frische Welt aus einem Seed.
  *
  * WICHTIG FUER DEN KOOP: Host und Client rufen das mit DERSELBEN Zahl auf und
@@ -150,8 +164,15 @@ export function createPlayer(
  * waere sie viel zu gross. Wer diesen Aufruf ohne Seed macht, bekommt die Welt
  * zu Seed 1 und damit eine andere als alle anderen.
  */
-export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldState {
-  const world = generateWorld(seed);
+export function createWorld(
+  setups: readonly PlayerSetup[],
+  seed = 1,
+  where: WorldPlace = "open",
+): WorldState {
+  // Offene Welt oder Gebiet eines Knotens - beide im selben Format, die
+  // Simulation darunter ist dieselbe.
+  const arena = where === "open" ? null : generateNodeArena(seed, where.nodeId ?? undefined);
+  const world = arena ?? generateWorld(seed);
 
   return {
     tick: 0,
@@ -176,6 +197,9 @@ export function createWorld(setups: readonly PlayerSetup[], seed = 1): WorldStat
     bushes: world.bushes,
     buildings: world.buildings,
     bounds: world.bounds,
+    fixedZone: arena?.fixedZone,
+    safeRadius: arena?.safeRadius,
+    props: arena?.props ?? [],
     encounters: world.encounters,
     extractions: world.extractions,
     extractionIndex: -1,

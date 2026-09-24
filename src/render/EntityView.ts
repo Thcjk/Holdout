@@ -1,31 +1,46 @@
 /**
- * Figuren, Gegner und Geschosse als 3D-Meshes (3D-Umbau).
+ * Figuren, Gegner und Geschosse als 3D-Objekte (3D-Umbau).
  *
  * ================================================================
- * EINE EINBAHNSTRASSE: SIMULATION -> MESH
+ * EINE EINBAHNSTRASSE: SIMULATION -> DARSTELLUNG
  * ================================================================
  *
- * Diese Klasse LIEST den Weltzustand und setzt danach die Meshes. Sie
- * schreibt nie zurueck. Positionen, Leben, wer am Boden liegt - das alles
- * entscheidet die Simulation (`systems/`), die weiterhin flach in Pixeln
- * rechnet und von Three.js nichts weiss. Deshalb laeuft der Koop unveraendert:
- * Der Host rechnet, der Client zeigt an, was im Zustandspaket steht.
+ * Diese Klasse LIEST den Weltzustand und setzt danach Modelle und
+ * Animationen. Sie schreibt nie zurueck. Positionen, Leben, wer am Boden
+ * liegt - das alles entscheidet die Simulation (`systems/`), die weiterhin
+ * flach in Pixeln rechnet und von Three.js nichts weiss.
  *
  * Gelesen wird ueber `WorldView`, nicht direkt aus `state`: Dort stecken
  * Interpolation (weich zwischen zwei Ticks) und die Vorhersage der eigenen
- * Figur im Koop. Die 2D-Darstellung macht es genauso.
+ * Figur im Koop.
+ *
+ * ================================================================
+ * MODELL, SOBALD GELADEN - VORHER PLATZHALTER
+ * ================================================================
+ *
+ * Die GLB-Modelle laden im Hintergrund (`preloadGameModels`). Solange sie
+ * nicht da sind, steht eine Kapsel bzw. ein Quader an ihrer Stelle - und
+ * sobald sie da sind, wird getauscht. So startet ein Run nie mit Warten,
+ * und eine fehlende Datei macht das Spiel nicht kaputt.
+ *
+ * ================================================================
+ * WELCHE ANIMATION? ABGELESEN AN DER BEWEGUNG
+ * ================================================================
+ *
+ * Laufen oder Stehen wird aus der DARGESTELLTEN Bewegung abgeleitet
+ * (Positionsaenderung je Bild), nicht aus einem Feld der Simulation. Das
+ * klappt beim Host und beim Koop-Client gleich - der Client bekommt keine
+ * Geschwindigkeiten der Gegner, nur Positionen. Und das Abspieltempo folgt
+ * dem echten Tempo: Ein Brocken, der langsamer wird, stapft langsamer.
  *
  * ================================================================
  * ANLEGEN UND AUFRAEUMEN
  * ================================================================
  *
- * Spieler und Gegner haben feste IDs. Taucht eine neue ID auf, entsteht ein
- * Mesh; verschwindet sie aus dem Zustand, wird es entfernt. Genau das hatte
- * die 2D-Darstellung bei Spielern einmal vergessen - uebrig blieb eine
- * eingefrorene, halbdurchsichtige "Geisterfigur" (Etappe 2).
- *
- * Geschosse liegen in der Simulation in einem festen Pool und werden wieder-
- * verwendet. Hier genauso: ein Mesh je Pool-Platz, sichtbar solange aktiv.
+ * Taucht eine neue ID auf, entsteht eine Figur; verschwindet sie aus dem
+ * Zustand, wird sie abgebaut. Genau das hatte die 2D-Darstellung bei
+ * Spielern einmal vergessen - uebrig blieb eine eingefrorene
+ * "Geisterfigur" (Etappe 2).
  */
 
 import {
@@ -39,8 +54,11 @@ import {
 } from "three";
 import type { Scene } from "three";
 import { COLORS } from "../config/constants";
+import { CHARACTER_LOOKS, ENEMY_LOOKS, FIGURE_HEIGHT_PER_DIAMETER } from "../config/models";
+import type { FigureLook } from "../config/models";
 import type { WorldView } from "../net/GameSession";
-import type { EnemyType } from "../systems/types";
+import type { EnemyType, Vec2 } from "../systems/types";
+import { FigureModel } from "./FigureModel";
 import {
   CHARACTER_COLORS,
   DOWN_COLOR,
@@ -52,11 +70,34 @@ import { meters, toThree } from "./space3d";
 
 /** Geschosse fliegen auf Brusthoehe - sonst verschwaenden sie im Boden. */
 const PROJECTILE_HEIGHT = 1;
+/** Ab diesem Tempo (Pixel/s) laeuft eine Figur, darunter steht sie. */
+const MOVING_SPEED = 25;
+/** Wie schnell sich eine Figur zu ihrer neuen Blickrichtung dreht (je s). */
+const TURN_RATE = 14;
+/**
+ * Bis zu so vielen Gegnern wird jedes Skelett in jedem Bild bewegt. Darueber
+ * nur jedes zweite Bild, abwechselnd und mit der aufgelaufenen Zeit - die
+ * Animation laeuft gleich schnell, nur mit halb so vielen Zwischenposen.
+ * Skelette zu bewegen kostet Rechenzeit auf dem Hauptprozessor, nicht auf
+ * der Grafikkarte; bei 40 Zombies ist es der groesste Einzelposten.
+ */
+const FULL_RATE_ENEMIES = 16;
 
-interface PlayerMesh {
+/** Eine Figur in der Welt - Modell oder, solange es laedt, Platzhalter. */
+interface FigureSlot {
   group: Group;
-  body: Mesh;
-  material: MeshToonMaterial;
+  placeholder: Group | Mesh;
+  figure: FigureModel | null;
+  look: FigureLook;
+  height: number;
+  /** Letzte dargestellte Position (Pixel) - daraus das Tempo. */
+  last: Vec2 | null;
+  /** Geglaettetes Tempo in Pixel/s. */
+  speed: number;
+  /** Aktuelle Drehung um die Hochachse. */
+  yaw: number;
+  /** Noch nicht an die Animation weitergegebene Zeit (gedrosselte Gegner). */
+  pending: number;
 }
 
 export class EntityView {
@@ -68,7 +109,6 @@ export class EntityView {
     6,
     14,
   );
-  /** Die "Nase": zeigt die Blickrichtung. Ohne sie ist eine Kapsel rund. */
   private readonly nose = new BoxGeometry(0.2, 0.2, 0.4);
   private readonly noseMaterial = new MeshToonMaterial({ color: 0x1b2230 });
   private readonly box = new BoxGeometry(1, 1, 1);
@@ -80,12 +120,13 @@ export class EntityView {
     enemy: new MeshBasicMaterial({ color: COLORS.enemyBullet }),
   };
 
-  private readonly players = new Map<string, PlayerMesh>();
-  private readonly enemies = new Map<number, Mesh>();
+  private readonly players = new Map<string, FigureSlot>();
+  private readonly enemies = new Map<number, FigureSlot>();
   private readonly projectiles: Mesh[] = [];
 
   /** Wiederverwendete Menge fuer "wer ist noch da?" - kein Muell je Bild. */
   private readonly seen = new Set<string | number>();
+  private frame = 0;
 
   constructor(scene: Scene) {
     this.enemyMaterials = {
@@ -97,81 +138,209 @@ export class EntityView {
     scene.add(this.root);
   }
 
-  /** Ein Bild: alle Meshes an den aktuellen Zustand angleichen. */
-  sync(view: WorldView): void {
-    this.syncPlayers(view);
-    this.syncEnemies(view);
+  /** Wie viele animierte Figuren gerade stehen - fuer die Leistungsanzeige. */
+  get figureCount(): number {
+    return this.players.size + this.enemies.size;
+  }
+
+  /**
+   * Ein Bild: alle Objekte an den aktuellen Zustand angleichen.
+   *
+   * @param seconds Zeit seit dem letzten Bild - fuer Animation und Drehung.
+   */
+  sync(view: WorldView, seconds: number): void {
+    this.frame += 1;
+    this.syncPlayers(view, seconds);
+    this.syncEnemies(view, seconds);
     this.syncProjectiles(view);
   }
 
-  private syncPlayers(view: WorldView): void {
+  private syncPlayers(view: WorldView, seconds: number): void {
     this.seen.clear();
     for (const player of view.state.players) {
       this.seen.add(player.id);
-      const mesh = this.players.get(player.id) ?? this.createPlayer(player.id);
+      let slot = this.players.get(player.id);
+      if (!slot) {
+        slot = this.createSlot(
+          CHARACTER_LOOKS[player.character],
+          PLAYER_SHAPE.height,
+          this.createCapsule(),
+        );
+        this.players.set(player.id, slot);
+      }
 
-      toThree(view.renderPlayerPosition(player.id), 0, mesh.group.position);
+      const position = view.renderPlayerPosition(player.id);
+      this.move(slot, position, seconds);
+      // Spieler schauen in ihre Blickrichtung (Zielen), nicht in die
+      // Laufrichtung - wer rueckwaerts schiessend flieht, dreht sich nicht um.
+      this.turn(slot, player.facing, seconds);
 
-      /*
-       * Blickrichtung: Die Nase sitzt am Mesh auf +z. Eine Drehung um die
-       * Hochachse um atan2(x, z) bringt +z genau auf (facing.x, facing.y) -
-       * Sim-y ist Three-z (siehe `space3d.ts`).
-       */
-      mesh.group.rotation.y = Math.atan2(player.facing.x, player.facing.y);
-
-      // Am Boden: flach gelegt und grau. Die Figur bleibt sichtbar, damit das
-      // Team weiss, wohin es zum Wiederbeleben muss.
-      mesh.group.rotation.x = player.down ? -Math.PI / 2 : 0;
-      mesh.material.color.setHex(player.down ? DOWN_COLOR : CHARACTER_COLORS[player.character]);
-    }
-
-    for (const [id, mesh] of this.players) {
-      if (!this.seen.has(id)) {
-        this.root.remove(mesh.group);
-        mesh.material.dispose();
-        this.players.delete(id);
+      if (slot.figure) {
+        if (player.down) {
+          slot.figure.play("death", 1, true);
+        } else {
+          this.playMovement(slot);
+        }
+        slot.figure.update(seconds);
+      } else {
+        // Platzhalter: flach gelegt und grau, wenn am Boden.
+        const capsule = slot.placeholder as Group;
+        capsule.rotation.x = player.down ? -Math.PI / 2 : 0;
+        const body = capsule.children[0] as Mesh;
+        (body.material as MeshToonMaterial).color.setHex(
+          player.down ? DOWN_COLOR : CHARACTER_COLORS[player.character],
+        );
       }
     }
+    this.prune(this.players);
   }
 
-  private createPlayer(id: string): PlayerMesh {
-    const material = new MeshToonMaterial({ color: 0xffffff });
-    const body = new Mesh(this.capsule, material);
-    // Kapsel steht mit dem Fuss auf dem Boden, nicht mit der Mitte.
-    body.position.y = PLAYER_SHAPE.height / 2;
-
-    const nose = new Mesh(this.nose, this.noseMaterial);
-    nose.position.set(0, PLAYER_SHAPE.height * 0.68, PLAYER_SHAPE.radius + 0.12);
-
-    const group = new Group();
-    group.add(body, nose);
-    this.root.add(group);
-
-    const mesh = { group, body, material };
-    this.players.set(id, mesh);
-    return mesh;
-  }
-
-  private syncEnemies(view: WorldView): void {
+  private syncEnemies(view: WorldView, seconds: number): void {
     this.seen.clear();
     for (const enemy of view.state.enemies) {
       this.seen.add(enemy.id);
-      let mesh = this.enemies.get(enemy.id);
-      if (!mesh) {
-        mesh = new Mesh(this.box, this.enemyMaterials[enemy.type]);
+      let slot = this.enemies.get(enemy.id);
+      if (!slot) {
         const diameter = meters(enemy.radius * 2);
-        const height = enemyHeight(diameter);
-        mesh.scale.set(diameter, height, diameter);
-        this.root.add(mesh);
-        this.enemies.set(enemy.id, mesh);
+        const box = new Mesh(this.box, this.enemyMaterials[enemy.type]);
+        const boxHeight = enemyHeight(diameter);
+        box.scale.set(diameter, boxHeight, diameter);
+        box.position.y = boxHeight / 2;
+        slot = this.createSlot(
+          ENEMY_LOOKS[enemy.type],
+          diameter * FIGURE_HEIGHT_PER_DIAMETER,
+          box,
+        );
+        this.enemies.set(enemy.id, slot);
       }
-      toThree(view.renderEnemyPosition(enemy.id, enemy.position), mesh.scale.y / 2, mesh.position);
+
+      const position = view.renderEnemyPosition(enemy.id, enemy.position);
+      const step = this.move(slot, position, seconds);
+      // Gegner schauen dorthin, wohin sie laufen.
+      if (step) {
+        this.turn(slot, step, seconds);
+      }
+
+      if (slot.figure) {
+        if (enemy.stunned > 0) {
+          slot.figure.play("idle", 0.4);
+        } else if (enemy.type === "shooter" && slot.speed < MOVING_SPEED) {
+          // Ein stehender Schuetze legt an - dafuer steht er ja.
+          slot.figure.play("shoot");
+        } else {
+          this.playMovement(slot);
+        }
+        slot.pending += seconds;
+        const throttled = view.state.enemies.length > FULL_RATE_ENEMIES;
+        if (!throttled || (enemy.id + this.frame) % 2 === 0) {
+          slot.figure.update(slot.pending);
+          slot.pending = 0;
+        }
+      }
+    }
+    this.prune(this.enemies);
+  }
+
+  private createSlot(look: FigureLook, height: number, placeholder: Group | Mesh): FigureSlot {
+    const group = new Group();
+    group.add(placeholder);
+    this.root.add(group);
+    return {
+      group,
+      placeholder,
+      figure: null,
+      look,
+      height,
+      last: null,
+      speed: 0,
+      yaw: 0,
+      pending: 0,
+    };
+  }
+
+  private createCapsule(): Group {
+    const body = new Mesh(this.capsule, new MeshToonMaterial({ color: 0xffffff }));
+    body.position.y = PLAYER_SHAPE.height / 2;
+    const nose = new Mesh(this.nose, this.noseMaterial);
+    nose.position.set(0, PLAYER_SHAPE.height * 0.68, PLAYER_SHAPE.radius + 0.12);
+    const capsule = new Group();
+    capsule.add(body, nose);
+    return capsule;
+  }
+
+  /**
+   * Position setzen, Tempo messen - und das Modell einsetzen, sobald es
+   * geladen ist.
+   *
+   * @returns die Bewegung seit dem letzten Bild (Pixel), oder null.
+   */
+  private move(slot: FigureSlot, position: Vec2, seconds: number): Vec2 | null {
+    if (!slot.figure) {
+      const figure = FigureModel.create(slot.look, slot.height);
+      if (figure) {
+        slot.group.remove(slot.placeholder);
+        disposePlaceholder(slot.placeholder);
+        slot.group.add(figure.root);
+        slot.figure = figure;
+      }
     }
 
-    for (const [id, mesh] of this.enemies) {
-      if (!this.seen.has(id)) {
-        this.root.remove(mesh);
-        this.enemies.delete(id);
+    toThree(position, 0, slot.group.position);
+
+    let step: Vec2 | null = null;
+    if (slot.last && seconds > 0) {
+      step = { x: position.x - slot.last.x, y: position.y - slot.last.y };
+      const speed = Math.hypot(step.x, step.y) / seconds;
+      // Glaetten: Ein einzelnes Bild mit Ruckler soll die Animation nicht
+      // zwischen Stehen und Laufen flackern lassen.
+      slot.speed += (speed - slot.speed) * Math.min(1, seconds * 10);
+      if (Math.hypot(step.x, step.y) < 0.5) {
+        step = null;
+      }
+    }
+    slot.last = { x: position.x, y: position.y };
+    return step;
+  }
+
+  /**
+   * Zur Richtung drehen, mit begrenzter Drehgeschwindigkeit.
+   *
+   * Das Modell schaut in seiner Ruhelage nach +z. Eine Drehung um die
+   * Hochachse um atan2(x, z) bringt +z auf die gewuenschte Richtung - Sim-y
+   * ist Three-z (siehe `space3d.ts`).
+   */
+  private turn(slot: FigureSlot, direction: Vec2, seconds: number): void {
+    if (Math.hypot(direction.x, direction.y) < 1e-6) {
+      return;
+    }
+    const target = Math.atan2(direction.x, direction.y);
+    let delta = target - slot.yaw;
+    delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+    slot.yaw += delta * Math.min(1, seconds * TURN_RATE);
+    slot.group.rotation.y = slot.yaw;
+  }
+
+  /** Laufen oder Stehen, mit Abspieltempo passend zur Geschwindigkeit. */
+  private playMovement(slot: FigureSlot): void {
+    const figure = slot.figure;
+    if (!figure) {
+      return;
+    }
+    if (slot.speed > MOVING_SPEED) {
+      const rate = Math.min(1.8, Math.max(0.5, slot.speed / slot.look.moveClipSpeed));
+      figure.play(slot.look.moveClip, rate);
+    } else {
+      figure.play("idle");
+    }
+  }
+
+  private prune<K>(slots: Map<K, FigureSlot>): void {
+    for (const [id, slot] of slots) {
+      if (!this.seen.has(id as string | number)) {
+        slot.figure?.dispose();
+        disposePlaceholder(slot.placeholder);
+        slot.group.removeFromParent();
+        slots.delete(id);
       }
     }
   }
@@ -193,7 +362,7 @@ export class EntityView {
       }
       mesh.material = this.bulletMaterials[projectile.owner];
       // Etwas groesser als der Trefferradius: Ein 7-px-Geschoss waere auf
-      // 26 m Abstand kaum ein Bildpunkt.
+      // 30 m Abstand kaum ein Bildpunkt.
       mesh.scale.setScalar(Math.max(0.12, meters(projectile.radius) * 1.4));
       toThree(
         view.renderProjectilePosition(projectile.position, projectile.velocity),
@@ -204,12 +373,14 @@ export class EntityView {
   }
 
   dispose(): void {
-    this.root.removeFromParent();
-    for (const mesh of this.players.values()) {
-      mesh.material.dispose();
+    for (const slots of [this.players, this.enemies] as Array<Map<unknown, FigureSlot>>) {
+      for (const slot of slots.values()) {
+        slot.figure?.dispose();
+        disposePlaceholder(slot.placeholder);
+      }
+      slots.clear();
     }
-    this.players.clear();
-    this.enemies.clear();
+    this.root.removeFromParent();
     this.projectiles.length = 0;
     this.capsule.dispose();
     this.nose.dispose();
@@ -221,5 +392,16 @@ export class EntityView {
     }
     this.bulletMaterials.player.dispose();
     this.bulletMaterials.enemy.dispose();
+  }
+}
+
+/**
+ * Nur das eigene Material der Kapsel freigeben - Geometrien und die
+ * Gegner-Materialien sind geteilt und gehoeren der EntityView.
+ */
+function disposePlaceholder(placeholder: Group | Mesh): void {
+  if (placeholder instanceof Group) {
+    const body = placeholder.children[0] as Mesh | undefined;
+    (body?.material as MeshToonMaterial | undefined)?.dispose();
   }
 }

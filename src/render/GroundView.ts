@@ -53,6 +53,11 @@ export class GroundView {
 
     const groups: Record<WallKind, Rect[]> = { outer: [], building: [], cover: [], bush: [] };
     for (const wall of state.walls) {
+      // Deckung, auf der Kisten stehen (Knoten-Gebiet), zeichnet `PropView`
+      // als echte Kisten - hier kein Quader darunter.
+      if (carriesCrate(wall, state)) {
+        continue;
+      }
       groups[wallKind(wall, state)].push(wall);
     }
     groups.bush = state.bushes;
@@ -149,6 +154,19 @@ export class GroundView {
       entry.dispose();
     }
   }
+}
+
+/** Steht auf dieser Wand eine Kiste der Kulisse? */
+function carriesCrate(wall: Rect, state: WorldState): boolean {
+  return (state.props ?? []).some(
+    (prop) =>
+      prop.kind.startsWith("crate") &&
+      prop.level === 0 &&
+      prop.x > wall.x &&
+      prop.x < wall.x + wall.width &&
+      prop.y > wall.y &&
+      prop.y < wall.y + wall.height,
+  );
 }
 
 /**

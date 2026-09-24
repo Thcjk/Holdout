@@ -19,6 +19,16 @@ const same = JSON.stringify(first) === JSON.stringify(second);
 
 console.log(describeNodeMap(first));
 console.log("");
+// Die Eckdaten je Knoten - die Nummer ist die fuer `?knoten=` im Spiel.
+const SIZE = ["", "klein", "mittel", "gross"];
+for (const node of first.nodes) {
+  console.log(
+    `  #${String(node.id).padStart(2)}  Schicht ${String(node.layer).padStart(2)}  ` +
+      `${node.type.padEnd(10)}  g ${String(node.danger).padStart(2)}  ` +
+      `${SIZE[node.arenaSize]?.padEnd(6)}  Beute ${node.loot}`,
+  );
+}
+console.log("");
 console.log(
   same
     ? `Zweiter Durchlauf mit Seed ${seed}: identisch (${first.nodes.length} Knoten).`

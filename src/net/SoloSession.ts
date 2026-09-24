@@ -9,7 +9,7 @@ import { Simulation } from "../systems/Simulation";
 import type { PlayerSetup } from "../systems/world";
 import type { InputState } from "../systems/types";
 import type { GameSession, WorldView } from "./GameSession";
-import { FORCED_SEED } from "../platform/debugFlags";
+import { FORCED_PLACE, FORCED_SEED } from "../platform/debugFlags";
 
 export class SoloSession implements GameSession {
   readonly selfId: string;
@@ -21,7 +21,9 @@ export class SoloSession implements GameSession {
 
   constructor(setup: PlayerSetup, seed = FORCED_SEED ?? Date.now() & 0x7fffffff) {
     this.selfId = setup.id;
-    this.simulation = new Simulation([setup], seed);
+    // Seit dem Umbau auf die Knoten-Karte spielt ein Run im Gebiet eines
+    // Knotens. Welcher, laesst sich solo ueber die Adresse waehlen.
+    this.simulation = new Simulation([setup], seed, FORCED_PLACE);
   }
 
   get view(): WorldView {

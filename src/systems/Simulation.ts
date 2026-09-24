@@ -13,7 +13,7 @@
 
 import { MAX_TICKS_PER_FRAME, TICK_MS, TICK_SECONDS } from "../config/constants";
 import { createWorld, stepWorld } from "./world";
-import type { PlayerSetup } from "./world";
+import type { PlayerSetup, WorldPlace } from "./world";
 import type { WorldView } from "../net/GameSession";
 import type { GameEvent, InputState, Vec2, WorldState } from "./types";
 
@@ -38,8 +38,8 @@ export class Simulation implements WorldView {
   /** Ereignisse aller Ticks dieses Bildes, gesammelt fuer die Darstellung. */
   private readonly frameEvents: GameEvent[] = [];
 
-  constructor(setups: readonly PlayerSetup[], seed = 1) {
-    this.state = createWorld(setups, seed);
+  constructor(setups: readonly PlayerSetup[], seed = 1, where: WorldPlace = "open") {
+    this.state = createWorld(setups, seed, where);
     this.snapshotPositions();
   }
 

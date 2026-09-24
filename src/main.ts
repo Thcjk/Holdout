@@ -169,6 +169,12 @@ async function startWhenLandscape(): Promise<void> {
 
   const game = new Phaser.Game(buildConfig());
 
+  // 3D-Modelle schon im Menue laden, nicht erst bei Rundenbeginn: Bis man
+  // Charakter und Rucksack gewaehlt hat, sind sie meist da.
+  if (VIEW_MODE === "3d") {
+    void import("./render/ModelLoader").then(({ preloadGameModels }) => preloadGameModels());
+  }
+
   // Mit ?debug=netz: Protokoll des Koop-Verbindungsaufbaus auf dem Bildschirm.
   // Ohne den Schalter passiert hier nichts.
   installNetLogOverlay();

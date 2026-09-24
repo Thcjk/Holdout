@@ -13,7 +13,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   prettier,
   {
-    files: ["**/*.{ts,tsx,js}"],
+    files: ["**/*.{ts,tsx,js,mjs}"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",

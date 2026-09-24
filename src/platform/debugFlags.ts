@@ -95,3 +95,29 @@ export const VIEW_MODE: "3d" | "2d" = (() => {
     return "3d";
   }
 })();
+
+/**
+ * Welcher Knoten gespielt wird (nur solo), solange es keine Kartenansicht gibt.
+ *
+ *   .../Holdout/?knoten=12        das Gebiet von Knoten 12 der Karte
+ *   .../Holdout/?welt=offen       die alte offene Welt (Phase 8/9)
+ *
+ * Ohne Angabe: der erste Kampfknoten. Welche Knoten es gibt, zeigt
+ * `npm run nodemap -- <seed>`; zusammen mit `?seed=` laesst sich so jedes
+ * Gebiet gezielt ansehen - etwa ein Elite-Knoten mit hoher Gefahr.
+ *
+ * Nur solo: Im Koop muessen Host und Clients dasselbe Gebiet bauen.
+ */
+export const FORCED_PLACE: "open" | { nodeId: number | null } = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("welt")?.trim().toLowerCase() === "offen") {
+      return "open";
+    }
+    const raw = params.get("knoten");
+    const value = raw === null ? Number.NaN : Number.parseInt(raw, 10);
+    return { nodeId: Number.isFinite(value) ? value : null };
+  } catch {
+    return { nodeId: null };
+  }
+})();

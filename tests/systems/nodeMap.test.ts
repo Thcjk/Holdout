@@ -150,6 +150,9 @@ describe("Knoten-Karte", () => {
         if (node.type === "rest" && node.layer < map.depth - 2) {
           expect(node.layer).toBeGreaterThanOrEqual(NODE_MAP.restFromLayer);
         }
+        if (node.type === "extraction") {
+          expect(node.layer).toBeGreaterThanOrEqual(NODE_MAP.extractionFromLayer);
+        }
       }
       // Nie zwei Rastplaetze hintereinander - auch nicht vor der
       // Pflicht-Rast vor dem Boss.
@@ -157,6 +160,30 @@ describe("Knoten-Karte", () => {
         if (node.type !== "rest") continue;
         for (const id of node.next) {
           expect(map.nodes[id]?.type).not.toBe("rest");
+        }
+      }
+    }
+  });
+
+  it("bietet Extraktionen an - sonst gaebe es nur Sieg oder Wipe", () => {
+    for (const seed of SEEDS) {
+      const map = generateNodeMap(seed);
+      expect(map.nodes.some((node) => node.type === "extraction")).toBe(true);
+    }
+  });
+
+  it("zeigt Eckdaten: Groesse 1-3, Beute nur bei Kampfknoten", () => {
+    for (const seed of SEEDS) {
+      const map = generateNodeMap(seed);
+      for (const node of map.nodes) {
+        expect([1, 2, 3]).toContain(node.arenaSize);
+        if (node.type === "elite") expect(node.arenaSize).toBe(1);
+        if (node.type === "boss") expect(node.arenaSize).toBe(3);
+        const fights = node.type === "combat" || node.type === "elite" || node.type === "boss";
+        if (fights) {
+          expect(node.loot).toBeGreaterThanOrEqual(node.danger);
+        } else {
+          expect(node.loot).toBe(0);
         }
       }
     }

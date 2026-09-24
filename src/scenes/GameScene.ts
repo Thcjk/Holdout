@@ -10,7 +10,7 @@
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import { playEventSounds } from "../audio/eventSounds";
-import { ABILITIES, CHARACTERS, PLAYER, SUPERS, WORLD } from "../config/balance";
+import { ABILITIES, CHARACTERS, PLAYER, SUPERS } from "../config/balance";
 import { COLORS, DEPTH, VIEW3D } from "../config/constants";
 import type { GameSession } from "../net/GameSession";
 import { SoloSession } from "../net/SoloSession";
@@ -27,7 +27,7 @@ import { setReloadSafe } from "../platform/update";
 import { hideValuesOverlay, updateValuesOverlay } from "../platform/valuesOverlay";
 import { loadHighscore } from "../storage/highscore";
 import { extractionFraction, leftBehind } from "../systems/encounters";
-import { distanceFromStart } from "../systems/zones";
+import { distanceFromStart, safeRadiusOf } from "../systems/zones";
 import { nearestEnemy } from "../systems/targeting";
 import { emptyInput } from "../systems/types";
 import type {
@@ -444,6 +444,7 @@ export class GameScene extends Phaser.Scene {
         view: this.world3d
           ? `3D Neigung ${VIEW3D.pitch} Drehung ${VIEW3D.yaw} Abstand ${VIEW3D.distance} Bildwinkel ${VIEW3D.fov}`
           : "2D",
+        render: this.world3d?.stats,
       },
       this.time.now,
     );
@@ -712,7 +713,8 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.zone = state.zone;
     this.hudModel.deepestZone = state.deepestZone;
     this.hudModel.inSafeZone =
-      distanceFromStart(state, player.position) <= WORLD.safeRadius;
+      safeRadiusOf(state) > 0 &&
+      distanceFromStart(state, player.position) <= safeRadiusOf(state);
     this.hudModel.extraction = state.extractionIndex < 0 ? -1 : extractionFraction(state);
     /*
      * Der Kompass zeigt auf etwas AUSSERHALB des Bildes. Liegt die Mitte der
@@ -762,7 +764,7 @@ export class GameScene extends Phaser.Scene {
     // zweite Quelle dafuer waere eine zweite Wahrheit.
     map.startX = state.bounds.width / 2;
     map.startY = state.bounds.height / 2;
-    map.safeRadius = WORLD.safeRadius;
+    map.safeRadius = safeRadiusOf(state);
     map.selfX = player.position.x;
     map.selfY = player.position.y;
 

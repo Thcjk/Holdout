@@ -81,7 +81,8 @@ export class ClientView implements WorldView {
      * Waende, waehrend die anderen ihn durch Deckung laufen saehen. Uebertragen
      * wird die Karte nie, nur diese eine Zahl.
      */
-    this.state = createWorld(setups, seed);
+    // Dasselbe Gebiet wie der Host (`HostSession`): erster Kampfknoten.
+    this.state = createWorld(setups, seed, { nodeId: null });
     for (const player of this.state.players) {
       this.playerById.set(player.id, player);
     }
