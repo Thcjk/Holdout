@@ -459,6 +459,29 @@ lief. Neueste unten.
   Nebenwirkung eines Fehlers. Falls es sich im Spiel falsch anfühlt: den
   Faktor je Charakter statt global setzen.
 
+#### Etappe 11 – UI-Stil · 2026-09-24 07:35 UTC
+
+- **Kein Kenney-UI-Paket und keine Pixelschrift im Repo.** Gesucht nach
+  Schriftdateien (`.ttf/.otf/.woff/.fnt`) und UI-Paketen: `public/` enthält
+  nur das Tilesheet, zwei Vorschaubilder, die Lizenz und die Musik. Laut
+  Dokument wird dann **nicht improvisiert** – Knöpfe, Balken und Rahmen
+  bleiben gezeichnet, die Schrift bleibt `system-ui`. Festgehalten in
+  `AUDIT.md`. Wer ein Paket nachliefert (z. B. Kenney „UI Pack“ und eine
+  Pixelschrift), ersetzt `ui/Button.ts` und die Balken in `HudScene`.
+- **Palette umgesetzt:** neue Konstante `PALETTE` in `config/constants.ts`
+  (HUD-Text `#FFFFFF`, Schatten `#00000066`, Gefahr `#E4572E`, Erfolg
+  `#7FB069`). `COLORS.mate` von `#7EE08A` auf `#7FB069`; alle Stellen, die
+  die alten Werte als Text wiederholten, lesen jetzt `PALETTE`. Zonenname,
+  Punktzahl, Mitspielerzeile, Ansage und Kompassschrift haben Schatten.
+- **Geprüft wie:** 253 Tests unverändert grün; im Emulator angesehen –
+  weisser Text mit Schatten ist auf Sand und Gras lesbar.
+- **Nicht wie geplant:** Das vorgegebene Erfolgsgrün ist dunkler als das
+  alte und hebt sich auf dem **Sandboden schwächer ab** (Ansage „Sichere
+  Zone …“, Kompass-Entfernung auf dem grünen Teppich). Der Schatten mildert
+  es, löst es nicht. Nicht eigenmächtig aufgehellt – die Farbe ist Vorgabe.
+  Die Menüs und Ergebnisbildschirme benutzen weiter ihr helles Blaugrau
+  (`#dce8f7`); das Dokument verlangt Weiss nur für den HUD-Text.
+
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut

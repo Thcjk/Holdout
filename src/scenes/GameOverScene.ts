@@ -7,7 +7,7 @@
 
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
-import { COLORS, VIEWPORT } from "../config/constants";
+import { COLORS, PALETTE, VIEWPORT } from "../config/constants";
 import { loadHighscore, saveHighscore } from "../storage/highscore";
 import type { CharacterId, RunOutcome } from "../systems/types";
 import { Button } from "../ui/Button";
@@ -58,12 +58,12 @@ export interface GameOverData {
 const OUTCOMES: Record<RunOutcome, { title: string; color: string; note: string }> = {
   wipe: {
     title: "Team am Boden",
-    color: "#e4572e",
+    color: PALETTE.danger,
     note: "Kein Ausstieg geschafft.",
   },
   extracted: {
     title: "Extrahiert",
-    color: "#7ee08a",
+    color: PALETTE.success,
     note: "Rechtzeitig rausgekommen.",
   },
   bossDefeated: {
@@ -148,7 +148,7 @@ export class GameOverScene extends Phaser.Scene {
         {
           fontFamily: "system-ui, sans-serif",
           fontSize: "18px",
-          color: isRecord ? "#7ee08a" : "#8ea6c4",
+          color: isRecord ? PALETTE.success : "#8ea6c4",
         },
       )
       .setOrigin(0.5);
@@ -186,7 +186,7 @@ export class GameOverScene extends Phaser.Scene {
         {
           fontFamily: "system-ui, sans-serif",
           fontSize: "17px",
-          color: loot.lost > 0 ? "#e4572e" : loot.kept > 0 ? "#7ee08a" : "#8ea6c4",
+          color: loot.lost > 0 ? PALETTE.danger : loot.kept > 0 ? PALETTE.success : "#8ea6c4",
           fontStyle: "bold",
         },
       )

@@ -11,7 +11,7 @@
 
 import Phaser from "phaser";
 import { ENCOUNTERS } from "../config/balance";
-import { COLORS, DEPTH, SAFE, TOUCH, VIEWPORT } from "../config/constants";
+import { COLORS, DEPTH, PALETTE, SAFE, TOUCH, VIEWPORT } from "../config/constants";
 import { audio } from "../audio/AudioEngine";
 import { InputManager } from "../input/InputManager";
 import { Button } from "../ui/Button";
@@ -143,9 +143,12 @@ export class HudScene extends Phaser.Scene {
       .text(0, 0, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "13px",
-        color: "#7ee08a",
+        color: PALETTE.success,
         fontStyle: "bold",
       })
+      // Auf dem gruenen Teppich war die gruene Entfernung kaum zu lesen
+      // (Etappe 6 gesehen) - der dunkle Schatten trennt sie vom Untergrund.
+      .setShadow(1, 1, "#000000cc", 2)
       .setOrigin(0.5)
       .setDepth(DEPTH.hud);
 
@@ -153,18 +156,20 @@ export class HudScene extends Phaser.Scene {
       .text(leftEdge, topEdge, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "18px",
-        color: "#dce8f7",
+        color: PALETTE.hudText,
         fontStyle: "bold",
       })
+      .setShadow(1, 2, PALETTE.hudShadow, 2)
       .setDepth(DEPTH.hud);
 
     this.scoreText = this.add
       .text(rightEdge, topEdge, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "16px",
-        color: "#dce8f7",
+        color: PALETTE.hudText,
         align: "right",
       })
+      .setShadow(1, 2, PALETTE.hudShadow, 2)
       .setOrigin(1, 0)
       .setDepth(DEPTH.hud);
 
@@ -172,8 +177,9 @@ export class HudScene extends Phaser.Scene {
       .text(leftEdge, topEdge + 28, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "13px",
-        color: "#8ea6c4",
+        color: PALETTE.hudText,
       })
+      .setShadow(1, 1, PALETTE.hudShadow, 2)
       .setDepth(DEPTH.hud);
 
     this.announceText = this.add
@@ -184,6 +190,9 @@ export class HudScene extends Phaser.Scene {
         fontStyle: "bold",
         align: "center",
       })
+      // Schatten wie das uebrige HUD - die Ansage liegt oft ueber hellem
+      // Sand oder Gras und war dort schwer zu lesen.
+      .setShadow(2, 2, PALETTE.hudShadow, 3)
       .setOrigin(0.5)
       .setDepth(DEPTH.hud);
 
@@ -690,13 +699,13 @@ export class HudScene extends Phaser.Scene {
   private updateAnnouncement(): void {
     if (this.model.connectionMessage) {
       this.announceText.setText(this.model.connectionMessage);
-      this.announceText.setColor("#e4572e");
+      this.announceText.setColor(PALETTE.danger);
       return;
     }
 
     if (this.model.down) {
       this.announceText.setText("Am Boden - ein Mitspieler kann dich aufheben");
-      this.announceText.setColor("#e4572e");
+      this.announceText.setColor(PALETTE.danger);
       return;
     }
 
@@ -712,7 +721,7 @@ export class HudScene extends Phaser.Scene {
       // "Wer steht", nicht "alle": Seit 2026-09-24 zaehlen Gefallene nicht
       // mehr mit (siehe `stepExtraction`). Der Text soll genau das sagen.
       this.announceText.setText(`Extraktion läuft - ${seconds}\nWer steht, bleibt in der Zone`);
-      this.announceText.setColor("#7ee08a");
+      this.announceText.setColor(PALETTE.success);
       return;
     }
 
@@ -725,7 +734,7 @@ export class HudScene extends Phaser.Scene {
      */
     if (this.model.inSafeZone) {
       this.announceText.setText("Sichere Zone - hier heilst du");
-      this.announceText.setColor("#7ee08a");
+      this.announceText.setColor(PALETTE.success);
       return;
     }
 

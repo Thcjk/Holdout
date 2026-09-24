@@ -282,4 +282,12 @@ Tank-Heilfeld und Sniper-Aufklärungsschuss nach Dokumentwerten, Auto-Aim
 −40 %. Abklingzeit 14 für einen ladungsbasierten Super nicht übernommen.
 Folge: Bot-Sniper 7,4 → 4,8 Zonen.
 
+### Etappe 11 · 2026-09-24 07:35 UTC
+
+**Bestätigt:** Kein Kenney-UI-Paket, keine Pixelschrift im Repo (gesucht nach
+Schriftdateien und UI-Paketen; `public/assets` enthält nur Tilesheet,
+Vorschaubilder, Lizenz, Musik). Nicht improvisiert. Palette umgesetzt
+(`PALETTE`), HUD-Text weiss mit Schatten. Nachteil: `#7FB069` ist auf Sand
+schwächer lesbar als das alte Grün.
+
 *(wird fortgeschrieben)*

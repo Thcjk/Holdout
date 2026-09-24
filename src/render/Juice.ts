@@ -10,7 +10,7 @@
  */
 
 import Phaser from "phaser";
-import { COLORS, DEPTH } from "../config/constants";
+import { COLORS, DEPTH, PALETTE } from "../config/constants";
 import { PARTICLE_TILES, SHEET_KEY } from "../config/assets";
 import type { GameEvent } from "../systems/types";
 
@@ -267,7 +267,7 @@ export class Juice {
 
     this.scene.tweens.killTweensOf(text);
     text.setText(`+${amount}`);
-    text.setColor("#7ee08a");
+    text.setColor(PALETTE.success);
     text.setPosition(x, y - 26);
     text.setAlpha(1);
     text.setScale(1.1);

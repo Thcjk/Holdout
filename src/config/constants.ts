@@ -283,6 +283,21 @@ export const TOUCH = {
   },
 } as const;
 
+/**
+ * Die Palette als Text-Farbwerte, fuer Phaser-Texte (die wollen "#rrggbb").
+ *
+ * Aus dem Arbeitsdokument (Etappe 11): HUD-Text weiss mit halbdurchsichtigem
+ * schwarzem Schatten, Warnung/Gefahr #E4572E, Erfolg/sicher #7FB069. An EINER
+ * Stelle, damit nicht wieder dieselbe Farbe in drei Schreibweisen im Code
+ * steht.
+ */
+export const PALETTE = {
+  hudText: "#ffffff",
+  hudShadow: "#00000066",
+  danger: "#e4572e",
+  success: "#7fb069",
+} as const;
+
 /** Farbpalette. Lesbarkeit auf kleinem Bildschirm geht vor Schoenheit. */
 export const COLORS = {
   background: 0x11161f,
@@ -295,7 +310,12 @@ export const COLORS = {
   player: 0x4cc2ff,
   playerOutline: 0xe8f6ff,
   playerDown: 0x4a5a70,
-  mate: 0x7ee08a,
+  /**
+   * "Erfolg / sicher" aus der Palette des Arbeitsdokuments (Etappe 11):
+   * #7FB069 statt des bisherigen helleren #7EE08A. Gilt fuer alles, was
+   * "gut" heisst: Ausstieg, Heilung, sichere Zone, Lebensbalken.
+   */
+  mate: 0x7fb069,
   playerBullet: 0xfff2a8,
   enemyBullet: 0xff7a5c,
   runner: 0xff6b4a,
