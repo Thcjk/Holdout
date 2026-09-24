@@ -33,7 +33,7 @@ import {
   SUPERS,
   WORLD,
 } from "./balance";
-import { CAMERA, TOUCH } from "./constants";
+import { CAMERA, TOUCH, VIEW3D } from "./constants";
 
 /** Die Wurzeln, unter denen gesucht wird. */
 const ROOTS: Record<string, unknown> = {
@@ -49,6 +49,8 @@ const ROOTS: Record<string, unknown> = {
   // ?tune=touch.responseCurve=1.5,touch.stickRadius=70
   touch: TOUCH,
   camera: CAMERA,
+  // Die feste 3D-Kamera: ?tune=view3d.pitch=60,view3d.distance=22
+  view3d: VIEW3D,
   /*
    * Encounter und Loot kamen mit Phase 9 und 10 dazu und fehlten hier
    * zunaechst - aufgefallen ist es beim Pruefen im Emulator, als

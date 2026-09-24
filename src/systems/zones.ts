@@ -8,7 +8,7 @@
  * Bauen auffaellt und dann schwer zu lesen ist.
  */
 
-import { DIFFICULTY, LIMITS } from "../config/balance";
+import { DIFFICULTY, LIMITS, WORLD } from "../config/balance";
 import type { Vec2, WorldState } from "./types";
 
 /** In welcher Distanzzone liegt ein Punkt mit diesem Abstand zum Start? */
@@ -20,6 +20,24 @@ export function zoneAt(distance: number): number {
 export function distanceFromStart(state: WorldState, point: Vec2): number {
   const center = { x: state.bounds.width / 2, y: state.bounds.height / 2 };
   return Math.hypot(point.x - center.x, point.y - center.y);
+}
+
+/**
+ * Die Zone, die an einem Punkt fuer Gegner und Beute gilt.
+ *
+ * In der offenen Welt die Distanzzone. Im Gebiet eines Knotens die feste
+ * Gefahrenstufe g des Knotens (`state.fixedZone`) - dort gibt es keinen
+ * "Weg nach draussen", die Gefahr steht vorher fest (BRIEFING Abschnitt 4).
+ * Alle Stellen, die eine Zone brauchen, fragen HIER - so bleibt es eine
+ * Regel an einer Stelle.
+ */
+export function zoneOf(state: WorldState, point: Vec2): number {
+  return state.fixedZone ?? zoneAt(distanceFromStart(state, point));
+}
+
+/** Radius der sicheren Zone um den Start (0 = keine, im Knoten-Gebiet). */
+export function safeRadiusOf(state: WorldState): number {
+  return state.safeRadius ?? WORLD.safeRadius;
 }
 
 /**

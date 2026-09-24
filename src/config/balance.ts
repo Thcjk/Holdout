@@ -899,3 +899,117 @@ export const LIMITS = {
   maxEnemies: 40,
   maxProjectiles: 60,
 } as const;
+
+/**
+ * Die Knoten-Karte eines Runs (BRIEFING Abschnitt 2 und 4).
+ *
+ * Das Muster: Schichten vom Start bis zum Ende-Boss. In jeder Schicht liegen
+ * bis zu `columns` Knoten nebeneinander. Mehrere Pfade laufen von Schicht zu
+ * Schicht, jeweils nur in eine NACHBARspalte - so entstehen parallele Wege,
+ * die sich trennen und wieder treffen, ohne sich zu kreuzen.
+ *
+ * Die Knotentypen sind die des Briefings: Standard-Kampf (haeufigster),
+ * Elite/Mini-Boss, Lager/Rast, Extraktion, Ende-Boss. Tiefe, Spaltenzahl
+ * und Gewichte sind Vorschlaege zum Justieren.
+ */
+export const NODE_MAP = {
+  /** Anzahl Schichten, Start und Ende-Boss eingeschlossen. */
+  depth: 12,
+  /** Spalten nebeneinander. 4 passt quer auf ein Handy, ohne zu scrollen. */
+  columns: 4,
+  /**
+   * Wie viele Pfade gezogen werden. Mehr Pfade = mehr Verzweigungen. Zwei
+   * Pfade starten garantiert in verschiedenen Spalten, sonst gaebe es
+   * gleich am Anfang keine Wahl.
+   */
+  paths: 5,
+  /**
+   * Gewichte der Knotentypen fuer die Schichten dazwischen. Ein Gewicht ist
+   * kein Prozentwert - 5 gegen 1 heisst "fuenfmal so haeufig". Kampf ist
+   * laut Briefing der haeufigste Typ.
+   */
+  typeWeights: {
+    combat: 5,
+    elite: 1,
+    rest: 1,
+    extraction: 1.2,
+  },
+  /** Ab welcher Schicht Elite-Knoten vorkommen duerfen (0 = Start). */
+  eliteFromLayer: 4,
+  /** Ab welcher Schicht Rastplaetze vorkommen duerfen. */
+  restFromLayer: 3,
+  /**
+   * Ab welcher Schicht Extraktionen vorkommen duerfen. Nicht gleich am
+   * Anfang: Wer nach einem Knoten schon aussteigen kann, hat nichts riskiert.
+   */
+  extractionFromLayer: 2,
+  /**
+   * Gefahrenstufe g: Grundwert je Schicht. Knoten in Schicht n haben
+   * mindestens `1 + floor(n * dangerPerLayer)`.
+   */
+  dangerPerLayer: 0.75,
+  /** Elite-Knoten liegen so viele Stufen ueber ihrer Schicht. */
+  eliteDangerBonus: 1,
+  /**
+   * Beute-Potenzial (Eckdaten-Balken): Gefahr plus Aufschlag je Typ.
+   * Rast, Extraktion und Start haben keine Kampfbeute - dort ist es 0.
+   */
+  lootBonus: { combat: 0, elite: 2, boss: 3 },
+  /**
+   * Kartengroesse (1 klein, 2 mittel, 3 gross) - Gewichte fuer normale
+   * Knoten. Elite ist immer klein (eng und heftig), der Boss immer gross.
+   */
+  sizeWeights: [3, 4, 2] as readonly number[],
+} as const;
+
+/**
+ * Das Gebiet eines Knotens (NodeArenaGenerator, BRIEFING Abschnitt 4).
+ *
+ * ================================================================
+ * DICHTE WIE DIE GEGNERDICHTE: PROPORTIONAL ZU g
+ * ================================================================
+ *
+ * Gleiche Logik wie die Gegnerformel im Briefing: Anzahl = Grundwert +
+ * Faktor x g, mit Obergrenze. Ein Knoten mit g = 1 ist eine offene Flaeche
+ * mit wenig Deckung; bei g = 8 steht Kiste an Kiste, und die Haeuser sind
+ * groesser. Mehr Deckung heisst dort nicht "leichter": Gegner kommen dann
+ * auch von hinter der Deckung.
+ *
+ * Die Obergrenzen sind die Leistungsgrenze fuers Handy (siehe CLAUDE.md,
+ * "Leistungsbudget"): Eine Kiste hat rund 630 Dreiecke.
+ */
+export const NODE_ARENA = {
+  /** Kantenlaenge je Kartengroesse (1 klein, 2 mittel, 3 gross), in Kacheln (1 m). */
+  sizeTiles: [40, 48, 56] as readonly number[],
+  /** Mindestabstand zwischen zwei Hindernissen (Pixel): zwei Kacheln Gasse. */
+  minGap: 96,
+  /** Um den Startpunkt bleibt so viel frei (Pixel). */
+  spawnClear: 336,
+  buildings: { base: 1, perDanger: 0.35, max: 5 },
+  /** Gebaeudegroesse in Kacheln; die Obergrenze waechst mit g. */
+  buildingTiles: { min: 6, max: 8, maxPerDanger: 0.3, maxCap: 12 },
+  /** Deckung aus Kistenstapeln: Anzahl Stapelreihen. */
+  cover: { base: 6, perDanger: 1.5, max: 20 },
+  /** Laenge einer Kistenreihe in Kacheln (je Kiste zwei Kacheln). */
+  coverTiles: [2, 4, 6] as readonly number[],
+  /** Anteil der Kisten, auf denen eine zweite liegt - hoehere Deckung. */
+  stackChance: 0.45,
+  /** Einzelne Beutekisten (mit Glanz markiert). */
+  lootCrates: { base: 2, perDanger: 0.3, max: 5 },
+  /** Buschhaufen - Verstecke, unabhaengig von g. */
+  bushes: 3,
+  /** Deko ohne Kollision: Zielscheiben und Rauch. */
+  deco: { base: 6, perDanger: 1, max: 16 },
+  /** Harte Obergrenze fuer Kisten je Knoten (Leistung). */
+  maxCrates: 70,
+  /**
+   * Beute-Qualitaet steigt mit g (Briefing): Grundgewichte der Seltenheiten
+   * 1 bis 4, und je Stufe g wird jede hoehere Seltenheit um diesen Anteil
+   * wahrscheinlicher. Bei g = 1 ist Stufe 4 selten, bei g = 8 so haeufig
+   * wie Stufe 1.
+   */
+  lootRarityBase: [6, 3, 1.5, 0.6] as readonly number[],
+  lootRarityPerDanger: 0.25,
+  /** Ausstieg bzw. Boss liegen so weit vom Start (Anteil der Kantenlaenge). */
+  landmarkDistance: 0.34,
+} as const;

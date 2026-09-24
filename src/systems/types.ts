@@ -443,6 +443,21 @@ export interface EncounterSpot {
   discovered: boolean;
 }
 
+/**
+ * Ein Gegenstand der Kulisse in einem Knoten-Gebiet (nur Darstellung).
+ * Lage in Simulationspixeln, Drehung im Bogenmass um die Hochachse.
+ */
+export interface ArenaProp {
+  kind: "crateSmall" | "crateMedium" | "crateWide" | "target" | "smoke";
+  x: number;
+  y: number;
+  rotation: number;
+  /** Stapelhoehe: 0 am Boden, 1 auf einer anderen Kiste. */
+  level: number;
+  /** Beutekiste - wird mit Glanz markiert. */
+  lootable: boolean;
+}
+
 /** Eine Zone, in der das Team den Run beenden kann. */
 export interface ExtractionZone {
   position: Vec2;
@@ -526,6 +541,25 @@ export interface WorldState {
    */
   buildings: Rect[];
   bounds: Rect;
+  /**
+   * Nur im Gebiet eines Knotens (NodeArenaGenerator): die feste Zone, nach der
+   * sich Gegnerzahl, -staerke und Beute richten - die Gefahrenstufe g des
+   * Knotens. In der offenen Welt `undefined`; dort zaehlt die Entfernung vom
+   * Start (`zones.ts`, `zoneOf`).
+   */
+  fixedZone?: number;
+  /**
+   * Radius der sicheren Zone um den Start. In der offenen Welt
+   * `undefined` = `WORLD.safeRadius`. Ein Knoten hat keine: Er ist eine kurze
+   * Kampfbegegnung, und 700 px Heilzone waeren dort die halbe Flaeche.
+   */
+  safeRadius?: number;
+  /**
+   * Nur zum Zeichnen: Kisten, Zielscheiben, Rauch eines Knotens. Die
+   * Simulation liest die Liste nicht - was Bewegung blockiert, steht in
+   * `walls`. Aus dem Seed erzeugt wie alles andere, geht also nie uebers Netz.
+   */
+  props?: ArenaProp[];
   /** Ereignisse dieses Ticks. Die Darstellung leert die Liste nach dem Auswerten. */
   events: GameEvent[];
   /** Zustand des Zufallsgenerators - damit Host und Client gleich rechnen. */

@@ -15,9 +15,25 @@ import Phaser from "phaser";
 import type { InputState } from "../systems/types";
 import { TouchControls } from "../ui/TouchControls";
 import type { TouchStatus } from "../ui/TouchControls";
+import { TOP_DOWN, screenToGround, screenToGroundOrNull } from "./viewMapping";
+import type { ViewOrientation } from "./viewMapping";
 
 export class InputManager {
   private readonly touch: TouchControls;
+
+  /**
+   * Wie die Kamera auf den Boden blickt (3D-Umbau).
+   *
+   * Der Daumen liefert BILDSCHIRM-Richtungen, die Simulation braucht
+   * BODEN-Richtungen. Umgerechnet wird genau hier und nur hier - vor dem
+   * Netz. Die Simulation, der Host und das Protokoll sehen damit weiterhin
+   * nur Weltrichtungen und wissen nicht, wie irgendeine Kamera steht.
+   *
+   * Voreinstellung: senkrecht von oben. Damit aendert sich in der 2D-Ansicht
+   * (`?view=2d`) nichts. Die Spielszene setzt den Wert jedes Bild aus der
+   * 3D-Kamera.
+   */
+  view: ViewOrientation = TOP_DOWN;
 
   constructor(scene: Phaser.Scene) {
     this.touch = new TouchControls(scene);
@@ -40,12 +56,12 @@ export class InputManager {
   getState(): InputState {
     const output = this.touch.read();
     return {
-      move: output.move,
-      aim: output.aim,
+      move: screenToGround(output.move, this.view),
+      aim: screenToGroundOrNull(output.aim, this.view),
       fire: output.fire,
       useSuper: output.useSuper,
       useAbility: output.useAbility,
-      abilityAim: output.abilityAim,
+      abilityAim: screenToGroundOrNull(output.abilityAim, this.view),
       // Rucksack-Befehle kommen nicht vom Daumen auf dem Spielfeld, sondern
       // aus dem Rucksack-Fenster der HUD-Szene - die Spielszene setzt sie ein.
       inventory: null,

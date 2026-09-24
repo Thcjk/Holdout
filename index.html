@@ -43,6 +43,11 @@
         height: 100%;
         display: grid;
         place-items: center;
+        /* Ueber dem Three.js-Canvas (#world-3d, z-index 0), das die Welt
+           zeichnet. Phaser ist darueber durchsichtig und bekommt alle
+           Beruehrungen. Siehe src/render/SceneSetup.ts. */
+        position: relative;
+        z-index: 1;
       }
 
       #game-root canvas {

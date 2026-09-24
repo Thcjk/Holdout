@@ -24,6 +24,12 @@ export interface OverlayValues {
   superCharge: number;
   /** Ausgeteilter Schaden je Sekunde, gemittelt ueber die Runde. */
   dps: number;
+  /** Eigene Position in Simulationspixeln - zum Pruefen der Laufrichtung. */
+  position: { x: number; y: number };
+  /** Welche Ansicht, bei 3D mit Kamerawerten - zum Justieren am Geraet. */
+  view: string;
+  /** Nur 3D: Kosten des letzten Bildes. */
+  render?: { triangles: number; calls: number; figures: number; loot: number };
 }
 
 function ensureElement(): HTMLDivElement | null {
@@ -77,7 +83,14 @@ export function updateValuesOverlay(values: OverlayValues, now: number): void {
     `Gegner ${String(values.enemies).padStart(2)}  Projektile ${String(values.projectiles).padStart(2)}`,
     `Leben ${Math.round(values.health)}/${values.maxHealth}  Munition ${values.ammo}`,
     `Super ${values.superCharge.toFixed(0)}%   Schaden/s ${values.dps.toFixed(0)}`,
+    `Position ${Math.round(values.position.x)}/${Math.round(values.position.y)}   ${values.view}`,
   ];
+  if (values.render) {
+    lines.push(
+      `3D: ${Math.round(values.render.triangles / 1000)}k Dreiecke  ${values.render.calls} Aufrufe  ` +
+        `${values.render.figures} Figuren  ${values.render.loot} Beute`,
+    );
+  }
 
   if (appliedTuning.length > 0) {
     lines.push("", "Werte aus der Adresse (nur dieses Geraet, nicht im Koop):");

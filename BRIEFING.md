@@ -1,7 +1,10 @@
 # Koop-Arena-Shooter – Projektbriefing für Claude Code
 
-Stand: 2026-09-23 (grosser Pivot, siehe Abschnitt 1). Die vorherige Fassung
-vom 2026-09-17 steht in der Git-Historie.
+Sep 17, 2026 · @Chairo
+
+Stand: 2026-09-24 – Abschnitte 2, 4 und 5 überarbeitet (3D mit Three.js,
+Knoten-Karte, Referenz "Deadly Days: Roadtrip"). Frühere Fassungen stehen in
+der Git-Historie.
 
 ## 1. Ziel & Scope
 
@@ -35,20 +38,24 @@ vom 2026-09-17 steht in der Git-Historie.
 
 ## 2. Spielkonzept & Core Loop
 
+**Update (3D + Knoten-Karte):** Referenzvorbild ist **"Deadly Days: Roadtrip"** – 3D-Low-Poly-Optik aus fester, angewinkelter Vogelperspektive, plus eine Knoten-Karte (wie Slay the Spire) statt einer durchgehend offenen Welt. Ein einzelner Knoten ist eine kurze, zeitlich begrenzte Kampfbegegnung in einem begrenzten Gebiet – näher am ursprünglichen Wellen-Survival-Prinzip als an einer offenen Erkundungswelt. Die Knoten-Karte darüber bildet die Risiko/Belohnung-Ebene des Roguelikes.
+
 ### Der Ablauf eines Runs
 
 1. **Vorbereitung (Basis/Lager):** Charakter wählen (Scout/Tank/Sniper), Rucksack-Loadout aus dem eigenen Lager zusammenstellen – begrenzt durch die Gitterfläche. Starter-Set steht immer zur Verfügung.
-2. **Lobby:** Host erstellt Raum, Freunde treten per Raumcode bei. Host generiert die Welt aus einem zufälligen Seed und teilt ihn mit allen Clients, damit alle exakt dieselbe Karte sehen.
-3. **Erkundung:** Offene, zusammenhängende Welt. Grundgegner tauchen organisch auf, dichter je weiter man sich vom Startpunkt entfernt. Feste Mini-Boss-Encounter an bestimmten Stellen, plus verteilte Loot-Fundorte.
-4. **Entscheidung unterwegs:** An Extraktionspunkten kann das Team jederzeit gemeinsam aussteigen und das bisherige Loot sichern – oder tiefer ins Risiko weiterziehen, Richtung Ende-Boss.
-5. **Ende-Boss (optional):** Wer ihn besiegt, gilt als voller Erfolg – bestes Loot, maximale Belohnung.
-6. **Tod eines Spielers:** Wie bisher – Mitspieler kann innerhalb von 3 Sekunden Nähe wiederbeleben. Sicher, kein Loot-Verlust dabei.
-7. **Team-Wipe:** Sind alle Spieler GLEICHZEITIG unten, endet der Run – das gesamte im Rucksack getragene Loot dieses Runs ist verloren. Das Lager bleibt unberührt.
-8. **Nach dem Run:** Bei Extraktion oder Bosssieg wandert das gesammelte Loot vom Rucksack ins dauerhafte Lager, von dort aus wird das nächste Loadout zusammengestellt.
+2. **Lobby:** Host erstellt Raum, Freunde treten per Raumcode bei. Host generiert die **Knoten-Karte** aus einem zufälligen Seed und teilt ihn mit allen Clients, damit alle exakt dieselbe Karte sehen.
+3. **Knoten-Karte:** Verzweigte Karte mit mehreren Pfaden (analog zu "Canyon / Vororte / Schneegipfel / Küste" bei der Referenz – bei uns thematisch frei wählbar). Jeder Knoten zeigt vor der Auswahl seine Eckdaten (Kartengrösse, Gefahrenlevel, Beute-Potenzial – siehe Referenz-Tooltip "Storm's Rift"). Das Team wählt gemeinsam den nächsten Knoten (bei Uneinigkeit entscheidet der Host).
+4. **Knoten spielen:** Kurze, zeitlich begrenzte Kampfbegegnung in einem begrenzten, prozedural generierten Gebiet (Timer sichtbar wie bei der Referenz oben rechts). Gegnerdichte/-stärke richtet sich nach dem Gefahrenlevel des gewählten Knotens.
+5. **Knoten-Typen:** Standard-Kampf, Elite/Mini-Boss, Lager/Rast (Heilen, Werkbank zum Verkaufen/Craften – siehe Referenzbild), Ende-Boss am Ende eines Pfades.
+6. **Entscheidung auf der Karte:** Nach jedem geschafften Knoten kann das Team einen als "Extraktion" markierten Knoten wählen und mit dem bisherigen Loot aussteigen, oder tiefer auf der Karte weiterziehen Richtung Ende-Boss.
+7. **Ende-Boss:** Wer ihn besiegt, gilt als voller Erfolg – bestes Loot, maximale Belohnung.
+8. **Tod eines Spielers (innerhalb eines Knotens):** Wie bisher – Mitspieler kann innerhalb von 3 Sekunden Nähe wiederbeleben. Sicher, kein Loot-Verlust dabei.
+9. **Team-Wipe (innerhalb eines Knotens):** Sind alle Spieler GLEICHZEITIG unten, endet der Run – das gesamte im Rucksack getragene Loot dieses Runs ist verloren. Das Lager bleibt unberührt.
+10. **Nach dem Run:** Bei Extraktion oder Bosssieg wandert das gesammelte Loot vom Rucksack ins dauerhafte Lager, von dort aus wird das nächste Loadout zusammengestellt.
 
 ### Was die Spannung erzeugt
 
-- **Risiko vs. Belohnung:** Der zentrale Entscheidungsmoment ist immer "aussteigen oder weiter?" – ersetzt das alte "wie weit komme ich"-Prinzip durch eine aktive, wiederholte Entscheidung.
+- **Risiko vs. Belohnung auf zwei Ebenen:** Innerhalb eines Knotens (überlebe ich die Begegnung?) UND auf der Karte (gehe ich zum gefährlicheren Nachbarknoten mit besserem Loot, oder nehme ich die Extraktion?).
 - **Verlustangst als Motor:** Weil man das eigene Loadout verlieren kann, fühlt sich jede Entscheidung im Run wichtiger an als in einem reinen Score-Loop.
 - **Wiederbelebung bleibt der Teamrettungsanker:** Ein gefallener Spieler ist nicht sofort raus, solange ein Mitspieler noch steht.
 - **Munition als Ressource:** Unverändert – drei einzeln nachladende Munitionsladungen, kein Dauerfeuer.
@@ -59,13 +66,14 @@ vom 2026-09-17 steht in der Git-Historie.
 | Grösse | Wert | Warum |
 | --- | --- | --- |
 | Spieler pro Run | 1–4 | Auch allein voll spielbar |
-| Weltgrösse | deutlich grösser als die bisherige 1600×1200-Arena, exakte Grösse in Phase 8 festlegen | Muss Raum für organische Gegnerdichte und mehrere Encounter-Punkte bieten |
-| Run-Dauer | variabel: ca. 5–10 Min bei früher Extraktion, bis 25–30 Min bei Ende-Boss-Route | Bewusst variabel statt fest, das ist Teil der Risiko-Entscheidung |
-| Zielbildrate | 60 fps auf einem Mittelklasse-Handy | Unverändert |
+| Knoten-Grösse | begrenztes Gebiet pro Knoten (deutlich kleiner als die frühere offene Welt), exakte Grösse in der Foundation-Phase festlegen | Kurze, fokussierte Begegnung statt Erkundung |
+| Knoten-Dauer | kurz, mit sichtbarem Timer (Richtwert 45–90s je nach Gefahrenlevel) | Direkt am Vorbild orientiert, hält die Spannung hoch |
+| Run-Dauer gesamt | variabel je nach gewähltem Pfad auf der Karte | Bewusst variabel, das ist Teil der Risiko-Entscheidung |
+| Zielbildrate | 60 fps auf einem Mittelklasse-Handy | Unverändert, trotz 3D wichtig – siehe Abschnitt 5 |
 
 ### Kamera
 
-Unverändert: gemeinsame Kamera mit dynamischem Zoom je nach Spielerabstand. Bei der offenen Welt zusätzlich wichtig: Sichtweite bewusst begrenzen (kein "alles auf einen Blick"), damit die Welt bedrohlich/unübersichtlich bleibt – passt zum neuen Sniper-Super (Aufklärungsschuss), der genau dieses Problem gezielt löst.
+**Update:** Feste, angewinkelte 3D-Kamera (wie bei der Referenz) statt der bisherigen 2D-Top-down-Kamera mit Zoom. Sie dreht und neigt sich NICHT mit der Spielfigur – das erhält die bereits gebaute Twin-Stick-Steuerung unverändert (Bildschirmrichtungen bleiben konsistent mit Weltrichtungen). Details zur technischen Umsetzung in Abschnitt 5.
 
 ## 3. Steuerung & Game Feel
 
@@ -105,20 +113,26 @@ Ohne diese Effekte fühlt sich ein technisch korrektes Spiel tot an. Mit ihnen f
 
 **Regel für Claude Code:** Juice-Effekte erst in Phase 3 einbauen, wenn die Mechanik steht – aber dann wirklich einbauen, nicht auf später verschieben.
 
-## 4. Welt, Charaktere, Gegner & Loot
+## 4. Knoten-Karte, Charaktere, Gegner & Loot
 
-### Die Welt
+### Die Knoten-Karte
 
-Offene, zusammenhängende, prozedural generierte Karte pro Run (kein Raum-für-Raum-System). Generierung muss **deterministisch aus einem Seed** erfolgen, damit Host und alle Clients exakt dieselbe Welt sehen (wichtig für Koop, siehe Abschnitt 6).
+**Update:** Ersetzt die frühere "offene Welt". Verzweigte Karte aus mehreren parallelen Pfaden (wie bei der Referenz "Deadly Days: Roadtrip": Canyon / Vororte / Schneegipfel / Küste als grobe Abschnitte von links nach rechts). Generierung muss **deterministisch aus einem Seed** erfolgen, damit Host und alle Clients exakt dieselbe Karte sehen (wichtig für Koop, siehe Abschnitt 6).
 
-- **Startpunkt:** klar erkennbar, ungefährliche Zone direkt darum.
-- **Gegnerdichte:** steigt mit Distanz vom Startpunkt (organisch, kein festes Wellen-Timing mehr).
-- **Encounter-Punkte:** feste, markierte Stellen mit Mini-Bossen – stärkerer Gegner oder kleine Gruppe, besserer Loot-Drop als Belohnung.
-- **Ende-Boss:** ein Encounter-Punkt, meist am weitesten vom Start entfernt, deutlich stärker als Mini-Bosse.
-- **Extraktionspunkte:** mehrere über die Karte verteilt, betretbare Zone mit kurzem Countdown/Bestätigung, danach verlässt das Team (gemeinsam) den Run mit dem gesammelten Loot.
-- **Loot-Fundorte:** verteilt über die Karte (Kisten, Gegner-Drops), Häufigkeit/Qualität steigt mit Entfernung vom Start.
+- **Knoten:** einzelne wählbare Punkte auf der Karte, durch Pfade verbunden. Jeder Knoten zeigt vor der Auswahl seine Eckdaten als kleine Balken-Anzeige (Kartengrösse, Gefahrenlevel, Beute, ggf. weitere) – direkt nach dem Referenz-Tooltip-Vorbild.
+- **Knoten-Typen:** Standard-Kampf (häufigster Typ), Elite/Mini-Boss (stärker, besseres Loot), Lager/Rast (Heilen, Werkbank zum Verkaufen/Craften – kein Kampf), Extraktion (Run erfolgreich beenden, Loot sichern), Ende-Boss (Abschluss eines Pfades).
+- **Gefahrenlevel steigt** mit der Tiefe auf der Karte (weiter vom Startknoten entfernt = härtere Knoten, aber auch besseres Loot) – ersetzt die frühere distanzbasierte Formel, jetzt pro Knoten statt kontinuierlich im Raum.
+- Team wählt gemeinsam den nächsten Knoten von den erreichbaren Nachbarn aus.
 
-### Die drei Charaktere (aktualisiert)
+### Ein einzelner Knoten (die eigentliche Kampfbegegnung)
+
+- Begrenztes, prozedural generiertes Gebiet (deutlich kleiner als die frühere offene Welt), ebenfalls deterministisch aus dem Karten-Seed abgeleitet.
+- **Zeitlich begrenzt** mit sichtbarem Countdown (Richtwert 45–90s, steigend mit Gefahrenlevel) – näher am ursprünglichen Wellen-Survival-Prinzip als an offener Erkundung.
+- Gegnerdichte/-stärke richtet sich nach dem Gefahrenlevel des Knotens (nicht mehr nach Distanz).
+- Loot-Fundorte und Encounter-Elemente innerhalb des begrenzten Gebiets platziert.
+- Ziel: Timer übersteht oder alle Gegner besiegt (je nach Knoten-Typ) → Knoten gilt als geschafft, zurück zur Karte.
+
+### Die drei Charaktere (unverändert ggü. letztem Stand)
 
 |  | **Scout** | **Tank** | **Sniper** |
 | --- | --- | --- | --- |
@@ -127,17 +141,17 @@ Offene, zusammenhängende, prozedural generierte Karte pro Run (kein Raum-für-R
 | Tempo | 250 px/s | 190 px/s | 220 px/s |
 | Angriff | Aus dem Rucksack-Loadout | Aus dem Rucksack-Loadout | Aus dem Rucksack-Loadout |
 | Zweite Fähigkeit | Blendgranate (Wurf, Radius 150px, blendet 1,5s) | Schildwand entfällt | Lähmschuss (900 Reichweite, wurzelt 1,5s) |
-| Super | Kurzer Dash, stösst Gegner zurück | **Heilen:** grosser Radius, heilt ALLE Teammitglieder im Bereich | **Aufklärungsschuss** (neu, siehe unten) |
+| Super | Kurzer Dash, stösst Gegner zurück | **Heilen:** grosser Radius, heilt ALLE Teammitglieder im Bereich | **Aufklärungsschuss** (siehe unten) |
 
 **Wichtige Änderung ggü. dem ursprünglichen Konzept:** Die Basis-Waffe kommt nicht mehr aus festen Charakterwerten, sondern aus dem Rucksack-Loadout (siehe Loot-System unten). Die Klassen-Identität (Leben, Tempo, zweite Fähigkeit, Super) bleibt fest an Scout/Tank/Sniper gebunden, unabhängig von der mitgeführten Waffe.
 
-**Tank-Heilung (neu):** Ersetzt die bisherige Schildwand komplett. Grosser Wirkradius um den Tank, heilt alle Teammitglieder im Bereich über Zeit (genaue Werte in Phase 14 austesten). Macht den Tank zum echten Support-Anker der Gruppe.
+**Tank-Heilung:** Ersetzt die bisherige Schildwand komplett. Grosser Wirkradius um den Tank, heilt alle Teammitglieder im Bereich über Zeit (genaue Werte in der Balancing-Phase austesten). Macht den Tank zum echten Support-Anker der Gruppe.
 
-**Sniper-Aufklärungsschuss (neu):** Spezielles Geschoss, das beim Einschlag alle Gegner, Loot und Punkte von Interesse in grossem Radius für das GESAMTE Team sichtbar macht (z.B. 6 Sekunden). Aufgedeckte Gegner nehmen dabei erhöhten Schaden von JEDEM Teammitglied, nicht nur vom Sniper. Team-Utility statt reinem Einzelschaden – wichtig gerade in der offenen, unübersichtlichen Welt.
+**Sniper-Aufklärungsschuss:** Spezielles Geschoss, das beim Einschlag alle Gegner, Loot und Punkte von Interesse in grossem Radius für das GESAMTE Team sichtbar macht (z.B. 6 Sekunden). Aufgedeckte Gegner nehmen dabei erhöhten Schaden von JEDEM Teammitglied, nicht nur vom Sniper. Team-Utility statt reinem Einzelschaden.
 
 ### Auto-Aim-Anpassung (für alle Charaktere)
 
-Reichweite/Zielkegel des automatischen Anvisierens (Basisangriff-Button, siehe Abschnitt 3) wird deutlich verkleinert. Manuelles Zielen (Ziehen zum Anvisieren) soll wieder mehr Gewicht bekommen – genaue neue Werte in Phase 14 austesten.
+Reichweite/Zielkegel des automatischen Anvisierens (Basisangriff-Button, siehe Abschnitt 3) wird deutlich verkleinert. Manuelles Zielen (Ziehen zum Anvisieren) soll wieder mehr Gewicht bekommen – genaue neue Werte in der Balancing-Phase austesten.
 
 ### Die drei Gegnertypen (unverändert in der Grundidee)
 
@@ -148,105 +162,126 @@ Reichweite/Zielkegel des automatischen Anvisierens (Basisangriff-Button, siehe A
 | Tempo | 180 px/s | 90 px/s | 140 px/s |
 | Schaden | 300 bei Berührung | 800 bei Berührung | 250 pro Schuss, alle 2s |
 
-**Gegner-KI:** weiterhin bewusst simpel (direkter Vektor + einfache Hindernisvermeidung), jetzt organisch über die Welt verteilt statt in Wellen gespawnt.
+**Gegner-KI:** weiterhin bewusst simpel (direkter Vektor + einfache Hindernisvermeidung), innerhalb der begrenzten Knoten-Fläche gespawnt statt organisch über eine offene Welt verteilt.
 
-### Schwierigkeitsformel (ersetzt die alte Wellenformel)
+### Schwierigkeitsformel (jetzt pro Knoten statt kontinuierlich)
 
-Statt einer Zeit-Wellenformel jetzt eine **Distanz-Formel**, abhängig von der Entfernung `d` zum Startpunkt (genau kalibrieren in Phase 8):
+Jeder Knoten hat ein festes Gefahrenlevel `g` (steigt mit Kartentiefe):
 
-- **Gegnerdichte:** steigt proportional mit `d`
-- **Gegnerleben/-schaden:** steigt mit `d` (ähnliches Prinzip wie bisher, aber Distanz-Zone statt Wellennummer)
-- **Encounter-Stärke:** Mini-Bosse und Loot-Qualität skalieren ebenfalls mit `d`
+- **Gegnerdichte im Knoten:** proportional zu `g`
+- **Gegnerleben/-schaden:** skaliert mit `g` (ähnliches Prinzip wie bisher)
+- **Loot-Qualität:** skaliert ebenfalls mit `g`
 - **Spieleranzahl:** wie bisher, Gegnerzahl mal `0,6 + 0,4 * Spielerzahl`
 
 Alle Werte weiterhin zentral in `src/config/balance.ts`.
 
-### Loot-System: Rucksack-Inventar
+### Loot-System: Rucksack-Inventar (unverändert)
 
 Gitterbasiertes Inventar (Tarkov-Prinzip): Items haben unterschiedliche Formen (1x1, 2x1, 2x2, L-Form usw.) und belegen mehrere Gitterzellen im Rucksack. Rucksackgrösse begrenzt, wie viel man mitnehmen/mitbringen kann.
 
 - **Vor dem Run:** Loadout aus dem Lager zusammenstellen (Drag & Drop, Rotation von Items).
-- **Während des Runs:** gefundenes Loot aufsammeln, wenn Platz im Rucksack ist.
+- **In Lager/Rast-Knoten:** zusätzliche Möglichkeit zum Verkaufen/Craften über eine Werkbank (siehe Referenzbild).
+- **Während eines Kampf-Knotens:** gefundenes Loot aufsammeln, wenn Platz im Rucksack ist.
 - **Waffen als Loot:** ersetzen direkt die aktive Basis-Waffe, sobald ausgerüstet.
-- **Bei Erfolg (Extraktion oder Bosssieg):** kompletter Rucksack-Inhalt wandert ins dauerhafte Lager.
+- **Bei Erfolg (Extraktions-Knoten oder Ende-Boss):** kompletter Rucksack-Inhalt wandert ins dauerhafte Lager.
 - **Bei Team-Wipe:** kompletter Rucksack-Inhalt dieses Runs ist verloren. Lager bleibt unberührt.
-- **Starter-Set:** feste, unverlierbare Grundausrüstung, unabhängig vom Rucksack-/Lagerzustand immer verfügbar – Sicherheitsnetz gegen komplettes Leerlaufen.
+- **Starter-Set:** feste, unverlierbare Grundausrüstung, unabhängig vom Rucksack-/Lagerzustand immer verfügbar.
 
 ### Dauerhaftes Lager & Meta-Fortschritt
 
-Lokal auf dem Gerät gespeichert (kein Server, siehe Abschnitt 1). Enthält das gesamte gesicherte Loot aus erfolgreichen Runs plus – Details in Phase 13 auszuarbeiten – eine Mischung aus mehreren Progressionsarten (z.B. dauerhafte Verbesserungen, freischaltbare Ausrüstung).
+Lokal auf dem Gerät gespeichert (kein Server, siehe Abschnitt 1). Enthält das gesamte gesicherte Loot aus erfolgreichen Runs plus eine Mischung aus mehreren Progressionsarten (dauerhafte Verbesserungen, freischaltbare Ausrüstung/Charaktere – siehe Referenz-Charakterauswahl mit Freischalt-Slots).
 
 ### Speichern/Fortsetzen eines laufenden Runs
 
-Ein pausierter Run soll später an derselben Stelle fortsetzbar sein. Technisch anspruchsvoll, besonders im Koop (wer speichert den Weltzustand, wie wird beim Rejoinen synchronisiert?) – eigene Phase (15), bewusst spät im Plan.
+Ein pausierter Run (auf der Knoten-Karte, zwischen zwei Knoten) soll später fortsetzbar sein. Technisch anspruchsvoll im Koop (wer speichert den Kartenzustand?) – späte, separate Phase.
 
 ## 5. Technik-Stack & Projektstruktur
+
+**Update (3D-Umstellung):** Referenzvorbild "Deadly Days: Roadtrip" nutzt 3D-Low-Poly-Grafik aus fester, angewinkelter Kamera. Phaser ist eine reine 2D-Engine – die Rendering-Schicht wird auf **Three.js** umgestellt. Die Simulation (Positionen, Kollision, Netzwerk-Sync) bleibt bewusst **2D auf der Bodenebene** (x/z-Koordinaten, Höhe nur visuell) – das hält Determinismus, Performance und Netzwerk-Sync einfach, während nur die Darstellung echtes 3D wird. Diese Trennung ist genau der Grund, warum die bisherige Architektur-Grundregel (Simulation strikt von Darstellung getrennt) sich jetzt auszahlt: die Logik-Schicht bleibt grösstenteils bestehen, nur die Render-Schicht wird ausgetauscht.
 
 ### Stack
 
 | Bereich | Wahl | Begründung |
 | --- | --- | --- |
-| Engine | **Phaser 3** | 2D-Spiel-Framework mit Physik, Kollision, Sprites, Touch-Input, Tilemaps. Sehr gute Dokumentation, riesige Community, läuft gut auf dem Handy |
-| Sprache | **TypeScript** | Typen fangen bei Spielcode viele Fehler vorab ab, gerade wenn Zustände zwischen Netzwerk und Spiel hin- und herwandern |
-| Build | **Vite** | Kennst du schon, schneller Dev-Server, einfacher Build für Pages |
-| Netzwerk | **PeerJS** (WebRTC) | Direktverbindung zwischen Spielern, kein eigener Server nötig |
-| PWA | **vite-plugin-pwa** | Installierbar auf dem Handy, offline spielbar im Solo-Modus |
-| Hosting | **GitHub Pages** | Wie bei deinen anderen Projekten, Deployment über GitHub Actions |
+| 3D-Rendering | **Three.js** | Web-Standard für 3D, gute GLB-Modell-Unterstützung, läuft auf dem Handy |
+| Simulation/Logik | weiterhin reines TypeScript, 2D-Koordinaten (x/z) | Determinismus & Netzwerk-Sync bleiben einfach, unabhängig vom Rendering |
+| UI/HUD | **HTML/CSS-Overlay** über dem Three.js-Canvas | Joystick, Buttons, Minimap, Rucksack-Gitter als DOM-Layer – einfacher als Versuche, UI in der 3D-Szene zu rendern |
+| Sprache | **TypeScript** | Unverändert |
+| Build | **Vite** | Unverändert |
+| Netzwerk | **PeerJS** (WebRTC) + TURN-Server | Unverändert |
+| PWA | **vite-plugin-pwa** | Unverändert |
+| Hosting | **GitHub Pages** | Unverändert |
 
-Bewusst **nicht** verwendet: React oder ein anderes UI-Framework für das Spiel selbst. Das Spiel läuft komplett auf dem Phaser-Canvas, Menüs macht Phaser mit. Ein zusätzliches Framework wäre hier nur Reibung.
+### Kamera-Umsetzung (Three.js)
 
-### Projektstruktur
+Feste, angewinkelte Perspektivkamera, die der Spielergruppe folgt, aber sich nicht dreht (wie bei der Referenz und wie zuvor die 2D-Kamera):
+
+```ts
+// Richtwerte, in der Foundation-Phase am echten Ergebnis justieren
+camera.position.set(target.x, target.x /* Höhe */ + 14, target.z + 10);
+camera.lookAt(target.x, 0, target.z);
+// fester Blickwinkel, KEINE Rotation basierend auf Spielerbewegung
+```
+
+Wichtig: Bildschirm-Richtungen (Joystick, Zielen) müssen weiterhin konsistent mit Weltrichtungen bleiben – die bestehende Twin-Stick-Logik bleibt unverändert, nur die Umrechnung Bildschirm→Welt muss die feste Kamera-Rotation berücksichtigen.
+
+### Assets
+
+- 3D-Modelle im **GLB-Format** (kompakt, Texturen eingebettet), aus dem heate Nachmittag hochgeladenen Paket.
+- Low-Poly, Toon-Shading bevorzugt (Three.js `MeshToonMaterial` oder einfaches `MeshStandardMaterial` mit hartem Licht) – passt zum Referenzstil und ist performant.
+- Bis die echten Assets hochgeladen sind: einfache Platzhalter-Geometrie (Boxen, Kapseln, Zylinder), damit die technische Grundlage schon getestet werden kann.
+
+### Projektstruktur (aktualisiert)
 
 ```
 src/
-  main.ts                 Einstiegspunkt, Phaser-Konfiguration
+  main.ts                 Einstiegspunkt
   config/
-    balance.ts            ALLE Spielwerte aus Abschnitt 4
-    constants.ts          Bildschirmgrössen, Tiefenebenen, Farben
-  scenes/
-    BootScene.ts          Assets laden, Ladebalken
-    MenuScene.ts          Charakterwahl, Raum erstellen/beitreten
-    GameScene.ts          das eigentliche Spiel
-    HudScene.ts           Overlay: Leben, Munition, Super, Welle, Score
-    GameOverScene.ts      Ergebnis, Highscore, Neustart
+    balance.ts            ALLE Spielwerte
+    constants.ts
+  scenes/                  (Konzept bleibt, Umsetzung wechselt von Phaser-Scenes
+                            zu eigenen State-Klassen, falls Phaser nicht mehr
+                            als Rahmen dient – in der Foundation-Phase klären)
+  render/                  NEU: Three.js-spezifischer Code
+    SceneSetup.ts          Renderer, Kamera, Licht
+    ModelLoader.ts         GLB-Ladefunktionen
+    EntityView.ts          verbindet Simulationsobjekt mit 3D-Mesh
   entities/
-    Player.ts
+    Player.ts              reine Daten, unverändert vom Rendering getrennt
     Enemy.ts
     Projectile.ts
-    characters/           je Datei pro Charakter: Scout, Tank, Sniper
   systems/
-    WaveManager.ts        Wellen berechnen und spawnen
-    InputManager.ts       Twin-Stick + Tastatur, liefert einheitlichen InputState
-    CombatSystem.ts       Schaden, Tod, Wiederbelebung
-    ScoreSystem.ts
+    NodeMapGenerator.ts    NEU: generiert die Knoten-Karte aus einem Seed
+    NodeArenaGenerator.ts  NEU: generiert das begrenzte Gebiet eines Knotens
+    InputManager.ts
+    CombatSystem.ts
+    InventoryGridSystem.ts
   net/
-    NetworkManager.ts     PeerJS-Verbindungen, Raumcodes
-    protocol.ts           Nachrichtentypen zwischen Host und Clients
-    HostGame.ts           autoritative Simulation
-    ClientGame.ts         Eingaben senden, Zustand darstellen
-  ui/
+    NetworkManager.ts
+    protocol.ts
+    HostGame.ts
+    ClientGame.ts
+  ui/                      HTML/CSS-Overlay-Komponenten
     VirtualJoystick.ts
-    Button.ts
+    Minimap.ts
+    InventoryGrid.ts
 public/
-  assets/                 Sprites, Sounds, Tilemap
+  assets/
+    models/                GLB-Dateien
+    audio/
 ```
 
-### Architektur-Grundregel
+### Architektur-Grundregel (bestätigt, wichtiger denn je)
 
-**Spiellogik und Darstellung strikt trennen.** Die Simulation (Positionen, Leben, Schaden) muss ohne Phaser-Rendering laufen können, weil der Host sie für alle rechnet. Konkret: keine Spiellogik in `update()` von Sprite-Klassen, sondern in den Systemen unter `systems/`, die auf reinen Datenobjekten arbeiten. Die Sprites lesen diesen Zustand nur aus und zeichnen ihn.
-
-Das ist die eine Entscheidung, die man später nicht mehr billig nachholen kann. Alles andere im Projekt lässt sich umbauen, diese Trennung nicht.
+**Spiellogik und Darstellung strikt trennen.** Die Simulation (Positionen, Leben, Schaden) läuft weiterhin ohne jede Rendering-Abhängigkeit, weil der Host sie für alle rechnet. Drei.js-Objekte lesen nur den Simulationszustand aus und zeichnen ihn – niemals umgekehrt. Das ist der Grund, warum dieser Engine-Wechsel machbar ist, ohne die Netzwerk-/Kampf-/Loot-Logik neu zu schreiben.
 
 ### Fester Zeitschritt
 
-Simulation mit festem Takt von **30 Ticks pro Sekunde** laufen lassen, Darstellung mit 60 fps und Interpolation dazwischen. Grund: Bei variablem Zeitschritt berechnen verschiedene Geräte unterschiedliche Ergebnisse, und im Mehrspielermodus driften die Spielstände auseinander.
+Unverändert: Simulation mit festem Takt von 30 Ticks/s, Darstellung mit 60 fps und Interpolation dazwischen.
 
 ### Deployment
 
-- Repo unter `github.com/thcjk/<projektname>`, Pages aus dem GitHub-Actions-Workflow
-- `vite.config.ts`: `base: '/<reponame>/'` – sonst laden auf Pages keine Assets
-- Workflow bei jedem Push auf `main`: Build, dann Deploy
-- Ab Phase 1 bereits live deployen, nicht erst am Ende. Auf dem echten Handy testen, nicht im Desktop-Browser mit schmalem Fenster – Touch-Verhalten und Leistung sind dort anders
+Unverändert (siehe bisherige Angaben zu Repo, `vite.config.ts base`, GitHub-Actions-Workflow). Ab der 3D-Foundation-Phase weiterhin auf dem echten Handy testen – 3D-Rendering ist leistungshungriger als 2D-Sprites, Leistungstest jetzt noch wichtiger.
 
 ## 6. Multiplayer-Architektur
 

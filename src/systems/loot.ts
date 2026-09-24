@@ -39,7 +39,7 @@ import { ITEMS } from "../config/items";
 import { LOOT } from "../config/balance";
 import { findFreeSpot, move, place, removeAt } from "./InventoryGridSystem";
 import { nextRandom } from "./rng";
-import { distanceFromStart, zoneAt } from "./zones";
+import { zoneOf } from "./zones";
 import type {
   EnemyState,
   GroundItem,
@@ -134,7 +134,7 @@ export function dropItem(
  * getroffen hat") waere eine zweite Regel, die mit der ersten auseinanderlaeuft.
  */
 export function dropFromEnemy(state: WorldState, enemy: EnemyState): void {
-  const zone = zoneAt(distanceFromStart(state, enemy.position));
+  const zone = zoneOf(state, enemy.position);
 
   if (enemy.type === "boss") {
     // Bosse lassen immer etwas fallen, und zwar mehreres - mit garantiert

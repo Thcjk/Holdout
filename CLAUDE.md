@@ -21,6 +21,387 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
+> **Stand 2026-09-24 abends: 3D mit echten Modellen, Knoten-Gebiete, Beute
+> in 3D.** Siehe **„3D-Assets und Knoten-Gebiete“** direkt unten, davor
+> **„3D-Umbau“** (Grundlage vom Mittag). Alles auf dem Branch
+> `claude/artifact-session-70nhy4`, **nicht auf `main`/Pages**. Auf `main`
+> ging nur die Reparatur nach dem Asset-Upload (Tilesheet zurück, langsamer
+> Test behoben – `d69bdf7`).
+>
+> **BRIEFING.md ist seit 2026-09-24 die neue Fassung** (Abschnitte 2, 4, 5:
+> Three.js, Knoten-Karte, Vorbild „Deadly Days: Roadtrip“), vom Nutzer im
+> Chat geliefert und eingespielt.
+
+## 3D-Assets und Knoten-Gebiete
+
+### Stand 2026-09-24, 18:35 UTC
+
+| Schritt | Was | Wo |
+| --- | --- | --- |
+| Inventur | kein GLB im Paket – Figuren nur als .blend, Rest FBX; umgewandelt | `tools/convert-models.py`, `tools/rasterize-skins.mjs` |
+| Modelle | Kapseln/Quader → animierte Kenney-Figuren, Platzhalter bleibt als Rückfall | `render/FigureModel.ts`, `render/EntityView.ts` |
+| Lader | lädt jede GLB einmal, Kopien teilen Geometrie/Textur | `render/ModelLoader.ts` |
+| Knoten-Gebiete | `NodeArenaGenerator` baut das Gebiet eines Knotens, Dichte ∝ g | `systems/NodeArenaGenerator.ts`, `NODE_ARENA` in `balance.ts` |
+| Kulisse | Kisten, Zielscheiben, Rauch (animiert), Markierungen | `render/PropView.ts` |
+| Beute | 3D-Modelle bzw. Pixel-Aufsteller, Seltenheitsring, Aufheben-Effekt, Pooling | `render/LootView.ts` |
+| Zonen | Ausstieg und Boss-Punkt als Ringe am Boden | `render/ZoneView.ts` |
+
+**Geprüft wie:** 290 Tests (neu: 10 für die Gebiete, 2 für die Karte),
+typecheck, lint, Build. Im Emulator (iPhone 13 quer): Figuren laufen
+animiert und schauen in die richtige Richtung (Nahaufnahme mit
+`?tune=view3d.distance=9`); Gebiete g 1, g 8 und g 11 angesehen; zur
+leuchtenden Beutekiste gelaufen → „Beute 1“ im HUD, die Kiste erlischt.
+Keine Seitenfehler.
+
+### Die Inventur – was im Upload wirklich war
+
+**Keine einzige GLB-Datei**, keine 3D-Gebäude, keine 3D-Umgebung. Im Einzelnen:
+
+| Paket | Inhalt | Format | Dreiecke |
+| --- | --- | --- | --- |
+| Kenney Animated Characters | 1 Körper in 4 Staturen (klein, mittel, gross m/w), Skelett 45 Knochen, 51 Häute (SVG 1024²), 17 Animationen | **nur Blender 2.79** | 1.550–1.770 |
+| Zubehör dazu | Helme, Mützen, Rucksäcke, Pistole, Gewehr, Schwert, Schild, Tierohren | FBX | 100–1.500, Gewehr 3.000 |
+| Kenney Blaster Kit | 18 Blaster, Kisten (3, mit Öffnen-Animation), Magazine, Granaten, Zielfernrohre, Zielscheiben, Rauch | FBX + `Textures/colormap.png` | 12–900 |
+| Kenney Sci-fi RTS | Gebäude, Felsen, Pflanzen, Fahrzeuge | **nur 2D-PNG** | – |
+| Kenney UI Pack RPG | Knöpfe, Panels, Balken | 2D-PNG | – |
+
+**Umwandlung (einmalig, Ergebnis im Repo unter `public/models/`):**
+Blender 4.2 als Python-Modul von PyPI (`pip install "bpy==4.2.*"`) öffnet
+die 2.79-Dateien. Zwei Fallen, beide im Skript kommentiert:
+
+- Das Skelett arbeitet mit IK-Steuerknochen – die Animationen werden beim
+  Export Bild für Bild eingebacken.
+- Mit Exportmodus `ACTIVE_ACTIONS` kam ein Clip „Animation“ mit **0 s**
+  heraus; `ACTIONS` liefert die echten Clips (Rennen 0,67 s bei 24 fps,
+  der Rest 30 fps). Ausprobiert, nicht vermutet.
+
+Jede Animation ist eine eigene Datei (nur Skelett); die Clips passen auf
+jeden Körper, weil alle Knochen gleich heissen. Die Clips bewegen die Figur
+nicht vorwärts (nachgemessen) – die Position kommt allein aus der
+Simulation.
+
+### Zuordnung (`src/config/models.ts`, einzige Stelle)
+
+| Rolle | Körper | Haut | Laufanimation |
+| --- | --- | --- | --- |
+| Scout | mittel | athleteMaleBlue | rennen |
+| Tank | gross m | racerOrangeMale | rennen |
+| Sniper | gross w | militaryFemaleA | rennen |
+| Läufer | klein | zombieA | rennen |
+| Brocken | gross m | zombieB | gehen (stapfen) |
+| Schütze | mittel | zombieC | gehen; steht er, „schiessen“ |
+| Boss | gross m | cyborg | gehen |
+
+- **Grösse aus dem Trefferkreis:** Höhe = 2,2 × Durchmesser. Spieler
+  1,65 m (wie die Kapsel, an der die 5–7-%-Regel gemessen ist), Brocken
+  grösser, Ende-Boss doppelt.
+- **Animation aus der dargestellten Bewegung**, nicht aus einem
+  Simulationsfeld – der Koop-Client kennt keine Gegner-Geschwindigkeiten.
+  Abspieltempo folgt dem echten Tempo.
+- **Am Boden:** Todesanimation, bleibt liegen. Gegner verschwinden beim Tod
+  sofort (die Simulation entfernt sie) – eine Sterbeanimation für Gegner
+  gibt es noch nicht.
+- **Toon-Look:** `MeshToonMaterial` mit drei harten Lichtstufen
+  (`TOON_STEPS`), auch für Kisten und Beute.
+- **Zubehör** (Helme, Waffen in der Hand) ist nicht angebracht.
+- **Häute als 256²-PNG:** Chromium rastert die SVGs, weil sie
+  Überblend-Modi benutzen, die andere Werkzeuge nicht können.
+
+### Knoten-Gebiete (`NodeArenaGenerator`)
+
+Ein Run spielt jetzt im **Gebiet eines Knotens**, nicht mehr in der offenen
+Welt. Das Gebiet hat **dasselbe Format** wie die offene Welt – Kollision,
+Sichtlinien, Treffer, Beute laufen unverändert. Zwei kleine Stellschrauben
+im Weltzustand, abgefragt an einer Stelle (`zones.ts`):
+
+- `fixedZone = g`: Gegnerzahl, -stärke und Beute richten sich nach der
+  Gefahr des Knotens statt nach der Entfernung (Briefing Abschnitt 4).
+- `safeRadius = 0`: keine Heilzone. 700 px wären in einem 48-m-Gebiet die
+  halbe Fläche gewesen, und Gegner dürften dort nicht erscheinen.
+
+**Welcher Knoten?** Solange es keine Kartenansicht gibt: der erste
+Kampfknoten. Solo über die Adresse wählbar – `?knoten=21` (Nummern zeigt
+`npm run nodemap -- <seed>`), `?welt=offen` für die alte offene Welt. Im
+Koop immer der erste Kampfknoten, Host und Client bauen ihn beide selbst aus
+dem Seed – am Protokoll ändert sich nichts.
+
+**Dichte-Werte (Anzahl = Grundwert + Faktor × g, begrenzt):**
+
+| Element | Grundwert | je g | Obergrenze | Grösse wächst mit g |
+| --- | --- | --- | --- | --- |
+| Häuser | 1 | 0,35 | 5 | Kante 6–8 Kacheln, +0,3 je g, bis 12 |
+| Kistenreihen (Deckung) | 6 | 1,5 | 20 | Reihen 2/4/6 Kacheln, lange erst ab g 3/6; 45 % mit zweiter Kiste obendrauf |
+| Beutekisten | 2 | 0,3 | 5 | – |
+| Deko (Rauch, Zielscheiben) | 6 | 1 | 16 | – |
+| Buschhaufen | 3 | – | – | – |
+| **Kisten gesamt** | | | **70** | Leistungsgrenze |
+
+Gebietsgrösse aus den Eckdaten des Knotens: klein 40 m, mittel 48 m,
+gross 56 m (Elite immer klein, Boss immer gross). Gemessen über acht Seeds:
+g 9 hat 3,5-mal so viele Kisten wie g 1 und fast 4-mal so viele Häuser.
+**Beute-Qualität** steigt mit g: mittlere Seltenheit 1,80 bei g 1, 2,40 bei
+g 9.
+
+**Erreichbarkeit ist gebaut, nicht gehofft:** Jedes Hindernis hält zwei
+Kacheln Abstand zu allem anderen, Häuser haben eine Tür. Der Test prüft es
+per Flutfüllung (Beute und Ausstieg inklusive). **Gegenprobe:** Häuser ohne
+Tür → genau dieser Test fällt durch.
+
+**Sichtdeckung:** Häuser und Kistenreihen sind gewöhnliche Wände in
+`state.walls`. Sichtlinie, Schüsse und Kollision benutzen genau diese Liste
+– sie blocken also Schüsse und Sicht ohne jede neue Logik. Büsche
+verstecken wie bisher.
+
+**Ein Ausstieg in JEDEM Gebiet – das ist ein Übergang.** Der Knoten-Ablauf
+(Timer, zurück zur Karte) ist nicht gebaut. Damit ein Run trotzdem gut
+enden kann, hat jedes Gebiet eine Ausstiegszone. Später nur noch in
+Extraktions-Knoten. Elite- und Boss-Knoten haben einen Boss-Punkt
+(bestehende Encounter-Mechanik).
+
+**Knoten-Karte an das neue Briefing angepasst:** Typen jetzt Kampf, Elite,
+Rast, Extraktion, Ende-Boss (vorher gab es „Plündern“, das im Briefing
+nicht vorkommt). Jeder Knoten hat Eckdaten: Kartengrösse (1–3),
+Gefahr g, Beute-Potenzial.
+
+### Beute sichtbar in der Welt
+
+- **Modell, wo vorhanden:** Pistole, MP, Gewehr, Railgun (Blaster), Munition
+  (Magazin), Schrott (Zielscheiben-Splitter). **Sonst das Pixel-Symbol** aus
+  dem Rucksack als Aufsteller – Energiezelle, Platine, Reaktorkern, Kabel,
+  Verband, Medipack haben kein Modell im Paket.
+- Ring in Seltenheitsfarbe, Schweben und Drehen; beim Aufheben springt es
+  kurz hoch und verschwindet.
+- **Beutekisten** leuchten golden mit pulsierendem Bodenring, **Häuser mit
+  Beute** tragen eine schwebende goldene Raute – bis die Beute weg ist
+  (jedes Bild aus `groundItems` abgelesen, stimmt also auch im Koop).
+- Aufheben selbst: unverändert in `systems/loot.ts`, Radius flach am Boden.
+
+### Leistung
+
+**Budget je Bild (Vorschlag aus der Inventur):** höchstens **150.000
+Dreiecke** und **120 Zeichenaufrufe**. Gemessen im Emulator (unabhängig vom
+Gerät, anders als die Bildrate):
+
+| Gebiet | Dreiecke | Zeichenaufrufe |
+| --- | --- | --- |
+| g 1, Start | 12 k | 21 |
+| g 8, Elite | 25–31 k | 40–49 |
+| g 11, Boss | 46 k | 39 |
+
+Hochgerechnet mit 40 Gegnern (je ~1.600 Dreiecke, je ein Aufruf): rund
+110 k Dreiecke, 90 Aufrufe – im Budget.
+
+- **Kisten** als `InstancedMesh`: alle Kisten eines Modells in einem
+  Aufruf. **Beute** mit Objekt-Vorrat je Modell (Pooling). **GLB-Dateien**
+  einmal geladen, Figuren sind Kopien mit geteilter Geometrie.
+- **Skelett-Animation drosseln:** Ab 17 Gegnern bewegt jedes Skelett nur
+  jedes zweite Bild (abwechselnd, mit aufgelaufener Zeit).
+- **Vorladen** schon im Menü; bis dahin Platzhalter.
+- **Offline-Speicher der App:** Durch den Upload waren es 355 Dateien /
+  6,9 MB (alle Vorschaubilder und SVGs). Jetzt 46 Dateien / 4,2 MB – die
+  ungenutzten Paketteile stehen in `globIgnores` (`vite.config.ts`).
+
+**Bekannte Leistungsrisiken:**
+
+- **Bildrate auf dem Handy weiter unbekannt.** Der Emulator rendert per
+  Software: 35 fps mit Kapseln, 17–29 fps mit Modellen. Das sagt über ein
+  Handy nichts, zeigt aber, dass die Modelle etwas kosten.
+  **Auf dem Gerät mit `?debug=werte` messen** – dort stehen jetzt auch
+  Dreiecke, Aufrufe, Figuren und Beute.
+- **Skelette** kosten Hauptprozessor, nicht Grafikkarte – bei 40 Zombies
+  der grösste Posten. Nächster Hebel, falls nötig: ferne Gegner seltener
+  animieren oder gar nicht.
+- **Bundle** jetzt ~594 kB gzip (vorher 554): GLTFLoader, SkeletonUtils.
+- **Kiste = 630 Dreiecke** – für einen Kasten viel. Bei Bedarf eine
+  vereinfachte Kiste bauen.
+
+### Offen / nicht wie geplant
+
+- **HUD bleibt Phaser**, nicht HTML/CSS wie im neuen Briefing
+  (Abschnitt 5, Stack). Begründung siehe „3D-Umbau“ – bewusste Abweichung,
+  zur Entscheidung vorgelegt.
+- **Kamera folgt nur der eigenen Figur**, nicht der Gruppe (Briefing
+  Abschnitt 5). Im Koop fehlt das Herauszoomen noch.
+- **Knoten-Ablauf fehlt:** Timer (45–90 s), Knoten geschafft → zurück zur
+  Karte, Kartenansicht, Rast-Knoten (Werkbank). Deshalb der Ausstieg in
+  jedem Gebiet.
+- **Gegner ohne Sterbeanimation**, keine Treffer-Effekte in 3D.
+- **Häuser sind orange Quader** – im Paket gibt es keine 3D-Gebäude.
+  Mit einem Umgebungspaket (z. B. Kenney City/Survival/Nature Kit) wäre das
+  ein Tausch in `GroundView`.
+- **Keine wehende Vegetation/Fahnen** – das Paket hat keine. Lebendig ist
+  bisher nur der Rauch.
+- Die 2D-Ansicht (`?view=2d`) zeigt die Knoten-Gebiete ebenfalls, aber
+  ohne die neue Kulisse (Kisten sind dort Deckungsblöcke).
+
+---
+
+## 3D-Umbau
+
+### Stand 2026-09-24, 11:54 UTC – Grundlage steht
+
+| | Was | Wo |
+| --- | --- | --- |
+| 1 | Three.js-Grundgerüst: Renderer, Szene, Umgebungs- + Richtungslicht | `render/SceneSetup.ts` |
+| 2 | Feste, angewinkelte Kamera, folgt der Figur, dreht nie mit | `render/FollowCamera.ts`, Werte in `VIEW3D` (`config/constants.ts`) |
+| 3 | Simulation unverändert, Darstellung liest nur (Sim → Mesh) | `render/EntityView.ts`, Umrechnung nur in `render/space3d.ts` |
+| 4 | Platzhalter: Kapseln je Charakter, Quader für Gegner, Plane als Boden | `render/placeholders.ts`, `render/GroundView.ts` |
+| 5 | Touch → Welt unter Berücksichtigung der Kamera | `input/viewMapping.ts`, angewendet im `InputManager` |
+| 6 | Knoten-Karte als reines Datenmodell | `systems/NodeMapGenerator.ts`, Werte in `NODE_MAP` (`config/balance.ts`) |
+
+**Nicht auf der Liste, aber mitgebaut, weil sonst unspielbar:** Wände und
+Büsche als graue/grüne Quader (die Simulation hat sie weiterhin – ohne sie
+läuft man gegen Unsichtbares), Geschosse als Kugeln, die Zielvorschau von
+Fähigkeit und Super am Boden. Alles Platzhalter.
+
+**Was in 3D noch fehlt** (in 2D vorhanden, unter **`?view=2d`** weiter
+spielbar): Beute am Boden, Ausstiegszonen, Encounter-Ringe und schlafende
+Bosse, Treffer-Effekte, Schadenszahlen, Heilfeld-Ring, Lebensbalken über
+Gegnern, Mitspieler-Pfeile am Rand, `?debug=hitbox`. Kompass, Minimap und
+HUD funktionieren in beiden Ansichten.
+
+### Entscheidung: Phaser bleibt – für Menüs, HUD und Touch
+
+Die Welt zeichnet Three.js. **Darüber** liegt Phaser als durchsichtige
+Ebene und zeichnet alles Übrige.
+
+- **Warum nicht eigene State-Klassen statt Phaser:** Rund 7000 Zeilen
+  hängen an Phaser – sieben Szenen, die Touch-Steuerung mit gemerktem
+  Schuss und mehreren Fingern, Sicherheitsabstände, das Nachrücken bei
+  Grössenänderung, das Gitter-Inventar mit Ziehen und Ablegen, das
+  Raumcode-Eingabefeld. Alles erprobt, vieles erst nach Spieltests richtig.
+  Eigene State-Klassen wären für den *Szenenwechsel* allein einfacher –
+  aber der Szenenwechsel ist der kleinste Teil dessen, was Phaser hier tut.
+  Ein Nachbau wäre ein zweites Projekt und stand nicht auf der Liste.
+- **Was Phaser abgibt:** nur die Welt (Arena, Figuren, Kamera). Genau der
+  Teil, der ohnehin neu entsteht.
+- **Ein WebGL-Kontext, nicht zwei:** In der 3D-Ansicht läuft Phaser mit
+  dem **Canvas-Renderer** (`type: CANVAS`, `transparent: true` in
+  `main.ts`). Für Text, Knöpfe und Balken reicht das, und das Handy muss
+  nur einen WebGL-Kontext halten – den der Welt.
+- **Ein Renderer fürs ganze App-Leben:** `sceneSetup()` legt ihn einmal an;
+  jeder Run leert nur die Szene. iOS gibt alte WebGL-Kontexte nicht
+  zuverlässig frei.
+- **Deckungsgleich:** Das Three-Canvas übernimmt jedes Bild das Rechteck,
+  das Phaser auf dem Bildschirm belegt (`getBoundingClientRect`), zeichnet
+  aber in Geräteauflösung (höchstens ×2). Berührungen gehen an Phaser
+  (`pointer-events: none` unten, `z-index` in `index.html`).
+- **Gezeichnet wird im selben Bild wie Phaser** (aus `GameScene.update`),
+  nicht in einer zweiten Schleife – sonst hinge die Welt ein Bild hinter
+  dem HUD.
+- **Kehrseite:** Das Bundle wächst von ~370 auf **~554 kB gzip**. Wenn das
+  auf dem Handy spürbar lädt: Phaser-Teile, die nur die 2D-Welt braucht,
+  fallen mit dem Ende von `?view=2d` weg.
+
+### Die Kamera: erste Richtwerte
+
+| Wert | Richtwert | Warum |
+| --- | --- | --- |
+| Neigung (`pitch`) | **55°** über dem Boden | Steil genug, dass man Abstände am Boden gut schätzt; flach genug, dass Figuren als Körper lesbar sind. 90° wäre wieder 2D. |
+| Drehung (`yaw`) | **0°** | Kamera im Süden, Blick nach Norden: „oben“ bleibt Norden wie in 2D, die Minimap passt ohne Drehung. |
+| Bildwinkel (`fov`) | **35°** | Eher Tele: wenig perspektivische Verzerrung am Bildrand, Figuren am Rand sehen aus wie in der Mitte. |
+| Abstand (`distance`) | **30 m** | Nach der Massstab-Regel aus Etappe 6 (Figur 5–7 % der Bildhöhe): mit der echten Kamera gemessen 6,6 %. 26 m ergab 7,6 % (im Emulator nachgemessen 7,7 %). |
+| Blickpunkt | 0,8 m über dem Boden | Etwa Brusthöhe – die Figur steht optisch in der Bildmitte, nicht ihre Füsse. |
+| Nachziehen | 0,18 je 1/60 s | Leichte Trägheit, bildratenunabhängig. |
+
+**Einheiten:** 1 Three-Einheit = 1 Meter = 48 Simulationspixel (eine
+Kachel). GLB-Modelle kommen in Metern, eine 1,8-m-Figur passt dann direkt
+zum Trefferkreis (0,75 m).
+
+**Justieren ohne Neubau:** `?tune=view3d.pitch=60,view3d.distance=24,view3d.fov=40`.
+`?debug=werte` zeigt die aktiven Werte und die Position an.
+
+**Folge, die man kennen muss:** Mit 30 m sieht man in der Bildmitte rund
+41 m Breite ≈ 2000 Simulationspixel – deutlich mehr als die ~1480 der
+2D-Ansicht. `ENEMIES.spawnRadiusMin` (700 px) war als „knapp ausserhalb
+des Sichtfelds“ gewählt; **seitlich erscheinen Gegner jetzt im Bild.** Nicht
+geändert, weil die Simulation in diesem Schritt unverändert bleiben sollte.
+Mit der Knoten-Karte ändert sich das Spawnen ohnehin.
+
+### Touch → Welt: gemessen, nicht vermutet
+
+Der Daumen liefert Bildschirmrichtungen, die Simulation braucht
+Bodenrichtungen. Zwei Dinge liegen dazwischen:
+
+1. **Drehung** (yaw): Bei gedrehter Kamera ist „oben“ nicht mehr Norden.
+2. **Stauchung** (pitch): Eine schräge Kamera staucht die Tiefe um
+   sin(Neigung). Ohne Ausgleich läuft die Figur bei schrägem Stick bei 55°
+   um **5,3° flacher**, als der Daumen zeigt, bei 40° um 11,6°.
+
+`screenToGround` gleicht beides aus und behält die **Länge** (halber
+Ausschlag = halbes Tempo, in jede Richtung). Angewendet an **genau einer
+Stelle**, im `InputManager` – vor dem Netz. Simulation, Host und Protokoll
+sehen weiterhin nur Weltrichtungen. In `?view=2d` ist die Abbildung die
+Identität.
+
+**Geprüft wie:**
+
+- `tests/render/followCamera.test.ts` gegen eine **echte Three-Kamera**:
+  16 Stick-Richtungen × 7 Kameralagen (Neigung 40/55/60/75°, Drehung
+  −30/0/45/90/180°) → Punkt am Boden → auf den Bildschirm projiziert.
+  Grösste Abweichung **0,34°** bei 55° (Rest ist Perspektive).
+  **Gegenproben:** Umrechnung mit falscher Drehung > 30° daneben, ohne
+  Neigungsausgleich > 4° – beide schlagen an.
+- **Im Emulator mit echten Touch-Ereignissen** (iPhone 13 quer), Position
+  aus `?debug=werte` abgelesen: bei Drehung 0 laufen oben/rechts/unten/links
+  exakt auf −90/0/90/180°, schräg oben rechts auf −50,9° (berechnet −50,7°).
+  Mit `?tune=view3d.yaw=45` schräg oben rechts auf −95,7° (berechnet −95,66°).
+- **Welt am richtigen Ort:** Wände aus dem Generator (Seed 4242) mit der
+  Kamera projiziert und mit dem Bildschirmfoto verglichen – alle acht
+  sichtbaren sitzen auf ~20 px genau dort (Rest: Wandhöhe).
+- Zielvorschau der Granate zeigt im Bild dorthin, wohin am Knopf gezogen
+  wurde, mit dem echten Explosionsradius.
+- Der Kompass am Bildrand rechnet den Bodenwinkel in einen Bildschirmwinkel
+  um (`groundToScreen`) – sonst zeigte er schräg an der Zone vorbei.
+
+### Knoten-Karte (nur Daten)
+
+`generateNodeMap(seed)` baut Schichten von Start (0) bis Boss (letzte).
+Mehrere Pfade (`NODE_MAP.paths`) laufen Schicht für Schicht nur in
+Nachbarspalten; ein Schritt, der eine vorhandene Kante kreuzen würde, ist
+verboten (geradeaus kreuzt nie, es bleibt also immer ein Schritt). Wo Pfade
+sich treffen, entsteht ein Knoten – daraus die Gabelungen. **Sackgassen
+sind durch den Aufbau ausgeschlossen**, nicht hinterher gesucht.
+
+- **Typen** *(überholt, siehe „3D-Assets und Knoten-Gebiete“: jetzt Kampf,
+  Elite, Rast, Extraktion, Ende-Boss)*: Kampf, Plündern, Rast, Elite; Start
+  und Boss fest. Erste
+  Schicht immer Kampf, vorletzte immer Rast, Elite erst ab Schicht 4, Rast
+  erst ab 3 und nie zweimal hintereinander.
+- **Gefahr:** `1 + floor(Schicht × 0,75)`, Elite +1, Boss +2. Der Boss ist
+  immer der gefährlichste Knoten.
+- **Zufall:** Mulberry32 mit eigenem Zustand, kein `Math.random` (der Test
+  ersetzt es durch eine Funktion, die wirft).
+- **Prüfen:** `npm run nodemap -- 4242` gibt die Karte als Text aus und
+  meldet, ob ein zweiter Durchlauf identisch ist. 10 Tests in
+  `tests/systems/nodeMap.test.ts`; Gegenprobe gemacht (ohne
+  Kreuzungsprüfung fällt genau der Kreuzungstest).
+- **VORLÄUFIG:** Tiefe 12, 4 Spalten, 5 Pfade, die Gewichte und die
+  Gefahrenformel sind **Annahmen**, weil Abschnitt 4 des neuen Briefings
+  fehlt. Alles steht in `NODE_MAP`; der Generator muss dafür nicht
+  angefasst werden, ausser Abschnitt 4 verlangt andere Typen.
+
+### Offen / nicht wie geplant
+
+- ~~**Das neue Briefing fehlt im Repo**~~ – seit dem Abend da. Karte an
+  Abschnitt 4 angeglichen (siehe „3D-Assets und Knoten-Gebiete“); die
+  Kamera passt: Das Briefing nennt Höhe 14 / Abstand 10, also rund 54°
+  Neigung – hier 55°.
+- **Bildrate unbekannt.** Der Emulator rendert per Software (SwiftShader,
+  ~35 fps) und sagt nichts über ein Handy. Auf dem Gerät messen:
+  `?debug=werte`. Hebel, falls es ruckelt: `?tune=view3d.maxPixelRatio=1`.
+- **Im Koop folgt die Kamera nur der eigenen Figur.** Die 2D-Kamera zoomte
+  heraus, wenn die Gruppe auseinanderlief; das ist nicht übernommen. Über
+  zwei Tabs nicht durchgespielt – der Koop-Weg (Eingabe → Host) ist aber
+  unverändert, umgerechnet wird vor dem Senden.
+- **Gegner erscheinen seitlich im Bild** (siehe Kamera).
+- **Die Figur hat keinen Schatten.** Schatten kosten auf dem Handy viel;
+  mit den echten Modellen entscheiden.
+- Liegt eine Figur am Boden, kippt die Kapsel immer nach Norden – egal,
+  wohin sie schaute. Platzhalter.
+
+---
+
 > **Seit 2026-09-23 abends läuft eine grosse Überarbeitung nach einem
 > technischen Arbeitsdokument (Etappen 0–12).** Der verlässliche Stand steht
 > in **`AUDIT.md`** (geprüft im Code, nicht aus dieser Datei übernommen) und
@@ -28,10 +409,10 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 > etwas anderes sagt, gilt das Protokoll.
 
 **Stand 2026-09-24 morgens: Etappen 0–12 abgeschlossen**, alles auf dem
-Branch `claude/artifact-session-70nhy4`. **GitHub Pages zeigt weiterhin
-Phase 9** – für die Überarbeitung auf dem Handy muss der Branch nach `main`
-(das braucht deine Freigabe). Die kurze Fassung für heute Morgen steht ganz
-unten: **MORGEN-ZUSAMMENFASSUNG**.
+Branch `claude/artifact-session-70nhy4`. **Seit 2026-09-24 08:29 UTC auch
+auf `main` und damit auf GitHub Pages** (Commit `0e28a23`, auf Wunsch
+„pushen“; Deploy und Quality Check grün). Die kurze Fassung für heute Morgen
+steht ganz unten: **MORGEN-ZUSAMMENFASSUNG**.
 
 ### Protokoll der Überarbeitung
 
@@ -1713,6 +2094,7 @@ src/
   config/
     balance.ts            ALLE Spielwerte
     assets.ts             ALLE Sprites: Kachelnummern, Massstab, Zuordnung
+    models.ts             ALLE 3D-Modelle: Dateien, Haeute, Zuordnung
     constants.ts          Arena, Bildschirm, Tickrate, Kamera, Touch, Farben
     tuning.ts             ?tune= aus der Adresszeile
   systems/                PHASER-FREI - die Simulation
@@ -1727,6 +2109,8 @@ src/
     supers.ts             die drei Super-Fähigkeiten (Sniper: Aufklärung)
     abilities.ts          zweite Fähigkeit (Granate, Heilfeld, Lähmschuss)
     WorldGenerator.ts     die Karte aus einem Seed (deterministisch)
+    NodeMapGenerator.ts   Knoten-Karte eines Runs aus einem Seed (nur Daten)
+    NodeArenaGenerator.ts das Gebiet eines Knotens (Dichte waechst mit g)
     encounters.ts         Encounter, Boss-Erwachen, Extraktion, Run-Ende
     boss.ts               Angriffsmuster des Bosses
     zones.ts              Distanzzonen und Skalierung
@@ -1748,10 +2132,25 @@ src/
     SoloSession.ts        Einzelspieler
     GameSession.ts        die Schnittstelle, die die Spielszene kennt
   render/                 Darstellung
-    ArenaRenderer, EntityRenderer, CameraController, Juice
+    SceneSetup.ts         Three.js: Renderer, Szene, Licht (3D)
+    ModelLoader.ts        GLB/Texturen einmal laden, Vorladen
+    FigureModel.ts        animierte Figur: Koerper + Haut + Clips
+    PropView.ts           Kulisse: Kisten, Zielscheiben, Rauch, Markierungen
+    LootView.ts           Beute am Boden in 3D, mit Objekt-Vorrat
+    ZoneView.ts           Ausstieg und Boss-Punkt als Ringe
+    World3D.ts            die 3D-Welt eines Runs, von GameScene gehalten
+    FollowCamera.ts       feste, angewinkelte Kamera (3D)
+    EntityView.ts         Figuren/Gegner/Geschosse als Meshes (3D)
+    GroundView.ts         Boden, Waende, Buesche (3D, Platzhalter)
+    AimPainter.ts         Zielvorschau-Schnittstelle, 2D und 3D
+    AimView3D.ts          Zielvorschau am Boden (3D)
+    placeholders.ts       Platzhalter-Masse und -Farben bis zu den GLB
+    space3d.ts            Sim-Pixel -> Three-Meter, EINZIGE Umrechnung
+    ArenaRenderer, EntityRenderer, CameraController, Juice   (2D, ?view=2d)
     wallPieces.ts         Wand -> Stuecke aus dem Sheet (Ecken, Kappen)
   scenes/                 Boot, Menu, Loadout, Lobby, Game, Hud, GameOver
   input/InputManager.ts   Touch -> InputState
+  input/viewMapping.ts    Bildschirm- <-> Bodenrichtung fuer die 3D-Kamera
   ui/                     VirtualJoystick, TouchControls, Button, HudModel,
                           Minimap, InventoryGrid, BackpackWindow,
                           compassPlacement, stickResponse
@@ -1762,11 +2161,13 @@ src/
   platform/               Geräte-Erkennung, Desktop-Sperre, Absturzanzeige,
                           Selbst-Aktualisierung, Installation
 android/                  Capacitor-Projekt für die Android-App
-tools/                    Hilfsskripte (App-Icons erzeugen)
+tools/                    Hilfsskripte (App-Icons, `npm run nodemap`,
+                          Modell-Umwandlung mit Blender, Haeute rastern)
+public/models/            die umgewandelten GLBs und Haeute (im Repo)
 tests/
   systems/                Simulation, inklusive ganzer Runden ohne Browser
   net/                    Protokoll, Raumcodes, Host und Client im selben Prozess
-  render/                 Wandzerlegung (phaserfrei)
+  render/                 Wandzerlegung, 3D-Kamera gegen Stick, 3D-Massstab
   ui/                     Joystick-Kennlinie, Kompass, Massstab
 ```
 
@@ -1901,6 +2302,7 @@ dem Bildschirm.
 | `npm run dev`       | Entwicklungsserver, auch im WLAN erreichbar (`--host` ist gesetzt) |
 | `npm run test`      | Tests der Simulation und des Netzwerks, plus Balancing-Messung     |
 | `npm run typecheck` | TypeScript prüfen                                                  |
+| `npm run nodemap -- <seed>` | Knoten-Karte als Text, prüft Wiederholbarkeit              |
 | `npm run lint`      | ESLint                                                             |
 | `npm run build`     | Produktionsbuild nach `dist/`                                      |
 | `npm run preview`   | Produktionsbuild lokal ansehen                                     |
@@ -2018,10 +2420,10 @@ auch dann nicht, wenn es "schnell noch" machbar wäre.
 
 Die Nacht hat alle zwölf Etappen des Arbeitsdokuments abgearbeitet, der
 Reihe nach, jede mit eigenem Commit auf `claude/artifact-session-70nhy4`.
-**Wichtig vorweg: Auf GitHub Pages ist davon noch nichts.** Pages baut aus
-`main`, und `main` steht auf Phase 9. Zum Ausprobieren auf dem Handy muss
-der Branch nach `main` – das habe ich nicht getan, weil du einen Push auf
-`main` jedes Mal selbst freigibst.
+**Nachtrag 08:30 UTC:** Auf „pushen“ hin steht der Stand seit Commit
+`0e28a23` auf `main`; Deploy und Quality Check liefen grün. Pages zeigt ihn
+also – auf dem Handy aktualisiert sich die installierte App im Hauptmenü
+von selbst.
 
 ### Fertig und geprüft
 
@@ -2093,11 +2495,11 @@ Stand am Ende: 253 Tests grün, Typecheck, Lint und Build sauber.
    ist. Gefällt es nicht: ein Parameter in `finishRun`.
 4. **Sniper-Aufklärung ohne Abklingzeit 14:** Supers laden über Schaden.
 5. **Grün doppelt belegt:** Büsche und Ausstiegsteppich sind beide grün.
-6. **Push nach `main`**, damit Pages den neuen Stand zeigt.
+6. ~~**Push nach `main`**~~ – erledigt (`0e28a23`).
 
 ### Ehrliche Priorität für heute
 
-1. Branch nach `main` freigeben und **auf dem Handy spielen** – vieles hier
+1. **Auf dem Handy spielen** (steht jetzt auf Pages) – vieles hier
    ist nur im Emulator gesehen (Bildrate, Lesbarkeit von `#7FB069` auf
    Sand, Bedienung des Rucksacks mit dem Daumen).
 2. Entscheidungen 1 und 2 oben – beide ändern, wie sich Tank und Sniper

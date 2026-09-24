@@ -195,6 +195,69 @@ export const CAMERA = {
 } as const;
 
 /**
+ * Die 3D-Ansicht (Three.js, seit dem 3D-Umbau).
+ *
+ * ================================================================
+ * EINE EINHEIT IST EIN METER, UND EIN METER SIND 48 PIXEL
+ * ================================================================
+ *
+ * Die Simulation rechnet weiter in Pixeln auf einer flachen Ebene - daran
+ * aendert der Umbau nichts. Erst die Darstellung rechnet um: Sim-(x, y) wird
+ * zu Three-(x / 48, 0, y / 48). 48 ist eine Bodenkachel (`WORLD.grid`).
+ *
+ * Warum Meter: GLB-Modelle kommen fast immer in Metern. Eine 1,8 m grosse
+ * Figur passt dann ohne Umrechnen zum Trefferkreis des Spielers
+ * (18 px Radius = 0,75 m Durchmesser - etwa Schulterbreite).
+ *
+ * ================================================================
+ * DIE KAMERA: FEST ANGEWINKELT, SIE DREHT SICH NIE MIT
+ * ================================================================
+ *
+ * Sie verschiebt sich mit der eigenen Figur, behaelt aber Neigung und
+ * Richtung. Das ist ein ERSTER RICHTWERT - justiert wird am echten
+ * Ergebnis auf dem Handy, ohne Neubau:
+ *
+ *   ?tune=view3d.pitch=60,view3d.distance=24,view3d.fov=35
+ *
+ * Wie die Werte zustande kamen, steht in CLAUDE.md ("3D-Umbau").
+ */
+export const VIEW3D = {
+  /** Simulationspixel je Meter. Gleich einer Bodenkachel. */
+  pixelsPerMeter: 48,
+  /** Senkrechter Bildwinkel in Grad. */
+  fov: 35,
+  /** Neigung in Grad ueber dem Boden: 90 waere senkrecht von oben. */
+  pitch: 55,
+  /**
+   * Drehung um die Hochachse in Grad. 0 heisst: Die Kamera steht im Sueden
+   * und schaut nach Norden - "oben" auf dem Bildschirm ist dann Sim-y klein,
+   * wie bisher in 2D.
+   */
+  yaw: 0,
+  /**
+   * Abstand der Kamera zur Figur in Metern, entlang der Blickrichtung.
+   *
+   * Gewaehlt nach der Massstab-Regel aus Etappe 6 (Figur 5-7 % der
+   * Bildhoehe), gemessen mit der echten Kamera in
+   * `tests/render/scaleRule3d.test.ts`: 26 m ergab 7,6 % (im Emulator
+   * nachgemessen 7,7 %), 30 m ergibt 6,6 %. Sichtbar sind damit in der
+   * Bildmitte rund 41 m Breite - mehr als die 31 m der alten 2D-Ansicht,
+   * weil die Figur jetzt aufrecht steht und hoeher ist als ihr Trefferkreis.
+   */
+  distance: 30,
+  /** Blickpunkt ueber dem Boden in Metern (etwa Brusthoehe). */
+  lookHeight: 0.8,
+  /** Traegheit der Kamerafolge je 1/60 s. 1 waere hart angeheftet. */
+  followLerp: 0.18,
+  /**
+   * Obergrenze fuer die Aufloesung. Ein iPhone meldet 3 Geraetepixel je
+   * CSS-Pixel; neunmal so viele Bildpunkte wie noetig kosten Akku, ohne dass
+   * man den Unterschied auf 6 Zoll sieht.
+   */
+  maxPixelRatio: 2,
+};
+
+/**
  * Touch-Steuerung.
  *
  * Links ein schwebender Joystick - er erscheint dort, wo der Daumen die linke

@@ -35,7 +35,9 @@ export class HostSession implements GameSession {
     seed: number,
   ) {
     this.selfId = selfId;
-    this.simulation = new Simulation(setups, seed);
+    // Immer der erste Kampfknoten - der Client baut genau dasselbe
+    // (`ClientView`), ohne dass etwas davon uebers Netz muss.
+    this.simulation = new Simulation(setups, seed, { nodeId: null });
 
     transport.onMessage((from, message) => this.receive(from, message));
     transport.onPeerLeave((peerId) => this.handleLeave(peerId));

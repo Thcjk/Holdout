@@ -100,7 +100,7 @@ function distanceToRect(rect: Rect, px: number, py: number): number {
  * koennen diagonal nah beieinander liegen und trotzdem eine breite Gasse
  * zwischen sich lassen. Es reicht, wenn EINE Achse genug Platz hat.
  */
-function hasGap(a: Rect, b: Rect, gap: number): boolean {
+export function hasGap(a: Rect, b: Rect, gap: number): boolean {
   const dx = Math.max(a.x - (b.x + b.width), b.x - (a.x + a.width), 0);
   const dy = Math.max(a.y - (b.y + b.height), b.y - (a.y + a.height), 0);
   return dx >= gap || dy >= gap;
@@ -422,7 +422,7 @@ function placeLootSpots(
 }
 
 /** Die vier Aussenmauern. Sie halten Spieler und Gegner im Feld. */
-function outerWalls(size: number): Rect[] {
+export function outerWalls(size: number): Rect[] {
   const t = WORLD.wallThickness;
   return [
     { x: 0, y: 0, width: size, height: t },
@@ -432,7 +432,7 @@ function outerWalls(size: number): Rect[] {
   ];
 }
 
-interface Area {
+export interface Area {
   x0: number;
   y0: number;
   x1: number;
@@ -741,7 +741,7 @@ export function bushCluster(
 }
 
 /** Ueberschneiden sich zwei Rechtecke? */
-function overlaps(a: Rect, b: Rect): boolean {
+export function overlaps(a: Rect, b: Rect): boolean {
   return (
     a.x < b.x + b.width &&
     a.x + a.width > b.x &&
@@ -763,7 +763,7 @@ function overlaps(a: Rect, b: Rect): boolean {
  * Es wird genau EINE Zufallszahl je Achse gezogen, wie vorher - das Raster
  * aendert die Folge nicht.
  */
-function randomRect(rng: RngHolder, area: Area, width: number, height: number): Rect | null {
+export function randomRect(rng: RngHolder, area: Area, width: number, height: number): Rect | null {
   const g = WORLD.grid;
   const snappedWidth = Math.max(g, Math.round(width / g) * g);
   const snappedHeight = Math.max(g, Math.round(height / g) * g);

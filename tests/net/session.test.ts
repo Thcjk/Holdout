@@ -85,8 +85,14 @@ describe("Host und Client", () => {
     host.view.state.enemies.push(createEnemy(1, "runner", { x: 400, y: 400 }, 1, 1, false));
     run(40, host, client, 0);
 
-    expect(client.view.state.enemies.length).toBe(1);
+    // Der von Hand gesetzte Gegner kommt beim Client an. (Nicht "genau
+    // einer": Im Knoten-Gebiet gibt es keine sichere Startzone mehr, dort
+    // spawnen sofort weitere - das ist gewollt.)
+    expect(client.view.state.enemies.map((enemy) => enemy.id)).toContain(1);
     expect(client.view.state.zone).toBe(host.view.state.zone);
+    // ... und beide bauen dasselbe Gebiet.
+    expect(client.view.state.walls).toEqual(host.view.state.walls);
+    expect(client.view.state.bounds).toEqual(host.view.state.bounds);
   });
 
   it("bewegt die eigene Figur sofort, ohne auf den Host zu warten", () => {

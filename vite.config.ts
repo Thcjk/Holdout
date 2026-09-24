@@ -58,7 +58,33 @@ export default defineConfig({
         // Phaser ist gross - die Voreinstellung von 2 MB wuerde es vom
         // Offline-Zwischenspeicher ausschliessen.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
-        globPatterns: ["**/*.{js,css,html,svg,png,ogg,m4a,json}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,ogg,m4a,json,glb}"],
+        /*
+         * Das hochgeladene Kenney-Paket liegt komplett unter `public/` -
+         * Vorschaubilder, 51 SVG-Haeute, UI-Paket, Sci-Fi-RTS-Grafiken. Das
+         * Spiel benutzt davon (noch) nichts direkt: Die Haeute sind als kleine
+         * PNGs unter `models/skins/` umgewandelt. Ohne diese Liste luede jedes
+         * Handy bei der Installation 6,9 MB statt rund 2, fuer nichts.
+         * Wer spaeter etwas davon im Spiel benutzt, nimmt es hier heraus.
+         */
+        globIgnores: [
+          "Skins/**",
+          "PNG/**",
+          "Spritesheet/**",
+          "Vector/**",
+          "Source/**",
+          "Animals/**",
+          "Textures/**",
+          "assets/Unit/**",
+          "assets/Structure/**",
+          "assets/Environment/**",
+          "assets/Tile/**",
+          "assets/scifi*",
+          // Vorschaubilder und Einzel-SVGs direkt in public/ (Blaster Kit,
+          // Tiere). favicon.svg kommt trotzdem mit - ueber `includeAssets`.
+          "*.png",
+          "*.svg",
+        ],
         /*
          * ================================================================
          * DER FEHLER, DER DIE MUSIK ZWEIMAL "NICHT GETAUSCHT" AUSSEHEN LIESS
