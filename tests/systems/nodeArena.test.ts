@@ -14,6 +14,7 @@ import {
 import type { NodeArena } from "../../src/systems/NodeArenaGenerator";
 import type { MapNode } from "../../src/systems/NodeMapGenerator";
 import { createWorld } from "../../src/systems/world";
+import { SOLID_PROP_KINDS } from "../../src/systems/types";
 import { soloSetup } from "../helpers";
 
 const SEEDS = [1, 42, 4242, 90210, -7, 777, 31337, 2024];
@@ -141,6 +142,40 @@ describe("Knoten-Gebiet", () => {
       const arena = buildArena(seed, node(30, "combat", 3));
       const crates = arena.props.filter((prop) => prop.kind.startsWith("crate")).length;
       expect(crates).toBeLessThanOrEqual(NODE_ARENA.maxCrates);
+    }
+  });
+
+  it("hat Umgebung: Blockierendes steht in walls, Kleinkram in keiner Wand, Umland draussen", () => {
+    for (const seed of SEEDS) {
+      const arena = buildArena(seed, node(6));
+      const inside = (x: number, y: number, rect: { x: number; y: number; width: number; height: number }) =>
+        x > rect.x && x < rect.x + rect.width && y > rect.y && y < rect.y + rect.height;
+      const withinBounds = (x: number, y: number) => inside(x, y, arena.bounds);
+
+      expect(arena.props.length).toBeLessThanOrEqual(NODE_ARENA.maxProps);
+      const kinds = new Set(arena.props.map((prop) => prop.kind));
+      for (const kind of ["tree", "pine", "rock", "grass", "stone", "shrub"] as const) {
+        expect(kinds.has(kind), `Seed ${seed}: ${kind}`).toBe(true);
+      }
+
+      for (const prop of arena.props) {
+        if (!withinBounds(prop.x, prop.y)) {
+          continue; // Umland
+        }
+        const inWall = arena.walls.some((wall) => inside(prop.x, prop.y, wall));
+        if (SOLID_PROP_KINDS.has(prop.kind)) {
+          // Was blockiert aussieht, blockiert auch - sonst liefe man durch
+          // einen Baum.
+          expect(inWall, `Seed ${seed}: ${prop.kind} ohne Wand`).toBe(true);
+        } else if (prop.kind !== "patch" && prop.kind !== "smoke") {
+          // Gras, Steine, Blumen, Schutt, Straeucher stechen nicht aus Waenden.
+          expect(inWall, `Seed ${seed}: ${prop.kind} in Wand`).toBe(false);
+        }
+      }
+
+      // Umland: nur ausserhalb der Mauer, und es gibt welches.
+      const outskirts = arena.props.filter((prop) => !withinBounds(prop.x, prop.y));
+      expect(outskirts.length).toBeGreaterThan(40);
     }
   });
 

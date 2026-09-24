@@ -1012,4 +1012,36 @@ export const NODE_ARENA = {
   lootRarityPerDanger: 0.25,
   /** Ausstieg bzw. Boss liegen so weit vom Start (Anteil der Kantenlaenge). */
   landmarkDistance: 0.34,
+
+  /*
+   * Umgebung (seit "Welt noch mehr Details"). Das Kenney-Paket hat keine
+   * 3D-Baeume, Felsen oder Pflanzen - diese Formen baut `render/decorModels.ts`
+   * selbst, im Low-Poly-Stil der Figuren.
+   */
+  /** Blockierende Umgebung: Baeume, Felsen, Fassgruppen, Zaeune. */
+  trees: { base: 6, perDanger: 0.2, max: 9 },
+  rocks: { base: 5, perDanger: 0.5, max: 10 },
+  barrels: { base: 2, perDanger: 0.4, max: 7 },
+  fences: { base: 1, perDanger: 0.25, max: 4 },
+  /** Zaunlaenge in Kacheln. */
+  fenceTiles: [3, 5] as readonly number[],
+  /**
+   * Kleinkram ohne Kollision. Schutt waechst mit g - je gefaehrlicher, desto
+   * kaputter sieht es aus.
+   */
+  grass: 150,
+  stones: 50,
+  flowers: 34,
+  patches: 12,
+  debris: { base: 4, perDanger: 2.5, max: 32 },
+  /** Abstand der Straeucher in einem Busch (Pixel). */
+  shrubSpacing: 40,
+  /**
+   * Umland ausserhalb der Mauer: nur zum Ansehen, unerreichbar. Ohne es
+   * steht das Gebiet wie eine Kiste im Nichts.
+   */
+  outskirtsDepth: 600,
+  outskirtsSpacing: 210,
+  /** Obergrenze aller Kulissenteile je Knoten (Leistung). */
+  maxProps: 900,
 } as const;

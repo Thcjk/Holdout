@@ -69,11 +69,17 @@ export const WALL_HEIGHT = {
 } as const;
 
 export const WALL_COLORS = {
-  outer: 0x6b4f3a,
-  building: 0xc97b3c,
+  /** Aussenmauer: Bruchstein. */
+  outer: 0x7d766a,
+  /** Hauswand: heller Putz. */
+  building: 0xd9b784,
   cover: 0x8a8f99,
   bush: 0x3f8f4f,
 } as const;
 
-/** Die zwei Sandtoene des Bodenschachbretts (je Kachel = 1 m abwechselnd). */
-export const GROUND_COLORS = ["#d9c29a", "#cfb68c"] as const;
+/** Mauerkrone obendrauf - nur Haus- und Aussenwaende haben eine. */
+export const WALL_CAP_COLORS: Partial<Record<keyof typeof WALL_COLORS, number>> = {
+  outer: 0x5e584e,
+  building: 0xa5533a,
+};
+

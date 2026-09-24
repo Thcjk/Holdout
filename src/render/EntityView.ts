@@ -46,7 +46,10 @@
 import {
   BoxGeometry,
   CapsuleGeometry,
+  CircleGeometry,
   Group,
+  InstancedMesh,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshToonMaterial,
@@ -113,6 +116,21 @@ export class EntityView {
   private readonly noseMaterial = new MeshToonMaterial({ color: 0x1b2230 });
   private readonly box = new BoxGeometry(1, 1, 1);
   private readonly sphere = new SphereGeometry(1, 10, 8);
+  /**
+   * Weicher Schatten unter jeder Figur: eine dunkle, halb durchsichtige
+   * Scheibe. Ohne sie scheinen Figuren ueber dem Boden zu schweben, weil
+   * echte Schatten auf dem Handy zu teuer sind. ALLE Schatten sind eine
+   * Instanzliste - ein Zeichenaufruf statt einem je Figur.
+   */
+  private readonly shadowGeometry = new CircleGeometry(1, 16).rotateX(-Math.PI / 2);
+  private readonly shadowMaterial = new MeshBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    opacity: 0.28,
+    depthWrite: false,
+  });
+  private readonly shadows = new InstancedMesh(this.shadowGeometry, this.shadowMaterial, 64);
+  private readonly shadowMatrix = new Matrix4();
 
   private readonly enemyMaterials: Record<EnemyType, MeshToonMaterial>;
   private readonly bulletMaterials = {
@@ -135,7 +153,10 @@ export class EntityView {
       shooter: new MeshToonMaterial({ color: ENEMY_COLORS.shooter }),
       boss: new MeshToonMaterial({ color: ENEMY_COLORS.boss }),
     };
-    scene.add(this.root);
+    this.shadows.count = 0;
+    this.shadows.frustumCulled = false;
+    this.shadows.renderOrder = 1;
+    scene.add(this.root, this.shadows);
   }
 
   /** Wie viele animierte Figuren gerade stehen - fuer die Leistungsanzeige. */
@@ -153,6 +174,24 @@ export class EntityView {
     this.syncPlayers(view, seconds);
     this.syncEnemies(view, seconds);
     this.syncProjectiles(view);
+    this.syncShadows();
+  }
+
+  /** Ein Schatten je Figur, etwa so breit wie die Schultern. */
+  private syncShadows(): void {
+    let index = 0;
+    for (const slots of [this.players, this.enemies] as Array<Map<unknown, FigureSlot>>) {
+      for (const slot of slots.values()) {
+        if (index >= this.shadows.instanceMatrix.count) break;
+        const size = slot.height * 0.26;
+        this.shadowMatrix.makeScale(size, 1, size);
+        this.shadowMatrix.setPosition(slot.group.position.x, 0.03, slot.group.position.z);
+        this.shadows.setMatrixAt(index, this.shadowMatrix);
+        index += 1;
+      }
+    }
+    this.shadows.count = index;
+    this.shadows.instanceMatrix.needsUpdate = true;
   }
 
   private syncPlayers(view: WorldView, seconds: number): void {
@@ -386,6 +425,10 @@ export class EntityView {
     this.nose.dispose();
     this.box.dispose();
     this.sphere.dispose();
+    this.shadows.removeFromParent();
+    this.shadows.dispose();
+    this.shadowGeometry.dispose();
+    this.shadowMaterial.dispose();
     this.noseMaterial.dispose();
     for (const material of Object.values(this.enemyMaterials)) {
       material.dispose();

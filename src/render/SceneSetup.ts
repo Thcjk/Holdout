@@ -41,11 +41,15 @@ import {
   AmbientLight,
   Color,
   DirectionalLight,
+  Fog,
   Scene,
   WebGLRenderer,
 } from "three";
 import type { Camera } from "three";
-import { COLORS, VIEW3D } from "../config/constants";
+import { VIEW3D } from "../config/constants";
+
+/** Dunst und Hintergrund: gedaempftes Wiesengruen wie das Umland. */
+const HAZE = 0x809866;
 
 export class SceneSetup {
   readonly renderer: WebGLRenderer;
@@ -79,7 +83,13 @@ export class SceneSetup {
     });
 
     this.scene = new Scene();
-    this.scene.background = new Color(COLORS.background);
+    /*
+     * Leichter Dunst in der Ferne, in der Farbe des Umlands. Der Rand des
+     * Bildes verschwimmt damit in Landschaft statt an einer harten Kante ins
+     * Dunkle zu kippen. Die Bildmitte (rund 30 m entfernt) bleibt klar.
+     */
+    this.scene.background = new Color(HAZE);
+    this.scene.fog = new Fog(HAZE, 44, 95);
 
     /*
      * Licht: Umgebungslicht plus ein Richtungslicht.

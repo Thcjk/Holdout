@@ -448,7 +448,7 @@ export interface EncounterSpot {
  * Lage in Simulationspixeln, Drehung im Bogenmass um die Hochachse.
  */
 export interface ArenaProp {
-  kind: "crateSmall" | "crateMedium" | "crateWide" | "target" | "smoke";
+  kind: ArenaPropKind;
   x: number;
   y: number;
   rotation: number;
@@ -456,7 +456,52 @@ export interface ArenaProp {
   level: number;
   /** Beutekiste - wird mit Glanz markiert. */
   lootable: boolean;
+  /** Groessenfaktor, 1 = normal. */
+  scale: number;
+  /** Spielart desselben Modells (Farbe, Form), ab 0. */
+  variant: number;
 }
+
+/**
+ * Was in einem Knoten-Gebiet steht.
+ *
+ *   Modelle aus dem Paket   crate*, target, smoke
+ *   selbst gebaute Formen   tree, pine, rock, barrels, fence    (blockieren)
+ *                           shrub, grass, stone, flower,
+ *                           debris, patch                       (nur Optik)
+ *
+ * Was blockiert, steht zusaetzlich als Rechteck in `walls` - nur dort liest
+ * die Simulation. Die Liste hier ist reine Darstellung.
+ */
+export type ArenaPropKind =
+  | "crateSmall"
+  | "crateMedium"
+  | "crateWide"
+  | "target"
+  | "smoke"
+  | "tree"
+  | "pine"
+  | "rock"
+  | "barrels"
+  | "fence"
+  | "shrub"
+  | "grass"
+  | "stone"
+  | "flower"
+  | "debris"
+  | "patch";
+
+/** Arten, die als Wand in `walls` stehen - die Darstellung zeichnet sie selbst. */
+export const SOLID_PROP_KINDS: ReadonlySet<ArenaPropKind> = new Set([
+  "crateSmall",
+  "crateMedium",
+  "crateWide",
+  "tree",
+  "pine",
+  "rock",
+  "barrels",
+  "fence",
+]);
 
 /** Eine Zone, in der das Team den Run beenden kann. */
 export interface ExtractionZone {

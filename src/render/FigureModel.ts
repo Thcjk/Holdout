@@ -43,7 +43,7 @@ import type { ClipId, FigureLook } from "../config/models";
 import { modelLoader } from "./ModelLoader";
 
 /** Drei Lichtstufen fuer den Toon-Look: Schatten, Halbschatten, Licht. */
-const TOON_STEPS = (() => {
+export const TOON_STEPS = (() => {
   const data = new Uint8Array([110, 190, 255]);
   const texture = new DataTexture(data, data.length, 1, RedFormat);
   texture.minFilter = NearestFilter;

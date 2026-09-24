@@ -231,7 +231,7 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
         const x = horizontal ? rect.x + along : rect.x + grid / 2;
         const y = horizontal ? rect.y + grid / 2 : rect.y + along;
         const rotation = (horizontal ? Math.PI / 2 : 0) + randomRange(rng, -0.08, 0.08);
-        props.push({ kind: "crateMedium", x, y, rotation, level: 0, lootable: false });
+        props.push({ kind: "crateMedium", x, y, rotation, level: 0, lootable: false, scale: 1, variant: 0 });
         crates += 1;
         if (nextRandom(rng) < NODE_ARENA.stackChance && crates < NODE_ARENA.maxCrates) {
           props.push({
@@ -241,6 +241,8 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
             rotation: rotation + randomRange(rng, -0.25, 0.25),
             level: 1,
             lootable: false,
+            scale: 1,
+            variant: 0,
           });
           crates += 1;
         }
@@ -294,6 +296,8 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
         rotation: horizontal ? Math.PI / 2 : 0,
         level: 0,
         lootable: true,
+        scale: 1,
+        variant: 0,
       });
       crates += 1;
       // Die Beute liegt VOR der Kiste - eine Kiste zu oeffnen waere eine neue
@@ -301,6 +305,79 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
       const side = nextRandom(rng) < 0.5 ? -1 : 1;
       const offset = grid / 2 + 40;
       addLoot(horizontal ? cx : cx + side * offset, horizontal ? cy + side * offset : cy);
+      break;
+    }
+  }
+
+  // --- Umgebung, die blockiert: Baeume, Felsen, Fassgruppen, Zaeune --------
+  // Jedes Stueck ist eine Wand in `walls` (Kollision, Sichtschutz, Schuesse)
+  // UND ein Kulissenteil (Aussehen). Dieselben Abstandsregeln wie fuer
+  // Kisten - die Erreichbarkeit bleibt gebaut, nicht gehofft.
+  const decor = (kind: ArenaProp["kind"], x: number, y: number, rotation: number, scale: number, variant: number): void => {
+    props.push({ kind, x, y, rotation, level: 0, lootable: false, scale, variant });
+  };
+  const placeSolid = (tiles: number, onPlace: (rect: Rect) => void): void => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const rect = randomRect(rng, area, tiles * grid, tiles * grid);
+      if (!rect || !fits(rect)) {
+        continue;
+      }
+      walls.push(rect);
+      obstacles.push(rect);
+      onPlace(rect);
+      return;
+    }
+  };
+
+  for (let i = 0; i < densityCount(NODE_ARENA.trees, g); i += 1) {
+    const kind = nextRandom(rng) < 0.5 ? "tree" : "pine";
+    const scale = randomRange(rng, 0.85, 1.3);
+    const variant = Math.floor(nextRandom(rng) * 3);
+    const rotation = randomRange(rng, 0, Math.PI * 2);
+    placeSolid(1, (rect) => decor(kind, rect.x + grid / 2, rect.y + grid / 2, rotation, scale, variant));
+  }
+  for (let i = 0; i < densityCount(NODE_ARENA.rocks, g); i += 1) {
+    const big = nextRandom(rng) < 0.4;
+    const variant = Math.floor(nextRandom(rng) * 3);
+    const rotation = randomRange(rng, 0, Math.PI * 2);
+    const tiles = big ? 2 : 1;
+    placeSolid(tiles, (rect) =>
+      decor("rock", rect.x + rect.width / 2, rect.y + rect.height / 2, rotation, tiles * 0.95, variant),
+    );
+  }
+  for (let i = 0; i < densityCount(NODE_ARENA.barrels, g); i += 1) {
+    const variant = Math.floor(nextRandom(rng) * 3);
+    const rotation = randomRange(rng, 0, Math.PI * 2);
+    placeSolid(1, (rect) => decor("barrels", rect.x + grid / 2, rect.y + grid / 2, rotation, 1, variant));
+  }
+  for (let i = 0; i < densityCount(NODE_ARENA.fences, g); i += 1) {
+    const length =
+      NODE_ARENA.fenceTiles[Math.floor(nextRandom(rng) * NODE_ARENA.fenceTiles.length)] ?? 3;
+    const horizontal = nextRandom(rng) < 0.5;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const rect = randomRect(
+        rng,
+        area,
+        (horizontal ? length : 1) * grid,
+        (horizontal ? 1 : length) * grid,
+      );
+      if (!rect || !fits(rect)) {
+        continue;
+      }
+      walls.push(rect);
+      obstacles.push(rect);
+      // Ein Zaunfeld je Kachel, laengs der Reihe.
+      for (let k = 0; k < length; k += 1) {
+        const along = k * grid + grid / 2;
+        decor(
+          "fence",
+          horizontal ? rect.x + along : rect.x + grid / 2,
+          horizontal ? rect.y + grid / 2 : rect.y + along,
+          horizontal ? 0 : Math.PI / 2,
+          1,
+          0,
+        );
+      }
       break;
     }
   }
@@ -323,7 +400,28 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
     if (reserved.some((circle) => distanceToRect(field, circle) < circle.r * 0.6)) {
       continue;
     }
-    bushes.push(...bushCluster(field, bites));
+    const pieces = bushCluster(field, bites);
+    bushes.push(...pieces);
+    // Jedes Stueck mit Straeuchern fuellen - dicht, damit man darin
+    // verschwindet und es von aussen wie ein Busch aussieht, nicht wie eine
+    // gruene Flaeche.
+    const step = NODE_ARENA.shrubSpacing;
+    for (const piece of pieces) {
+      for (let y = piece.y + step / 2; y < piece.y + piece.height; y += step) {
+        for (let x = piece.x + step / 2; x < piece.x + piece.width; x += step) {
+          props.push({
+            kind: "shrub",
+            x: x + randomRange(rng, -10, 10),
+            y: y + randomRange(rng, -10, 10),
+            rotation: randomRange(rng, 0, Math.PI * 2),
+            level: 0,
+            lootable: false,
+            scale: randomRange(rng, 0.85, 1.25),
+            variant: Math.floor(nextRandom(rng) * 3),
+          });
+        }
+      }
+    }
   }
 
   // --- Deko: Rauch ueber den Daechern, Zielscheiben -----------------------
@@ -338,6 +436,8 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
       rotation: randomRange(rng, 0, Math.PI * 2),
       level: 0,
       lootable: false,
+      scale: 1,
+      variant: 0,
     });
     deco += 1;
   }
@@ -353,8 +453,60 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
       rotation: randomRange(rng, 0, Math.PI * 2),
       level: 0,
       lootable: false,
+      scale: 1,
+      variant: 0,
     });
     deco += 1;
+  }
+
+  // --- Kleinkram ohne Kollision: Gras, Steine, Blumen, Schutt, Flecken ----
+  // Nicht in Hindernisse hinein (dort saehe man ihn durch die Wand stechen).
+  const free = (x: number, y: number): boolean =>
+    obstacles.every(
+      (rect) =>
+        x < rect.x - 16 || x > rect.x + rect.width + 16 || y < rect.y - 16 || y > rect.y + rect.height + 16,
+    );
+  const scatter = (kind: ArenaProp["kind"], count: number, variants: number, scaleMin: number, scaleMax: number): void => {
+    for (let i = 0; i < count; i += 1) {
+      const x = randomRange(rng, t + 24, size - t - 24);
+      const y = randomRange(rng, t + 24, size - t - 24);
+      const rotation = randomRange(rng, 0, Math.PI * 2);
+      const scale = randomRange(rng, scaleMin, scaleMax);
+      const variant = Math.floor(nextRandom(rng) * variants);
+      if (kind === "patch" || free(x, y)) {
+        decor(kind, Math.round(x), Math.round(y), rotation, scale, variant);
+      }
+    }
+  };
+  scatter("patch", NODE_ARENA.patches, 3, 0.7, 1.4);
+  scatter("grass", NODE_ARENA.grass, 3, 0.8, 1.4);
+  scatter("stone", NODE_ARENA.stones, 3, 0.6, 1.5);
+  scatter("flower", NODE_ARENA.flowers, 3, 0.8, 1.2);
+  scatter("debris", densityCount(NODE_ARENA.debris, g), 3, 0.8, 1.3);
+
+  // --- Umland ausserhalb der Mauer: Wald und Felsen -------------------------
+  // Unerreichbar, nur Kulisse. Ein lockeres Raster mit Versatz, dichter
+  // Wald direkt an der Mauer, nach aussen lichter.
+  const depth = NODE_ARENA.outskirtsDepth;
+  const spacing = NODE_ARENA.outskirtsSpacing;
+  for (let y = -depth; y < size + depth; y += spacing) {
+    for (let x = -depth; x < size + depth; x += spacing) {
+      const px = x + randomRange(rng, -spacing * 0.4, spacing * 0.4);
+      const py = y + randomRange(rng, -spacing * 0.4, spacing * 0.4);
+      const roll = nextRandom(rng);
+      const rotation = randomRange(rng, 0, Math.PI * 2);
+      const scale = randomRange(rng, 0.9, 1.5);
+      const variant = Math.floor(nextRandom(rng) * 3);
+      // Innerhalb der Mauer (plus etwas Luft) nichts.
+      if (px > -40 && px < size + 40 && py > -40 && py < size + 40) {
+        continue;
+      }
+      if (props.length >= NODE_ARENA.maxProps) {
+        continue;
+      }
+      const kind = roll < 0.45 ? "pine" : roll < 0.8 ? "tree" : roll < 0.92 ? "rock" : "shrub";
+      decor(kind, Math.round(px), Math.round(py), rotation, kind === "rock" ? scale * 1.4 : scale, variant);
+    }
   }
 
   const extractions: ExtractionZone[] = [

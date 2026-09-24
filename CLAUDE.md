@@ -53,6 +53,44 @@ animiert und schauen in die richtige Richtung (Nahaufnahme mit
 leuchtenden Beutekiste gelaufen → „Beute 1“ im HUD, die Kiste erlischt.
 Keine Seitenfehler.
 
+### Nachtrag 2026-09-24 abends: „Welt noch mehr Details“
+
+Rückmeldung: „ziemlich leer so“. Das Paket hat keine 3D-Bäume, -Felsen oder
+-Pflanzen – deshalb **selbst gebaute Low-Poly-Formen** aus Kegeln,
+Zylindern und Ikosaedern (`render/decorModels.ts`), im Stil der Figuren.
+Kommt ein Umgebungspaket (z. B. Kenney Nature Kit), ersetzt es diese Datei.
+
+| Was | Kollision | Menge (Formel wie oben, g = Gefahr) |
+| --- | --- | --- |
+| Laubbäume, Tannen | ja (Stamm, 1 Kachel) | 6 + 0,2·g, max 9 |
+| Felsen (1 oder 2 Kacheln) | ja | 5 + 0,5·g, max 10 |
+| Fassgruppen | ja | 2 + 0,4·g, max 7 |
+| Zäune (3 oder 5 Kacheln) | ja | 1 + 0,25·g, max 4 |
+| Sträucher in den Büschen | nein (Versteck wie bisher) | dicht, alle 40 px |
+| Gras / Steine / Blumen | nein | 150 / 50 / 34 |
+| Schutt (Bretter, Brocken) | nein | 4 + 2,5·g, max 32 – je gefährlicher, desto kaputter |
+| Bodenflecken (Erde, Kies – bewusst kein Grün) | nein | 12 |
+| Umland ausserhalb der Mauer (Wald, Felsen) | – unerreichbar | Raster 210 px, 600 px tief |
+
+- **Was blockiert aussieht, blockiert auch:** Bäume, Felsen, Fässer und
+  Zäune stehen als Wand in `walls` (Kollision, Sicht, Schüsse). Ein Test
+  prüft das für jedes Teil, und dass Kleinkram nie in einer Wand steckt.
+  Erreichbarkeit hält weiter (Flutfüllung).
+- **Wind:** Bäume, Sträucher, Gras und Blumen wiegen sich – im Shader
+  gerechnet, der Hauptprozessor merkt davon nichts.
+- **Boden:** Sand mit Körnung statt Schachbrett, Wiese im Umland, Dunst am
+  Bildrand in derselben Farbe. **Häuser:** heller Putz, ziegelrote
+  Mauerkrone, Dielenboden innen; Aussenmauer aus Stein.
+- **Schatten** unter jeder Figur (eine Scheibe, alle zusammen ein
+  Zeichenaufruf) – ohne ihn schweben die Figuren.
+- **Leistung, gemessen:** 30–40 k Dreiecke, 35–69 Zeichenaufrufe (g 1 bis
+  g 8). Die Spielarten einer Form teilen sich eine Geometrie, die
+  Abwechslung ist Instanzfarbe – so ist jede Form ein einziger Aufruf. Die
+  erste Fassung hatte je Spielart einen und lag bei 85 Aufrufen; mit 40
+  Gegnern wäre das Budget (120) gerissen. Jetzt hochgerechnet rund 110.
+  **Grösster Rest:** Beute am Boden wird einzeln gezeichnet (2–3 Aufrufe je
+  Stück) – nächster Hebel, falls es eng wird.
+
 ### Die Inventur – was im Upload wirklich war
 
 **Keine einzige GLB-Datei**, keine 3D-Gebäude, keine 3D-Umgebung. Im Einzelnen:
@@ -229,8 +267,8 @@ Hochgerechnet mit 40 Gegnern (je ~1.600 Dreiecke, je ein Aufruf): rund
 - **Häuser sind orange Quader** – im Paket gibt es keine 3D-Gebäude.
   Mit einem Umgebungspaket (z. B. Kenney City/Survival/Nature Kit) wäre das
   ein Tausch in `GroundView`.
-- **Keine wehende Vegetation/Fahnen** – das Paket hat keine. Lebendig ist
-  bisher nur der Rauch.
+- ~~**Keine wehende Vegetation**~~ – Bäume, Sträucher, Gras und Blumen
+  wiegen sich seit dem Nachtrag im Wind (selbst gebaute Formen).
 - Die 2D-Ansicht (`?view=2d`) zeigt die Knoten-Gebiete ebenfalls, aber
   ohne die neue Kulisse (Kisten sind dort Deckungsblöcke).
 
@@ -2136,6 +2174,8 @@ src/
     ModelLoader.ts        GLB/Texturen einmal laden, Vorladen
     FigureModel.ts        animierte Figur: Koerper + Haut + Clips
     PropView.ts           Kulisse: Kisten, Zielscheiben, Rauch, Markierungen
+    DecorView.ts          Umgebung: Baeume, Felsen, Gras ... mit Wind
+    decorModels.ts        selbst gebaute Low-Poly-Formen (kein Paket)
     LootView.ts           Beute am Boden in 3D, mit Objekt-Vorrat
     ZoneView.ts           Ausstieg und Boss-Punkt als Ringe
     World3D.ts            die 3D-Welt eines Runs, von GameScene gehalten

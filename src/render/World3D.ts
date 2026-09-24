@@ -20,6 +20,7 @@ import type { WorldView } from "../net/GameSession";
 import type { ViewOrientation } from "../input/viewMapping";
 import type { Vec2, WorldState } from "../systems/types";
 import { AimView3D } from "./AimView3D";
+import { DecorView } from "./DecorView";
 import { EntityView } from "./EntityView";
 import { FollowCamera } from "./FollowCamera";
 import { GroundView } from "./GroundView";
@@ -35,6 +36,7 @@ export class World3D {
   private readonly ground: GroundView;
   private readonly entities: EntityView;
   private readonly props: PropView;
+  private readonly decor: DecorView;
   private readonly loot: LootView;
   private readonly zones: ZoneView;
   readonly aim: AimView3D;
@@ -47,6 +49,7 @@ export class World3D {
     // Welt zeigt Platzhalter, bis die Modelle da sind.
     void preloadGameModels();
     this.ground = new GroundView(this.setup.scene, this.setup.renderer, state);
+    this.decor = new DecorView(this.setup.scene, state.props ?? []);
     this.props = new PropView(this.setup.scene, state.props ?? [], state.buildings);
     this.zones = new ZoneView(this.setup.scene, state);
     this.loot = new LootView(this.setup.scene);
@@ -68,6 +71,7 @@ export class World3D {
   update(view: WorldView, selfId: string, deltaMs: number, overlay: HTMLCanvasElement): void {
     const aspect = this.setup.matchOverlay(overlay);
     const seconds = Math.min(deltaMs, 100) / 1000;
+    this.decor.update(seconds);
     this.props.update(view.state, seconds);
     this.zones.update(view.state, seconds);
     this.loot.sync(view.state, seconds);
@@ -97,6 +101,7 @@ export class World3D {
   }
 
   destroy(): void {
+    this.decor.dispose();
     this.props.dispose();
     this.zones.dispose();
     this.loot.dispose();

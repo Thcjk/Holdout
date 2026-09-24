@@ -1,22 +1,37 @@
 /**
- * Boden, Waende und Buesche als Platzhalter (3D-Umbau).
+ * Boden, Waende, Hausboeden und (in der offenen Welt) Buesche.
  *
- * Der Boden ist eine einzige Flaeche mit Schachbrettmuster: je Meter (= eine
- * Kachel, 48 px) ein Feld. Das Muster ist nicht Schmuck, sondern Werkzeug -
- * auf einer einfarbigen Flaeche sieht man nicht, ob und wohin man sich
- * bewegt, und genau das muss man beim Pruefen der Steuerung sehen.
+ * ================================================================
+ * BODEN
+ * ================================================================
  *
- * Waende und Buesche stehen nicht auf der Liste fuer diesen Schritt, sind
- * aber noetig: Die Simulation hat sie weiterhin. Ohne sie liefe man gegen
- * Unsichtbares und verschwaende in unsichtbarem Gebuesch. Sie sind schlichte
- * Quader und fliegen raus, sobald es Modelle gibt.
+ * Sand mit Koernung und hellen/dunklen Flecken, gekachelt alle 8 m - statt
+ * des Schachbretts aus der Grundlagen-Phase. Die Koernung ist nicht nur
+ * Schmuck: Auf einer einfarbigen Flaeche saehe man nicht, dass man sich
+ * bewegt. Um das Knoten-Gebiet herum liegt ein zweiter, groesserer Boden in
+ * Gras-Toenen fuer das Umland (Wald und Felsen aus `DecorView`).
+ *
+ * Die Texturen werden hier im Code gemalt (Canvas), mit festem Startwert -
+ * kein Bild zum Laden, und auf jedem Geraet gleich.
+ *
+ * ================================================================
+ * WAENDE
+ * ================================================================
+ *
+ * Hauswaende in hellem Putz mit ziegelroter Mauerkrone, die Aussenmauer in
+ * Stein. Die Krone ist ein flacher, etwas breiterer Quader obendrauf - der
+ * einfachste Weg, einem Kasten eine Oberkante zu geben, an der man ihn als
+ * Mauer erkennt. Innen haben Haeuser einen Holzboden: Von oben sieht man
+ * sofort, was drinnen und was draussen ist.
+ *
+ * Wo Kulisse eine Wand ausmacht (Kisten, Baeume, Felsen, Faesser, Zaeune),
+ * wird die Wand hier NICHT gezeichnet - das Aussehen kommt dann aus
+ * `PropView` bzw. `DecorView`, die Kollision bleibt dieselbe.
  *
  * ================================================================
  * EIN ZEICHENAUFRUF JE WANDART, NICHT EINER JE WAND
  * ================================================================
  *
- * Eine Welt hat ueber 500 Wandstuecke. Als einzelne Meshes waeren das 500
- * Zeichenaufrufe je Bild - auf dem Handy der teuerste Posten ueberhaupt.
  * `InstancedMesh` zeichnet alle Quader derselben Art in EINEM Aufruf; jede
  * Wand ist nur eine Zeile in einer Matrixliste.
  */
@@ -26,84 +41,113 @@ import {
   CanvasTexture,
   InstancedMesh,
   LinearMipmapLinearFilter,
+  LinearFilter,
   Matrix4,
   Mesh,
   MeshLambertMaterial,
   MeshToonMaterial,
-  NearestFilter,
   PlaneGeometry,
   Quaternion,
   RepeatWrapping,
   SRGBColorSpace,
   Vector3,
 } from "three";
-import type { Scene, WebGLRenderer } from "three";
+import type { Scene, Texture, WebGLRenderer } from "three";
+import { NODE_ARENA } from "../config/balance";
+import { SOLID_PROP_KINDS } from "../systems/types";
 import type { Rect, WorldState } from "../systems/types";
-import { GROUND_COLORS, WALL_COLORS, WALL_HEIGHT } from "./placeholders";
+import { TOON_STEPS } from "./FigureModel";
+import { WALL_CAP_COLORS, WALL_COLORS, WALL_HEIGHT } from "./placeholders";
 import { meters } from "./space3d";
 
 type WallKind = "outer" | "building" | "cover" | "bush";
+
+/** Eine Kachel der Bodentextur deckt so viele Meter. */
+const GROUND_TILE_METERS = 8;
 
 export class GroundView {
   private readonly disposables: Array<{ dispose(): void }> = [];
   private readonly objects: Array<Mesh | InstancedMesh> = [];
 
   constructor(scene: Scene, renderer: WebGLRenderer, state: WorldState) {
-    this.buildFloor(scene, renderer, state.bounds);
+    const anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    const isArena = (state.props?.length ?? 0) > 0;
+
+    this.buildFloor(scene, state.bounds, groundTexture(SAND, 7, anisotropy), 0);
+    if (isArena) {
+      // Umland: grosszuegig ueber den Rand hinaus, damit auch am Bildrand
+      // Land zu sehen ist und kein Nichts.
+      const margin = NODE_ARENA.outskirtsDepth + 900;
+      const outer = {
+        x: state.bounds.x - margin,
+        y: state.bounds.y - margin,
+        width: state.bounds.width + margin * 2,
+        height: state.bounds.height + margin * 2,
+      };
+      this.buildFloor(scene, outer, groundTexture(MEADOW, 13, anisotropy), -0.02);
+    }
+    this.buildHouseFloors(scene, state.buildings, anisotropy);
 
     const groups: Record<WallKind, Rect[]> = { outer: [], building: [], cover: [], bush: [] };
     for (const wall of state.walls) {
-      // Deckung, auf der Kisten stehen (Knoten-Gebiet), zeichnet `PropView`
-      // als echte Kisten - hier kein Quader darunter.
-      if (carriesCrate(wall, state)) {
+      if (carriesProp(wall, state)) {
         continue;
       }
       groups[wallKind(wall, state)].push(wall);
     }
-    groups.bush = state.bushes;
+    // Buesche als gruene Quader nur noch in der offenen Welt - im Knoten-
+    // Gebiet stehen dort echte Straeucher (`DecorView`).
+    const hasShrubs = (state.props ?? []).some((prop) => prop.kind === "shrub");
+    groups.bush = hasShrubs ? [] : state.bushes;
 
     for (const kind of Object.keys(groups) as WallKind[]) {
       this.buildBlocks(scene, kind, groups[kind]);
     }
   }
 
-  private buildFloor(scene: Scene, renderer: WebGLRenderer, bounds: Rect): void {
-    // 2 x 2 Pixel Schachbrett, gekachelt: ein Pixel = ein Meter am Boden.
-    const canvas = document.createElement("canvas");
-    canvas.width = 2;
-    canvas.height = 2;
-    const context = canvas.getContext("2d");
-    if (context) {
-      context.fillStyle = GROUND_COLORS[0];
-      context.fillRect(0, 0, 2, 2);
-      context.fillStyle = GROUND_COLORS[1];
-      context.fillRect(0, 0, 1, 1);
-      context.fillRect(1, 1, 1, 1);
-    }
-
-    const width = meters(bounds.width);
-    const depth = meters(bounds.height);
-    const texture = new CanvasTexture(canvas);
-    texture.colorSpace = SRGBColorSpace;
-    texture.wrapS = RepeatWrapping;
-    texture.wrapT = RepeatWrapping;
-    texture.repeat.set(width / 2, depth / 2);
-    // Nah: harte Kanten. Fern: zu einer Mischfarbe verschwimmen lassen -
-    // sonst flimmert das Muster zum Horizont hin (Moire).
-    texture.magFilter = NearestFilter;
-    texture.minFilter = LinearMipmapLinearFilter;
-    texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  private buildFloor(scene: Scene, rect: Rect, texture: Texture, height: number): void {
+    const width = meters(rect.width);
+    const depth = meters(rect.height);
+    texture.repeat.set(width / GROUND_TILE_METERS, depth / GROUND_TILE_METERS);
 
     const geometry = new PlaneGeometry(width, depth);
     // PlaneGeometry steht aufrecht (x/y). Flach auf den Boden (x/z) legen.
     geometry.rotateX(-Math.PI / 2);
     const material = new MeshLambertMaterial({ map: texture });
     const floor = new Mesh(geometry, material);
-    floor.position.set(meters(bounds.x) + width / 2, 0, meters(bounds.y) + depth / 2);
+    floor.position.set(meters(rect.x) + width / 2, height, meters(rect.y) + depth / 2);
 
     scene.add(floor);
     this.objects.push(floor);
     this.disposables.push(texture, geometry, material);
+  }
+
+  /** Holzboden in jedem Haus - innen und aussen auf einen Blick getrennt. */
+  private buildHouseFloors(scene: Scene, buildings: readonly Rect[], anisotropy: number): void {
+    if (buildings.length === 0) {
+      return;
+    }
+    const texture = planksTexture(anisotropy);
+    const material = new MeshLambertMaterial({ map: texture });
+    const geometry = new PlaneGeometry(1, 1);
+    geometry.rotateX(-Math.PI / 2);
+    this.disposables.push(texture, material, geometry);
+    for (const house of buildings) {
+      // Eigene Textur-Wiederholung je Haus: Bretter sollen gleich breit sein.
+      const floorGeometry = geometry.clone();
+      const width = meters(house.width);
+      const depth = meters(house.height);
+      const uv = floorGeometry.getAttribute("uv");
+      for (let i = 0; i < uv.count; i += 1) {
+        uv.setXY(i, uv.getX(i) * width * 0.5, uv.getY(i) * depth * 0.5);
+      }
+      floorGeometry.scale(width, 1, depth);
+      const floor = new Mesh(floorGeometry, material);
+      floor.position.set(meters(house.x) + width / 2, 0.02, meters(house.y) + depth / 2);
+      scene.add(floor);
+      this.objects.push(floor);
+      this.disposables.push(floorGeometry);
+    }
   }
 
   private buildBlocks(scene: Scene, kind: WallKind, rects: readonly Rect[]): void {
@@ -112,7 +156,7 @@ export class GroundView {
     }
 
     const geometry = new BoxGeometry(1, 1, 1);
-    const material = new MeshToonMaterial({ color: WALL_COLORS[kind] });
+    const material = new MeshToonMaterial({ color: WALL_COLORS[kind], gradientMap: TOON_STEPS });
     if (kind === "bush") {
       // Halb durchsichtig: Wer sich darin versteckt, soll sich selbst noch
       // sehen. (Die Simulation entscheidet, ob GEGNER einen sehen.)
@@ -120,30 +164,43 @@ export class GroundView {
       material.opacity = 0.7;
       material.depthWrite = false;
     }
-
-    const mesh = new InstancedMesh(geometry, material, rects.length);
     const height = WALL_HEIGHT[kind];
+    this.placeBoxes(scene, geometry, material, rects, height, 0, 0);
+
+    // Mauerkrone fuer Haus- und Aussenwaende.
+    const capColor = WALL_CAP_COLORS[kind];
+    if (capColor !== undefined) {
+      const capMaterial = new MeshToonMaterial({ color: capColor, gradientMap: TOON_STEPS });
+      this.placeBoxes(scene, geometry, capMaterial, rects, 0.16, height, 0.12);
+      this.disposables.push(capMaterial);
+    }
+    this.disposables.push(geometry, material);
+  }
+
+  /** Quader fuer alle Rechtecke, als eine Instanzliste. */
+  private placeBoxes(
+    scene: Scene,
+    geometry: BoxGeometry,
+    material: MeshToonMaterial,
+    rects: readonly Rect[],
+    height: number,
+    base: number,
+    overhang: number,
+  ): void {
+    const mesh = new InstancedMesh(geometry, material, rects.length);
     const matrix = new Matrix4();
     const rotation = new Quaternion();
     const position = new Vector3();
     const scale = new Vector3();
-
     rects.forEach((rect, index) => {
-      scale.set(meters(rect.width), height, meters(rect.height));
-      position.set(
-        meters(rect.x + rect.width / 2),
-        height / 2,
-        meters(rect.y + rect.height / 2),
-      );
+      scale.set(meters(rect.width) + overhang, height, meters(rect.height) + overhang);
+      position.set(meters(rect.x + rect.width / 2), base + height / 2, meters(rect.y + rect.height / 2));
       mesh.setMatrixAt(index, matrix.compose(position, rotation, scale));
     });
     mesh.instanceMatrix.needsUpdate = true;
-    // Die Box der ganzen Gruppe fuer das Wegschneiden ausserhalb des Bildes.
     mesh.computeBoundingSphere();
-
     scene.add(mesh);
     this.objects.push(mesh);
-    this.disposables.push(geometry, material);
   }
 
   dispose(): void {
@@ -156,11 +213,103 @@ export class GroundView {
   }
 }
 
-/** Steht auf dieser Wand eine Kiste der Kulisse? */
-function carriesCrate(wall: Rect, state: WorldState): boolean {
+/** Sand: Grundton, zwei Flecktoene, Koernung. */
+const SAND = { base: "#d8c29a", blotches: ["#cfb68a", "#e0cca6"], grains: ["#b99f74", "#eadbbd"] };
+/** Umland: Wiese mit Erdstellen. */
+const MEADOW = { base: "#7c9a52", blotches: ["#6f8e49", "#8aa65c", "#8f8558"], grains: ["#5f7f40", "#9bb56a"] };
+
+/**
+ * Eine Bodentextur, im Code gemalt: weiche Flecken, dann Koernung. Mit
+ * festem Startwert - jeder Start sieht gleich aus.
+ */
+function groundTexture(
+  palette: { base: string; blotches: string[]; grains: string[] },
+  seed: number,
+  anisotropy: number,
+): Texture {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  let state = seed;
+  const random = (): number => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  if (context) {
+    context.fillStyle = palette.base;
+    context.fillRect(0, 0, size, size);
+    // Weiche Flecken - auch ueber den Rand gespiegelt, damit die Kachel
+    // nahtlos wiederholt.
+    for (let i = 0; i < 26; i += 1) {
+      const x = random() * size;
+      const y = random() * size;
+      const radius = 12 + random() * 34;
+      context.fillStyle = palette.blotches[i % palette.blotches.length] as string;
+      context.globalAlpha = 0.35 + random() * 0.3;
+      for (const dx of [-size, 0, size]) {
+        for (const dy of [-size, 0, size]) {
+          context.beginPath();
+          context.arc(x + dx, y + dy, radius, 0, Math.PI * 2);
+          context.fill();
+        }
+      }
+    }
+    // Koernung.
+    context.globalAlpha = 0.55;
+    for (let i = 0; i < 900; i += 1) {
+      context.fillStyle = palette.grains[i % palette.grains.length] as string;
+      context.fillRect(Math.floor(random() * size), Math.floor(random() * size), 2, 2);
+    }
+    context.globalAlpha = 1;
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
+  texture.magFilter = LinearFilter;
+  texture.minFilter = LinearMipmapLinearFilter;
+  texture.anisotropy = anisotropy;
+  return texture;
+}
+
+/** Holzdielen: Streifen mit leicht wechselnden Toenen und Fugen. */
+function planksTexture(anisotropy: number): Texture {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  const tones = ["#9b7650", "#8f6c48", "#a47f57", "#957049"];
+  if (context) {
+    const plank = size / 4;
+    for (let i = 0; i < 4; i += 1) {
+      context.fillStyle = tones[i] as string;
+      context.fillRect(0, i * plank, size, plank);
+      context.fillStyle = "#6e5236";
+      context.fillRect(0, i * plank, size, 2);
+      // Versetzte Stossfuge je Diele.
+      context.fillRect(((i * 37) % size) + 10, i * plank, 2, plank);
+    }
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
+  texture.minFilter = LinearMipmapLinearFilter;
+  texture.anisotropy = anisotropy;
+  return texture;
+}
+
+/**
+ * Macht Kulisse diese Wand aus (Kiste, Baum, Fels, Faesser, Zaun)? Dann
+ * zeichnet die Kulisse sie - hier kein Quader darunter.
+ */
+function carriesProp(wall: Rect, state: WorldState): boolean {
   return (state.props ?? []).some(
     (prop) =>
-      prop.kind.startsWith("crate") &&
+      SOLID_PROP_KINDS.has(prop.kind) &&
       prop.level === 0 &&
       prop.x > wall.x &&
       prop.x < wall.x + wall.width &&
