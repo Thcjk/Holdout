@@ -27,11 +27,11 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 > im **Protokoll der Überarbeitung** direkt unten. Wo der Rest dieser Datei
 > etwas anderes sagt, gilt das Protokoll.
 
-Gebaut vor der Überarbeitung (alles auf dem Branch, **Pages zeigt noch
-Phase 9**): Phase 8 (offene Welt aus Seed), Phase 9 (Encounter, Boss,
-Extraktion), Gebäude, Kamera 0,8, Kompass, Minimap, Phase 10 (Loot),
-Phase 11 zum Teil (Gitter-Logik, Loadout-Bildschirm, Rucksack reist in den
-Run).
+**Stand 2026-09-24 morgens: Etappen 0–12 abgeschlossen**, alles auf dem
+Branch `claude/artifact-session-70nhy4`. **GitHub Pages zeigt weiterhin
+Phase 9** – für die Überarbeitung auf dem Handy muss der Branch nach `main`
+(das braucht deine Freigabe). Die kurze Fassung für heute Morgen steht ganz
+unten: **MORGEN-ZUSAMMENFASSUNG**.
 
 ### Protokoll der Überarbeitung
 
@@ -482,6 +482,18 @@ lief. Neueste unten.
   Die Menüs und Ergebnisbildschirme benutzen weiter ihr helles Blaugrau
   (`#dce8f7`); das Dokument verlangt Weiss nur für den HUD-Text.
 
+#### Etappe 12 – Abschluss · 2026-09-24 07:38 UTC
+
+- BRIEFING §1 Punkt für Punkt geprüft (Tabelle in der
+  MORGEN-ZUSAMMENFASSUNG ganz unten).
+- Veraltete Stellen dieser Datei nachgezogen: Stand oben, Tabelle „Stellen,
+  an denen BRIEFING.md einen älteren Stand beschreibt“ (Tank), zweite
+  Fähigkeit (Heilfeld), Kacheltabelle (Verweis auf Etappe 5),
+  Projektstruktur (neue Dateien), Balancing-Stand, offene Punkte (erledigte
+  entfernt: „kein Ausstieg“, „Büsche harte Rechtecke“).
+- **Geprüft wie:** typecheck, lint, 253 Tests, Produktionsbuild – alles
+  sauber, unmittelbar vor diesem Eintrag.
+
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut
@@ -501,7 +513,7 @@ Hier nur festgehalten, damit niemand danach baut:
 | --- | --- | --- |
 | 3 | Rechter Joystick zum Zielen, WASD-Desktop-Fallback | Fester FEUER-Knopf, Desktop gesperrt – beides auf Wunsch des Nutzers |
 | 4 | Scout: **Blendgranate** | Splittergranate – die Blendgranate wurde als wirkungslos zurückgemeldet |
-| 4 | Tank-Super = Team-Heilung | Seine *zweite* Fähigkeit ist bereits eine Selbstheilung → zwei Heilungen an einem Charakter, zu klären in Phase 14 |
+| 4 | Tank-Super = Team-Heilung, zweite Fähigkeit entfällt | Seit Etappe 10 ist die Team-Heilung (Heilfeld) die **zweite Fähigkeit**, der Super bleibt der Bodenstampfer. Das Arbeitsdokument gab ihr eine Abklingzeit – die haben nur Fähigkeiten. Offene Entscheidung, siehe MORGEN-ZUSAMMENFASSUNG |
 | 5 | Projektstruktur mit `entities/`, `WaveManager` | Die echte Struktur steht weiter unten |
 
 ## Nur Handy, und installiert statt im Browser
@@ -782,7 +794,7 @@ und ist der grosse Moment; diese hier soll laufend eingesetzt werden.
 | Charakter | Fähigkeit | Wirkung | Abklingzeit |
 | --------- | --------- | ------- | ----------- |
 | Scout | **Splittergranate** | Wurf bis 400 px, Explosionsradius 140 px, 700 Schaden an jedem Gegner darin. Das Wurfgeschoss selbst macht keinen Schaden – der ganze Schaden steckt in der Explosion. | 7 s |
-| Tank | **Zweite Luft** | Heilt sofort 1000 Lebenspunkte (von 4200). Kein Zielen. | 12 s |
+| Tank | **Heilfeld** (seit Etappe 10; vorher „Zweite Luft“, sofort +1000 nur selbst) | 3 s lang heilt ein Feld mit 220 px Radius um den Tank alle Stehenden darin um 80/s. Kein Zielen. | 12 s |
 | Sniper | **Lähmschuss** | Langsames Geschoss (300 px/s), 200 Schaden statt 900, wurzelt den Getroffenen 1,5 s fest. | 9 s |
 
 #### Die Lehre aus dem zweiten Spieltest: Wirkung muss man **sehen**
@@ -1029,6 +1041,11 @@ endet. Was man sieht, ist auch das, wogegen man läuft.
 | Boden | (4,0)/(5,0) | warmer Sand statt kühlem Stein |
 | Aussenmauer | (8,0) | kühler Stein – hebt sich vom Sand ab |
 | Deckung | (14,2) | rote Ziegel, nahtlos, mit Umriss |
+
+*Seit Etappe 5 überholt:* Wände sind jetzt Stücke aus dem Sheet mit Ecken
+und Endkappen (Gebäude orange, Deckung grau, Aussenmauer braun), alle auf
+dem 48-px-Raster. Details im Protokoll, Etappe 5, und in
+`render/wallPieces.ts`.
 
 #### Was NICHT geändert wurde, und warum
 
@@ -1707,8 +1724,15 @@ src/
     combat.ts             Schüsse, Munition, Schaden, Wiederbelebung
     projectiles.ts        Projektile mit Object Pooling
     enemies.ts            Gegner-KI, Sichtlinie
-    supers.ts             die drei Super-Fähigkeiten
+    supers.ts             die drei Super-Fähigkeiten (Sniper: Aufklärung)
+    abilities.ts          zweite Fähigkeit (Granate, Heilfeld, Lähmschuss)
     WorldGenerator.ts     die Karte aus einem Seed (deterministisch)
+    encounters.ts         Encounter, Boss-Erwachen, Extraktion, Run-Ende
+    boss.ts               Angriffsmuster des Bosses
+    zones.ts              Distanzzonen und Skalierung
+    loot.ts               Drops, Fundorte, Aufsammeln, Rucksack-Befehle
+    InventoryGridSystem.ts Gitter-Rucksack: passt/platzieren/verschieben
+    backpackCodec.ts      Rucksack als Zahlenreihe (Netz, Lobby)
     spawning.ts           Distanzformel, Zielbevölkerung, Rundenablauf
     targeting.ts          wer sieht wen
     rng.ts                wiederholbarer Zufall (Mulberry32)
@@ -1726,11 +1750,15 @@ src/
   render/                 Darstellung
     ArenaRenderer, EntityRenderer, CameraController, Juice
     wallPieces.ts         Wand -> Stuecke aus dem Sheet (Ecken, Kappen)
-  scenes/                 Boot, Menu, Lobby, Game, Hud, GameOver
+  scenes/                 Boot, Menu, Loadout, Lobby, Game, Hud, GameOver
   input/InputManager.ts   Touch -> InputState
-  ui/                     VirtualJoystick, TouchControls, SkillPanel, Button, HudModel
+  ui/                     VirtualJoystick, TouchControls, Button, HudModel,
+                          Minimap, InventoryGrid, BackpackWindow,
+                          compassPlacement, stickResponse
   audio/                  synthetisierte Klänge und Musik
   storage/highscore.ts    lokaler Rekord
+  storage/carried.ts      Rucksack/Lager zwischen Runs (nur Arbeitsspeicher)
+  config/items.ts         der Gegenstandskatalog
   platform/               Geräte-Erkennung, Desktop-Sperre, Absturzanzeige,
                           Selbst-Aktualisierung, Installation
 android/                  Capacitor-Projekt für die Android-App
@@ -1738,6 +1766,8 @@ tools/                    Hilfsskripte (App-Icons erzeugen)
 tests/
   systems/                Simulation, inklusive ganzer Runden ohne Browser
   net/                    Protokoll, Raumcodes, Host und Client im selben Prozess
+  render/                 Wandzerlegung (phaserfrei)
+  ui/                     Joystick-Kennlinie, Kompass, Massstab
 ```
 
 ## Balancing
@@ -1764,6 +1794,19 @@ mittelmässig, muss aber zwei Dinge können, sonst misst er Unsinn:
 2. **Merken, wann er zuletzt getroffen hat.** Trifft er drei Sekunden nichts,
    obwohl Gegner leben, steht eine Wand dazwischen – dann geht er stur nach
    vorne, statt Abstand zu halten.
+
+### Stand nach der Messung vom 2026-09-24 (nach Etappe 10)
+
+| Charakter | Zonen (Bot) |
+| --------- | ----------- |
+| Scout     | 4,6         |
+| Tank      | 3,4         |
+| Sniper    | 4,8         |
+
+Der Sniper ist gegenüber der Messung darunter deutlich gefallen – Folge der
+kürzeren Auto-Aim-Reichweite (Etappe 10). Zwischen den Messungen haben sich
+ausserdem Deckung (Raster, Etappe 5) und Gegnerdichte nicht verändert, die
+Weltgenerierung schon – Einzelwerte schwanken bei fünf Läufen um ±1 Zone.
 
 ### Stand nach der Messung vom 2026-09-23 (Phase 8)
 
@@ -1908,10 +1951,10 @@ Zwei Konsequenzen, beide im Code:
 - **Version 1.1.0 ist ein kaputter Stand** (falscher Basispfad, weisse bzw.
   blaue Seite). Heruntergeladen hat sie niemand (0 Downloads). Ab 1.1.1 ist es
   behoben; ob das alte Release gelöscht wird, entscheidet der Nutzer.
-- **Die Balance ist am Bot gemessen, nicht am Menschen.** Scout 10,2 · Tank
-  9,8 · Sniper 7,2 Wellen. Der Bot nutzt keine Deckung, keine Büsche und
-  **keine der beiden Fähigkeiten** – das sind Untergrenzen. Ob 8–15 Wellen
-  stimmen, zeigt erst eigenes Spielen.
+- **Die Balance ist am Bot gemessen, nicht am Menschen.** Stand 2026-09-24:
+  Scout 4,6 · Tank 3,4 · Sniper 4,8 Zonen von zehn. Der Bot nutzt keine
+  Deckung, keine Büsche und **keine der beiden Fähigkeiten** – das sind
+  Untergrenzen.
 - **Koop über das Internet funktioniert** – vom Nutzer am 2026-09-18 auf
   echten Geräten bestätigt („es geht jetzt mit online"). Damit ist der lange
   offene Punkt aus Phase 6 erledigt. **Was dabei noch offen ist:** ob die
@@ -1947,15 +1990,10 @@ Zwei Konsequenzen, beide im Code:
 - **Die Welt ist keine Tilemap**, sondern eine Liste von Rechtecken aus
   `systems/WorldGenerator.ts`. Die Schnittstelle zur Simulation bleibt
   dieselbe, eine Tilemap könnte sie später füllen.
-- **Phase 8 hat noch keinen Ausstieg.** Ein Run endet nur durch den Tod –
-  Extraktionspunkte und Mini-Bosse kommen in Phase 9. Bis dahin fühlt sich ein
-  Run bewusst unfertig an.
-- **Die neuen Balancing-Zahlen sind Erstmessungen.** Scout 5,4 · Tank 3,4 ·
-  Sniper 8,6 Zonen von zehn. Der Tank liegt deutlich hinten. Ob das stört,
-  zeigt erst eigenes Spielen.
-- **Die Buschfelder sind harte Rechtecke.** Bei Feldern bis 380 px fällt die
-  gerade Kante mehr auf als in der alten Arena. Rein optisch, keine Auswirkung
-  aufs Spiel.
+- **Das Lager ist nur im Arbeitsspeicher.** Nach dem Schliessen der App ist
+  gesicherte Beute weg. Dauerhaft speichern ist laut Briefing Phase 13.
+- **Gefundene Waffen wirken noch nicht.** Sie liegen im Rucksack, ersetzen
+  aber nicht die Basiswaffe (Briefing: Phase 12).
 
 ## Was bewusst NICHT gebaut wird (V1)
 
@@ -1973,3 +2011,97 @@ auch dann nicht, wenn es "schnell noch" machbar wäre.
 - Erklären, was gebaut wurde und warum – besonders bei Phaser-Begriffen wie
   Scenes, Groups oder dem Scale Manager.
 - Am Ende der Sitzung diese Datei aktualisieren.
+
+---
+
+## MORGEN-ZUSAMMENFASSUNG (2026-09-24, 07:38 UTC)
+
+Die Nacht hat alle zwölf Etappen des Arbeitsdokuments abgearbeitet, der
+Reihe nach, jede mit eigenem Commit auf `claude/artifact-session-70nhy4`.
+**Wichtig vorweg: Auf GitHub Pages ist davon noch nichts.** Pages baut aus
+`main`, und `main` steht auf Phase 9. Zum Ausprobieren auf dem Handy muss
+der Branch nach `main` – das habe ich nicht getan, weil du einen Push auf
+`main` jedes Mal selbst freigibst.
+
+### Fertig und geprüft
+
+| Etappe | Was | Wie geprüft |
+| --- | --- | --- |
+| 0 | `AUDIT.md`: ehrlicher Ist-Stand, 19 Punkte | im Code nachgesehen, Nachträge je Etappe |
+| 1 | Skillpunkte-System komplett entfernt | Typecheck, Tests, grep |
+| 2 | Pinke Linie → gestrichelter Ring 2 px `#E4572E`; zwei Fehler, die „Geisterfiguren“ erzeugen konnten | Tests, Zwei-Tab-Koop im Browser |
+| 3 | Weltgenerierung deterministisch; **Gegner erschienen in der Startzone** – behoben | Test mit Gegenprobe |
+| 4 | Extraktion zählt nur Stehende; Kompass am Bildschirmrand; Teppich als Bodenmarker; schlafender Boss sichtbar | 4 neue Tests, Lauf zur Zone und zum Boss im Emulator |
+| 5 | Wände aus Kenney-Stücken mit Ecken/Kappen, Büsche als Haufen, Beute/Geschosse/Partikel aus dem Sheet | Raster- und Zerlegungstests, Bot-Messung davor/danach |
+| 6 | Figur 5,3 % der Bildhöhe (Soll 5–7 %); Minimap 120 × 120 rechts oben, Antippen = grosse Ansicht ohne Pause | Test, Emulator |
+| 7 | **Koop-Raum bleibt nach dem Run offen**, Host startet mit neuem Seed | 2 Netztests, Zwei-Tab-Durchlauf bis in den zweiten Run |
+| 8 | Dropquoten 15/30/20 %, Boss-Mindestseltenheit | Quote über je 1000 Tode gemessen |
+| 9 | Rucksack 8 × 6, Lager links/Rucksack rechts, Rucksack im Run (umräumen, wegwerfen), Starter-Set geschützt | Tests inkl. Netz, Wipe- und Extraktionsfall im Browser |
+| 10 | Tank-Heilfeld, Sniper-Aufklärungsschuss, Auto-Aim −40 % | Tests, beide im Emulator ausgelöst |
+| 11 | Palette, HUD-Text weiss mit Schatten | Emulator |
+
+Stand am Ende: 253 Tests grün, Typecheck, Lint und Build sauber.
+
+### Teilweise – was fehlt
+
+- **HUD, Knöpfe, Balken, Minimap, Inventar-Zellen sind weiter gezeichnet.**
+  Im Repo gibt es kein Kenney-UI-Paket und keine Pixelschrift; das Dokument
+  sagt „nicht improvisieren“. Liefere das Paket nach, dann ist es ein
+  Tausch in `ui/Button.ts` und `HudScene`.
+- **Waffen haben kein eigenes Symbol** – das Paket hat keine einzelnen
+  Waffen. Sie liegen als Kiste da.
+- **Koop über zwei echte Geräte** ist für die neuen Teile (Raum bleibt
+  offen, Rucksack im Run) nur lokal mit zwei Tabs geprüft. Der
+  Signalisierungsserver ist hier gesperrt.
+- **Startet der Host den nächsten Run, bevor alle zurück in der Lobby sind,
+  fehlt der Nachzügler.** Die Liste zeigt, wer da ist; erzwungen wird nichts.
+
+### Fehlt (bewusst, laut Briefing spätere Phasen)
+
+- Dauerhaftes Lager (Phase 13) – gesicherte Beute lebt nur bis zum
+  Schliessen der App.
+- Gefundene Waffen ersetzen die Basiswaffe (Phase 12).
+- Speichern/Fortsetzen eines Runs (Phase 15).
+
+### BRIEFING §1, Punkt für Punkt
+
+| Punkt | Stand |
+| --- | --- |
+| Prozedurale offene Welt, pro Run neu, gemeinsamer Seed | ✅ – im Koop seit Etappe 7 auch ohne neuen Raum |
+| Gegnerdichte mit der Entfernung, Mini-Bosse, Ende-Boss | ✅ |
+| Mehrere Extraktionspunkte | ✅ sechs je Welt |
+| Gitter-Rucksack mit verschieden geformten Items | ⚠️ nur Rechtecke (1 × 1 bis 4 × 2), keine L-Formen |
+| Loadout vor dem Run, Verlust bei Wipe, Sicherung bei Erfolg | ✅ |
+| Dauerhaftes, lokal gespeichertes Lager mit geschütztem Starter-Set | ⚠️ Starter-Set geschützt; Lager nur im Arbeitsspeicher (Phase 13) |
+| Gefundene Waffen ersetzen die Basiswaffe | ❌ Phase 12 |
+| Pausieren und Fortsetzen (Speicherstand) | ⚠️ Pause solo in der laufenden Sitzung ja; Speicherstand nein (Phase 15) |
+| Nicht geplant: PvP, Accounts, Server, Ranglisten, Skins, weitere Modi, Story | ✅ nichts davon gebaut |
+
+### Deine Entscheidungen, die offen sind
+
+1. **Tank: Heilung als Fähigkeit oder als Super?** BRIEFING §4 macht sie
+   zum Super (zweite Fähigkeit „entfällt“), das Arbeitsdokument gibt ihr
+   eine Abklingzeit – so haben es nur Fähigkeiten. Gebaut: Fähigkeit,
+   Bodenstampfer bleibt Super.
+2. **Auto-Aim kürzer, aber der Basisangriff zielt nicht von Hand.** BRIEFING
+   will manuelles Zielen „wieder mehr Gewicht“ geben; auf deinen Wunsch
+   zielt FEUER aber nur automatisch. Folge: Der Bot-Sniper fällt von 7,4 auf
+   4,8 Zonen. Entweder Zielen am FEUER-Knopf wieder zulassen oder den
+   Faktor je Charakter setzen.
+3. **Extraktion ohne Gefallene:** Wer am Boden ausserhalb der Zone liegt,
+   verliert seine Beute – meine Ergänzung, damit Liegenlassen nicht gratis
+   ist. Gefällt es nicht: ein Parameter in `finishRun`.
+4. **Sniper-Aufklärung ohne Abklingzeit 14:** Supers laden über Schaden.
+5. **Grün doppelt belegt:** Büsche und Ausstiegsteppich sind beide grün.
+6. **Push nach `main`**, damit Pages den neuen Stand zeigt.
+
+### Ehrliche Priorität für heute
+
+1. Branch nach `main` freigeben und **auf dem Handy spielen** – vieles hier
+   ist nur im Emulator gesehen (Bildrate, Lesbarkeit von `#7FB069` auf
+   Sand, Bedienung des Rucksacks mit dem Daumen).
+2. Entscheidungen 1 und 2 oben – beide ändern, wie sich Tank und Sniper
+   spielen.
+3. Einen Koop-Run mit zwei Geräten bis in den zweiten Run.
+4. Danach laut Plan Phase 12 (Waffen wirken) und Phase 13 (Lager dauerhaft).
+

@@ -290,4 +290,8 @@ Vorschaubilder, Lizenz, Musik). Nicht improvisiert. Palette umgesetzt
 (`PALETTE`), HUD-Text weiss mit Schatten. Nachteil: `#7FB069` ist auf Sand
 schwächer lesbar als das alte Grün.
 
-*(wird fortgeschrieben)*
+### Etappe 12 · 2026-09-24 07:38 UTC
+
+Abschluss. BRIEFING §1 geprüft, CLAUDE.md nachgezogen,
+MORGEN-ZUSAMMENFASSUNG am Ende der CLAUDE.md. Offen laut Briefing-Plan:
+Phase 12 (Waffen wirken), 13 (dauerhaftes Lager), 15 (Speicherstand).
