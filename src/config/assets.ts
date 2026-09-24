@@ -26,6 +26,7 @@
  * koennen statt Nummern wie 64.
  */
 
+import type { WallPieceRole } from "../render/wallPieces";
 import type { CharacterId, EnemyType } from "../systems/types";
 
 /** Schluessel, unter dem Phaser das Sheet fuehrt. */
@@ -156,36 +157,80 @@ export const FLOOR_TILES: readonly number[] = [tile(4, 0), tile(5, 0)];
 
 /**
  * ================================================================
- * NUR NAHTLOSE KACHELN FUER FLAECHEN - DAS IST KEINE GESCHMACKSFRAGE
+ * WAENDE AUS STUECKEN - Ecken, Kanten, Endkappen (seit Etappe 5)
  * ================================================================
  *
- * Hier stand vorher eine gerahmte Holzkiste, und daraus wurde ein sichtbarer
- * Fehler: Neben jedem Deckungsblock lief ein duenner senkrechter Streifen.
+ * Bis 2026-09-24 war jede Wand eine wiederholte nahtlose Kachel (Stein oder
+ * Ziegel) mit einem gezeichneten Umriss. Der Umriss war die Loesung dafuer,
+ * dass 60 px breite Bloecke die 48-px-Kachel anschnitten. Das Arbeitsdokument
+ * verlangt aber Waende mit Ecken und Endstuecken - und das Paket hat sie: die
+ * dunklen Bloecke mit farbigem Rand, mit denen Kenney im Beispielbild
+ * (`public/assets/Sample.png`) seine Haeuser baut.
  *
- * Die Ursache ist Arithmetik, kein Bluten aus dem Sheet. Ein Deckungsblock ist
- * 60 Pixel breit, eine Kachel erscheint mit 48 (16 x WORLD_SCALE):
+ * Dafuer liegt jetzt jede Wand auf dem Kachelraster (`WORLD.grid`), und die
+ * Zerlegung in Stuecke steht in `render/wallPieces.ts`. Der gezeichnete
+ * Umriss ist weg - der Rand ist jetzt Teil der Kachel.
  *
- *   60 / 48 = 1,25   ->   die letzte Kachel wird bei einem Viertel abgeschnitten
+ * Das Paket hat denselben Satz Stuecke dreimal, in drei Farben und immer im
+ * selben Aufbau. Gemessen (Ausschnitt achtfach vergroessert angesehen):
  *
- * Bei einer Kachel MIT RAHMEN sieht man diesen Schnitt sofort - der Rahmen ist
- * plötzlich weg und man blickt auf das nackte Innere. Bei einer NAHTLOSEN
- * Kachel faellt derselbe Schnitt gar nicht auf, weil ueberall dasselbe Muster
- * liegt.
+ *   orange  Spalten 0-8,  Reihen 4-9    -> Gebaeudewaende (wie im Beispielbild)
+ *   braun   Spalten 9-17, Reihen 4-9    -> Aussenmauer
+ *   grau    Spalten 0-8,  Reihen 10-15  -> Deckungsbloecke
  *
- * Die Bloecke einfach auf ein Vielfaches von 48 zu bringen waere der falsche
- * Weg: Das sind Spielwerte, die Kollision und Balance bestimmen, und die
- * wurden gemessen. Optik ist kein Grund, daran zu drehen.
+ * Zuerst war es andersherum (braune Deckung). Im Emulator verschwand der
+ * braune Rand fast im Sandboden - Deckung, die man nicht sieht, ist keine.
+ * Der kuehle graue Rand hebt sich vom warmen Sand ab; an der Aussenmauer
+ * stoert der geringe Kontrast nicht, hinter ihr steht nie jemand.
  *
- * Was den Bloecken ihre Form gibt, ist deshalb ein GEZEICHNETER UMRISS
- * (`ArenaRenderer`) - eine Linie, die immer genau auf der Kollisionskante
- * liegt, unabhaengig davon, wo die Kachel gerade endet.
+ * Innerhalb eines Satzes (Koordinaten fuer Orange):
+ *
+ *   Einzelblock (6,7)
+ *   duenn waagerecht:  Kappe links (6,5), Mitte (2,4), Kappe rechts (5,4)
+ *   duenn senkrecht:   Kappe oben (5,5),  Mitte (2,5), Kappe unten (6,4)
+ *   dick: Ecken (7,4) (8,4) (7,5) (8,5), Kanten oben (4,7) unten (5,7)
+ *         links (4,6) rechts (5,6), Mitte (6,6)
+ *   Ecken duenner Waende: (0,4) (1,4) (0,5) (1,5)
  */
+const WALL_PIECE_COORDS: Record<WallPieceRole, [number, number]> = {
+  single: [6, 7],
+  hLeft: [6, 5],
+  hMid: [2, 4],
+  hRight: [5, 4],
+  vTop: [5, 5],
+  vMid: [2, 5],
+  vBottom: [6, 4],
+  topLeft: [7, 4],
+  top: [4, 7],
+  topRight: [8, 4],
+  left: [4, 6],
+  center: [6, 6],
+  right: [5, 6],
+  bottomLeft: [7, 5],
+  bottom: [5, 7],
+  bottomRight: [8, 5],
+  // Ecken DUENNER Waende - dort, wo zwei Gebaeudewaende zusammenstossen.
+  cornerTopLeft: [0, 4],
+  cornerTopRight: [1, 4],
+  cornerBottomLeft: [0, 5],
+  cornerBottomRight: [1, 5],
+};
 
-/** Aussenmauer: kuehler Stein - hebt sich bewusst vom warmen Sandboden ab. */
-export const WALL_TILE = tile(8, 0);
+export type WallMaterial = "building" | "cover" | "outer";
 
-/** Deckungsbloecke: rote Ziegel, nahtlos. Klar anders als Boden und Mauer. */
-export const COVER_TILE = tile(14, 2);
+/** Versatz jedes Farbsatzes gegenueber dem orangen. */
+const WALL_SET_OFFSET: Record<WallMaterial, [number, number]> = {
+  building: [0, 0],
+  cover: [0, 6],
+  outer: [9, 0],
+};
+
+/** Die Kachel fuer ein Wandstueck in einem Material. */
+export function wallFrame(material: WallMaterial, role: WallPieceRole): number {
+  const [column, row] = WALL_PIECE_COORDS[role];
+  const [dc, dr] = WALL_SET_OFFSET[material];
+  return tile(column + dc, row + dr);
+}
 
 /**
  * ================================================================
@@ -214,16 +259,6 @@ export const COVER_TILE = tile(14, 2);
 export const BUILDING_FLOOR_TILE = tile(4, 3);
 
 /**
- * Gebaeudewand: derselbe kuehle Stein wie die Aussenmauer.
- *
- * Bewusst dieselbe Kachel: Beides ist Architektur, gegen die man laeuft, und
- * beides ist NICHT die rote Ziegeldeckung, hinter der man sich duckt. Dass
- * man ein Gebaeude trotzdem nie mit dem Kartenrand verwechselt, liegt am
- * Innenboden und an der Tuer - die hat die Aussenmauer nicht.
- */
-export const BUILDING_WALL_TILE = tile(8, 0);
-
-/**
  * Buschfelder: GRAS, nicht die Buschkacheln des Pakets.
  *
  * Das klingt verkehrt und ist gemessen. Die Buschkacheln (18,6) und (19,6)
@@ -237,6 +272,68 @@ export const BUILDING_WALL_TILE = tile(8, 0);
  * kann man drin verschwinden."
  */
 export const BUSH_TILE = tile(0, 0);
+
+/**
+ * Der grosse runde Busch des Pakets - vier Viertelstuecke, zusammengesetzt
+ * 32 x 32 Sheetpixel (96 in der Welt). Oben links, oben rechts, unten links,
+ * unten rechts.
+ *
+ * Einzeln gekachelt taugen die Stuecke nicht als Flaeche (siehe oben, 54 %
+ * Deckung). Als SCHMUCK auf dem Gras aber schon: Sie brechen die Kanten des
+ * Buschfelds auf und geben ihm die Form, die man aus Kenneys Beispielbild
+ * kennt. Die Versteck-Wirkung haengt weiter nur am Gras-Rechteck darunter.
+ */
+/**
+ * Geschoss: das laengste der drei Projektile des Pakets (30,16), 8 x 3
+ * Sheetpixel, liegt waagerecht nach rechts. Im Paket ist es dunkelgrau - auf
+ * dem dunklen Hausboden unsichtbar, und Freund und Feind waeren nicht zu
+ * unterscheiden. Es wird deshalb in der Palettenfarbe EINGEFAERBT
+ * (`setTintFill`): Die Form kommt aus dem Sheet, die Farbe aus der Palette.
+ */
+export const BULLET_TILE = tile(30, 16);
+
+/** Partikel: Truemmer beim Tod, weisse Splitter beim Treffer. */
+export const PARTICLE_TILES = {
+  debris: tile(19, 9),
+  spark: tile(20, 10),
+} as const;
+
+/**
+ * ================================================================
+ * GEGENSTAENDE AM BODEN (seit Etappe 5)
+ * ================================================================
+ *
+ * Vorher lag Beute als farbiges Rechteck da - eine Farbflaeche, die das
+ * Arbeitsdokument fuer alles Sichtbare verbietet. Jetzt ein Sprite aus dem
+ * Sheet, darunter nur noch ein duenner Ring in der Seltenheitsfarbe.
+ *
+ * Ausgesucht auf Sandhintergrund (Spalten 18-26, Reihen 4-11). EHRLICH:
+ * Das Paket hat KEINE einzelnen Waffen - die Figuren halten sie nur in der
+ * Hand. Waffen liegen deshalb als Kiste da (Messer- bzw. Werkzeugkiste), die
+ * Seltenheit sagt der Ring. Wer ein Paket mit Waffen-Symbolen findet, ersetzt
+ * nur diese vier Zeilen.
+ */
+export const ITEM_TILES: Record<string, number> = {
+  scrap: tile(18, 9), // zwei graue Metallstuecke
+  wire: tile(25, 5), // gebogenes Kabel
+  cell: tile(19, 10), // orange Kapsel
+  circuit: tile(23, 8), // gruene Platine
+  core: tile(25, 4), // gruener Stein im orangen Rahmen
+  bandage: tile(24, 7), // weisse Rolle
+  medkit: tile(24, 4), // helle Schachtel
+  ammoBox: tile(18, 11), // orange Kiste
+  pistol: tile(23, 9), // Kiste mit Messer
+  smg: tile(24, 9), // Kiste mit Messer und Munition
+  rifle: tile(21, 10), // Werkzeug auf Brett
+  railgun: tile(22, 10), // Teile und Kristalle
+};
+
+export const BIG_BUSH_TILES: readonly number[] = [
+  tile(18, 6),
+  tile(19, 6),
+  tile(18, 7),
+  tile(19, 7),
+];
 
 /**
  * Der Landeplatz einer Ausstiegszone: ein gruener Teppich mit hellem Rand,

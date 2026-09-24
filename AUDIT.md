@@ -244,4 +244,11 @@ nicht am Rand, sondern auf einer Ellipse innen – jetzt am Rand. Bodenmarker
 waren Farbflächen – jetzt Teppich aus dem Sheet. **Neu gefunden:** Der
 schlafende Boss wurde entgegen dem Kommentar nie gezeichnet – jetzt schon.
 
+### Etappe 5 · 2026-09-24 06:55 UTC
+
+Welt ohne Farbflächen: Wände aus Sheet-Stücken mit Ecken/Kappen, Büsche als
+Haufen, Beute/Geschosse/Partikel aus dem Sheet, Effekte nur als Ringe.
+`assets/textures.ts` (gezeichneter Atlas) gelöscht. Bleibt gezeichnet: das
+HUD (kein UI-Paket, siehe Punkt 11) und die Gegner-Lebensbalken.
+
 *(wird fortgeschrieben)*

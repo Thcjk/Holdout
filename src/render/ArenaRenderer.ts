@@ -25,22 +25,26 @@
 
 import Phaser from "phaser";
 import {
+  BIG_BUSH_TILES,
   BUILDING_FLOOR_TILE,
-  BUILDING_WALL_TILE,
   BUSH_TILE,
-  COVER_TILE,
   ENEMY_TILES,
   EXTRACTION_PAD_TILES,
   FLOOR_TILES,
   SPRITE_BODY_RADIUS,
   TILE,
   SHEET_KEY,
-  WALL_TILE,
   WORLD_SCALE,
+  wallFrame,
 } from "../config/assets";
+import type { WallMaterial } from "../config/assets";
 import { ENCOUNTERS, ENEMIES } from "../config/balance";
 import { COLORS, DEPTH } from "../config/constants";
 import type { Rect, WorldState } from "../systems/types";
+import { joinedWallCells, wallPieces } from "./wallPieces";
+
+/** Kantenlaenge einer Kachel in der Welt. */
+const TILE_SIZE = TILE * WORLD_SCALE;
 
 /**
  * Kantenlaenge eines Bodenfelds in Weltpixeln.
@@ -55,7 +59,7 @@ const FLOOR_CHUNK = 1200;
 const CULL_MARGIN = 300;
 
 interface CullablePart {
-  object: Phaser.GameObjects.TileSprite;
+  object: Phaser.GameObjects.TileSprite | Phaser.GameObjects.Image;
   rect: Rect;
 }
 
@@ -65,10 +69,6 @@ export class ArenaRenderer {
 
   /** Was nach Kamerasicht ein- und ausgeblendet wird. */
   private readonly cullable: CullablePart[] = [];
-
-  /** Die Deckungsbloecke mit ihrem Umriss - der wird je Bild neu gezeichnet. */
-  private readonly coverBlocks: Rect[] = [];
-  private readonly outline: Phaser.GameObjects.Graphics;
 
   /** Die Ringe von Encounter- und Ausstiegszonen, je Bild neu gezeichnet. */
   private readonly markers: Phaser.GameObjects.Graphics;
@@ -88,9 +88,6 @@ export class ArenaRenderer {
     private readonly scene: Phaser.Scene,
     private readonly state: WorldState,
   ) {
-    this.outline = scene.add.graphics().setDepth(DEPTH.walls + 1);
-    this.parts.push(this.outline);
-
     // UNTER den Figuren, aber ueber dem Boden: Die Ringe liegen auf dem Boden
     // und duerfen niemanden verdecken, den man gerade bekaempft.
     this.markers = scene.add.graphics().setDepth(DEPTH.floor + 1);
@@ -111,7 +108,6 @@ export class ArenaRenderer {
     }
     this.parts.length = 0;
     this.cullable.length = 0;
-    this.coverBlocks.length = 0;
   }
 
   /**
@@ -138,7 +134,6 @@ export class ArenaRenderer {
       part.object.setVisible(visible);
     }
 
-    this.drawOutlines(left, top, right, bottom);
     this.drawMarkers(left, top, right, bottom);
   }
 
@@ -248,37 +243,6 @@ export class ArenaRenderer {
   }
 
   /**
-   * Der Umriss um jeden Deckungsblock - und der ist nicht Zierde, sondern die
-   * Loesung eines sichtbaren Fehlers.
-   *
-   * Eine Kachel erscheint mit 48 Pixeln (16 x WORLD_SCALE), ein Deckungsblock
-   * ist aber beliebig breit - die letzte Kachel wird also fast immer
-   * angeschnitten. Bei einer nahtlosen Textur faellt der Schnitt nicht auf, und
-   * der Umriss gibt dem Block seine Kante zurueck. Er liegt IMMER genau auf der
-   * Kollisionsgrenze: Was man sieht, ist auch das, wogegen man laeuft.
-   *
-   * Neu gezeichnet statt einmal gefuellt: Bei 150 Bloecken in der ganzen Welt
-   * waeren das 150 Rechtecke je Bild, obwohl hoechstens ein Dutzend sichtbar
-   * ist. Loeschen und neu zeichnen ist hier billiger als alles zu behalten.
-   */
-  private drawOutlines(left: number, top: number, right: number, bottom: number): void {
-    this.outline.clear();
-    this.outline.lineStyle(3, 0x1b2430, 0.9);
-
-    for (const block of this.coverBlocks) {
-      if (
-        block.x >= right ||
-        block.x + block.width <= left ||
-        block.y >= bottom ||
-        block.y + block.height <= top
-      ) {
-        continue;
-      }
-      this.outline.strokeRect(block.x, block.y, block.width, block.height);
-    }
-  }
-
-  /**
    * Der Boden, in Feldern.
    *
    * Die Kachel wechselt je Feld zwischen den verfuegbaren Bodenkacheln. Eine
@@ -330,6 +294,10 @@ export class ArenaRenderer {
    * beides dasselbe Rechteck. Das ist Absicht - er ist rein optisch.
    */
   private drawWalls(state: WorldState): void {
+    // Gebaeudewaende gesammelt, weil ihre Ecken von den Nachbarn abhaengen
+    // (`joinedWallCells`). Alles andere steht fuer sich.
+    const buildingWalls: Rect[] = [];
+
     for (const wall of state.walls) {
       /*
        * Drei Materialien aus einer einzigen Liste von Rechtecken.
@@ -347,28 +315,44 @@ export class ArenaRenderer {
        */
       const outer = this.touchesBorder(wall, state);
       const inBuilding = !outer && this.insideBuilding(wall, state);
-      const deckung = !outer && !inBuilding;
-
-      const texture = outer
-        ? WALL_TILE
-        : inBuilding
-          ? BUILDING_WALL_TILE
-          : COVER_TILE;
-
-      const sprite = this.scene.add
-        .tileSprite(wall.x, wall.y, wall.width, wall.height, SHEET_KEY, texture)
-        .setOrigin(0)
-        .setTileScale(WORLD_SCALE, WORLD_SCALE)
-        .setDepth(DEPTH.walls);
-
-      this.addCullable(sprite, wall);
-
-      // Den Umriss bekommen Deckung UND Gebaeudewand: Er liegt genau auf der
-      // Kollisionskante und ist der Grund, warum eine angeschnittene Kachel
-      // nicht als fehlendes Stueck auffaellt (siehe `drawOutlines`).
-      if (deckung || inBuilding) {
-        this.coverBlocks.push(wall);
+      const material: WallMaterial = outer ? "outer" : inBuilding ? "building" : "cover";
+      if (inBuilding) {
+        buildingWalls.push(wall);
+        continue;
       }
+
+      /*
+       * Jede Wand aus Stuecken: Ecken, Kanten, Endkappen (`wallPieces`).
+       * Ein Stueck von genau einer Kachel wird ein einfaches Bild, nur was
+       * sich wiederholt, ein `tileSprite` - ein `tileSprite` ist teurer, und
+       * es gibt jetzt drei- bis neunmal so viele Teile wie Waende.
+       */
+      for (const piece of wallPieces(wall, TILE_SIZE)) {
+        const frame = wallFrame(material, piece.role);
+        const single =
+          Math.abs(piece.width - TILE_SIZE) < 0.5 && Math.abs(piece.height - TILE_SIZE) < 0.5;
+        const sprite = single
+          ? this.scene.add
+              .image(piece.x, piece.y, SHEET_KEY, frame)
+              .setOrigin(0)
+              .setScale(WORLD_SCALE)
+              .setDepth(DEPTH.walls)
+          : this.scene.add
+              .tileSprite(piece.x, piece.y, piece.width, piece.height, SHEET_KEY, frame)
+              .setOrigin(0)
+              .setTileScale(WORLD_SCALE, WORLD_SCALE)
+              .setDepth(DEPTH.walls);
+        this.addCullable(sprite, piece);
+      }
+    }
+
+    for (const cell of joinedWallCells(buildingWalls, TILE_SIZE)) {
+      const sprite = this.scene.add
+        .image(cell.x, cell.y, SHEET_KEY, wallFrame("building", cell.role))
+        .setOrigin(0)
+        .setScale(WORLD_SCALE)
+        .setDepth(DEPTH.walls);
+      this.addCullable(sprite, cell);
     }
   }
 
@@ -515,10 +499,43 @@ export class ArenaRenderer {
         .setDepth(DEPTH.bushesAbove);
 
       this.addCullable(sprite, bush);
+      this.decorateBush(bush);
     }
   }
 
-  private addCullable(object: Phaser.GameObjects.TileSprite, rect: Rect): void {
+  /**
+   * Runde Buesche aus dem Sheet auf dem Gras - je 2 x 2 Kacheln einer, aber
+   * nicht ueberall: Welche Stelle einen bekommt, entscheidet ein Hash der
+   * Lage. Kein Zufall aus der Simulation - die Darstellung darf deren
+   * Zufallsstrom nicht anfassen, sonst liefen Host und Client auseinander.
+   * Der Hash ergibt auf jedem Geraet dasselbe Bild, ohne etwas zu ziehen.
+   */
+  private decorateBush(bush: Rect): void {
+    const big = TILE_SIZE * 2;
+    for (let y = bush.y; y + big <= bush.y + bush.height + 0.5; y += big) {
+      for (let x = bush.x; x + big <= bush.x + bush.width + 0.5; x += big) {
+        if (positionHash(x, y) % 3 === 0) {
+          continue;
+        }
+        BIG_BUSH_TILES.forEach((frame, index) => {
+          const px = x + (index % 2) * TILE_SIZE;
+          const py = y + Math.floor(index / 2) * TILE_SIZE;
+          const sprite = this.scene.add
+            .image(px, py, SHEET_KEY, frame)
+            .setOrigin(0)
+            .setScale(WORLD_SCALE)
+            .setAlpha(0.9)
+            .setDepth(DEPTH.bushesAbove + 1);
+          this.addCullable(sprite, { x: px, y: py, width: TILE_SIZE, height: TILE_SIZE });
+        });
+      }
+    }
+  }
+
+  private addCullable(
+    object: Phaser.GameObjects.TileSprite | Phaser.GameObjects.Image,
+    rect: Rect,
+  ): void {
     this.parts.push(object);
     this.cullable.push({ object, rect });
   }
@@ -560,4 +577,11 @@ function strokeDashedCircle(
     graphics.arc(x, y, radius, start, start + dashAngle, false);
     graphics.strokePath();
   }
+}
+
+/** Eine feste Zahl aus einer Weltposition - gleich auf jedem Geraet. */
+function positionHash(x: number, y: number): number {
+  let h = (Math.round(x) * 73856093) ^ (Math.round(y) * 19349663);
+  h = Math.imul(h ^ (h >>> 13), 0x5bd1e995);
+  return (h ^ (h >>> 15)) >>> 0;
 }

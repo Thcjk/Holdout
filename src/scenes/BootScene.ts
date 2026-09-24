@@ -2,11 +2,10 @@
  * Erste Szene. "Scene" ist in Phaser ein abgeschlossener Abschnitt des Spiels -
  * Menue, Spiel, Game Over sind je eine eigene Szene mit eigenem `create()` und `update()`.
  *
- * Hier werden die Texturen erzeugt und anschliessend ins Spiel gewechselt.
+ * Hier wird das Kenney-Sheet geladen und anschliessend ins Menue gewechselt.
  */
 
 import Phaser from "phaser";
-import { buildAtlas } from "../assets/textures";
 import { SHEET_KEY, SHEET_PATH, SPACING, TILE } from "../config/assets";
 import { COLORS } from "../config/constants";
 
@@ -33,9 +32,9 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Projektile, Funken und Punkte bleiben gezeichnet: Das Paket hat dafuer
-    // nichts Passendes, und abstrakte Punkte passen in jeden Stil.
-    buildAtlas(this);
+    // Bis Etappe 5 wurde hier ein zweiter, selbst GEZEICHNETER Atlas gebaut
+    // (Projektile, Funken, Punkte). Seitdem kommt alles aus dem Sheet - auch
+    // Geschosse und Partikel (`BULLET_TILE`, `PARTICLE_TILES`).
     this.scene.start("Menu");
   }
 }

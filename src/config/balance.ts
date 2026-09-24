@@ -621,8 +621,21 @@ export const WORLD = {
    * ein Tick kostete bei 124 Waenden 0,057 ms von 33 ms Budget.
    */
   size: 16000,
-  /** Dicke der Aussenmauer. Sie haelt Spieler und Gegner im Feld. */
-  wallThickness: 40,
+  /**
+   * Das Kachelraster der Welt: eine Kachel des Sheets (16 px) mal
+   * `WORLD_SCALE` (3) aus `config/assets.ts`. Hier noch einmal als Zahl, weil
+   * `systems/` nichts aus der Darstellung importieren darf -
+   * `tests/systems/worldGenerator.test.ts` prueft, dass beide gleich sind.
+   *
+   * SEIT 2026-09-24 liegt jede Wand auf diesem Raster. Vorher waren
+   * Deckungsbloecke 60 px breit, eine Kachel erscheint aber mit 48 - Wandstuecke
+   * mit Ecken und Endkappen aus dem Sheet (Etappe 5) passen nur, wenn jede
+   * Wand ein ganzes Vielfaches einer Kachel ist. Sonst sitzt eine Ecke mitten
+   * in der Wand.
+   */
+  grid: 48,
+  /** Dicke der Aussenmauer - genau eine Kachel. Sie haelt alle im Feld. */
+  wallThickness: 48,
 
   /**
    * DAS RASTER IST DIE GARANTIE, DASS DIE KARTE ZUSAMMENHAENGT.
@@ -661,10 +674,15 @@ export const WORLD = {
    */
   coverChance: 0.85,
   coverPerCell: 3,
-  /** Laenge und Dicke eines Deckungsblocks - wie in der alten Arena. */
-  coverLongMin: 140,
-  coverLongMax: 320,
-  coverShort: 60,
+  /**
+   * Laenge und Dicke eines Deckungsblocks. Bis 2026-09-24 waren es
+   * 140-320 x 60 wie in der alten Arena; jetzt aufs Kachelraster gerundet
+   * (siehe `grid`). Die Dicke ist damit 12 px duenner - dafuer passen die
+   * Wandstuecke aus dem Sheet genau.
+   */
+  coverLongMin: 144,
+  coverLongMax: 336,
+  coverShort: 48,
 
   /**
    * Anteil der Zellen mit einem Buschfeld, und dessen Kantenlaengen.
@@ -674,8 +692,17 @@ export const WORLD = {
    * Zelle waeren eines je 1,6 Millionen gewesen.
    */
   bushChance: 0.75,
-  bushMin: 180,
-  bushMax: 380,
+  /** Aussenmass eines Buschfelds, aufs Kachelraster gerundet. */
+  bushMin: 192,
+  bushMax: 384,
+  /**
+   * Wie viel von jeder Ecke eines Buschfelds weggeknabbert werden darf, als
+   * Anteil der Kantenlaenge. Aus Rechtecken werden so unregelmaessige
+   * Haufen - das Arbeitsdokument verlangt Cluster statt Kaesten. Unter 0,5,
+   * damit das Kreuz in der Mitte immer stehen bleibt und das Feld
+   * zusammenhaengt.
+   */
+  bushCornerBite: 0.45,
 
   /*
    * ================================================================
@@ -705,24 +732,32 @@ export const WORLD = {
   buildingChancePerZone: 0.022,
   buildingChanceMax: 0.30,
   /**
-   * Kantenlaenge. Untergrenze 280, damit innen mindestens 208 px bleiben -
+   * Kantenlaenge. Untergrenze 288, damit innen mindestens 192 px bleiben -
    * der Spieler ist 36 px dick, und drinnen soll man sich noch bewegen und
    * ausweichen koennen, nicht nur stehen.
    */
-  buildingMin: 280,
-  buildingMax: 420,
-  /** Dicke der Gebaeudewaende. */
-  buildingWall: 36,
+  buildingMin: 288,
+  buildingMax: 384,
+  /**
+   * Die Obergrenze waechst mit der Zone - tiefer draussen stehen groessere
+   * Gebaeude (Arbeitsdokument, Etappe 5: "Dichte/Groesse steigen mit d").
+   * Bei 624 ist Schluss: Mehr passt nicht in eine Zelle von 800 abzueglich
+   * der Gasse von 160.
+   */
+  buildingMaxPerZone: 24,
+  buildingMaxCap: 624,
+  /** Dicke der Gebaeudewaende - genau eine Kachel. */
+  buildingWall: 48,
   /**
    * Breite des Eingangs.
    *
-   * 130 px bei 36 px Spielerdicke - grosszuegig, und das ist Absicht. Eine
+   * 144 px (drei Kacheln) bei 36 px Spielerdicke - grosszuegig, und das ist Absicht. Eine
    * Tuer, die man im Gefecht auf den ersten Versuch trifft, ist eine Tuer;
    * eine, an der man haengenbleibt, waehrend hinter einem drei Laeufer
    * ankommen, ist eine Falle. Ausserdem haengt daran der Zusammenhang der
    * Karte: Passt hier niemand durch, ist der Innenraum unerreichbar.
    */
-  buildingDoor: 130,
+  buildingDoor: 144,
 } as const;
 
 /**

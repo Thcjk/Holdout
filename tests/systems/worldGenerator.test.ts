@@ -18,7 +18,8 @@
 
 import { describe, expect, it } from "vitest";
 import { PLAYER, WORLD } from "../../src/config/balance";
-import { generateWorld, gameplaySeed } from "../../src/systems/WorldGenerator";
+import { TILE, WORLD_SCALE } from "../../src/config/assets";
+import { bushCluster, generateWorld, gameplaySeed } from "../../src/systems/WorldGenerator";
 import type { Rect } from "../../src/systems/types";
 
 const SEEDS = [1, 42, 4242, 20260918, 999999];
@@ -293,6 +294,69 @@ describe("Weltgenerierung", () => {
        */
       expect(freeCount / total).toBeGreaterThan(0.5);
       expect(reached).toBe(freeCount);
+    }
+  });
+});
+
+describe("Kachelraster (Etappe 5)", () => {
+  it("rechnet mit derselben Kachelgroesse wie die Darstellung", () => {
+    // `systems/` darf `config/assets.ts` nicht benutzen - also steht die Zahl
+    // zweimal da, und dieser Test haelt beide zusammen.
+    expect(WORLD.grid).toBe(TILE * WORLD_SCALE);
+  });
+
+  it("legt jede Wand und jedes Buschstueck aufs Raster", () => {
+    const g = WORLD.grid;
+    for (const seed of SEEDS) {
+      const world = generateWorld(seed);
+      const outer = (rect: Rect): boolean =>
+        rect.x === 0 || rect.y === 0 || rect.x + rect.width === WORLD.size || rect.y + rect.height === WORLD.size;
+
+      for (const rect of [...world.walls, ...world.bushes]) {
+        if (outer(rect)) {
+          // Die Aussenmauer ist so lang wie die Welt (16000, kein Vielfaches
+          // von 48) - aber genau eine Kachel dick.
+          expect(Math.min(rect.width, rect.height)).toBe(g);
+          continue;
+        }
+        expect(rect.x % g, `Seed ${seed}`).toBe(0);
+        expect(rect.y % g, `Seed ${seed}`).toBe(0);
+        expect(rect.width % g, `Seed ${seed}`).toBe(0);
+        expect(rect.height % g, `Seed ${seed}`).toBe(0);
+      }
+    }
+  });
+
+  it("macht aus Buschfeldern Haufen ohne Ueberlappung, die zusammenhaengen", () => {
+    const g = WORLD.grid;
+    const field = { x: 0, y: 0, width: 8 * g, height: 6 * g };
+    const pieces = bushCluster(field, [
+      { columns: 0.4, rows: 0.4 },
+      { columns: 0.2, rows: 0.3 },
+      { columns: 0.3, rows: 0.1 },
+      { columns: 0.44, rows: 0.44 },
+    ]);
+
+    // Kein Rechteck mehr, sondern mehrere Stuecke ...
+    expect(pieces.length).toBeGreaterThan(1);
+    // ... ohne Ueberlappung (sonst waere eine Stelle doppelt dunkel) ...
+    for (let i = 0; i < pieces.length; i += 1) {
+      for (let j = i + 1; j < pieces.length; j += 1) {
+        const a = pieces[i];
+        const b = pieces[j];
+        if (!a || !b) continue;
+        const overlap =
+          a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+        expect(overlap).toBe(false);
+      }
+    }
+    // ... und jedes Stueck beruehrt das naechste (das Kreuz in der Mitte bleibt).
+    for (let i = 1; i < pieces.length; i += 1) {
+      const a = pieces[i - 1];
+      const b = pieces[i];
+      if (!a || !b) continue;
+      expect(a.y + a.height).toBe(b.y);
+      expect(a.x < b.x + b.width && b.x < a.x + a.width).toBe(true);
     }
   });
 });

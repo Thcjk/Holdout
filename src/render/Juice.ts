@@ -11,7 +11,7 @@
 
 import Phaser from "phaser";
 import { COLORS, DEPTH } from "../config/constants";
-import { ATLAS_KEY, FRAMES } from "../assets/textures";
+import { PARTICLE_TILES, SHEET_KEY } from "../config/assets";
 import type { GameEvent } from "../systems/types";
 
 /** Wie viele Schadenszahlen gleichzeitig hoechstens sichtbar sind. */
@@ -51,21 +51,28 @@ export class Juice {
       this.damageTexts.push(text);
     }
 
-    this.deathParticles = scene.add.particles(0, 0, ATLAS_KEY, {
-      frame: FRAMES.dot,
+    /*
+     * Partikel aus dem Sheet statt aus selbst gezeichneten Punkten (seit
+     * Etappe 5): Truemmerstuecke (19,9) beim Tod, weisse Splitter (20,10)
+     * beim Treffer. Die Groesse ist ganzzahlig-nah gewaehlt, damit die
+     * Pixel nicht verschmieren.
+     */
+    this.deathParticles = scene.add.particles(0, 0, SHEET_KEY, {
+      frame: PARTICLE_TILES.debris,
       lifespan: 420,
       speed: { min: 60, max: 220 },
-      scale: { start: 1.1, end: 0 },
+      scale: { start: 2.5, end: 0 },
+      rotate: { min: 0, max: 360 },
       quantity: 10,
       emitting: false,
     });
     this.deathParticles.setDepth(DEPTH.particles);
 
-    this.hitParticles = scene.add.particles(0, 0, ATLAS_KEY, {
-      frame: FRAMES.spark,
+    this.hitParticles = scene.add.particles(0, 0, SHEET_KEY, {
+      frame: PARTICLE_TILES.spark,
       lifespan: 200,
       speed: { min: 40, max: 120 },
-      scale: { start: 0.8, end: 0 },
+      scale: { start: 2, end: 0 },
       quantity: 3,
       emitting: false,
     });
@@ -151,8 +158,10 @@ export class Juice {
    * reichte.
    */
   blastRing(x: number, y: number, radius: number): void {
-    const ring = this.scene.add.circle(x, y, radius, COLORS.superReady, 0.25);
-    ring.setStrokeStyle(4, COLORS.superReady, 0.95);
+    // Nur Linie, keine Flaeche (Arbeitsdokument: keine Farbflaechen fuer
+    // Sichtbares). Ohne Fuellfarbe zeichnet Phaser den Kreis ungefuellt.
+    const ring = this.scene.add.circle(x, y, radius);
+    ring.setStrokeStyle(5, COLORS.superReady, 0.95);
     ring.setDepth(DEPTH.projectiles);
 
     this.scene.tweens.add({
@@ -173,24 +182,37 @@ export class Juice {
    * nichts anders machen koennen. Mit ihm ist sie eine Frage: rechtzeitig raus
    * oder nicht?
    *
-   * Deshalb wird er GEFUELLT und nicht nur umrandet, und er waechst auf seinen
-   * vollen Radius an: Das Auge nimmt eine wachsende Flaeche schneller wahr als
-   * eine duenne Linie, gerade wenn daneben gerade zwanzig Gegner stehen. Der
-   * Endradius ist exakt der, in dem der Schaden wirkt - alles andere waere eine
-   * Anzeige, die luegt.
+   * Bis 2026-09-24 war er eine gefuellte, wachsende Flaeche. Farbflaechen
+   * sind seither verboten, und die Umstellung hat ihn sogar verbessert: Jetzt
+   * sind es ZWEI Ringe.
+   *
+   *   1. Ein fester Ring, sofort auf dem vollen Radius. Man weiss vom ersten
+   *      Moment an, wohin man laufen muss - bei der wachsenden Flaeche sah
+   *      man die Grenze erst kurz vor dem Einschlag.
+   *   2. Ein Ring, der von innen auf diesen Rand zuwaechst. Er ist die Uhr:
+   *      Trifft er den festen Ring, schlaegt es ein.
+   *
+   * Der Endradius ist exakt der, in dem der Schaden wirkt - alles andere waere
+   * eine Anzeige, die luegt.
    */
   bossWarning(x: number, y: number, radius: number, seconds: number): void {
-    const ring = this.scene.add.circle(x, y, radius, COLORS.danger, 0.18);
-    ring.setStrokeStyle(4, COLORS.danger, 0.9);
-    ring.setDepth(DEPTH.floor + 1);
+    const edge = this.scene.add.circle(x, y, radius);
+    edge.setStrokeStyle(3, COLORS.danger, 0.9);
+    edge.setDepth(DEPTH.floor + 1);
+
+    const timer = this.scene.add.circle(x, y, radius);
+    timer.setStrokeStyle(6, COLORS.danger, 0.9);
+    timer.setDepth(DEPTH.floor + 1);
 
     this.scene.tweens.add({
-      targets: ring,
-      scale: { from: 0.25, to: 1 },
-      alpha: { from: 0.55, to: 1 },
+      targets: timer,
+      scale: { from: 0.1, to: 1 },
       duration: seconds * 1000,
       ease: "Quad.easeIn",
-      onComplete: () => ring.destroy(),
+      onComplete: () => {
+        timer.destroy();
+        edge.destroy();
+      },
     });
   }
 
@@ -201,8 +223,8 @@ export class Juice {
    * kommt zurueck. Das liest man, ohne es erklaert zu bekommen.
    */
   healPulse(x: number, y: number, amount: number): void {
-    const ring = this.scene.add.circle(x, y, 54, COLORS.mate, 0.2);
-    ring.setStrokeStyle(4, COLORS.mate, 0.95);
+    const ring = this.scene.add.circle(x, y, 54);
+    ring.setStrokeStyle(5, COLORS.mate, 0.95);
     ring.setDepth(DEPTH.projectiles);
 
     this.scene.tweens.add({
@@ -243,8 +265,8 @@ export class Juice {
    * Ohne sie waere jeder Spawn ein Hinterhalt - und das waere nur unfair, nicht spannend.
    */
   spawnWarning(x: number, y: number): void {
-    const marker = this.scene.add.circle(x, y, 26, COLORS.danger, 0.22);
-    marker.setStrokeStyle(3, COLORS.danger, 0.9);
+    const marker = this.scene.add.circle(x, y, 26);
+    marker.setStrokeStyle(4, COLORS.danger, 0.9);
     marker.setDepth(DEPTH.spawnWarning);
 
     this.scene.tweens.add({

@@ -193,6 +193,76 @@ lief. Neueste unten.
   - Einmal gesehen: Eine Deckungswand berührte den Wirkkreis einer
     Ausstiegszone. Kein Fehler im Ablauf, aber unschön – nicht behoben.
 
+#### Etappe 5 – echte Kacheln statt Farbflächen · 2026-09-24 06:55 UTC
+
+- **Wände mit Ecken und Endkappen.** Kenneys Beispielbild
+  (`public/assets/Sample.png`) baut Häuser aus dunklen Blöcken mit farbigem
+  Rand – dieselben Stücke gibt es im Sheet dreimal (orange, braun, grau). Die
+  Zerlegung steht in `render/wallPieces.ts` (phaserfrei, 7 Tests):
+  Einzelblock, dünne Wand mit zwei Kappen, dicker Block als Neunerteilung.
+  Gebäude werden **zellenweise nach Nachbarn** ausgelegt
+  (`joinedWallCells`), damit an den Ecken echte Eckstücke sitzen und Kappen
+  nur an der Tür. Farben: Gebäude orange (wie im Beispielbild), Deckung
+  grau, Aussenmauer braun.
+- **Dafür liegt jetzt jede Wand auf dem 48-px-Raster** (`WORLD.grid`).
+  Deckung 144–336 × 48 statt 140–320 × 60, Gebäudewand 48 statt 36, Tür 144
+  statt 130, Aussenmauer 48 statt 40. **Das ändert Spielwerte** – früher war
+  genau das mit Verweis auf Balance abgelehnt worden. Hier verlangt das
+  Dokument die Wandstücke, und sie passen nur auf ein Raster. Gegengeprüft
+  mit dem Bot, Stand davor gegen danach im selben Lauf gemessen:
+  Scout 5,4 → 4,6 · Tank 3,2 → 3,2 · Sniper 6,8 → 7,4 Zonen. Bei fünf
+  Läufen auf verschiedenen Welten ist das Rauschen, keine Verschiebung.
+- **Gebäude wachsen mit der Distanz:** Obergrenze 384 + 24 je Zone, höchstens
+  624 (Dichte stieg schon vorher mit der Zone).
+- **Büsche als unregelmässige Haufen:** Von jeder Ecke eines Feldes wird ein
+  Stück abgeknabbert (`bushCluster`); zurück kommen Rechtecke ohne
+  Überlappung, die Versteck-Prüfung bleibt unverändert. Darauf sitzen
+  Kenneys runde Büsche (18–19, 6–7) an per Hash gewählten Stellen – kein
+  Zufall aus der Simulation, damit Host und Client dasselbe sehen.
+- **Bodenfunde, Geschosse, Partikel aus dem Sheet.** Beute liegt als Sprite
+  da (`ITEM_TILES`), darunter nur noch ein Ring in der Seltenheitsfarbe.
+  Geschosse sind das Projektil (30,16), eingefärbt in der Palettenfarbe;
+  Partikel sind Trümmer (19,9) und Splitter (20,10). **Der selbst gezeichnete
+  Atlas `assets/textures.ts` ist gelöscht.**
+- **Effekte ohne Füllung:** Explosion, Heilung, Spawnwarnung sind reine
+  Ringe. Die Boss-Warnung hat jetzt einen festen Ring am Wirkradius plus
+  einen wachsenden als Uhr – vorher sah man die Grenze erst kurz vor dem
+  Einschlag. Zielvorschau von Granate und Stampfer ohne Füllung.
+- **Geprüft wie:** 236 Tests (neu: Raster aller Wände und Büsche für fünf
+  Seeds, `WORLD.grid === TILE × WORLD_SCALE`, Buschhaufen ohne Überlappung
+  und zusammenhängend, alle Wandformen, Gebäude-Ecken). Flutfüllung weiter
+  100 % erreichbar. Im Emulator bei Zoom 0,35 und normal angesehen.
+  **Zwei Fehler erst im Bild gefunden:** braune Deckung verschwand im Sand
+  (→ grau), und Häuser sahen mit Kappen an jeder Ecke zusammengestückelt aus
+  (→ `joinedWallCells`).
+- **Grep-Ergebnis `fillRect(` / `fillCircle(` in `src/`, wie verlangt:**
+
+  | Datei | Anzahl | Was | Warum noch da |
+  | --- | --- | --- | --- |
+  | `scenes/HudScene.ts` | 7 | Lebens-/Superbalken, Wiederbelebungsbalken, Kompass-Untergrund | HUD |
+  | `ui/Minimap.ts` | 5 | Punkte auf der Karte | HUD |
+  | `ui/TouchControls.ts` | 3 | Knöpfe FEUER/Fähigkeit/Super | HUD |
+  | `ui/VirtualJoystick.ts` | 2 | Joystick | HUD |
+  | `ui/InventoryGrid.ts` | 2 | Rucksack-Zellen | HUD |
+  | `render/EntityRenderer.ts` | 2 | Lebensbalken über Gegnern | Balken, siehe unten |
+
+  Dazu (andere Befehle, gleicher Sinn): `fillRoundedRect`/`fillTriangle`/
+  `add.rectangle` in Minimap, Inventar, Menü, Knopf, HUD und die
+  Teammate-Pfeile in `CameraController`. `add.circle` in `Juice.ts` ist nur
+  noch ungefüllt.
+- **Nicht wie geplant / offen:**
+  - **Das HUD ist weiter gezeichnet.** Ein UI-Paket (Knöpfe, Balken, Rahmen)
+    ist im Repo nicht vorhanden (Etappe 11 hält das fest). Das Dokument sagt
+    dort „nicht improvisieren“ – deshalb kein Nachbau aus Weltkacheln.
+  - **Lebensbalken über Gegnern** sind gefüllte Rechtecke in der Welt. Das
+    Sheet hat keine Balken. Bewusst gelassen: Ein Balken ist eine Anzeige,
+    keine Fläche, die etwas darstellt.
+  - **Das Paket hat keine Waffen-Symbole.** Waffen liegen als Kiste mit
+    Messer/Werkzeug da; welche Waffe es ist, sagt erst der Rucksack.
+  - **Bodenvariation** bleibt beim Wechsel der zwei Sandkacheln je Feld.
+    Streudeko (Steine, Grasbüschel) habe ich verworfen: graue Steine sehen
+    aus wie Schrott am Boden, grüne Büschel widersprechen „Grün = Versteck“.
+
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut
@@ -1436,11 +1506,11 @@ src/
     GameSession.ts        die Schnittstelle, die die Spielszene kennt
   render/                 Darstellung
     ArenaRenderer, EntityRenderer, CameraController, Juice
+    wallPieces.ts         Wand -> Stuecke aus dem Sheet (Ecken, Kappen)
   scenes/                 Boot, Menu, Lobby, Game, Hud, GameOver
   input/InputManager.ts   Touch -> InputState
   ui/                     VirtualJoystick, TouchControls, SkillPanel, Button, HudModel
   audio/                  synthetisierte Klänge und Musik
-  assets/textures.ts      Texture Atlas
   storage/highscore.ts    lokaler Rekord
   platform/               Geräte-Erkennung, Desktop-Sperre, Absturzanzeige,
                           Selbst-Aktualisierung, Installation

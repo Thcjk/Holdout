@@ -531,8 +531,6 @@ export class GameScene extends Phaser.Scene {
       // Splittergranate: der Kreis ist der echte Schadensradius.
       this.aimLine.lineStyle(2, COLORS.superReady, 0.9);
       this.aimLine.strokeCircle(endX, endY, ABILITIES.scout.blastRadius);
-      this.aimLine.fillStyle(COLORS.superReady, 0.12);
-      this.aimLine.fillCircle(endX, endY, ABILITIES.scout.blastRadius);
       return;
     }
 
@@ -552,8 +550,6 @@ export class GameScene extends Phaser.Scene {
       // Bodenstampfer wirkt rund um den Spieler, nicht in eine Richtung.
       this.aimLine.lineStyle(3, COLORS.superReady, 0.9);
       this.aimLine.strokeCircle(position.x, position.y, SUPERS.tank.radius);
-      this.aimLine.fillStyle(COLORS.superReady, 0.12);
-      this.aimLine.fillCircle(position.x, position.y, SUPERS.tank.radius);
       return;
     }
 

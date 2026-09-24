@@ -516,8 +516,13 @@ function placeBuilding(
     return null;
   }
 
-  const width = randomRange(rng, WORLD.buildingMin, WORLD.buildingMax);
-  const height = randomRange(rng, WORLD.buildingMin, WORLD.buildingMax);
+  // Groesser, je tiefer draussen - Dichte UND Groesse steigen mit der Distanz.
+  const maxSide = Math.min(
+    WORLD.buildingMaxCap,
+    WORLD.buildingMax + (zone - WORLD.buildingFromZone) * WORLD.buildingMaxPerZone,
+  );
+  const width = randomRange(rng, WORLD.buildingMin, maxSide);
+  const height = randomRange(rng, WORLD.buildingMin, maxSide);
   const footprint = randomRect(rng, area, width, height);
   if (!footprint) {
     return null;
@@ -569,6 +574,9 @@ export function buildingWalls(footprint: Rect, door: number, along: number): Rec
     }
 
     let start = Math.min(Math.max(along * length - d / 2, 0), length - d);
+    // Aufs Kachelraster: Sonst endet ein Wandstueck mitten in einer Kachel,
+    // und die Endkappe aus dem Sheet saesse schief.
+    start = Math.min(Math.round(start / WORLD.grid) * WORLD.grid, length - d);
 
     /*
      * ================================================================
@@ -635,6 +643,14 @@ export function buildingWalls(footprint: Rect, door: number, along: number): Rec
 /**
  * Ein Buschfeld je Zelle. Buesche blockieren nichts, sie verstecken nur.
  *
+ * SEIT 2026-09-24 KEIN RECHTECK MEHR, sondern ein unregelmaessiger Haufen aus
+ * Kacheln: Von jeder der vier Ecken wird ein zufaelliges Stueck abgeknabbert.
+ * Uebrig bleibt immer ein Kreuz in der Mitte (`bushCornerBite` < 0,5), das
+ * Feld haengt also zusammen. Zurueckgegeben wird es als Liste von
+ * Rechtecken ohne Ueberlappung - so bleibt die Versteck-Pruefung, wie sie war
+ * ("steht der Spieler in einem der Rechtecke?"), und die Darstellung zeichnet
+ * keine Stelle doppelt.
+ *
  * `building` ist der Grundriss in dieser Zelle, falls einer gebaut wurde. Ein
  * Feld, das ihn beruehrt, wird verworfen statt verschoben: Die Zufallszahlen
  * sind dann trotzdem gezogen, also bleibt die Folge fuer Host und Clients
@@ -653,13 +669,75 @@ function placeBush(
   const width = randomRange(rng, WORLD.bushMin, WORLD.bushMax);
   const height = randomRange(rng, WORLD.bushMin, WORLD.bushMax);
   const field = randomRect(rng, area, width, height);
+
+  // Die Bisse IMMER wuerfeln, auch wenn das Feld gleich verworfen wird: Sonst
+  // haengt die Zahl der gezogenen Zufallszahlen davon ab, ob ein Haus in der
+  // Zelle steht, und alles Spaetere verschiebt sich.
+  const bites = [0, 1, 2, 3].map(() => ({
+    columns: randomRange(rng, 0, WORLD.bushCornerBite),
+    rows: randomRange(rng, 0, WORLD.bushCornerBite),
+  }));
+
   if (!field) {
     return;
   }
   if (building && overlaps(field, building)) {
     return;
   }
-  bushes.push(field);
+
+  for (const piece of bushCluster(field, bites)) {
+    bushes.push(piece);
+  }
+}
+
+/**
+ * Macht aus einem Feld und vier Eckbissen die Rechtecke des Haufens.
+ *
+ * `bites` in der Reihenfolge oben links, oben rechts, unten links, unten
+ * rechts; jeder Biss ist ein Anteil der Kantenlaenge. Zeilen mit gleicher
+ * Spanne werden zusammengefasst - meist bleiben drei bis fuenf Rechtecke.
+ */
+export function bushCluster(
+  field: Rect,
+  bites: readonly { columns: number; rows: number }[],
+): Rect[] {
+  const g = WORLD.grid;
+  const columns = Math.round(field.width / g);
+  const rows = Math.round(field.height / g);
+  const cut = bites.map((bite) => ({
+    columns: Math.floor(bite.columns * columns),
+    rows: Math.floor(bite.rows * rows),
+  }));
+  const [topLeft, topRight, bottomLeft, bottomRight] = cut;
+
+  const pieces: Rect[] = [];
+  for (let row = 0; row < rows; row += 1) {
+    let from = 0;
+    let to = columns;
+    if (topLeft && row < topLeft.rows) from = Math.max(from, topLeft.columns);
+    if (topRight && row < topRight.rows) to = Math.min(to, columns - topRight.columns);
+    if (bottomLeft && row >= rows - bottomLeft.rows) from = Math.max(from, bottomLeft.columns);
+    if (bottomRight && row >= rows - bottomRight.rows) {
+      to = Math.min(to, columns - bottomRight.columns);
+    }
+    if (to <= from) {
+      continue;
+    }
+
+    const rect = { x: field.x + from * g, y: field.y + row * g, width: (to - from) * g, height: g };
+    const previous = pieces[pieces.length - 1];
+    if (
+      previous &&
+      previous.x === rect.x &&
+      previous.width === rect.width &&
+      previous.y + previous.height === rect.y
+    ) {
+      previous.height += g;
+    } else {
+      pieces.push(rect);
+    }
+  }
+  return pieces;
 }
 
 /** Ueberschneiden sich zwei Rechtecke? */
@@ -676,18 +754,38 @@ function overlaps(a: Rect, b: Rect): boolean {
  * Setzt ein Rechteck der gewuenschten Groesse zufaellig in die Flaeche.
  * Gibt `null` zurueck, wenn es nicht hineinpasst - am Kartenrand sind die
  * Flaechen beschnitten.
+ *
+ * Lage und Groesse liegen auf dem Kachelraster (`WORLD.grid`), und zwar auf
+ * dem der WELT, nicht der Zelle: Die Zellen sind 800 px gross, das ist kein
+ * Vielfaches von 48. Eine Wand, die an ihrer Zelle ausgerichtet waere, laege
+ * gegenueber dem Boden um bis zu 47 Pixel versetzt.
+ *
+ * Es wird genau EINE Zufallszahl je Achse gezogen, wie vorher - das Raster
+ * aendert die Folge nicht.
  */
 function randomRect(rng: RngHolder, area: Area, width: number, height: number): Rect | null {
-  const maxX = area.x1 - width;
-  const maxY = area.y1 - height;
-  if (maxX < area.x0 || maxY < area.y0) {
+  const g = WORLD.grid;
+  const snappedWidth = Math.max(g, Math.round(width / g) * g);
+  const snappedHeight = Math.max(g, Math.round(height / g) * g);
+
+  const x = snapInto(rng, area.x0, area.x1 - snappedWidth);
+  const y = snapInto(rng, area.y0, area.y1 - snappedHeight);
+  if (x === null || y === null) {
     return null;
   }
 
-  return {
-    x: Math.round(randomRange(rng, area.x0, maxX)),
-    y: Math.round(randomRange(rng, area.y0, maxY)),
-    width: Math.round(width),
-    height: Math.round(height),
-  };
+  return { x, y, width: snappedWidth, height: snappedHeight };
+}
+
+/** Eine zufaellige Rasterstelle zwischen `min` und `max`, oder `null`. */
+function snapInto(rng: RngHolder, min: number, max: number): number | null {
+  const g = WORLD.grid;
+  const low = Math.ceil(min / g);
+  const high = Math.floor(max / g);
+  // Die Zahl wird auch gezogen, wenn nichts passt - siehe oben.
+  const roll = randomRange(rng, 0, 1);
+  if (high < low) {
+    return null;
+  }
+  return (low + Math.min(high - low, Math.floor(roll * (high - low + 1)))) * g;
 }

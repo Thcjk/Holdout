@@ -5,15 +5,16 @@
  * werden wiederverwendet statt staendig neu erzeugt (Pooling), weil das Erzeugen
  * und Wegwerfen von Objekten auf dem Handy der haeufigste Ruckler-Grund ist.
  *
- * Alle Bilder kommen aus dem Texture Atlas (`assets/textures.ts`), nie aus
- * hartkodierten Formen - deshalb ist ein Wechsel auf echte Sprites eine Datei.
+ * Alle Bilder kommen aus dem Kenney-Sheet, zugeordnet in `config/assets.ts` -
+ * nie aus hartkodierten Formen. Ein Wechsel des Pakets ist damit eine Datei.
  */
 
 import Phaser from "phaser";
-import { ATLAS_KEY, BODY_RADIUS, FRAMES } from "../assets/textures";
 import {
   CHARACTER_TILES,
+  BULLET_TILE,
   ENEMY_TILES,
+  ITEM_TILES,
   SHEET_KEY,
   SPRITE_BODY_RADIUS,
 } from "../config/assets";
@@ -41,8 +42,6 @@ const CHARACTER_FRAMES: Record<CharacterId, number> = {
   sniper: CHARACTER_TILES.sniper,
 };
 
-/** Halber Durchmesser des Leuchtkerns eines Projektils im Atlas. */
-const BULLET_RADIUS_IN_CELL = BODY_RADIUS * 0.72;
 
 interface PlayerVisual {
   body: Phaser.GameObjects.Image;
@@ -69,7 +68,9 @@ export class EntityRenderer {
    * Arbeit fuer nichts - deshalb wird der Wechsel hier gemerkt.
    */
   private readonly enemyFrames: number[] = [];
-  private readonly projectileFrames: string[] = [];
+  private readonly projectileColors: number[] = [];
+  /** Das Bild je Bodenfund, nach dessen Id. */
+  private readonly itemSprites = new Map<number, Phaser.GameObjects.Image>();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -127,6 +128,7 @@ export class EntityRenderer {
     this.ground.clear();
 
     const pulse = 0.55 + 0.45 * Math.sin(this.scene.time.now / 360);
+    const seen = new Set<number>();
 
     for (const item of state.groundItems) {
       const def = itemAt(item.def);
@@ -135,22 +137,39 @@ export class EntityRenderer {
       }
 
       const color = RARITY_COLORS[def.rarity] ?? 0xffffff;
-      // Die Gitterform wird sichtbar: ein 2x1-Gewehr liegt breit da, ein
-      // 1x1-Schrott ist ein Punkt. Ab Phase 11 ist genau das die Frage, die
-      // beim Aufheben zaehlt - passt das ueberhaupt in den Rucksack?
-      const width = 9 + def.size.width * 7;
-      const height = 9 + def.size.height * 7;
-      const x = item.position.x - width / 2;
-      const y = item.position.y - height / 2;
+      const { x, y } = item.position;
 
-      // Schatten darunter, damit das Rechteck nicht im Boden klebt.
-      this.ground.fillStyle(0x0d1420, 0.35);
-      this.ground.fillRoundedRect(x + 2, y + 3, width, height, 3);
+      /*
+       * Ein Sprite aus dem Sheet statt eines gefuellten Rechtecks. Grosse
+       * Gegenstaende (ab 2 Feldern Kantenlaenge im Rucksack) liegen groesser
+       * da - die Frage "passt das noch rein?" soll man schon am Boden ahnen.
+       * Ganzzahliger Massstab, sonst werden Pixel ungleich breit.
+       */
+      const big = Math.max(def.size.width, def.size.height) >= 2;
+      let sprite = this.itemSprites.get(item.id);
+      if (!sprite) {
+        sprite = this.scene.add
+          .image(x, y, SHEET_KEY, ITEM_TILES[def.id] ?? ITEM_TILES.scrap)
+          .setScale(big ? 3 : 2)
+          .setDepth(DEPTH.players - 1);
+        this.itemSprites.set(item.id, sprite);
+      }
+      sprite.setPosition(x, y);
+      seen.add(item.id);
 
-      this.ground.fillStyle(color, 0.9);
-      this.ground.fillRoundedRect(x, y, width, height, 3);
-      this.ground.lineStyle(2, 0xffffff, 0.35 + 0.45 * pulse);
-      this.ground.strokeRoundedRect(x, y, width, height, 3);
+      // Nur ein Ring in der Seltenheitsfarbe, pulsierend - eine Linie, keine
+      // Flaeche. Er sagt "hier liegt etwas" und "wie wertvoll".
+      const radius = big ? 30 : 20;
+      this.ground.lineStyle(2, color, 0.45 + 0.45 * pulse);
+      this.ground.strokeCircle(x, y, radius);
+    }
+
+    // Aufgehobene oder verfallene Gegenstaende: Bild abraeumen.
+    for (const [id, sprite] of this.itemSprites) {
+      if (!seen.has(id)) {
+        sprite.destroy();
+        this.itemSprites.delete(id);
+      }
     }
   }
 
@@ -214,6 +233,10 @@ export class EntityRenderer {
     for (const sprite of this.projectileSprites) {
       sprite.destroy();
     }
+    for (const sprite of this.itemSprites.values()) {
+      sprite.destroy();
+    }
+    this.itemSprites.clear();
     this.ground.destroy();
     this.trails.destroy();
     this.bars.destroy();
@@ -396,13 +419,18 @@ export class EntityRenderer {
       );
       const isPlayerShot = projectile.owner === "player";
 
-      const frame = isPlayerShot ? FRAMES.bulletPlayer : FRAMES.bulletEnemy;
-      if (this.projectileFrames[index] !== frame) {
-        sprite.setTexture(ATLAS_KEY, frame);
-        this.projectileFrames[index] = frame;
+      // Farbe nur umstellen, wenn sie wechselt - `setTintFill` markiert das
+      // Sprite sonst in jedem Bild als veraendert.
+      const color = isPlayerShot ? COLORS.playerBullet : COLORS.enemyBullet;
+      if (this.projectileColors[index] !== color) {
+        sprite.setTintFill(color);
+        this.projectileColors[index] = color;
       }
       sprite.setPosition(position.x, position.y);
-      sprite.setScale(projectile.radius / BULLET_RADIUS_IN_CELL);
+      // Das Geschoss ist 8 Sheetpixel lang und soll etwa 2,6 Trefferradien
+      // lang erscheinen. Mindestens doppelt, sonst ist es auf dem Handy weg.
+      sprite.setScale(Math.max(2, (projectile.radius * 2.6) / 8));
+      sprite.setRotation(Math.atan2(projectile.velocity.y, projectile.velocity.x));
       sprite.setVisible(true);
 
       // Spuranzeige: eine kurze Linie entgegen der Flugrichtung. Ohne sie wirken
@@ -435,7 +463,7 @@ export class EntityRenderer {
       return existing;
     }
 
-    const sprite = this.scene.add.image(0, 0, ATLAS_KEY, FRAMES.bulletPlayer);
+    const sprite = this.scene.add.image(0, 0, SHEET_KEY, BULLET_TILE);
     sprite.setDepth(DEPTH.projectiles);
     this.projectileSprites[index] = sprite;
     return sprite;
