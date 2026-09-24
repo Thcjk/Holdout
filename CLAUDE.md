@@ -263,6 +263,36 @@ lief. Neueste unten.
     Streudeko (Steine, Grasbüschel) habe ich verworfen: graue Steine sehen
     aus wie Schrott am Boden, grüne Büschel widersprechen „Grün = Versteck“.
 
+#### Etappe 6 – Massstab und Minimap · 2026-09-24 07:05 UTC
+
+- **Massstab gemessen, nicht verändert.** Der sichtbare Körper jeder Figur
+  ist 12 Sheetpixel hoch, beim Spieler ×3 = 36 Weltpixel. Beim Standardzoom
+  0,8 (eine Person) sind das 28,8 von 540 Entwurfspixeln = **5,3 %** der
+  Bildhöhe – innerhalb der verlangten 5–7 %. Weil die Entwurfshöhe fest 540
+  ist und formatfüllend skaliert wird, gilt der Anteil auf jedem Gerät. Beim
+  weitesten Zoom (0,55, Gruppe weit auseinander) sind es 3,7 % – das ist
+  gewollt, sonst passt die Gruppe nicht ins Bild. Festgehalten in
+  `tests/ui/scaleRule.test.ts`.
+- **Minimap immer sichtbar, rechts oben, 120 × 120**, unter Punktzahl und
+  Knopfreihe. Antippen öffnet die grosse Ansicht (oben links, bis 250 px –
+  die frühere Position, die im Emulator nachweislich nichts verdeckte),
+  erneutes Antippen der kleinen schliesst sie. **Kein Anhalten**, die
+  Steuerung bleibt aktiv – im Emulator mit offener Karte gelaufen.
+- **Umbau dafür:** Die Punktzahl steht auf zwei Zeilen („Score · Rekord“,
+  „Gegner · Beute“) statt vier, die Knopfreihe rückt von 106 auf 62. Sonst
+  hätte die Karte auf dem SUPER-Knopf gelegen. Der Knopf **„Karte“ ist
+  weg** – die Karte selbst ist jetzt der Knopf.
+- **Kompass** weicht der kleinen und (wenn offen) der grossen Karte aus.
+- **Nicht wie geplant / offen:**
+  - Die grosse Karte schliesst man über die kleine, nicht durch Antippen
+    der grossen: Die grosse liegt links, und dort startet jede Berührung den
+    Joystick.
+  - Die kleine Karte zeigt die ganze Welt (16000 px auf 120 px). Ein
+    mitlaufender Ausschnitt wäre für die Umgebung nützlicher; das Dokument
+    sagt dazu nichts, deshalb nicht gebaut.
+  - HUD-Text auf Gras und Kompassschrift auf grünem Teppich sind schwer
+    lesbar – das ist Etappe 11 (weiss mit Schatten).
+
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut

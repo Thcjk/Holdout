@@ -24,6 +24,22 @@
  * unangetastet, und man laeuft beim Kartenlesen einfach weiter.
  *
  * ================================================================
+ * SEIT ETAPPE 6: ZWEI ANSICHTEN
+ * ================================================================
+ *
+ * Das Arbeitsdokument verlangt die Karte IMMER sichtbar, rechts oben unter
+ * der Punktzahl, rund 120 x 120, und per Antippen eine groessere Ansicht.
+ *
+ *   klein  rechts oben, 120 x 120, immer da. Antippen oeffnet/schliesst die
+ *          grosse. (Der Knopf "Karte" ist damit weggefallen.)
+ *   gross  oben links, bis 250 x 250 - dort, wo die Karte vorher als Panel
+ *          sass und im Emulator nachweislich nichts verdeckte.
+ *
+ * Geschlossen wird ueber die KLEINE Karte, nicht durch Antippen der grossen:
+ * Die grosse liegt in der linken Bildhaelfte, und dort startet jede
+ * Beruehrung den Joystick.
+ *
+ * ================================================================
  * SIE ZEIGT NUR, WO JEMAND SCHON WAR
  * ================================================================
  *
@@ -38,73 +54,86 @@ import Phaser from "phaser";
 import { COLORS, DEPTH, SAFE, VIEWPORT } from "../config/constants";
 import type { MinimapModel } from "./HudModel";
 
+/** Kantenlaenge der kleinen Karte (Arbeitsdokument: rund 120 x 120). */
+export const SMALL_SIZE = 120;
+
 /**
- * Abstand des Panels zur oberen Kante, zusaetzlich zum Geraeterand.
+ * Abstand der grossen Karte zur oberen Kante, zusaetzlich zum Geraeterand.
  *
- * 86 statt 46: Darueber stehen die Zonenanzeige, die Mitspielerzeile und die
- * damalige Hinweiszeile. Bei 70 schnitt das Panel sie an - im Emulator stand
- * der Text halb hinter der Karte. Die Karte wird
- * dadurch nicht kleiner: Ihre Kantenlaenge ist ohnehin auf 250 begrenzt, und
- * darunter bleibt genug Platz.
+ * 86: Darueber stehen die Zonenanzeige und die Mitspielerzeile. Bei 70
+ * schnitt das Panel sie an - im Emulator stand der Text halb hinter der Karte.
  */
-const TOP_MARGIN = 86;
+const LARGE_TOP_MARGIN = 86;
 
 /**
  * Wie viel Platz unten fuer die Bedienung frei bleibt.
  *
- * Der Knopfbogen unten rechts ist rund 150 Entwurfseinheiten hoch, der
- * Joystick links erscheint irgendwo in der unteren Haelfte. Beides darf die
- * Karte nicht erreichen - sonst tippt man beim Kartenlesen auf FEUER.
+ * Der Joystick links erscheint irgendwo in der unteren Haelfte - die grosse
+ * Karte darf ihn nicht erreichen.
  */
 const BOTTOM_KEEPOUT = 110;
 
 /**
- * Groesste Kantenlaenge des Kartenfelds.
+ * Groesste Kantenlaenge der grossen Karte.
  *
- * ================================================================
- * WARUM DIE KARTE LINKS SITZT UND NICHT IN DER MITTE
- * ================================================================
- *
- * Im ersten Versuch sass sie mittig und war 320 Einheiten gross. Im Emulator
- * war sofort zu sehen, was daran falsch ist: Die eigene Figur steht IMMER in
- * der Bildmitte - die Karte lag also genau ueber ihr. Damit war der eine
- * Zweck kaputt, den sie haben soll ("kurz checken, waehrend man laeuft"): Wer
- * waehrend des Lesens angegriffen wird, sieht es nicht.
- *
- * Jetzt liegt sie in der linken oberen Ecke. Frei bleiben damit die Bildmitte
- * (die Figur), unten links Leben und Super, unten rechts der Knopfbogen und
- * oben rechts Punktzahl und Knoepfe.
+ * Nicht in der Bildmitte: Dort steht IMMER die eigene Figur. Im ersten
+ * Versuch lag die Karte genau darueber - wer waehrend des Lesens angegriffen
+ * wird, saehe es nicht.
  */
-const MAX_SIZE = 250;
+const LARGE_MAX = 250;
+
+interface MapView {
+  frame: Phaser.GameObjects.Graphics;
+  marks: Phaser.GameObjects.Graphics;
+  left: number;
+  top: number;
+  size: number;
+}
 
 export class Minimap {
-  private readonly container: Phaser.GameObjects.Container;
-  private readonly frame: Phaser.GameObjects.Graphics;
-  private readonly marks: Phaser.GameObjects.Graphics;
+  private readonly small: MapView;
+  private readonly large: MapView;
   private readonly hint: Phaser.GameObjects.Text;
-
-  /** Bildschirmkoordinaten und Kantenlaenge des quadratischen Kartenfelds. */
-  private left = 0;
-  private top = 0;
-  private size = 0;
+  /** Unsichtbare Tippflaeche ueber der kleinen Karte. */
+  private readonly hitZone: Phaser.GameObjects.Zone;
 
   private open = false;
 
-  constructor(scene: Phaser.Scene) {
-    this.container = scene.add.container(0, 0);
-    this.container.setDepth(DEPTH.hud + 5);
-    this.container.setVisible(false);
+  /**
+   * @param anchorTop Oberkante der kleinen Karte - die HUD-Szene gibt sie vor,
+   *                  weil sie weiss, wo Punktzahl und Knoepfe enden.
+   * @param onToggle  Wird nach jedem Antippen mit dem neuen Zustand gerufen.
+   */
+  constructor(
+    scene: Phaser.Scene,
+    private anchorTop: number,
+    onToggle: (open: boolean) => void,
+  ) {
+    this.small = this.createView(scene);
+    this.large = this.createView(scene);
+    this.large.frame.setVisible(false);
+    this.large.marks.setVisible(false);
 
-    this.frame = scene.add.graphics();
-    this.marks = scene.add.graphics();
-    this.hint = scene.add.text(0, 0, "", {
-      fontFamily: "system-ui, sans-serif",
-      fontSize: "12px",
-      color: "#8ea6c4",
+    this.hint = scene.add
+      .text(0, 0, "Die Runde laeuft weiter", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "12px",
+        color: "#ffffff",
+      })
+      .setShadow(1, 1, "#00000066", 2)
+      .setOrigin(0.5, 0)
+      .setDepth(DEPTH.hud + 5)
+      .setVisible(false);
+
+    this.hitZone = scene.add
+      .zone(0, 0, SMALL_SIZE, SMALL_SIZE)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(DEPTH.hud + 6);
+    this.hitZone.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
+      onToggle(this.toggle());
     });
-    this.hint.setOrigin(0.5, 0);
 
-    this.container.add([this.frame, this.marks, this.hint]);
     this.layout();
   }
 
@@ -114,80 +143,128 @@ export class Minimap {
 
   toggle(): boolean {
     this.open = !this.open;
-    this.container.setVisible(this.open);
+    this.large.frame.setVisible(this.open);
+    this.large.marks.setVisible(this.open);
+    this.hint.setVisible(this.open);
     return this.open;
   }
 
+  /** Die kleine Karte als Rechteck - fuer die Sperrflaechen des Kompasses. */
+  get smallBounds(): { x: number; y: number; width: number; height: number } {
+    return { x: this.small.left, y: this.small.top, width: SMALL_SIZE, height: SMALL_SIZE };
+  }
+
+  /** Die grosse Karte, wenn offen - sonst `null`. */
+  get largeBounds(): { x: number; y: number; width: number; height: number } | null {
+    if (!this.open) {
+      return null;
+    }
+    return { x: this.large.left, y: this.large.top, width: this.large.size, height: this.large.size + 20 };
+  }
+
   /**
-   * Setzt das Kartenfeld neu.
+   * Setzt beide Karten neu.
    *
    * Muss bei jeder Groessenaenderung laufen: Die Entwurfsbreite aendert sich
    * auch waehrend des Spiels, wenn in Safari die Adressleiste ein- oder
    * ausklappt. Wer seine Position nur einmal bekommt, klebt danach an der
    * alten Kante.
    */
-  layout(): void {
-    const availableHeight = VIEWPORT.height - SAFE.top - TOP_MARGIN - BOTTOM_KEEPOUT;
+  layout(anchorTop: number = this.anchorTop): void {
+    this.anchorTop = anchorTop;
+
+    this.small.size = SMALL_SIZE;
+    this.small.left = VIEWPORT.width - SAFE.right - 14 - SMALL_SIZE;
+    this.small.top = anchorTop;
+    this.hitZone.setPosition(this.small.left, this.small.top);
+
+    const availableHeight = VIEWPORT.height - SAFE.top - LARGE_TOP_MARGIN - BOTTOM_KEEPOUT;
     // Quadratisch, weil die Welt quadratisch ist. Eine verzerrte Karte waere
     // schlimmer als eine kleine: Man schaetzt daraus Entfernungen ab.
-    this.size = Math.max(120, Math.min(availableHeight, MAX_SIZE));
-    this.left = SAFE.left + 14;
-    this.top = SAFE.top + TOP_MARGIN;
+    this.large.size = Math.max(SMALL_SIZE, Math.min(availableHeight, LARGE_MAX));
+    this.large.left = SAFE.left + 14;
+    this.large.top = SAFE.top + LARGE_TOP_MARGIN;
 
-    this.frame.clear();
-    this.frame.fillStyle(0x0d1420, 0.82);
-    this.frame.fillRoundedRect(this.left, this.top, this.size, this.size, 8);
-    this.frame.lineStyle(2, COLORS.hudDim, 0.8);
-    this.frame.strokeRoundedRect(this.left, this.top, this.size, this.size, 8);
-
-    this.hint.setPosition(this.left + this.size / 2, this.top + this.size + 6);
-    this.hint.setText("Die Runde laeuft weiter");
-  }
-
-  /** Zeichnet den aktuellen Stand. Wird jedes Bild gerufen, solange offen. */
-  update(model: MinimapModel): void {
-    if (!this.open) {
-      return;
+    for (const view of [this.small, this.large]) {
+      view.frame.clear();
+      view.frame.fillStyle(0x0d1420, 0.72);
+      view.frame.fillRoundedRect(view.left, view.top, view.size, view.size, 8);
+      view.frame.lineStyle(2, COLORS.hudDim, 0.8);
+      view.frame.strokeRoundedRect(view.left, view.top, view.size, view.size, 8);
     }
 
-    this.marks.clear();
+    this.hint.setPosition(this.large.left + this.large.size / 2, this.large.top + this.large.size + 6);
+  }
 
-    const scale = this.size / Math.max(1, model.worldSize);
+  /** Zeichnet den aktuellen Stand - die kleine immer, die grosse nur offen. */
+  update(model: MinimapModel): void {
+    this.draw(this.small, model, 0.6);
+    if (this.open) {
+      this.draw(this.large, model, 1);
+    }
+  }
+
+  destroy(): void {
+    for (const view of [this.small, this.large]) {
+      view.frame.destroy();
+      view.marks.destroy();
+    }
+    this.hint.destroy();
+    this.hitZone.destroy();
+  }
+
+  private createView(scene: Phaser.Scene): MapView {
+    return {
+      frame: scene.add.graphics().setDepth(DEPTH.hud + 4),
+      marks: scene.add.graphics().setDepth(DEPTH.hud + 5),
+      left: 0,
+      top: 0,
+      size: 0,
+    };
+  }
+
+  /**
+   * Eine Karte zeichnen. `detail` verkleinert die Markierungen auf der
+   * kleinen Karte - Punkte in voller Groesse wuerden sie zukleistern.
+   */
+  private draw(view: MapView, model: MinimapModel, detail: number): void {
+    const marks = view.marks;
+    marks.clear();
+
+    const scale = view.size / Math.max(1, model.worldSize);
     const toScreen = (x: number, y: number): { x: number; y: number } => ({
-      x: this.left + x * scale,
-      y: this.top + y * scale,
+      x: view.left + x * scale,
+      y: view.top + y * scale,
     });
+    const r = (radius: number): number => Math.max(1.5, radius * detail);
 
     // Die sichere Zone um den Start: der eine Ort, den man immer wiederfinden
-    // will, weil man dort heilt und Punkte verteilt.
+    // will, weil man dort heilt.
     const start = toScreen(model.startX, model.startY);
-    this.marks.fillStyle(COLORS.mate, 0.16);
-    this.marks.fillCircle(start.x, start.y, Math.max(3, model.safeRadius * scale));
+    marks.fillStyle(COLORS.mate, 0.16);
+    marks.fillCircle(start.x, start.y, Math.max(2, model.safeRadius * scale));
 
-    // Aufgedeckte Ausstiege: gefuellte gruene Punkte - dasselbe Gruen wie der
-    // Ring am Boden und der Kompasspfeil. Drei Anzeigen derselben Sache in
-    // derselben Farbe sind eine Sprache; drei Farben waeren drei Raetsel.
+    // Aufgedeckte Ausstiege: gruene Punkte - dasselbe Gruen wie der Teppich am
+    // Boden und der Kompasspfeil. Drei Anzeigen derselben Sache in derselben
+    // Farbe sind eine Sprache; drei Farben waeren drei Raetsel.
     for (const zone of model.extractions) {
       const point = toScreen(zone.x, zone.y);
-      this.marks.fillStyle(COLORS.mate, 0.95);
-      this.marks.fillCircle(point.x, point.y, 4);
-      this.marks.lineStyle(1, 0x0d1420, 0.9);
-      this.marks.strokeCircle(point.x, point.y, 4);
+      marks.fillStyle(COLORS.mate, 0.95);
+      marks.fillCircle(point.x, point.y, r(4));
+      marks.lineStyle(1, 0x0d1420, 0.9);
+      marks.strokeCircle(point.x, point.y, r(4));
     }
 
     // Aufgedeckte Encounter: rot wie ihr Ring am Boden. Geschaffte werden
-    // blass, statt zu verschwinden - so sieht man, was man schon erledigt hat,
-    // und kann daraus schliessen, wo es sich noch lohnt.
+    // blass, statt zu verschwinden.
     for (const spot of model.encounters) {
       const point = toScreen(spot.x, spot.y);
-      const radius = spot.isFinal ? 6 : 3.5;
-      this.marks.fillStyle(COLORS.danger, spot.cleared ? 0.28 : 0.95);
-      this.marks.fillCircle(point.x, point.y, radius);
+      const radius = r(spot.isFinal ? 6 : 3.5);
+      marks.fillStyle(COLORS.danger, spot.cleared ? 0.28 : 0.95);
+      marks.fillCircle(point.x, point.y, radius);
       if (spot.isFinal) {
-        // Der Ende-Boss bekommt einen Ring dazu: Er ist nicht "noch ein
-        // Mini-Boss", sondern das Ende des Runs.
-        this.marks.lineStyle(1.5, COLORS.danger, spot.cleared ? 0.35 : 1);
-        this.marks.strokeCircle(point.x, point.y, radius + 3);
+        marks.lineStyle(1.5, COLORS.danger, spot.cleared ? 0.35 : 1);
+        marks.strokeCircle(point.x, point.y, radius + 3 * detail);
       }
     }
 
@@ -195,18 +272,14 @@ export class Minimap {
     // liegt - sie ist die, die man sucht.
     for (const mate of model.mates) {
       const point = toScreen(mate.x, mate.y);
-      this.marks.fillStyle(mate.down ? COLORS.hudDim : COLORS.player, 0.9);
-      this.marks.fillCircle(point.x, point.y, 3);
+      marks.fillStyle(mate.down ? COLORS.hudDim : COLORS.player, 0.9);
+      marks.fillCircle(point.x, point.y, r(3));
     }
 
     const self = toScreen(model.selfX, model.selfY);
-    this.marks.fillStyle(0xffffff, 1);
-    this.marks.fillCircle(self.x, self.y, 3.5);
-    this.marks.lineStyle(2, COLORS.player, 1);
-    this.marks.strokeCircle(self.x, self.y, 6);
-  }
-
-  destroy(): void {
-    this.container.destroy();
+    marks.fillStyle(0xffffff, 1);
+    marks.fillCircle(self.x, self.y, r(3.5));
+    marks.lineStyle(2, COLORS.player, 1);
+    marks.strokeCircle(self.x, self.y, r(6));
   }
 }

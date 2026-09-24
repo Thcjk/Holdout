@@ -251,4 +251,10 @@ Haufen, Beute/Geschosse/Partikel aus dem Sheet, Effekte nur als Ringe.
 `assets/textures.ts` (gezeichneter Atlas) gelöscht. Bleibt gezeichnet: das
 HUD (kein UI-Paket, siehe Punkt 11) und die Gegner-Lebensbalken.
 
+### Etappe 6 · 2026-09-24 07:05 UTC
+
+Massstab 5,3 % gemessen (im Soll). Minimap: war ein Panel oben links hinter
+einem Knopf – jetzt immer sichtbar rechts oben (120 × 120), Antippen für die
+grosse Ansicht, ohne Pause.
+
 *(wird fortgeschrieben)*

@@ -35,13 +35,17 @@ export interface HudSceneData {
 
 
 /**
- * Abstand der Knopfreihe (Karte, Pause, Ton) von der oberen Kante.
+ * Abstand der Knopfreihe (Pause, Ton) von der oberen Kante.
  *
- * 88 -> 106: Die Punkteanzeige darueber hat seit der Beute VIER Zeilen statt
- * drei. Im Emulator war "Beute 4" halb hinter den Knoepfen - eine Anzeige,
- * die man nicht ganz lesen kann, ist keine.
+ * 106 -> 62 (Etappe 6): Darunter sitzt jetzt die kleine Karte, und alles
+ * zusammen muss oberhalb des SUPER-Knopfs enden. Dafuer steht die
+ * Punkteanzeige auf ZWEI Zeilen statt vier ("Score · Rekord", "Gegner ·
+ * Beute").
  */
-const BUTTON_ROW_Y = 106;
+const BUTTON_ROW_Y = 62;
+
+/** Oberkante der kleinen Karte, unter der Knopfreihe. */
+const MINIMAP_Y = 90;
 
 export class HudScene extends Phaser.Scene {
   /** Erst wenn das hier `true` ist, darf die Spielszene Eingaben abholen. */
@@ -84,7 +88,6 @@ export class HudScene extends Phaser.Scene {
     this.onQuit = data.onQuit;
   }
 
-  private mapButton!: Button;
   private minimap!: Minimap;
   private compass!: Phaser.GameObjects.Graphics;
   private compassText!: Phaser.GameObjects.Text;
@@ -195,29 +198,12 @@ export class HudScene extends Phaser.Scene {
     this.menuButton.setDepth(DEPTH.hud);
 
     /*
-     * Der Kartenknopf - und er sitzt bewusst NEBEN Pause und Ton, nicht unten.
-     *
-     * Unten rechts liegt der Knopfbogen (FEUER, Faehigkeit, SUPER), unten
-     * links der Joystick. Ein vierter Knopf in Daumennaehe waere genau der
-     * Knopf, den man im Gefecht versehentlich trifft - und eine Karte, die
-     * sich mitten im Kampf oeffnet, nimmt die Sicht.
-     *
-     * Hier oben kommt man mit Absicht hin, aber nicht aus Versehen.
+     * Die Karte - klein und immer sichtbar rechts oben (Arbeitsdokument,
+     * Etappe 6). Antippen oeffnet die grosse Ansicht, OHNE anzuhalten. Der
+     * fruehere Knopf "Karte" ist damit weggefallen: Die Karte selbst ist der
+     * Knopf.
      */
-    this.mapButton = new Button(
-      this,
-      rightEdge - 226,
-      topEdge + BUTTON_ROW_Y,
-      "Karte",
-      () => {
-        const open = this.minimap.toggle();
-        this.mapButton.setText(open ? "Karte zu" : "Karte");
-      },
-      { width: 76, height: 30, fontSize: 13, color: COLORS.hudDim },
-    );
-    this.mapButton.setDepth(DEPTH.hud);
-
-    this.minimap = new Minimap(this);
+    this.minimap = new Minimap(this, topEdge + MINIMAP_Y, () => undefined);
 
     /*
      * Ton beim ersten Antippen freigeben - Browser verweigern Klang, bevor der
@@ -279,8 +265,8 @@ export class HudScene extends Phaser.Scene {
      * knappste Platz im Bild; dort sitzen Leben, Super und der Knopfbogen.
      */
     this.scoreText.setText(
-      `Score ${this.model.score}\nRekord ${this.model.highscore}\n` +
-        `Gegner ${this.model.enemiesLeft}\nBeute ${this.model.carriedItems}`,
+      `Score ${this.model.score} · Rekord ${this.model.highscore}\n` +
+        `Gegner ${this.model.enemiesLeft} · Beute ${this.model.carriedItems}`,
     );
     this.mateText.setText(
       this.model.mates
@@ -425,7 +411,6 @@ export class HudScene extends Phaser.Scene {
      */
     if (visible && this.minimap.isOpen) {
       this.minimap.toggle();
-      this.mapButton.setText("Karte");
     }
 
     this.paused = visible && this.canPause;
@@ -571,8 +556,9 @@ export class HudScene extends Phaser.Scene {
         this.scoreText.getBounds(),
         this.muteButton.getBounds(),
         this.menuButton.getBounds(),
-        this.mapButton.getBounds(),
       ]),
+      this.minimap.smallBounds,
+      ...(this.minimap.largeBounds ? [this.minimap.largeBounds] : []),
       // Leben und Super unten links, wie in `drawPlayerBars`.
       { x: SAFE.left, y: bottom - 64, width: 250, height: 64 },
       { x: arcLeft, y: arcTop, width: right - arcLeft, height: bottom - arcTop },
@@ -593,8 +579,7 @@ export class HudScene extends Phaser.Scene {
     this.announceText.setPosition(VIEWPORT.width / 2, 132);
     this.muteButton.setPosition(rightEdge - 44, topEdge + BUTTON_ROW_Y);
     this.menuButton.setPosition(rightEdge - 146, topEdge + BUTTON_ROW_Y);
-    this.mapButton.setPosition(rightEdge - 226, topEdge + BUTTON_ROW_Y);
-    this.minimap.layout();
+    this.minimap.layout(topEdge + MINIMAP_Y);
 
     // Das Pausenbild sitzt in der Mitte - die verschiebt sich mit der Breite.
     this.pauseTitle.setPosition(VIEWPORT.width / 2, VIEWPORT.height / 2 - 96);
