@@ -28,10 +28,10 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 > etwas anderes sagt, gilt das Protokoll.
 
 **Stand 2026-09-24 morgens: Etappen 0–12 abgeschlossen**, alles auf dem
-Branch `claude/artifact-session-70nhy4`. **GitHub Pages zeigt weiterhin
-Phase 9** – für die Überarbeitung auf dem Handy muss der Branch nach `main`
-(das braucht deine Freigabe). Die kurze Fassung für heute Morgen steht ganz
-unten: **MORGEN-ZUSAMMENFASSUNG**.
+Branch `claude/artifact-session-70nhy4`. **Seit 2026-09-24 08:29 UTC auch
+auf `main` und damit auf GitHub Pages** (Commit `0e28a23`, auf Wunsch
+„pushen“; Deploy und Quality Check grün). Die kurze Fassung für heute Morgen
+steht ganz unten: **MORGEN-ZUSAMMENFASSUNG**.
 
 ### Protokoll der Überarbeitung
 
@@ -2018,10 +2018,10 @@ auch dann nicht, wenn es "schnell noch" machbar wäre.
 
 Die Nacht hat alle zwölf Etappen des Arbeitsdokuments abgearbeitet, der
 Reihe nach, jede mit eigenem Commit auf `claude/artifact-session-70nhy4`.
-**Wichtig vorweg: Auf GitHub Pages ist davon noch nichts.** Pages baut aus
-`main`, und `main` steht auf Phase 9. Zum Ausprobieren auf dem Handy muss
-der Branch nach `main` – das habe ich nicht getan, weil du einen Push auf
-`main` jedes Mal selbst freigibst.
+**Nachtrag 08:30 UTC:** Auf „pushen“ hin steht der Stand seit Commit
+`0e28a23` auf `main`; Deploy und Quality Check liefen grün. Pages zeigt ihn
+also – auf dem Handy aktualisiert sich die installierte App im Hauptmenü
+von selbst.
 
 ### Fertig und geprüft
 
@@ -2093,11 +2093,11 @@ Stand am Ende: 253 Tests grün, Typecheck, Lint und Build sauber.
    ist. Gefällt es nicht: ein Parameter in `finishRun`.
 4. **Sniper-Aufklärung ohne Abklingzeit 14:** Supers laden über Schaden.
 5. **Grün doppelt belegt:** Büsche und Ausstiegsteppich sind beide grün.
-6. **Push nach `main`**, damit Pages den neuen Stand zeigt.
+6. ~~**Push nach `main`**~~ – erledigt (`0e28a23`).
 
 ### Ehrliche Priorität für heute
 
-1. Branch nach `main` freigeben und **auf dem Handy spielen** – vieles hier
+1. **Auf dem Handy spielen** (steht jetzt auf Pages) – vieles hier
    ist nur im Emulator gesehen (Bildrate, Lesbarkeit von `#7FB069` auf
    Sand, Bedienung des Rucksacks mit dem Daumen).
 2. Entscheidungen 1 und 2 oben – beide ändern, wie sich Tank und Sniper
