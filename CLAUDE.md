@@ -263,7 +263,7 @@ lief. Neueste unten.
     Streudeko (Steine, Grasbüschel) habe ich verworfen: graue Steine sehen
     aus wie Schrott am Boden, grüne Büschel widersprechen „Grün = Versteck“.
 
-#### Etappe 6 – Massstab und Minimap · 2026-09-24 07:05 UTC
+#### Etappe 6 – Massstab und Minimap · 2026-09-24 06:57 UTC
 
 - **Massstab gemessen, nicht verändert.** Der sichtbare Körper jeder Figur
   ist 12 Sheetpixel hoch, beim Spieler ×3 = 36 Weltpixel. Beim Standardzoom
