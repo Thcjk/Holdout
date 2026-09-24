@@ -66,6 +66,11 @@ export class Button {
     return this;
   }
 
+  /** Die Flaeche des Knopfs - fuer Anzeigen, die ihm ausweichen muessen. */
+  getBounds(): Phaser.Geom.Rectangle {
+    return this.background.getBounds();
+  }
+
   setText(text: string): void {
     this.label.setText(text);
   }

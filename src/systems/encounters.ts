@@ -4,8 +4,8 @@
  * Seit Phase 9 kann ein Run auch GUT ausgehen. Vorher gab es nur einen Ausgang:
  * alle am Boden. Jetzt sind es drei, und diese Datei bringt zwei davon:
  *
- *   EXTRAKTION      Das Team steht gemeinsam in einer Ausstiegszone und haelt
- *                   sie fuenf Sekunden. Der Run endet erfolgreich.
+ *   EXTRAKTION      Alle stehenden Spieler halten gemeinsam eine
+ *                   Ausstiegszone fuenf Sekunden. Der Run endet erfolgreich.
  *   ENDE-BOSS       Der grosse Waechter faellt. Der Run endet ebenfalls
  *                   erfolgreich, nur eine Stufe hoeher.
  *
@@ -22,8 +22,10 @@
  *     vorne waere nichts mehr erschienen.
  *
  * Deshalb ist ein Encounter bis zum Betreten nur ein EINTRAG IN EINER LISTE.
- * Sichtbar ist er trotzdem: Die Darstellung zeichnet Ring und Sprite aus genau
- * diesem Eintrag - dasselbe Bild, das man danach bekaempft.
+ * Sichtbar ist er trotzdem: `ArenaRenderer` zeichnet Ring und ein schlafendes,
+ * abgedunkeltes Boss-Sprite aus genau diesem Eintrag - dasselbe Bild, das man
+ * danach bekaempft. (Das Sprite stand hier schon laenger im Kommentar, wurde
+ * aber erst am 2026-09-24 wirklich gezeichnet.)
  */
 
 import { ENCOUNTERS, LIMITS } from "../config/balance";
@@ -201,10 +203,15 @@ function checkCleared(state: WorldState): void {
 /**
  * Der Countdown in einer Ausstiegszone.
  *
- * ALLE SPIELER MUESSEN DRIN STEHEN, auch die am Boden liegenden. Das ist eine
- * Entscheidung und keine Nachlaessigkeit: "Alle LEBENDEN" haette geheissen, dass
- * man einen Gefallenen einfach liegen lassen und gehen kann. So muss man ihn
- * erst aufheben - und genau das ist der Moment, um den es im Koop geht.
+ * ALLE STEHENDEN SPIELER MUESSEN DRIN SEIN - wer am Boden liegt, zaehlt nicht.
+ *
+ * Bis zur Ueberarbeitung vom 2026-09-24 galt das Gegenteil: auch die am Boden
+ * liegenden mussten in der Zone sein, damit niemand einen Gefallenen einfach
+ * zuruecklaesst. Das Arbeitsdokument verlangt ausdruecklich "alle LEBENDEN".
+ * Der Grund, warum das trotzdem kein Freibrief ist: Wer liegen bleibt, kommt
+ * zwar mit raus, verliert aber seine Beute (`leftBehind` unten, abgerechnet in
+ * `storage/carried.ts`). Das Aufheben lohnt sich also weiterhin - es ist nur
+ * keine Sackgasse mehr, wenn der Gefallene unerreichbar zwischen Gegnern liegt.
  *
  * Verlaesst jemand die Zone, faengt der Countdown von vorn an. Kein langsames
  * Zuruecklaufen: Ein Fortschritt, der sich halb haelt, waere schwer zu lesen -
@@ -231,9 +238,15 @@ function stepExtraction(state: WorldState, dt: number): void {
   }
 }
 
-/** In welcher Ausstiegszone steht das ganze Team? -1, wenn in keiner. */
+/**
+ * In welcher Ausstiegszone stehen alle stehenden Spieler? -1, wenn in keiner.
+ *
+ * Liegen alle am Boden, ist das ein Wipe und kein Ausstieg - deshalb braucht
+ * es mindestens einen, der steht.
+ */
 function zoneWithWholeTeam(state: WorldState): number {
-  if (state.players.length === 0) {
+  const standing = state.players.filter((player) => !player.down);
+  if (standing.length === 0) {
     return -1;
   }
 
@@ -242,12 +255,34 @@ function zoneWithWholeTeam(state: WorldState): number {
     if (!zone) {
       continue;
     }
-    if (state.players.every((player) => distance(player.position, zone.position) <= zone.radius)) {
+    if (standing.every((player) => distance(player.position, zone.position) <= zone.radius)) {
       return i;
     }
   }
 
   return -1;
+}
+
+/**
+ * Wurde dieser Spieler bei der Extraktion zurueckgelassen?
+ *
+ * Ja, wenn er am Boden liegt und NICHT in der Zone, aus der das Team
+ * ausgestiegen ist. Wer am Boden liegend innerhalb der Zone liegt, ist
+ * mitgekommen. Nur fuer den Ausgang `extracted` von Bedeutung.
+ */
+export function leftBehind(state: WorldState, playerId: string): boolean {
+  if (state.outcome !== "extracted") {
+    return false;
+  }
+  const player = state.players.find((entry) => entry.id === playerId);
+  if (!player || !player.down) {
+    return false;
+  }
+  const zone = state.extractions[state.extractionIndex];
+  if (!zone) {
+    return true;
+  }
+  return distance(player.position, zone.position) > zone.radius;
 }
 
 /** Beendet den Run mit diesem Ausgang. Mehrfach zu rufen ist harmlos. */

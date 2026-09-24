@@ -29,12 +29,16 @@ import {
   BUILDING_WALL_TILE,
   BUSH_TILE,
   COVER_TILE,
+  ENEMY_TILES,
+  EXTRACTION_PAD_TILES,
   FLOOR_TILES,
+  SPRITE_BODY_RADIUS,
+  TILE,
   SHEET_KEY,
   WALL_TILE,
   WORLD_SCALE,
 } from "../config/assets";
-import { ENCOUNTERS } from "../config/balance";
+import { ENCOUNTERS, ENEMIES } from "../config/balance";
 import { COLORS, DEPTH } from "../config/constants";
 import type { Rect, WorldState } from "../systems/types";
 
@@ -69,6 +73,17 @@ export class ArenaRenderer {
   /** Die Ringe von Encounter- und Ausstiegszonen, je Bild neu gezeichnet. */
   private readonly markers: Phaser.GameObjects.Graphics;
 
+  /**
+   * Der schlafende Boss je Encounter - gleicher Index wie `state.encounters`.
+   *
+   * Solange niemand den Ring betritt, gibt es den Boss in der Simulation noch
+   * gar nicht (warum, steht oben in `systems/encounters.ts`). Gezeichnet wird
+   * er trotzdem: Man soll sehen, WAS dort wartet, bevor man sich entscheidet
+   * hineinzugehen. Beim Erwachen verschwindet dieses Bild, und an derselben
+   * Stelle steht der echte Gegner aus `EntityRenderer`.
+   */
+  private readonly sleepers: Phaser.GameObjects.Image[] = [];
+
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly state: WorldState,
@@ -85,6 +100,8 @@ export class ArenaRenderer {
     this.drawBuildingFloors(state);
     this.drawWalls(state);
     this.drawBushes(state);
+    this.drawExtractionPads(state);
+    this.createSleepers(state);
     this.update();
   }
 
@@ -141,18 +158,20 @@ export class ArenaRenderer {
     const visible = (x: number, y: number, radius: number): boolean =>
       x + radius > left && x - radius < right && y + radius > top && y - radius < bottom;
 
-    for (const spot of this.state.encounters) {
+    this.state.encounters.forEach((spot, index) => {
       const { x, y } = spot.position;
-      if (!visible(x, y, ENCOUNTERS.triggerRadius)) {
-        continue;
-      }
-
-      const cleared = spot.status === "cleared";
       // Der Ende-Boss bekommt einen groesseren Ring - man soll von weitem
       // sehen, dass dort etwas anderes wartet als an den acht davor.
       // Genau der Radius, bei dem der Boss erwacht. Wer den Ring ueberschreitet,
       // hat sich entschieden - vorher passiert nichts.
       const radius = ENCOUNTERS.triggerRadius * (spot.isFinal ? 1.35 : 1);
+      const inView = visible(x, y, radius);
+      this.sleepers[index]?.setVisible(inView && spot.status === "sleeping");
+      if (!inView) {
+        return;
+      }
+
+      const cleared = spot.status === "cleared";
 
       /*
        * ================================================================
@@ -182,50 +201,49 @@ export class ArenaRenderer {
         COLORS.danger,
         cleared ? 0.25 : 0.8,
       );
-    }
+    });
 
     /*
-     * Die Ausstiegszonen - und die haben nach dem Spieltest deutlich
-     * zugelegt.
+     * Die Ausstiegszonen: ueber dem Teppich aus dem Sheet
+     * (`drawExtractionPads`) liegen zwei Ringe.
      *
-     * Vorher waren sie ein duenner gruener Kreis mit 10 % Fuellung. Auf einem
-     * Bild voller Sand, Ziegel und Gras ist das genau dann zu sehen, wenn man
-     * schon davorsteht - zurueckgemeldet als "Extraktionspunkte findet man
-     * gar nicht". Jetzt sind es DREI Dinge uebereinander, weil ein einzelnes
-     * im Getuemmel untergeht:
+     *   1. Die GRENZE, genau auf dem Radius, der zaehlt. Der Teppich ist
+     *      quadratisch und liegt innerhalb des Kreises - wer am Rand des
+     *      Kreises steht, ist schon drin, auch wenn er neben dem Teppich
+     *      steht. Der Ring sagt, wo es wirklich anfaengt.
+     *   2. Der LEUCHT-PULS: ein Ring, der ueber den Kreis hinaus nach aussen
+     *      laeuft und verblasst. Bewegung faellt im Augenwinkel auf, eine
+     *      ruhende Flaeche nicht - so ist die Zone schon zu erkennen, wenn nur
+     *      ihr Rand ins Bild ragt.
      *
-     *   1. ein kraeftig gefuellter Kreis (die Zone selbst),
-     *   2. ein PULSIERENDER Ring darueber - Bewegung faellt im Augenwinkel
-     *      auf, eine ruhende Flaeche nicht,
-     *   3. ein doppelt so grosser, blasser Hof - er ist im Bild, bevor die
-     *      Zone selbst es ist.
+     * Bis 2026-09-24 waren es gefuellte Kreise (Hof, Zone). Die sind
+     * weggefallen: Farbflaechen sind im fertigen Spiel nicht mehr erlaubt, und
+     * der Teppich erfuellt ihren Zweck besser - er sieht aus wie ein Ort, nicht
+     * wie eine Markierung.
      *
      * Der Puls laeuft ueber die Weltzeit und nicht ueber einen eigenen
      * Zaehler: So pulsieren alle Zonen im Gleichtakt, und im Koop sehen alle
      * Geraete dasselbe.
      */
-    const pulse = 0.5 + 0.5 * Math.sin(this.scene.time.now / 420);
+    const pulse = (this.scene.time.now % 1600) / 1600;
 
     for (const zone of this.state.extractions) {
       const { x, y } = zone.position;
-      const halo = zone.radius * 2;
-      if (!visible(x, y, halo)) {
+      const glowReach = zone.radius * 1.6;
+      if (!visible(x, y, glowReach)) {
         continue;
       }
 
-      // Der Hof: gross und blass, damit er von weitem als gruener Fleck
-      // auffaellt, ohne die Sicht auf Gegner darin zu nehmen.
-      this.markers.fillStyle(COLORS.mate, 0.05);
-      this.markers.fillCircle(x, y, halo);
-
-      this.markers.fillStyle(COLORS.mate, 0.22);
-      this.markers.fillCircle(x, y, zone.radius);
-      this.markers.lineStyle(5, COLORS.mate, 0.95);
+      this.markers.lineStyle(4, COLORS.mate, 0.95);
       this.markers.strokeCircle(x, y, zone.radius);
 
-      // Der Puls: ein Ring, der nach aussen laeuft und dabei verblasst.
-      this.markers.lineStyle(3, COLORS.mate, 0.5 * (1 - pulse));
-      this.markers.strokeCircle(x, y, zone.radius * (0.55 + 0.45 * pulse));
+      // Zwei Pulse im Abstand einer halben Periode: Einer allein laesst eine
+      // Luecke, in der gar nichts leuchtet.
+      for (const phase of [pulse, (pulse + 0.5) % 1]) {
+        const radius = zone.radius * (0.35 + 1.25 * phase);
+        this.markers.lineStyle(6 - 4 * phase, COLORS.mate, 0.7 * (1 - phase));
+        this.markers.strokeCircle(x, y, radius);
+      }
     }
   }
 
@@ -398,6 +416,73 @@ export class ArenaRenderer {
         .setDepth(DEPTH.floor + 2);
 
       this.addCullable(sprite, house);
+    }
+  }
+
+  /**
+   * Der Landeplatz jeder Ausstiegszone, aus neun Teilen des Sheets.
+   *
+   * Die Seitenlaenge ist ein ganzes Vielfaches der Kachel und so gewaehlt,
+   * dass auch die Ecken noch im Kreis liegen (Diagonale <= Durchmesser).
+   * Sonst stuende man auf dem Teppich und waere trotzdem nicht in der Zone.
+   */
+  private drawExtractionPads(state: WorldState): void {
+    const size = TILE * WORLD_SCALE;
+
+    for (const zone of state.extractions) {
+      const tiles = Math.max(3, Math.floor((zone.radius * Math.SQRT2) / size));
+      const side = tiles * size;
+      const left = zone.position.x - side / 2;
+      const top = zone.position.y - side / 2;
+      const inner = side - size * 2;
+
+      // Spalten und Zeilen der Neunerteilung: Rand, Mitte, Rand.
+      const spans = [
+        { offset: 0, length: size },
+        { offset: size, length: inner },
+        { offset: size + inner, length: size },
+      ];
+
+      spans.forEach((row, rowIndex) => {
+        spans.forEach((column, columnIndex) => {
+          const frame = EXTRACTION_PAD_TILES[rowIndex * 3 + columnIndex];
+          if (frame === undefined || row.length <= 0 || column.length <= 0) {
+            return;
+          }
+          const rect = {
+            x: left + column.offset,
+            y: top + row.offset,
+            width: column.length,
+            height: row.length,
+          };
+          const sprite = this.scene.add
+            .tileSprite(rect.x, rect.y, rect.width, rect.height, SHEET_KEY, frame)
+            .setOrigin(0)
+            .setTileScale(WORLD_SCALE, WORLD_SCALE)
+            .setDepth(DEPTH.floor + 0.5);
+          this.addCullable(sprite, rect);
+        });
+      });
+    }
+  }
+
+  /**
+   * Die schlafenden Bosse. Groesse genau wie beim echten Gegner
+   * (`createEnemy`: Ende-Boss doppelt so gross), leicht abgedunkelt - er
+   * schlaeft. Ein Sprite aus dem Sheet, kein Platzhalter.
+   */
+  private createSleepers(state: WorldState): void {
+    for (const spot of state.encounters) {
+      const radius = ENEMIES.boss.radius * (spot.isFinal ? 2 : 1);
+      const sprite = this.scene.add
+        .image(spot.position.x, spot.position.y, SHEET_KEY, ENEMY_TILES.boss)
+        .setScale(radius / SPRITE_BODY_RADIUS)
+        .setRotation(Math.PI / 2)
+        .setTint(0x9a9a9a)
+        .setDepth(DEPTH.enemies)
+        .setVisible(false);
+      this.sleepers.push(sprite);
+      this.parts.push(sprite);
     }
   }
 

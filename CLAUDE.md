@@ -142,6 +142,57 @@ lief. Neueste unten.
   statt eigenem `endBossPoint`). Inhaltlich gleichwertig – umbenannt habe ich
   nicht, weil die Regel lautet, Funktionierendes nicht neu zu bauen.
 
+#### Etappe 4 – Encounter, Bosse, Extraktion · 2026-09-24 06:40 UTC
+
+- **Extraktionsregel umgedreht, weil das Dokument es verlangt:** Der
+  Countdown zählt jetzt nur die **stehenden** Spieler („alle lebenden“).
+  Bisher mussten auch Gefallene in der Zone liegen. Damit „Liegenlassen“
+  trotzdem nicht folgenlos ist, habe ich einen Preis ergänzt: Wer bei der
+  Extraktion am Boden **ausserhalb** der Zone liegt, verliert seine Beute
+  (`leftBehind` in `systems/encounters.ts`, abgerechnet in
+  `storage/carried.ts`; der Ergebnisbildschirm sagt „Am Boden
+  zurückgelassen – N Gegenstände verloren“). **Das ist meine Ergänzung,
+  nicht aus dem Dokument** – wenn sie nicht gefällt: ein Parameter in
+  `finishRun`, raus damit. Liegen alle am Boden, startet kein Countdown –
+  das ist ein Wipe. Hinweis im Bild: „Wer steht, bleibt in der Zone“.
+- **Kompass am Bildschirmrand** (`ui/compassPlacement.ts`, phaserfrei, mit
+  Test über 72 Richtungen): Der Pfeil läuft 30 px innerhalb des Rands und
+  rutscht auf derselben Kante aus den vier HUD-Ecken heraus. Die Sperrflächen
+  werden aus den **echten** Anzeigen gemessen (`getBounds`), nicht geschätzt.
+  Er verschwindet, sobald die Zonenmitte im Bild ist – im Emulator lag er
+  sonst mitten auf dem Teppich, auf den er zeigen sollte.
+- **Bodenmarker aus dem Sheet:** grüner Teppich als Neunerteilung (Spalten
+  21–23, Reihen 13–15, `EXTRACTION_PAD_TILES`), so gross, dass auch seine
+  Ecken im Wirkkreis liegen. Darüber die exakte Grenze als Ring und ein
+  doppelter Leucht-Puls, der über den Kreis hinaus nach aussen läuft. Die
+  **gefüllten Kreise** (Hof, Zone) sind weg.
+- **Schlafender Boss wird jetzt gezeichnet:** abgedunkeltes Boss-Sprite in
+  der Ringmitte, Ende-Boss doppelt so gross. Der Kommentar in
+  `encounters.ts` behauptete das schon seit Phase 9 – gezeichnet wurde es nie.
+  Nebenbei: Der Ring des Ende-Bosses wurde zu früh ausgeblendet (Sichtprüfung
+  mit dem kleinen Radius) – behoben.
+- **Geprüft wie:** 226 Tests, darunter vier neue zur Extraktion (Gefallener
+  hält nicht auf; Stehender verlässt → Abbruch; Gefallener in der Zone kommt
+  mit; alle am Boden → Wipe) und einer zur Beute. Der erste der vier schlägt
+  auf dem alten Code fehl (dort wartete die Zone auf den Gefallenen).
+  **Im Emulator** (iPhone 13 quer, `?seed=1/42/4242`): Kompass an drei
+  verschiedenen Rändern ohne Überlappung; Lauf in die Zone → Countdown →
+  „Extrahiert, 4 Gegenstände gesichert“; Lauf zum Boss → schlafendes Sprite
+  sichtbar, beim Betreten erwacht er in Farbe.
+- **Nicht wie geplant / offen:**
+  - Die Minimap-Markierung der Zonen gab es schon; sie wandert mit der
+    Minimap in Etappe 6.
+  - **Grün ist doppelt belegt:** Büsche (verstecken) und Teppich
+    (aussteigen) sind beide grün. Der Teppich unterscheidet sich durch Rahmen
+    und Ring, aber das Dokument sagt „Grün = sicher“. Die Alternative im
+    Sheet wäre der orange Teppich (18–20, 13–15) – der verwechselt sich mit
+    den Ziegeln. Ich habe Grün gelassen; im Spieltest ansehen.
+  - Kompass und HUD-Balken sind weiterhin gezeichnet (Kreis, Dreieck,
+    Rechtecke). Ein UI-Paket gibt es nicht (siehe Etappe 11); das bleibt
+    auf der Liste für Etappe 5.
+  - Einmal gesehen: Eine Deckungswand berührte den Wirkkreis einer
+    Ausstiegszone. Kein Fehler im Ablauf, aber unschön – nicht behoben.
+
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut

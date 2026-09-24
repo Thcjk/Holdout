@@ -50,8 +50,14 @@ export function carriedItems(): readonly ItemInstance[] {
 export function finishRun(
   outcome: RunOutcome,
   runItems: readonly ItemInstance[],
+  /**
+   * Bei der Extraktion am Boden liegend zurueckgelassen? Das Team ist raus,
+   * dieser Spieler aber nicht wirklich - fuer seine Beute zaehlt es wie ein
+   * Wipe. Siehe `leftBehind` in `systems/encounters.ts`.
+   */
+  wasLeftBehind = false,
 ): { kept: number; lost: number } {
-  if (outcome === "wipe") {
+  if (outcome === "wipe" || wasLeftBehind) {
     return { kept: 0, lost: runItems.length };
   }
 

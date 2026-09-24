@@ -238,6 +238,25 @@ export const BUILDING_WALL_TILE = tile(8, 0);
  */
 export const BUSH_TILE = tile(0, 0);
 
+/**
+ * Der Landeplatz einer Ausstiegszone: ein gruener Teppich mit hellem Rand,
+ * als Neunerteilung (Ecken, Kanten, Mitte) aus Spalte 21 bis 23, Reihe 13
+ * bis 15.
+ *
+ * Gruen, weil Gruen im ganzen Spiel "sicher" heisst - dieselbe Farbe wie der
+ * Kompasspfeil und die Minimap-Markierung. Aus dem Sheet und nicht als
+ * gefuellter Kreis: Das Arbeitsdokument vom 2026-09-24 verbietet
+ * Farbflaechen fuer alles, was im fertigen Spiel sichtbar ist.
+ *
+ * Reihenfolge: oben links, oben, oben rechts, links, Mitte, rechts, unten
+ * links, unten, unten rechts.
+ */
+export const EXTRACTION_PAD_TILES: readonly number[] = [
+  tile(21, 13), tile(22, 13), tile(23, 13),
+  tile(21, 14), tile(22, 14), tile(23, 14),
+  tile(21, 15), tile(22, 15), tile(23, 15),
+];
+
 
 /**
  * ================================================================

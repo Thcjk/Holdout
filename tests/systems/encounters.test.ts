@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 import { ENCOUNTERS, WORLD } from "../../src/config/balance";
 import { TICK_RATE, TICK_SECONDS } from "../../src/config/constants";
-import { stepEncounters } from "../../src/systems/encounters";
+import { leftBehind, stepEncounters } from "../../src/systems/encounters";
 import { stepRound } from "../../src/systems/spawning";
 import { generateWorld } from "../../src/systems/WorldGenerator";
 import { createPlayer, createWorld, stepWorld } from "../../src/systems/world";
@@ -273,12 +273,44 @@ describe("Extraktion", () => {
     expect(state.phase).toBe("running");
   });
 
-  it("wartet im Koop auf ALLE - auch auf die am Boden liegenden", () => {
+  it("wartet im Koop auf alle STEHENDEN - ein Gefallener haelt nicht auf", () => {
     /*
-     * Das ist die Entscheidung hinter "niemand wird zurueckgelassen". Waere
-     * die Regel "alle LEBENDEN", koennte man einen Gefallenen einfach liegen
-     * lassen und gehen.
+     * Seit der Ueberarbeitung vom 2026-09-24 zaehlen nur die Stehenden. Der
+     * Preis fuers Liegenlassen ist die Beute, nicht der Ausstieg selbst.
      */
+    const state = createWorld(
+      [
+        { id: "a", name: "A", character: "scout" },
+        { id: "b", name: "B", character: "tank" },
+        { id: "c", name: "C", character: "sniper" },
+      ],
+      4242,
+    );
+    const zone = state.extractions[0];
+    if (!zone) throw new Error("keine Ausstiegszone");
+
+    const fallen = state.players[2];
+    if (!fallen) throw new Error("Testaufbau");
+    fallen.down = true;
+
+    // Zwei Stehende, einer davon draussen: kein Countdown.
+    place(state, zone.position.x, zone.position.y, 0);
+    place(state, zone.position.x + 3000, zone.position.y, 1);
+    place(state, zone.position.x + 3000, zone.position.y + 200, 2);
+    tick(state, 1);
+    expect(state.extractionProgress).toBe(0);
+
+    // Beide Stehenden drin, der Gefallene weiterhin weit weg: es laeuft.
+    place(state, zone.position.x + 40, zone.position.y, 1);
+    tick(state, ENCOUNTERS.extractionSeconds + 0.2);
+
+    expect(state.phase).toBe("ended");
+    expect(state.outcome).toBe("extracted");
+    expect(leftBehind(state, "c")).toBe(true);
+    expect(leftBehind(state, "a")).toBe(false);
+  });
+
+  it("bricht ab, wenn ein Stehender die Zone verlaesst", () => {
     const state = createWorld(
       [
         { id: "a", name: "A", character: "scout" },
@@ -289,22 +321,51 @@ describe("Extraktion", () => {
     const zone = state.extractions[0];
     if (!zone) throw new Error("keine Ausstiegszone");
 
-    const second = state.players[1];
-    if (!second) throw new Error("Testaufbau");
-    second.down = true;
-
-    // Einer drin, der Gefallene weit weg.
     place(state, zone.position.x, zone.position.y, 0);
-    place(state, zone.position.x + 3000, zone.position.y, 1);
-    tick(state, ENCOUNTERS.extractionSeconds + 1);
-    expect(state.phase).toBe("running");
-
-    // Aufgehoben und mitgenommen (hier: hingestellt) - jetzt geht es.
     place(state, zone.position.x + 40, zone.position.y, 1);
+    tick(state, ENCOUNTERS.extractionSeconds - 1);
+    expect(state.extractionProgress).toBeGreaterThan(0);
+
+    place(state, zone.position.x + zone.radius + 200, zone.position.y, 1);
+    tick(state, TICK_SECONDS);
+    expect(state.extractionProgress).toBe(0);
+    expect(state.phase).toBe("running");
+  });
+
+  it("nimmt einen Gefallenen mit, der IN der Zone liegt", () => {
+    const state = createWorld(
+      [
+        { id: "a", name: "A", character: "scout" },
+        { id: "b", name: "B", character: "tank" },
+      ],
+      4242,
+    );
+    const zone = state.extractions[0];
+    if (!zone) throw new Error("keine Ausstiegszone");
+
+    const fallen = state.players[1];
+    if (!fallen) throw new Error("Testaufbau");
+    fallen.down = true;
+    place(state, zone.position.x, zone.position.y, 0);
+    place(state, zone.position.x + 60, zone.position.y, 1);
     tick(state, ENCOUNTERS.extractionSeconds + 0.2);
 
-    expect(state.phase).toBe("ended");
     expect(state.outcome).toBe("extracted");
+    expect(leftBehind(state, "b")).toBe(false);
+  });
+
+  it("startet keinen Countdown, wenn alle am Boden liegen", () => {
+    // Dann ist es ein Wipe, kein Ausstieg.
+    const state = createWorld(soloSetup(), 4242);
+    const zone = state.extractions[0];
+    const player = state.players[0];
+    if (!zone || !player) throw new Error("Testaufbau");
+
+    place(state, zone.position.x, zone.position.y);
+    player.down = true;
+    stepRound(state, TICK_SECONDS);
+
+    expect(state.outcome).toBe("wipe");
   });
 });
 

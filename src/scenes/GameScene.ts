@@ -21,7 +21,7 @@ import { Juice } from "../render/Juice";
 import { setReloadSafe } from "../platform/update";
 import { hideValuesOverlay, updateValuesOverlay } from "../platform/valuesOverlay";
 import { loadHighscore } from "../storage/highscore";
-import { extractionFraction } from "../systems/encounters";
+import { extractionFraction, leftBehind } from "../systems/encounters";
 import { distanceFromStart } from "../systems/zones";
 import { nearestEnemy } from "../systems/targeting";
 import { emptyInput } from "../systems/types";
@@ -411,7 +411,11 @@ export class GameScene extends Phaser.Scene {
              * behaelt" stuende dann dort, statt an der einen Stelle in
              * `storage/carried.ts`.
              */
-            loot: finishRun(event.outcome, (this.selfPlayer()?.backpack.items ?? []).map((entry) => entry.item)),
+            loot: finishRun(
+              event.outcome,
+              (this.selfPlayer()?.backpack.items ?? []).map((entry) => entry.item),
+              leftBehind(this.session.view.state, this.session.selfId),
+            ),
           });
         });
       }
@@ -604,7 +608,22 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.inSafeZone =
       distanceFromStart(state, player.position) <= WORLD.safeRadius;
     this.hudModel.extraction = state.extractionIndex < 0 ? -1 : extractionFraction(state);
-    this.hudModel.extractionCompass = nearestKnownExtraction(state, player.position);
+    /*
+     * Der Kompass zeigt auf etwas AUSSERHALB des Bildes. Liegt die Mitte der
+     * Zone schon im Sichtfeld, sieht man den Teppich selbst - ein Pfeil am
+     * Rand laege dann mitten darauf und verdeckte genau das, worauf er zeigt.
+     * So im Emulator gesehen, deshalb diese Pruefung.
+     */
+    const nearest = nearestKnownExtraction(state, player.position);
+    const view = this.cameras.main.worldView;
+    const onScreen =
+      nearest !== null &&
+      nearest.position.x > view.x + 60 &&
+      nearest.position.x < view.right - 60 &&
+      nearest.position.y > view.y + 60 &&
+      nearest.position.y < view.bottom - 60;
+    this.hudModel.extractionCompass =
+      nearest && !onScreen ? { angle: nearest.angle, distance: nearest.distance } : null;
     this.fillMinimap(state, player);
     this.hudModel.carriedItems = player.backpack.items.length;
     this.hudModel.score = state.score;
@@ -688,8 +707,8 @@ export class GameScene extends Phaser.Scene {
 function nearestKnownExtraction(
   state: WorldState,
   from: Vec2,
-): { angle: number; distance: number } | null {
-  let best: { angle: number; distance: number } | null = null;
+): { angle: number; distance: number; position: Vec2 } | null {
+  let best: { angle: number; distance: number; position: Vec2 } | null = null;
 
   for (const zone of state.extractions) {
     if (!zone.discovered) {
@@ -699,7 +718,7 @@ function nearestKnownExtraction(
     const dy = zone.position.y - from.y;
     const distance = Math.hypot(dx, dy);
     if (!best || distance < best.distance) {
-      best = { angle: Math.atan2(dy, dx), distance };
+      best = { angle: Math.atan2(dy, dx), distance, position: zone.position };
     }
   }
 

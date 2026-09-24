@@ -431,4 +431,12 @@ describe("Run-Ende", () => {
 
     expect(carriedItems().length).toBe(1);
   });
+
+  it("verliert die Beute, wer bei der Extraktion am Boden zurueckbleibt", () => {
+    // Das Team ist raus - dieser Spieler aber nicht wirklich.
+    const result = finishRun("extracted", [{ id: 1, def: 0 }], true);
+
+    expect(result.lost).toBe(1);
+    expect(carriedItems().length).toBe(0);
+  });
 });

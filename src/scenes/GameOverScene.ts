@@ -168,7 +168,11 @@ export class GameOverScene extends Phaser.Scene {
         VIEWPORT.width / 2,
         272,
         loot.lost > 0
-          ? `${loot.lost} Gegenstände verloren`
+          ? // Das Team ist raus, man selbst lag aber am Boden ausserhalb der
+            // Zone. Ohne diesen Zusatz stuende "Extrahiert" ueber "verloren".
+            this.result.outcome === "wipe"
+            ? `${loot.lost} Gegenstände verloren`
+            : `Am Boden zurückgelassen – ${loot.lost} Gegenstände verloren`
           : loot.kept > 0
             ? `${loot.kept} Gegenstände gesichert`
             : "Keine Beute gemacht",

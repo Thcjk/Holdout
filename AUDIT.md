@@ -236,4 +236,12 @@ Etappe 2.
 konnten in der sicheren Startzone erscheinen (`findSpawnPoint` prüfte sie
 nicht). Behoben, mit Test und Gegenprobe. Ansonsten bestätigt.
 
+### Etappe 4 · 2026-09-24 06:40 UTC
+
+**Korrektur zu Punkt „Extraktion“:** Die Regel „alle, auch Gefallene“ war
+vorhanden, das Dokument verlangt „alle lebenden“ – umgestellt. Kompass sass
+nicht am Rand, sondern auf einer Ellipse innen – jetzt am Rand. Bodenmarker
+waren Farbflächen – jetzt Teppich aus dem Sheet. **Neu gefunden:** Der
+schlafende Boss wurde entgegen dem Kommentar nie gezeichnet – jetzt schon.
+
 *(wird fortgeschrieben)*

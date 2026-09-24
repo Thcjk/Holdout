@@ -11,10 +11,12 @@
 
 import Phaser from "phaser";
 import { ENCOUNTERS } from "../config/balance";
-import { COLORS, DEPTH, SAFE, VIEWPORT } from "../config/constants";
+import { COLORS, DEPTH, SAFE, TOUCH, VIEWPORT } from "../config/constants";
 import { audio } from "../audio/AudioEngine";
 import { InputManager } from "../input/InputManager";
 import { Button } from "../ui/Button";
+import { placeOnEdge } from "../ui/compassPlacement";
+import type { Rect } from "../ui/compassPlacement";
 import { Minimap } from "../ui/Minimap";
 import type { HudModel } from "../ui/HudModel";
 
@@ -469,30 +471,21 @@ export class HudScene extends Phaser.Scene {
       return;
     }
 
-    const centerX = VIEWPORT.width / 2;
-    const centerY = VIEWPORT.height / 2;
     /*
-     * Die Halbachsen - und die sind kleiner, als man zuerst denkt.
-     *
-     * Im ersten Versuch lief der Pfeil ganz aussen am Bildrand. Im Emulator
-     * sass er dann prompt auf dem Knopf "Ton an", und die Entfernung war
-     * halb verdeckt. Der Bildrand ist hier naemlich schon vergeben: oben
-     * rechts Punktzahl und Knoepfe, unten rechts der Knopfbogen, unten links
-     * Leben und Super, oben links die Zone.
-     *
-     * Deshalb kreist der Pfeil jetzt INNERHALB dieser Anzeigen. Er ist damit
-     * naeher an der Figur, was sogar besser ist: Der Blick liegt beim Spielen
-     * ohnehin dort, und ein Kompass am aeussersten Rand wird uebersehen.
-     *
-     * Eine Ellipse und kein Kreis, weil das Bild doppelt so breit wie hoch
-     * ist - auf einem Kreis waere der Pfeil nach links und rechts viel zu
-     * dicht an der Figur.
+     * Am Bildschirmrand, wie im Arbeitsdokument verlangt - aber nie auf einer
+     * Anzeige. Bis 2026-09-24 lief der Pfeil auf einer Ellipse weiter innen,
+     * weil er am Rand prompt auf "Ton an" sass. Jetzt weicht er den vier
+     * besetzten Ecken aus (`ui/compassPlacement.ts`) und bleibt trotzdem am
+     * Rand, wo man einen Hinweis auf etwas ausserhalb des Bildes erwartet.
      */
-    const radiusX = Math.min(300, (VIEWPORT.width - SAFE.left - SAFE.right) / 2 - 60);
-    const radiusY = Math.min(150, (VIEWPORT.height - SAFE.top - SAFE.bottom) / 2 - 60);
-
-    const x = centerX + Math.cos(target.angle) * radiusX;
-    const y = centerY + Math.sin(target.angle) * radiusY;
+    const inset = 30;
+    const frame = {
+      x: SAFE.left + inset,
+      y: SAFE.top + inset,
+      width: VIEWPORT.width - SAFE.left - SAFE.right - inset * 2,
+      height: VIEWPORT.height - SAFE.top - SAFE.bottom - inset * 2,
+    };
+    const { x, y } = placeOnEdge(target.angle, frame, this.compassKeepOut());
 
     // Steht man schon drin, waere ein Pfeil nur Verwirrung - dann sagt es der
     // Extraktionsbalken, nicht der Kompass.
@@ -537,6 +530,53 @@ export class HudScene extends Phaser.Scene {
     );
     this.compassText.setText(`${meters} m`);
     this.compassText.setVisible(true);
+  }
+
+  /**
+   * Die vier besetzten Ecken, gemessen an den echten Anzeigen statt
+   * geschaetzt - aendert sich ein Text oder ein Knopf, weicht der Kompass
+   * trotzdem richtig aus.
+   */
+  private compassKeepOut(): Rect[] {
+    const toRect = (bounds: Phaser.Geom.Rectangle): Rect => ({
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+    });
+    const union = (list: Phaser.Geom.Rectangle[]): Rect => {
+      const first = list[0] ?? new Phaser.Geom.Rectangle();
+      const merged = Phaser.Geom.Rectangle.Clone(first);
+      for (const bounds of list.slice(1)) {
+        Phaser.Geom.Rectangle.Union(merged, bounds, merged);
+      }
+      return toRect(merged);
+    };
+
+    const topLeft = [this.waveText.getBounds()];
+    if (this.mateText.text !== "") {
+      topLeft.push(this.mateText.getBounds());
+    }
+
+    const bottom = VIEWPORT.height - SAFE.bottom;
+    const right = VIEWPORT.width - SAFE.right;
+    // Der Knopfbogen: aeusserste Kanten von Faehigkeit (links) und Super (oben),
+    // jeweils samt Abklingring.
+    const arcLeft = right - TOUCH.abilityButton.marginX - TOUCH.abilityButton.radius - 10;
+    const arcTop = bottom - TOUCH.superButton.marginY - TOUCH.superButton.radius - 10;
+
+    return [
+      union(topLeft),
+      union([
+        this.scoreText.getBounds(),
+        this.muteButton.getBounds(),
+        this.menuButton.getBounds(),
+        this.mapButton.getBounds(),
+      ]),
+      // Leben und Super unten links, wie in `drawPlayerBars`.
+      { x: SAFE.left, y: bottom - 64, width: 250, height: 64 },
+      { x: arcLeft, y: arcTop, width: right - arcLeft, height: bottom - arcTop },
+    ];
   }
 
   private layout(): void {
@@ -629,7 +669,9 @@ export class HudScene extends Phaser.Scene {
      */
     if (this.model.extraction >= 0) {
       const seconds = Math.ceil(EXTRACTION_SECONDS * (1 - this.model.extraction));
-      this.announceText.setText(`Extraktion läuft - ${seconds}\nAlle müssen in der Zone bleiben`);
+      // "Wer steht", nicht "alle": Seit 2026-09-24 zaehlen Gefallene nicht
+      // mehr mit (siehe `stepExtraction`). Der Text soll genau das sagen.
+      this.announceText.setText(`Extraktion läuft - ${seconds}\nWer steht, bleibt in der Zone`);
       this.announceText.setColor("#7ee08a");
       return;
     }
