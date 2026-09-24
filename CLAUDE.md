@@ -115,6 +115,33 @@ lief. Neueste unten.
   Herunterfallen und Wiederbeleben kein Fehler: Die Vorhersage springt auf
   die Host-Position, sobald der Spieler am Boden ist.
 
+#### Etappe 3 – Weltgenerierung verifiziert, ein Fehler behoben · 2026-09-24 06:27 UTC
+
+- **Laut Audit vorhanden – nur verifiziert, nicht neu gebaut.** Der vom
+  Dokument verlangte Selbsttest existiert: `worldGenerator.test.ts` erzeugt
+  jede Welt zweimal aus demselben Seed und vergleicht das **ganze** Ergebnis
+  tief (`toEqual`) – Wände, Büsche, Gebäude, Encounter, Ausstiege, Fundorte.
+  Dazu: verschiedene Seeds ergeben verschiedene Welten, Welt- und
+  Spielzufall sind getrennte Ströme, Flutfüllung 100 % erreichbar mit
+  Gegenprobe. Zufall nur über Mulberry32 (`systems/rng.ts`).
+- **Behoben – das Audit hatte es übersehen:** `findSpawnPoint` prüfte die
+  sichere Startzone gar nicht. Ein Spieler am Rand der Zone bekam Gegner auf
+  einem Ring von 700–1200 px – und ein Teil davon liegt mitten in der Zone.
+  Das Dokument verlangt „keine Gegner-Spawns innerhalb“. Jetzt wird jeder
+  Punkt näher als `safeRadius + 120` verworfen.
+- **Geprüft wie:** neuer Test in `spawning.test.ts` stellt den Spieler genau
+  auf die Grenze und sammelt 60 s Spawns – keiner liegt innerhalb, und es
+  sind überhaupt welche erschienen (sonst wäre der Test wertlos). **Gegenprobe
+  gemacht:** Mit abgeschalteter Prüfung fällt der Test durch.
+- **Bewusst nicht geändert:** Gegner, die dem Spieler in die Startzone
+  *nachlaufen*, dürfen das weiterhin. Das Dokument verbietet nur das
+  Erscheinen dort. Ob die Zone ganz gegnerfrei sein soll, ist eine offene
+  Designfrage.
+- **Nicht wie geplant:** Die Namen im Ergebnis weichen vom Dokument ab
+  (`spawnPoint` statt `startPoint`, Ende-Boss in `encounters` mit `isFinal`
+  statt eigenem `endBossPoint`). Inhaltlich gleichwertig – umbenannt habe ich
+  nicht, weil die Regel lautet, Funktionierendes nicht neu zu bauen.
+
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut

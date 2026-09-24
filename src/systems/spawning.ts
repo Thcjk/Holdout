@@ -82,6 +82,24 @@ function findSpawnPoint(state: WorldState, around: Vec2): Vec2 | null {
       continue;
     }
 
+    /*
+     * NIE IN DER SICHEREN STARTZONE.
+     *
+     * Diese Pruefung fehlte bis zur Ueberarbeitung - aufgefallen erst beim
+     * Nachpruefen gegen das Arbeitsdokument ("keine Gegner-Spawns
+     * innerhalb"). Gesucht wird auf einem Ring von 700 bis 1200 Pixeln um
+     * einen Spieler; steht der am Rand der Startzone, liegt ein Teil dieses
+     * Rings mitten in ihr. Ein Gegner, der dort auftaucht, macht die
+     * "ungefaehrliche Zone" aus dem Briefing zur Luege - und genau dort
+     * steht man, um zu heilen.
+     *
+     * Mit 120 Pixeln Aufschlag, damit ein Gegner nicht auf der Grenze
+     * erscheint und mit dem ersten Schritt schon drin ist.
+     */
+    if (distanceFromStart(state, point) < WORLD.safeRadius + 120) {
+      continue;
+    }
+
     return point;
   }
 

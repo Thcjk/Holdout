@@ -230,4 +230,10 @@ Doppel-Charakter: nicht nachgestellt; zwei passende Sprite-Lebensdauer-Fehler
 behoben (Figuren Gegangener blieben stehen). Siehe CLAUDE.md, Protokoll
 Etappe 2.
 
+### Etappe 3 · 2026-09-24 06:27 UTC
+
+**Korrektur zu Punkt 1/2:** Das Audit hat einen Fehler übersehen – Gegner
+konnten in der sicheren Startzone erscheinen (`findSpawnPoint` prüfte sie
+nicht). Behoben, mit Test und Gegenprobe. Ansonsten bestätigt.
+
 *(wird fortgeschrieben)*

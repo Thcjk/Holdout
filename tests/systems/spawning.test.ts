@@ -196,3 +196,35 @@ describe("Fortschritt", () => {
     expect(player.health).toBeGreaterThan(100);
   });
 });
+
+describe("Sichere Startzone", () => {
+  it("laesst dort nie einen Gegner erscheinen", () => {
+    /*
+     * Bis zur Ueberarbeitung fehlte diese Pruefung ganz. Ein Spieler am
+     * Rand der Startzone bekam Gegner auf einem Ring von 700 bis 1200 Pixeln
+     * um sich herum - und ein Teil dieses Rings liegt mitten in der Zone.
+     *
+     * Hier steht der Spieler genau auf der Grenze, der ungueenstigste Fall,
+     * und es wird ueber viele Ticks gesammelt.
+     */
+    const state = createWorld(soloSetup(), 11);
+    placeAt(state, WORLD.safeRadius + 10);
+
+    const center = { x: state.bounds.width / 2, y: state.bounds.height / 2 };
+    let spawned = 0;
+
+    for (let i = 0; i < TICK_RATE * 60; i += 1) {
+      state.events.length = 0;
+      stepRound(state, TICK_SECONDS);
+      for (const order of state.pendingSpawns) {
+        const distance = Math.hypot(order.position.x - center.x, order.position.y - center.y);
+        expect(distance).toBeGreaterThan(WORLD.safeRadius);
+      }
+      spawned += state.events.filter((event) => event.type === "spawnWarning").length;
+    }
+
+    // Gegenprobe: Es muss ueberhaupt etwas erschienen sein, sonst bestuende
+    // der Test auch dann, wenn gar nichts mehr spawnt.
+    expect(spawned).toBeGreaterThan(3);
+  });
+});
