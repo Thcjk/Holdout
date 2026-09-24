@@ -146,32 +146,50 @@ describe("Drops von Gegnern", () => {
       const def = ITEMS[item.def];
       if (!def) throw new Error("unbekannter Gegenstand");
       // Nach dem Ende-Boss waere Schrott eine Beleidigung.
-      expect(def.rarity).toBeGreaterThanOrEqual(3);
+      expect(def.rarity).toBeGreaterThanOrEqual(LOOT.finalBossMinRarity);
     }
   });
 
-  it("laesst einen Laeufer nur manchmal etwas fallen", () => {
-    /*
-     * Gemessen statt behauptet: Wuerde jeder Laeufer etwas fallen lassen,
-     * laege der Boden nach einer Minute voll, und Aufheben waere kein Fund
-     * mehr, sondern Hausarbeit.
-     */
-    let drops = 0;
-    const runs = 400;
-
-    for (let i = 0; i < runs; i += 1) {
+  it("gibt auch dem Mini-Boss garantiert keine unterste Stufe", () => {
+    for (const seed of SEEDS) {
       const state = emptyWorld();
-      state.rngState = i * 7919;
-      const runner = createEnemy(1, "runner", { x: 5000, y: 5000 }, 1, 1, false);
-      state.enemies.push(runner);
-      killEnemy(state, runner);
-      drops += state.groundItems.length;
+      state.rngState = seed;
+      const boss = createEnemy(1, "boss", { x: 5000, y: 5000 }, 1, 1, false);
+      state.enemies.push(boss);
+      killEnemy(state, boss);
+      for (const item of state.groundItems) {
+        expect(ITEMS[item.def]?.rarity).toBeGreaterThanOrEqual(LOOT.bossMinRarity);
+      }
     }
+  });
 
-    const rate = drops / runs;
-    console.log(`   Laeufer-Dropquote: ${(rate * 100).toFixed(1)} % (eingestellt ${LOOT.dropChance.runner! * 100} %)`);
-    expect(rate).toBeGreaterThan(0.02);
-    expect(rate).toBeLessThan(0.2);
+  it("trifft die Dropquoten aus dem Arbeitsdokument (15/30/20 %)", () => {
+    /*
+     * Gemessen statt behauptet: 1000 Tode je Typ, die Quote muss bis auf
+     * drei Prozentpunkte an der eingestellten liegen. Und die eingestellten
+     * Werte selbst sind die des Dokuments - sonst misst der Test nur, dass
+     * der Zufall funktioniert.
+     */
+    expect(LOOT.dropChance.runner).toBe(0.15);
+    expect(LOOT.dropChance.brute).toBe(0.3);
+    expect(LOOT.dropChance.shooter).toBe(0.2);
+
+    for (const type of ["runner", "brute", "shooter"] as const) {
+      let drops = 0;
+      const runs = 1000;
+      for (let i = 0; i < runs; i += 1) {
+        const state = emptyWorld();
+        state.rngState = i * 7919 + 13;
+        const enemy = createEnemy(1, type, { x: 5000, y: 5000 }, 1, 1, false);
+        state.enemies.push(enemy);
+        killEnemy(state, enemy);
+        drops += state.groundItems.length;
+      }
+      const rate = drops / runs;
+      const target = LOOT.dropChance[type] ?? 0;
+      console.log(`   ${type}: Dropquote ${(rate * 100).toFixed(1)} % (eingestellt ${target * 100} %)`);
+      expect(Math.abs(rate - target)).toBeLessThan(0.03);
+    }
   });
 });
 

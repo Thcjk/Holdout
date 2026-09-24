@@ -257,11 +257,16 @@ Massstab 5,3 % gemessen (im Soll). Minimap: war ein Panel oben links hinter
 einem Knopf – jetzt immer sichtbar rechts oben (120 × 120), Antippen für die
 grosse Ansicht, ohne Pause.
 
-### Etappe 7 · 2026-09-24 07:10 UTC
+### Etappe 7 · 2026-09-24 07:09 UTC
 
 Punkt „neuer Seed nach Run-Ende“ war solo erfüllt, im Koop nur über einen
 neuen Raum. Jetzt bleibt der Raum offen (`GameSession.release()`), der Host
 startet den nächsten Run mit neuem Seed über das bestehende `start`-Paket.
 Offen: Start, bevor alle zurück sind, lässt Nachzügler draussen.
+
+### Etappe 8 · 2026-09-24 07:11 UTC
+
+Dropquoten auf 15/30/20 % (vorher 8/28/16), Boss-Mindestseltenheit in die
+Konfiguration gezogen. Sonst wie im Audit: vorhanden.
 
 *(wird fortgeschrieben)*

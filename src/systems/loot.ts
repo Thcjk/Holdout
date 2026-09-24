@@ -130,12 +130,12 @@ export function dropFromEnemy(state: WorldState, enemy: EnemyState): void {
   const zone = zoneAt(distanceFromStart(state, enemy.position));
 
   if (enemy.type === "boss") {
-    // Bosse lassen immer etwas fallen, und zwar mehreres. Zusaetzlich wird
-    // die untere Seltenheitsstufe ausgeschlossen: Nach einem Boss ist
-    // Schrott eine Beleidigung.
+    // Bosse lassen immer etwas fallen, und zwar mehreres - mit garantiert
+    // hoeherer Seltenheit (`LOOT.bossMinRarity`).
     const count = enemy.isBoss ? LOOT.finalBossDrops : LOOT.bossDrops;
+    const minRarity = enemy.isBoss ? LOOT.finalBossMinRarity : LOOT.bossMinRarity;
     for (let i = 0; i < count; i += 1) {
-      dropItem(state, rollItem(state, zone, enemy.isBoss ? 3 : 2), enemy.position);
+      dropItem(state, rollItem(state, zone, minRarity), enemy.position);
     }
     return;
   }

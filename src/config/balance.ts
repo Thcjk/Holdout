@@ -471,10 +471,16 @@ export const LOOT = {
    * laege der Boden nach einer Minute voll, und Aufheben waere kein Fund
    * mehr, sondern Hausarbeit.
    */
+  /*
+   * Seit Etappe 8 die Werte aus dem Arbeitsdokument (vorher 8/28/16 %).
+   * Laeufer fast doppelt so oft - der Boden fuellt sich schneller, das ist
+   * gewollt: Mit dem Gitter-Rucksack wird Aufheben zur Entscheidung, was
+   * mitkommt, statt zur Frage, ob ueberhaupt etwas liegt.
+   */
   dropChance: {
-    runner: 0.08,
-    brute: 0.28,
-    shooter: 0.16,
+    runner: 0.15,
+    brute: 0.3,
+    shooter: 0.2,
     // Ein Boss laesst IMMER etwas fallen. Ein Encounter, der nach zwei
     // Minuten Kampf nichts hergibt, waere die Enttaeuschung, die einen davon
     // abhaelt, es noch einmal zu versuchen.
@@ -484,6 +490,12 @@ export const LOOT = {
   /** Wie viele Gegenstaende ein Boss hinterlaesst. */
   bossDrops: 2,
   finalBossDrops: 4,
+  /**
+   * Garantiert hoehere Seltenheit bei Bossen: Die unteren Stufen fallen weg.
+   * Nach einem Boss ist Schrott eine Beleidigung.
+   */
+  bossMinRarity: 2,
+  finalBossMinRarity: 3,
 
   /**
    * Wie stark die Tiefe die Seltenheit anhebt.

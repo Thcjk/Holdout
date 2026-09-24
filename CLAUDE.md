@@ -293,7 +293,7 @@ lief. Neueste unten.
   - HUD-Text auf Gras und Kompassschrift auf grünem Teppich sind schwer
     lesbar – das ist Etappe 11 (weiss mit Schatten).
 
-#### Etappe 7 – neue Welt nach jedem Run, Koop-Raum bleibt offen · 2026-09-24 07:10 UTC
+#### Etappe 7 – neue Welt nach jedem Run, Koop-Raum bleibt offen · 2026-09-24 07:09 UTC
 
 - **Der eigentliche Fehler:** Die Verbindung gehörte der Sitzung, und die
   Spielszene räumte die Sitzung beim Verlassen mit `destroy()` ab – der Host
@@ -340,6 +340,25 @@ lief. Neueste unten.
     Wiederholungen sofort, weil die Szene die Lobby im Start-Handler
     abräumt. Ein verlorenes `start`-Paket würde also nicht wiederholt. War
     schon vorher so und im Feldtest unauffällig.
+
+#### Etappe 8 – Loot-Grunddaten · 2026-09-24 07:11 UTC
+
+- **Laut Audit fast vollständig vorhanden** (`config/items.ts` mit
+  `ItemDef {id, name, type, size, rarity}`, zwölf Gegenstände; Sprites seit
+  Etappe 5). Geändert wurden nur die Zahlen:
+- **Dropquoten auf die Dokumentwerte:** Läufer 8 → **15 %**, Brocken 28 →
+  **30 %**, Schütze 16 → **20 %** (`LOOT.dropChance`). Der Boden füllt sich
+  damit merklich schneller – gewollt, weil der Gitter-Rucksack das Aufheben
+  zur Auswahl macht.
+- **Bosse: garantiert höhere Seltenheit** stand schon im Code (Mini-Boss ab
+  Stufe 2, Ende-Boss ab 3), aber als nackte Zahl in `systems/loot.ts`. Jetzt
+  `LOOT.bossMinRarity` / `finalBossMinRarity` in `balance.ts`.
+- **Geprüft wie:** 1000 Tode je Typ, gemessene Quote 14,7 / 28,6 / 19,4 %;
+  der Test prüft zusätzlich, dass die eingestellten Werte die des Dokuments
+  sind (sonst prüfte er nur den Zufall). Neuer Test: auch der Mini-Boss
+  lässt nie Stufe 1 fallen. 240 Tests grün.
+- **Nicht wie geplant:** nichts – bis auf die Waffen-Symbole, die das Paket
+  nicht hat (siehe Etappe 5).
 
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
