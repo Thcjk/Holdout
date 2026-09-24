@@ -75,6 +75,19 @@ export class HostSession implements GameSession {
     this.transport.close();
   }
 
+  /**
+   * Gibt die Verbindung fuer den naechsten Run heraus - ohne "bye".
+   *
+   * Die Nachrichtenempfaenger bleiben bis zum naechsten Besitzer auf dieser
+   * Sitzung stehen. Das ist harmlos: Sie fuehren nur noch Eingaben in eine
+   * Simulation, die niemand mehr weiterrechnet, und die Lobby setzt eigene,
+   * sobald sie den Transport bekommt (`onMessage` ERSETZT den Empfaenger).
+   */
+  release(): Transport {
+    this.inputs.clear();
+    return this.transport;
+  }
+
   private receive(from: string, message: NetMessage): void {
     if (message.t !== "input") {
       return;

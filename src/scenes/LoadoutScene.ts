@@ -45,12 +45,15 @@ import type { InventoryGrid as GridData } from "../systems/types";
 import { Button } from "../ui/Button";
 import { InventoryGrid } from "../ui/InventoryGrid";
 import { setReloadSafe } from "../platform/update";
+import type { Transport } from "../net/Transport";
 import type { CharacterId, ItemInstance, PackedItem } from "../systems/types";
 
 export interface LoadoutData {
   character: CharacterId;
   /** Wohin es nach dem Packen geht: allein oder in die Lobby. */
   coop?: boolean;
+  /** Nach einem Koop-Run: die noch offene Verbindung zum selben Raum. */
+  transport?: Transport;
 }
 
 /**
@@ -142,7 +145,11 @@ export class LoadoutScene extends Phaser.Scene {
       SAFE.left + 84,
       VIEWPORT.height - SAFE.bottom - 34,
       "Zurück",
-      () => this.scene.start("Menu"),
+      () => {
+        // Zurueck ins Menue heisst: raus aus dem Raum.
+        this.setup.transport?.close();
+        this.scene.start("Menu");
+      },
       { width: 140, height: 46, fontSize: 16, color: COLORS.hudDim },
     );
 
@@ -196,7 +203,11 @@ export class LoadoutScene extends Phaser.Scene {
       // Im Koop geht der Rucksack ueber die Lobby: Der Client meldet ihn im
       // `hello`, der Host nimmt ihn in die Spielerliste und schickt sie im
       // `start` an alle. So baut jedes Geraet denselben Rucksack auf.
-      this.scene.start("Lobby", { character: this.setup.character, backpack });
+      this.scene.start("Lobby", {
+        character: this.setup.character,
+        backpack,
+        transport: this.setup.transport,
+      });
       return;
     }
     this.scene.start("Game", { character: this.setup.character, backpack });

@@ -216,7 +216,17 @@ export class Lobby {
   }
 
   private handleLeave(peerId: string): void {
-    if (!this.transport.isHost || this.started) {
+    // Als Client gibt es nur einen, der gehen kann: den Host. Vorher blieb
+    // der Client dann stumm in der Lobby haengen - seit Etappe 7 kommt man
+    // nach einem Run hierher zurueck, waehrend der Host vielleicht schon weg
+    // ist. Das muss man sehen.
+    if (!this.transport.isHost) {
+      if (!this.started) {
+        this.errorHandler("Der Host hat den Raum verlassen. Zurück ins Menü.");
+      }
+      return;
+    }
+    if (this.started) {
       return;
     }
     const remaining = this.players.filter((player) => player.id !== peerId);

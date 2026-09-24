@@ -113,6 +113,8 @@ export class GameScene extends Phaser.Scene {
    */
   private overlayOpen = false;
   private paused = false;
+  /** Ist die Sitzung schon an den naechsten Run weitergegeben? */
+  private released = false;
 
   constructor() {
     super("Game");
@@ -121,6 +123,7 @@ export class GameScene extends Phaser.Scene {
   init(data: GameSceneData): void {
     this.character = data.character ?? "scout";
     this.finished = false;
+    this.released = false;
     this.hudModel = createHudModel();
     this.hudModel.highscore = loadHighscore()?.score ?? 0;
 
@@ -182,7 +185,11 @@ export class GameScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       hideValuesOverlay();
       this.scene.stop("Hud");
-      this.session.destroy();
+      // Beim Run-Ende ist die Sitzung schon freigegeben (`release`) - ihre
+      // Verbindung lebt im naechsten Run weiter und darf hier nicht zu.
+      if (!this.released) {
+        this.session.destroy();
+      }
       this.cameraController.destroy();
       this.entities.destroy();
       this.juice.destroy();
@@ -393,6 +400,16 @@ export class GameScene extends Phaser.Scene {
         // Kurz warten, damit der letzte Effekt noch zu sehen ist.
         this.time.delayedCall(900, () => {
           this.scene.stop("Hud");
+          // Beute abrechnen, bevor die Sitzung freigegeben wird - danach
+          // gibt es keinen Zustand mehr, aus dem man lesen koennte.
+          const loot = finishRun(
+            event.outcome,
+            (this.selfPlayer()?.backpack.items ?? []).map((entry) => entry.item),
+            leftBehind(this.session.view.state, this.session.selfId),
+          );
+          const coop = !this.session.canPause;
+          const transport = this.session.release();
+          this.released = true;
           this.scene.start("GameOver", {
             score: event.score,
             zone: event.zone,
@@ -401,7 +418,10 @@ export class GameScene extends Phaser.Scene {
             // Ob solo oder im Koop gespielt wurde, weiss nur die Sitzung -
             // und sie ist gleich weg. Deshalb wird die Antwort jetzt
             // mitgegeben statt spaeter erfragt.
-            coop: !this.session.canPause,
+            coop,
+            // Im Koop die offene Verbindung: Der naechste Run findet im
+            // selben Raum statt (Etappe 7).
+            transport: transport ?? undefined,
             /*
              * Beute abrechnen, SOLANGE DER ZUSTAND NOCH DA IST.
              *
@@ -411,11 +431,7 @@ export class GameScene extends Phaser.Scene {
              * behaelt" stuende dann dort, statt an der einen Stelle in
              * `storage/carried.ts`.
              */
-            loot: finishRun(
-              event.outcome,
-              (this.selfPlayer()?.backpack.items ?? []).map((entry) => entry.item),
-              leftBehind(this.session.view.state, this.session.selfId),
-            ),
+            loot,
           });
         });
       }

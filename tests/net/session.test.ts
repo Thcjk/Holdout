@@ -7,10 +7,11 @@
  * zeigen sich sonst erst auf zwei echten Geraeten, und dann sucht man lange.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TICK_MS } from "../../src/config/constants";
 import { ClientSession } from "../../src/net/ClientSession";
 import { HostSession } from "../../src/net/HostSession";
+import { Lobby } from "../../src/net/Lobby";
 import { createEnemy } from "../../src/systems/enemies";
 import type { PlayerSetup } from "../../src/systems/world";
 import type { NetMessage } from "../../src/net/protocol";
@@ -165,3 +166,76 @@ describe("Ein Mitspieler verlaesst die Runde", () => {
     host.destroy();
   });
 });
+
+describe("Neuer Run im selben Raum (Etappe 7)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("gibt die Verbindung frei, ohne sie zu schliessen oder 'bye' zu senden", () => {
+    const { hostTransport, clientTransport } = pair();
+    const host = new HostSession(hostTransport, SETUPS, "host", 7);
+    const client = new ClientSession(clientTransport, SETUPS, "client", 7);
+    run(10, host, client, 1);
+
+    const released = host.release();
+    client.release();
+
+    expect(released).toBe(hostTransport);
+    // Die Verbindung steht noch: `close()` setzt bei der Attrappe `other` auf null.
+    expect(hostTransport.other).toBe(clientTransport);
+    expect(client.connectionLost).toBeNull();
+  });
+
+  it("startet ueber dieselbe Verbindung eine neue Welt mit neuem Seed", () => {
+    // Die Lobby benutzt `window.setInterval` fuer Wiederholungen - im
+    // Node-Test gibt es kein `window`, `globalThis` hat dieselben Timer.
+    vi.stubGlobal("window", globalThis);
+
+    const { hostTransport, clientTransport } = pair();
+    const firstHost = new HostSession(hostTransport, SETUPS, "host", 7);
+    const firstClient = new ClientSession(clientTransport, SETUPS, "client", 7);
+    run(10, firstHost, firstClient, 1);
+
+    // Run vorbei: beide geben die Verbindung weiter an eine neue Lobby.
+    const hostLobby = new Lobby(firstHost.release(), { name: "Host", character: "scout" });
+    const clientLobby = new Lobby(firstClient.release(), { name: "Client", character: "sniper" });
+
+    let hostStart: { seed: number; count: number } | null = null;
+    let clientStart: { seed: number; count: number; character?: string } | null = null;
+    hostLobby.onStart((setups, seed) => {
+      hostStart = { seed, count: setups.length };
+    });
+    clientLobby.onStart((setups, seed) => {
+      clientStart = {
+        seed,
+        count: setups.length,
+        character: setups.find((setup) => setup.id === "client")?.character,
+      };
+    });
+
+    // Der Client hat sich mit `hello` gemeldet und steht in der Liste.
+    expect(hostLobby.playerList.map((player) => player.id)).toEqual(["host", "client"]);
+
+    hostLobby.start();
+    hostLobby.destroy();
+    clientLobby.destroy();
+
+    expect(hostStart).not.toBeNull();
+    expect(clientStart).not.toBeNull();
+    const h = hostStart as unknown as { seed: number; count: number };
+    const c = clientStart as unknown as { seed: number; count: number; character?: string };
+    // Beide bauen dieselbe neue Welt: gleicher Seed, beide Spieler dabei ...
+    expect(c.seed).toBe(h.seed);
+    expect(h.count).toBe(2);
+    // ... und der neue Charakter des Clients ist angekommen.
+    expect(c.character).toBe("sniper");
+
+    // Die neue Runde laeuft ueber genau diese Verbindung.
+    const host = new HostSession(hostTransport, SETUPS, "host", h.seed);
+    const client = new ClientSession(clientTransport, SETUPS, "client", c.seed);
+    run(30, host, client, 1);
+    expect(client.view.state.walls).toEqual(host.view.state.walls);
+  });
+});
+

@@ -257,4 +257,11 @@ Massstab 5,3 % gemessen (im Soll). Minimap: war ein Panel oben links hinter
 einem Knopf – jetzt immer sichtbar rechts oben (120 × 120), Antippen für die
 grosse Ansicht, ohne Pause.
 
+### Etappe 7 · 2026-09-24 07:10 UTC
+
+Punkt „neuer Seed nach Run-Ende“ war solo erfüllt, im Koop nur über einen
+neuen Raum. Jetzt bleibt der Raum offen (`GameSession.release()`), der Host
+startet den nächsten Run mit neuem Seed über das bestehende `start`-Paket.
+Offen: Start, bevor alle zurück sind, lässt Nachzügler draussen.
+
 *(wird fortgeschrieben)*

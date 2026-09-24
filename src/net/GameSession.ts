@@ -7,6 +7,7 @@
  */
 
 import type { GameEvent, InputState, Vec2, WorldState } from "../systems/types";
+import type { Transport } from "./Transport";
 
 /** Alles, was die Darstellung braucht. `Simulation` und `ClientView` erfuellen das. */
 export interface WorldView {
@@ -48,6 +49,21 @@ export interface GameSession {
    *          (Schuss, Super) geloescht werden duerfen.
    */
   update(deltaMs: number, input: InputState): boolean;
+
+  /**
+   * Beendet die Sitzung, OHNE die Verbindung zu schliessen, und gibt sie
+   * heraus - `null`, wenn es keine gibt (solo).
+   *
+   * Gebraucht beim Run-Ende im Koop (Etappe 7): Vorher raeumte die Spielszene
+   * die Sitzung mit `destroy()` ab, und die schloss den Transport. Der Raum
+   * war damit zu, und fuer den naechsten Run brauchten alle einen neuen
+   * Code. Jetzt wandert die Verbindung ueber Ergebnis- und Packbildschirm
+   * zurueck in dieselbe Lobby, und der Host startet dort den naechsten Run
+   * mit neuem Seed - ueber dasselbe `start`-Paket wie beim ersten Mal.
+   *
+   * Nach `release()` ist die Sitzung tot: kein `update`, kein `destroy`.
+   */
+  release(): Transport | null;
 
   destroy(): void;
 }

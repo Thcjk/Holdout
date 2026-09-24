@@ -12,6 +12,7 @@ import { loadHighscore, saveHighscore } from "../storage/highscore";
 import type { CharacterId, RunOutcome } from "../systems/types";
 import { Button } from "../ui/Button";
 import { setReloadSafe } from "../platform/update";
+import type { Transport } from "../net/Transport";
 
 export interface GameOverData {
   score: number;
@@ -36,6 +37,12 @@ export interface GameOverData {
   coop: boolean;
   /** Wie viele Gegenstaende der Run eingebracht oder gekostet hat. */
   loot: { kept: number; lost: number };
+  /**
+   * Die offene Koop-Verbindung (seit Etappe 7). Sie geht mit "Neuer Run"
+   * weiter zum Packen und von dort in denselben Raum - oder wird bei
+   * "Charakter wechseln" geschlossen.
+   */
+  transport?: Transport;
 }
 
 /**
@@ -190,7 +197,7 @@ export class GameOverScene extends Phaser.Scene {
         VIEWPORT.width / 2,
         300,
         this.result.coop
-          ? "Neue Welt, neuer Raum - die Verbindung endet mit dem Run."
+          ? "Gleicher Raum, neue Welt - der Host startet, sobald alle gepackt haben."
           : "Ein neuer Run bekommt eine neue Welt.",
         { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#8ea6c4" },
       )
@@ -200,7 +207,7 @@ export class GameOverScene extends Phaser.Scene {
       this,
       VIEWPORT.width / 2 - 132,
       380,
-      this.result.coop ? "Zur Lobby" : "Neuer Run",
+      "Neuer Run",
       () => this.restart(),
       { width: 230 },
     );
@@ -210,7 +217,13 @@ export class GameOverScene extends Phaser.Scene {
       VIEWPORT.width / 2 + 132,
       380,
       "Charakter wechseln",
-      () => this.scene.start("Menu"),
+      () => {
+        // Wer den Charakter wechselt, verlaesst den Raum: Das Menue kennt
+        // keine offene Verbindung, und eine vergessene hielte den Raum fuer
+        // die anderen offen, obwohl niemand mehr kommt.
+        this.result.transport?.close();
+        this.scene.start("Menu");
+      },
       { width: 230, fontSize: 18, color: COLORS.hudDim },
     );
   }
@@ -233,29 +246,22 @@ export class GameOverScene extends Phaser.Scene {
     this.restartButton.setEnabled(false);
 
     this.time.delayedCall(60, () => {
-      if (this.result.coop) {
-        /*
-         * Zurueck in die Lobby: Dort zieht der Host den neuen Seed und
-         * schickt ihn an alle - derselbe Weg wie beim allerersten Start.
-         *
-         * WAS DABEI NICHT GEHT, und die Beschriftung sagt es deshalb auch:
-         * Die Verbindung ueberlebt den Run nicht. `GameScene` raeumt beim
-         * Verlassen die Sitzung ab, und die schliesst den Transport - der
-         * Host schickt sogar ein "bye". Der Raum ist danach zu, alle
-         * brauchen einen neuen Code.
-         *
-         * Das liesse sich aendern, waere aber kein kleiner Eingriff: Der
-         * Transport muesste die Szene ueberleben, also jemand anderem
-         * gehoeren als der Spielszene. Solange das nicht so ist, ist eine
-         * ehrliche Beschriftung besser als ein Knopf, der Nahtlosigkeit
-         * verspricht und dann in einer leeren Lobby endet.
-         */
-        this.scene.start("Lobby");
-        return;
-      }
-      // Solo: `SoloSession` wuerfelt beim Anlegen einen neuen Seed, und
-      // `createWorld` setzt Position, Leben und Munition ohnehin neu.
-      this.scene.start("Game", { character: this.result.character });
+      /*
+       * Solo UND Koop gehen erst zum Packen (Etappe 7): Ein neuer Run heisst
+       * neuer Rucksack - nach einem Wipe ist er leer, nach einem Erfolg liegt
+       * die Beute im Lager.
+       *
+       * Im Koop reist die offene Verbindung mit. Frueher endete sie mit dem
+       * Run (die Spielszene schloss sie beim Aufraeumen), und alle brauchten
+       * einen neuen Raumcode. Jetzt geht es vom Packen zurueck in DENSELBEN
+       * Raum; der Host zieht dort den neuen Seed und schickt ihn mit dem
+       * `start`-Paket an alle - derselbe Weg wie beim allerersten Start.
+       */
+      this.scene.start("Loadout", {
+        character: this.result.character,
+        coop: this.result.coop,
+        transport: this.result.transport,
+      });
     });
   }
 }

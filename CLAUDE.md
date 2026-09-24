@@ -293,6 +293,54 @@ lief. Neueste unten.
   - HUD-Text auf Gras und Kompassschrift auf grünem Teppich sind schwer
     lesbar – das ist Etappe 11 (weiss mit Schatten).
 
+#### Etappe 7 – neue Welt nach jedem Run, Koop-Raum bleibt offen · 2026-09-24 07:10 UTC
+
+- **Der eigentliche Fehler:** Die Verbindung gehörte der Sitzung, und die
+  Spielszene räumte die Sitzung beim Verlassen mit `destroy()` ab – der Host
+  schickte sogar ein „bye“. Nach jedem Koop-Run war der Raum zu, alle
+  brauchten einen neuen Code. Der Ergebnisbildschirm sagte das ehrlich
+  („die Verbindung endet mit dem Run“), gelöst war es nicht.
+- **Jetzt:** `GameSession.release()` beendet die Sitzung, **ohne** die
+  Verbindung zu schliessen, und gibt sie heraus (solo `null`). Sie wandert
+  Ergebnisbildschirm → Packen → **dieselbe Lobby**. Dort meldet sich jeder
+  Client mit `hello` neu (mit neuem Rucksack und evtl. neuem Charakter), der
+  Host zieht mit „Runde starten“ einen neuen Seed und verteilt ihn über das
+  bestehende `start`-Paket. Keine neue Nachricht im Protokoll.
+- **Solo und Koop gleich:** „Neuer Run“ führt beide zum Packen (vorher ging
+  solo direkt ins Spiel und übersprang den Rucksack). Ladezustand: Der Knopf
+  zeigt „Welt wird gebaut …“ und ist gesperrt, bis die nächste Szene steht.
+- **Zustände zurückgesetzt:** Jede neue Sitzung baut die Welt mit
+  `createWorld` neu – Position, Leben, Munition, Gegner, Beute am Boden. Der
+  Rucksack kommt aus dem Packbildschirm; die Wipe/Erfolg-Regel rechnet weiter
+  `storage/carried.ts` ab (die Übernahme gesicherter Beute ins Packen ist
+  Etappe 9).
+- **Wer „Charakter wechseln“ oder „Zurück“ wählt, schliesst die Verbindung**
+  – eine vergessene hielte den Raum für die anderen offen. Verlässt der Host
+  den Raum, während ein Client in der Lobby wartet, steht das jetzt dort
+  (vorher wartete der Client stumm).
+- **Geprüft wie:** zwei neue Tests in `tests/net/session.test.ts` –
+  `release()` schliesst nichts und sendet kein „bye“; nach einem Run starten
+  zwei neue Lobbys über **dieselben** Transporte, beide bekommen denselben
+  neuen Seed, der neue Charakter des Clients kommt an, und Host und Client
+  bauen dieselbe Karte. **Im Browser** mit zwei Tabs (lokaler Transport):
+  Run 1 bis zum Wipe (1 Lebenspunkt, schnelle Gegner per `?tune=`), beide
+  „Neuer Run“ → Packen → Lobby zeigt „LOCAL1“ mit beiden Spielern → Start →
+  beide in einer neuen Welt. Der erste Versuch lief versehentlich gegen den
+  alten Build (vergessen zu bauen) – wiederholt.
+- **Nicht wie geplant / offen:**
+  - **Startet der Host, bevor ein Client zurück in der Lobby ist, fehlt
+    dieser Client im neuen Run** und hängt in der Lobby. Die Hostliste zeigt,
+    wer da ist, und der Hinweis sagt „starte, sobald alle in der Liste
+    stehen“ – erzwungen wird es nicht. Eine Sperre bräuchte eine Vorstellung,
+    wer „alle“ sind, obwohl jemand gehen darf.
+  - Über PeerJS (zwei echte Geräte) nicht geprüft – der Signalisierungsserver
+    ist hier gesperrt. Der lokale Transport benutzt aber dieselbe
+    Schnittstelle, und am Transport ändert sich nichts.
+  - Aufgefallen, nicht geändert: `Lobby.start()` stoppt seine
+    Wiederholungen sofort, weil die Szene die Lobby im Start-Handler
+    abräumt. Ein verlorenes `start`-Paket würde also nicht wiederholt. War
+    schon vorher so und im Feldtest unauffällig.
+
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut

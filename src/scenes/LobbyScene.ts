@@ -27,6 +27,11 @@ export interface LobbySceneData {
   character: CharacterId;
   /** Der im Loadout-Bildschirm gepackte Rucksack. */
   backpack?: PackedItem[];
+  /**
+   * Nach einem Koop-Run: die noch offene Verbindung. Dann gibt es nichts zu
+   * waehlen - es geht direkt zurueck in denselben Raum.
+   */
+  transport?: Transport;
 }
 
 export class LobbyScene extends Phaser.Scene {
@@ -43,6 +48,10 @@ export class LobbyScene extends Phaser.Scene {
   private startButton?: Button;
   private codeInput?: HTMLInputElement;
   private choiceObjects: { setVisible(visible: boolean): void }[] = [];
+  /** Offene Verbindung aus dem vorigen Run, falls es eine gibt. */
+  private rejoin: Transport | null = null;
+  /** Kam diese Lobby aus einem vorigen Run? Dann lauten die Hinweise anders. */
+  private rejoined = false;
 
   constructor() {
     super("Lobby");
@@ -53,6 +62,8 @@ export class LobbyScene extends Phaser.Scene {
     this.backpack = data.backpack ?? [];
     this.lobby = null;
     this.transport = null;
+    this.rejoin = data.transport ?? null;
+    this.rejoined = false;
     this.startButton = undefined;
     this.codeInput = undefined;
     this.choiceObjects = [];
@@ -149,6 +160,24 @@ export class LobbyScene extends Phaser.Scene {
       if (this.codeInput) {
         this.codeInput.value = fromUrl;
       }
+    }
+
+    /*
+     * Zurueck aus einem Koop-Run: gleicher Raum, keine Wahl. Die Knoepfe
+     * "Raum erstellen/beitreten" wuerden hier nur eine zweite Verbindung
+     * aufmachen, waehrend die erste noch offen ist.
+     */
+    if (this.rejoin) {
+      const transport = this.rejoin;
+      this.rejoin = null;
+      this.rejoined = true;
+      this.hideChoices();
+      this.useTransport(transport);
+      this.statusText.setText(
+        transport.isHost
+          ? "Gleicher Raum. Warte, bis alle gepackt haben - dann starten."
+          : "Gleicher Raum. Der Host startet den nächsten Run.",
+      );
     }
   }
 
@@ -293,9 +322,11 @@ export class LobbyScene extends Phaser.Scene {
 
       if (transport.isHost) {
         this.statusText.setText(
-          players.length < MAX_PLAYERS
-            ? "Gib den Raumcode weiter. Start geht auch allein."
-            : "Der Raum ist voll.",
+          this.rejoined
+            ? "Gleicher Raum, neue Welt. Starte, sobald alle wieder in der Liste stehen."
+            : players.length < MAX_PLAYERS
+              ? "Gib den Raumcode weiter. Start geht auch allein."
+              : "Der Raum ist voll.",
         );
         this.ensureStartButton();
       } else if (players.length > 0) {

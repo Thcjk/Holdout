@@ -96,6 +96,11 @@ export class ClientSession implements GameSession {
     this.transport.close();
   }
 
+  /** Gibt die Verbindung fuer den naechsten Run heraus, siehe `GameSession`. */
+  release(): Transport {
+    return this.transport;
+  }
+
   private receive(message: NetMessage): void {
     switch (message.t) {
       case "state":

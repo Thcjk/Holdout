@@ -33,6 +33,10 @@ export class SoloSession implements GameSession {
     return this.simulation.advance(deltaMs, this.inputs) > 0;
   }
 
+  release(): null {
+    return null;
+  }
+
   destroy(): void {
     // Nichts freizugeben - die Simulation ist reiner Speicher.
   }
