@@ -21,6 +21,180 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
+> **Seit 2026-09-24 mittags: 3D-Umbau (Phaser → Three.js) und Wechsel auf
+> eine Knoten-Karte.** Erster Schritt, die technische Grundlage, ist fertig –
+> siehe Abschnitt **„3D-Umbau“** direkt unten. Er steht nur auf dem Branch
+> `claude/artifact-session-70nhy4`, **nicht auf `main`/Pages** (dort bleibt
+> der Stand nach Etappe 12).
+>
+> **Das überarbeitete BRIEFING.md ist noch nicht im Repo.** Die Datei ist
+> seit dem Pivot-Commit `16acc33` unverändert; weder „Deadly Days“ noch
+> „Knoten“ kommen darin vor. Kamera und Knoten-Karte sind deshalb nach
+> Annahmen gebaut (alle Werte an einer Stelle, siehe unten) und werden an
+> Abschnitt 4 und 5 angepasst, sobald sie da sind.
+
+## 3D-Umbau
+
+### Stand 2026-09-24, 11:54 UTC – Grundlage steht
+
+| | Was | Wo |
+| --- | --- | --- |
+| 1 | Three.js-Grundgerüst: Renderer, Szene, Umgebungs- + Richtungslicht | `render/SceneSetup.ts` |
+| 2 | Feste, angewinkelte Kamera, folgt der Figur, dreht nie mit | `render/FollowCamera.ts`, Werte in `VIEW3D` (`config/constants.ts`) |
+| 3 | Simulation unverändert, Darstellung liest nur (Sim → Mesh) | `render/EntityView.ts`, Umrechnung nur in `render/space3d.ts` |
+| 4 | Platzhalter: Kapseln je Charakter, Quader für Gegner, Plane als Boden | `render/placeholders.ts`, `render/GroundView.ts` |
+| 5 | Touch → Welt unter Berücksichtigung der Kamera | `input/viewMapping.ts`, angewendet im `InputManager` |
+| 6 | Knoten-Karte als reines Datenmodell | `systems/NodeMapGenerator.ts`, Werte in `NODE_MAP` (`config/balance.ts`) |
+
+**Nicht auf der Liste, aber mitgebaut, weil sonst unspielbar:** Wände und
+Büsche als graue/grüne Quader (die Simulation hat sie weiterhin – ohne sie
+läuft man gegen Unsichtbares), Geschosse als Kugeln, die Zielvorschau von
+Fähigkeit und Super am Boden. Alles Platzhalter.
+
+**Was in 3D noch fehlt** (in 2D vorhanden, unter **`?view=2d`** weiter
+spielbar): Beute am Boden, Ausstiegszonen, Encounter-Ringe und schlafende
+Bosse, Treffer-Effekte, Schadenszahlen, Heilfeld-Ring, Lebensbalken über
+Gegnern, Mitspieler-Pfeile am Rand, `?debug=hitbox`. Kompass, Minimap und
+HUD funktionieren in beiden Ansichten.
+
+### Entscheidung: Phaser bleibt – für Menüs, HUD und Touch
+
+Die Welt zeichnet Three.js. **Darüber** liegt Phaser als durchsichtige
+Ebene und zeichnet alles Übrige.
+
+- **Warum nicht eigene State-Klassen statt Phaser:** Rund 7000 Zeilen
+  hängen an Phaser – sieben Szenen, die Touch-Steuerung mit gemerktem
+  Schuss und mehreren Fingern, Sicherheitsabstände, das Nachrücken bei
+  Grössenänderung, das Gitter-Inventar mit Ziehen und Ablegen, das
+  Raumcode-Eingabefeld. Alles erprobt, vieles erst nach Spieltests richtig.
+  Eigene State-Klassen wären für den *Szenenwechsel* allein einfacher –
+  aber der Szenenwechsel ist der kleinste Teil dessen, was Phaser hier tut.
+  Ein Nachbau wäre ein zweites Projekt und stand nicht auf der Liste.
+- **Was Phaser abgibt:** nur die Welt (Arena, Figuren, Kamera). Genau der
+  Teil, der ohnehin neu entsteht.
+- **Ein WebGL-Kontext, nicht zwei:** In der 3D-Ansicht läuft Phaser mit
+  dem **Canvas-Renderer** (`type: CANVAS`, `transparent: true` in
+  `main.ts`). Für Text, Knöpfe und Balken reicht das, und das Handy muss
+  nur einen WebGL-Kontext halten – den der Welt.
+- **Ein Renderer fürs ganze App-Leben:** `sceneSetup()` legt ihn einmal an;
+  jeder Run leert nur die Szene. iOS gibt alte WebGL-Kontexte nicht
+  zuverlässig frei.
+- **Deckungsgleich:** Das Three-Canvas übernimmt jedes Bild das Rechteck,
+  das Phaser auf dem Bildschirm belegt (`getBoundingClientRect`), zeichnet
+  aber in Geräteauflösung (höchstens ×2). Berührungen gehen an Phaser
+  (`pointer-events: none` unten, `z-index` in `index.html`).
+- **Gezeichnet wird im selben Bild wie Phaser** (aus `GameScene.update`),
+  nicht in einer zweiten Schleife – sonst hinge die Welt ein Bild hinter
+  dem HUD.
+- **Kehrseite:** Das Bundle wächst von ~370 auf **~554 kB gzip**. Wenn das
+  auf dem Handy spürbar lädt: Phaser-Teile, die nur die 2D-Welt braucht,
+  fallen mit dem Ende von `?view=2d` weg.
+
+### Die Kamera: erste Richtwerte
+
+| Wert | Richtwert | Warum |
+| --- | --- | --- |
+| Neigung (`pitch`) | **55°** über dem Boden | Steil genug, dass man Abstände am Boden gut schätzt; flach genug, dass Figuren als Körper lesbar sind. 90° wäre wieder 2D. |
+| Drehung (`yaw`) | **0°** | Kamera im Süden, Blick nach Norden: „oben“ bleibt Norden wie in 2D, die Minimap passt ohne Drehung. |
+| Bildwinkel (`fov`) | **35°** | Eher Tele: wenig perspektivische Verzerrung am Bildrand, Figuren am Rand sehen aus wie in der Mitte. |
+| Abstand (`distance`) | **30 m** | Nach der Massstab-Regel aus Etappe 6 (Figur 5–7 % der Bildhöhe): mit der echten Kamera gemessen 6,6 %. 26 m ergab 7,6 % (im Emulator nachgemessen 7,7 %). |
+| Blickpunkt | 0,8 m über dem Boden | Etwa Brusthöhe – die Figur steht optisch in der Bildmitte, nicht ihre Füsse. |
+| Nachziehen | 0,18 je 1/60 s | Leichte Trägheit, bildratenunabhängig. |
+
+**Einheiten:** 1 Three-Einheit = 1 Meter = 48 Simulationspixel (eine
+Kachel). GLB-Modelle kommen in Metern, eine 1,8-m-Figur passt dann direkt
+zum Trefferkreis (0,75 m).
+
+**Justieren ohne Neubau:** `?tune=view3d.pitch=60,view3d.distance=24,view3d.fov=40`.
+`?debug=werte` zeigt die aktiven Werte und die Position an.
+
+**Folge, die man kennen muss:** Mit 30 m sieht man in der Bildmitte rund
+41 m Breite ≈ 2000 Simulationspixel – deutlich mehr als die ~1480 der
+2D-Ansicht. `ENEMIES.spawnRadiusMin` (700 px) war als „knapp ausserhalb
+des Sichtfelds“ gewählt; **seitlich erscheinen Gegner jetzt im Bild.** Nicht
+geändert, weil die Simulation in diesem Schritt unverändert bleiben sollte.
+Mit der Knoten-Karte ändert sich das Spawnen ohnehin.
+
+### Touch → Welt: gemessen, nicht vermutet
+
+Der Daumen liefert Bildschirmrichtungen, die Simulation braucht
+Bodenrichtungen. Zwei Dinge liegen dazwischen:
+
+1. **Drehung** (yaw): Bei gedrehter Kamera ist „oben“ nicht mehr Norden.
+2. **Stauchung** (pitch): Eine schräge Kamera staucht die Tiefe um
+   sin(Neigung). Ohne Ausgleich läuft die Figur bei schrägem Stick bei 55°
+   um **5,3° flacher**, als der Daumen zeigt, bei 40° um 11,6°.
+
+`screenToGround` gleicht beides aus und behält die **Länge** (halber
+Ausschlag = halbes Tempo, in jede Richtung). Angewendet an **genau einer
+Stelle**, im `InputManager` – vor dem Netz. Simulation, Host und Protokoll
+sehen weiterhin nur Weltrichtungen. In `?view=2d` ist die Abbildung die
+Identität.
+
+**Geprüft wie:**
+
+- `tests/render/followCamera.test.ts` gegen eine **echte Three-Kamera**:
+  16 Stick-Richtungen × 7 Kameralagen (Neigung 40/55/60/75°, Drehung
+  −30/0/45/90/180°) → Punkt am Boden → auf den Bildschirm projiziert.
+  Grösste Abweichung **0,34°** bei 55° (Rest ist Perspektive).
+  **Gegenproben:** Umrechnung mit falscher Drehung > 30° daneben, ohne
+  Neigungsausgleich > 4° – beide schlagen an.
+- **Im Emulator mit echten Touch-Ereignissen** (iPhone 13 quer), Position
+  aus `?debug=werte` abgelesen: bei Drehung 0 laufen oben/rechts/unten/links
+  exakt auf −90/0/90/180°, schräg oben rechts auf −50,9° (berechnet −50,7°).
+  Mit `?tune=view3d.yaw=45` schräg oben rechts auf −95,7° (berechnet −95,66°).
+- **Welt am richtigen Ort:** Wände aus dem Generator (Seed 4242) mit der
+  Kamera projiziert und mit dem Bildschirmfoto verglichen – alle acht
+  sichtbaren sitzen auf ~20 px genau dort (Rest: Wandhöhe).
+- Zielvorschau der Granate zeigt im Bild dorthin, wohin am Knopf gezogen
+  wurde, mit dem echten Explosionsradius.
+- Der Kompass am Bildrand rechnet den Bodenwinkel in einen Bildschirmwinkel
+  um (`groundToScreen`) – sonst zeigte er schräg an der Zone vorbei.
+
+### Knoten-Karte (nur Daten)
+
+`generateNodeMap(seed)` baut Schichten von Start (0) bis Boss (letzte).
+Mehrere Pfade (`NODE_MAP.paths`) laufen Schicht für Schicht nur in
+Nachbarspalten; ein Schritt, der eine vorhandene Kante kreuzen würde, ist
+verboten (geradeaus kreuzt nie, es bleibt also immer ein Schritt). Wo Pfade
+sich treffen, entsteht ein Knoten – daraus die Gabelungen. **Sackgassen
+sind durch den Aufbau ausgeschlossen**, nicht hinterher gesucht.
+
+- **Typen:** Kampf, Plündern, Rast, Elite; Start und Boss fest. Erste
+  Schicht immer Kampf, vorletzte immer Rast, Elite erst ab Schicht 4, Rast
+  erst ab 3 und nie zweimal hintereinander.
+- **Gefahr:** `1 + floor(Schicht × 0,75)`, Elite +1, Boss +2. Der Boss ist
+  immer der gefährlichste Knoten.
+- **Zufall:** Mulberry32 mit eigenem Zustand, kein `Math.random` (der Test
+  ersetzt es durch eine Funktion, die wirft).
+- **Prüfen:** `npm run nodemap -- 4242` gibt die Karte als Text aus und
+  meldet, ob ein zweiter Durchlauf identisch ist. 10 Tests in
+  `tests/systems/nodeMap.test.ts`; Gegenprobe gemacht (ohne
+  Kreuzungsprüfung fällt genau der Kreuzungstest).
+- **VORLÄUFIG:** Tiefe 12, 4 Spalten, 5 Pfade, die Gewichte und die
+  Gefahrenformel sind **Annahmen**, weil Abschnitt 4 des neuen Briefings
+  fehlt. Alles steht in `NODE_MAP`; der Generator muss dafür nicht
+  angefasst werden, ausser Abschnitt 4 verlangt andere Typen.
+
+### Offen / nicht wie geplant
+
+- **Das neue Briefing fehlt im Repo** (siehe oben). Kamera und Karte an
+  Abschnitt 4/5 abgleichen, sobald es da ist.
+- **Bildrate unbekannt.** Der Emulator rendert per Software (SwiftShader,
+  ~35 fps) und sagt nichts über ein Handy. Auf dem Gerät messen:
+  `?debug=werte`. Hebel, falls es ruckelt: `?tune=view3d.maxPixelRatio=1`.
+- **Im Koop folgt die Kamera nur der eigenen Figur.** Die 2D-Kamera zoomte
+  heraus, wenn die Gruppe auseinanderlief; das ist nicht übernommen. Über
+  zwei Tabs nicht durchgespielt – der Koop-Weg (Eingabe → Host) ist aber
+  unverändert, umgerechnet wird vor dem Senden.
+- **Gegner erscheinen seitlich im Bild** (siehe Kamera).
+- **Die Figur hat keinen Schatten.** Schatten kosten auf dem Handy viel;
+  mit den echten Modellen entscheiden.
+- Liegt eine Figur am Boden, kippt die Kapsel immer nach Norden – egal,
+  wohin sie schaute. Platzhalter.
+
+---
+
 > **Seit 2026-09-23 abends läuft eine grosse Überarbeitung nach einem
 > technischen Arbeitsdokument (Etappen 0–12).** Der verlässliche Stand steht
 > in **`AUDIT.md`** (geprüft im Code, nicht aus dieser Datei übernommen) und
@@ -1727,6 +1901,7 @@ src/
     supers.ts             die drei Super-Fähigkeiten (Sniper: Aufklärung)
     abilities.ts          zweite Fähigkeit (Granate, Heilfeld, Lähmschuss)
     WorldGenerator.ts     die Karte aus einem Seed (deterministisch)
+    NodeMapGenerator.ts   Knoten-Karte eines Runs aus einem Seed (nur Daten)
     encounters.ts         Encounter, Boss-Erwachen, Extraktion, Run-Ende
     boss.ts               Angriffsmuster des Bosses
     zones.ts              Distanzzonen und Skalierung
@@ -1748,10 +1923,20 @@ src/
     SoloSession.ts        Einzelspieler
     GameSession.ts        die Schnittstelle, die die Spielszene kennt
   render/                 Darstellung
-    ArenaRenderer, EntityRenderer, CameraController, Juice
+    SceneSetup.ts         Three.js: Renderer, Szene, Licht (3D)
+    World3D.ts            die 3D-Welt eines Runs, von GameScene gehalten
+    FollowCamera.ts       feste, angewinkelte Kamera (3D)
+    EntityView.ts         Figuren/Gegner/Geschosse als Meshes (3D)
+    GroundView.ts         Boden, Waende, Buesche (3D, Platzhalter)
+    AimPainter.ts         Zielvorschau-Schnittstelle, 2D und 3D
+    AimView3D.ts          Zielvorschau am Boden (3D)
+    placeholders.ts       Platzhalter-Masse und -Farben bis zu den GLB
+    space3d.ts            Sim-Pixel -> Three-Meter, EINZIGE Umrechnung
+    ArenaRenderer, EntityRenderer, CameraController, Juice   (2D, ?view=2d)
     wallPieces.ts         Wand -> Stuecke aus dem Sheet (Ecken, Kappen)
   scenes/                 Boot, Menu, Loadout, Lobby, Game, Hud, GameOver
   input/InputManager.ts   Touch -> InputState
+  input/viewMapping.ts    Bildschirm- <-> Bodenrichtung fuer die 3D-Kamera
   ui/                     VirtualJoystick, TouchControls, Button, HudModel,
                           Minimap, InventoryGrid, BackpackWindow,
                           compassPlacement, stickResponse
@@ -1762,11 +1947,11 @@ src/
   platform/               Geräte-Erkennung, Desktop-Sperre, Absturzanzeige,
                           Selbst-Aktualisierung, Installation
 android/                  Capacitor-Projekt für die Android-App
-tools/                    Hilfsskripte (App-Icons erzeugen)
+tools/                    Hilfsskripte (App-Icons, `npm run nodemap`)
 tests/
   systems/                Simulation, inklusive ganzer Runden ohne Browser
   net/                    Protokoll, Raumcodes, Host und Client im selben Prozess
-  render/                 Wandzerlegung (phaserfrei)
+  render/                 Wandzerlegung, 3D-Kamera gegen Stick, 3D-Massstab
   ui/                     Joystick-Kennlinie, Kompass, Massstab
 ```
 
@@ -1901,6 +2086,7 @@ dem Bildschirm.
 | `npm run dev`       | Entwicklungsserver, auch im WLAN erreichbar (`--host` ist gesetzt) |
 | `npm run test`      | Tests der Simulation und des Netzwerks, plus Balancing-Messung     |
 | `npm run typecheck` | TypeScript prüfen                                                  |
+| `npm run nodemap -- <seed>` | Knoten-Karte als Text, prüft Wiederholbarkeit              |
 | `npm run lint`      | ESLint                                                             |
 | `npm run build`     | Produktionsbuild nach `dist/`                                      |
 | `npm run preview`   | Produktionsbuild lokal ansehen                                     |
