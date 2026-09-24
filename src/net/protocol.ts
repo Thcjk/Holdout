@@ -113,6 +113,12 @@ export interface NetPlayer {
    * Rucksack nur bei Aenderung zu schicken statt in jedem Paket.
    */
   bp: number[];
+  /**
+   * Restzeit des Heilfelds in Sekunden (Tank, Etappe 10). Optional, damit
+   * Pakete aelterer Fassungen gueltig bleiben. Muss uebertragen werden: Den
+   * Ring sehen alle, nicht nur der Tank - sonst wuesste niemand, wohin.
+   */
+  hf?: number;
 }
 
 export interface NetEnemy {
@@ -331,6 +337,7 @@ function encodePlayer(player: PlayerState): NetPlayer {
     down: player.down,
     revive: round1(player.reviveProgress),
     inv: round1(player.invulnerable),
+    hf: round1(player.healField),
     // Vierter Wert je Gegenstand: Merkmale als Bits (gedreht, Starter) -
     // siehe `systems/backpackCodec.ts`.
     bp: player.backpack.items.flatMap((entry) => [

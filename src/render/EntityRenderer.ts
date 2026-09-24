@@ -18,6 +18,7 @@ import {
   SHEET_KEY,
   SPRITE_BODY_RADIUS,
 } from "../config/assets";
+import { ABILITIES } from "../config/balance";
 import { COLORS, DEPTH } from "../config/constants";
 import type { WorldView } from "../net/GameSession";
 import { SHOW_HITBOXES } from "../platform/debugFlags";
@@ -97,6 +98,7 @@ export class EntityRenderer {
     this.trails.clear();
 
     this.updateGroundItems(state);
+    this.drawHealFields(state);
     this.updatePlayers(state);
     this.updateEnemies(state);
     this.updateProjectiles(state);
@@ -170,6 +172,31 @@ export class EntityRenderer {
         sprite.destroy();
         this.itemSprites.delete(id);
       }
+    }
+  }
+
+  /**
+   * Das Heilfeld des Tanks (Etappe 10): ein gruener Ring mit GENAU dem
+   * Radius, in dem geheilt wird, plus ein zweiter, der nach innen laeuft -
+   * Heilung kommt herein, Schaden geht hinaus (wie beim Heilpuls in `Juice`).
+   *
+   * Nur Linien: Eine Flaeche in dieser Groesse laege ueber allem, was man
+   * gerade bekaempft. Auf die Unterseite der Figuren, weil es am Boden liegt.
+   */
+  private drawHealFields(state: WorldState): void {
+    const radius = ABILITIES.tank.radius;
+    const phase = (this.scene.time.now % 900) / 900;
+    for (const player of state.players) {
+      if (player.healField <= 0) {
+        continue;
+      }
+      const position = this.simulation.renderPlayerPosition(player.id);
+      // Gegen Ende blasser - man sieht, dass es gleich vorbei ist.
+      const fade = Math.min(1, player.healField / 0.8);
+      this.ground.lineStyle(4, COLORS.mate, 0.85 * fade);
+      this.ground.strokeCircle(position.x, position.y, radius);
+      this.ground.lineStyle(3, COLORS.mate, 0.6 * (1 - phase) * fade);
+      this.ground.strokeCircle(position.x, position.y, radius * (1 - 0.7 * phase));
     }
   }
 

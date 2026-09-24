@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SUPERS } from "../../src/config/balance";
 import { TICK_SECONDS } from "../../src/config/constants";
 import { createEnemy } from "../../src/systems/enemies";
+import { stepProjectiles } from "../../src/systems/projectiles";
 import { stepDashDamage, trySuper } from "../../src/systems/supers";
 import { createWorld } from "../../src/systems/world";
 import { makeInput } from "../helpers";
@@ -75,23 +76,66 @@ describe("Tank: Bodenstampfer", () => {
   });
 });
 
-describe("Sniper: Zielscheinwerfer", () => {
-  it("markiert einen Gegner in Zielrichtung", () => {
+describe("Sniper: Aufklaerungsschuss (Etappe 10)", () => {
+  function fire(targetDistance: number, others: { x: number; y: number }[]) {
     const { state, player } = world("sniper");
     player.superCharge = 100;
     const target = createEnemy(
       1,
-      "runner",
-      { x: player.position.x + 300, y: player.position.y },
+      "brute",
+      { x: player.position.x + targetDistance, y: player.position.y },
       1,
       1,
       false,
     );
     state.enemies.push(target);
+    const extra = others.map((offset, index) =>
+      createEnemy(
+        2 + index,
+        "runner",
+        { x: target.position.x + offset.x, y: target.position.y + offset.y },
+        1,
+        1,
+        false,
+      ),
+    );
+    state.enemies.push(...extra);
 
     trySuper(state, player, superInput);
+    for (let i = 0; i < Math.round(2 / TICK_SECONDS); i += 1) {
+      stepProjectiles(state, TICK_SECONDS);
+    }
+    return { state, target, extra };
+  }
 
-    expect(target.marked).toBeCloseTo(SUPERS.sniper.duration, 6);
+  it("deckt beim Einschlag alle Gegner im Umkreis auf", () => {
+    const radius = SUPERS.sniper.revealRadius;
+    const { target, extra } = fire(400, [
+      { x: 0, y: radius - 60 },
+      { x: 0, y: radius + 120 },
+    ]);
+    const [inside, outside] = extra;
+
+    expect(target.marked).toBeGreaterThan(SUPERS.sniper.revealDuration - 2);
+    expect(inside?.marked).toBeGreaterThan(0);
+    expect(outside?.marked).toBe(0);
+  });
+
+  it("wirkt auch, wenn das Geschoss ins Leere fliegt", () => {
+    // Sonst waere ein knapp verfehlter Schuss wertlos, obwohl Gegner neben
+    // dem Endpunkt stehen - dieselbe Regel wie bei der Granate.
+    const { state, player } = world("sniper");
+    player.superCharge = 100;
+    const end = { x: player.position.x + SUPERS.sniper.range, y: player.position.y };
+    const bystander = createEnemy(1, "runner", { x: end.x, y: end.y + 200 }, 1, 1, false);
+    state.enemies.push(bystander);
+
+    trySuper(state, player, superInput);
+    for (let i = 0; i < Math.round(2 / TICK_SECONDS); i += 1) {
+      stepProjectiles(state, TICK_SECONDS);
+    }
+
+    expect(bystander.marked).toBeGreaterThan(0);
   });
 });
 

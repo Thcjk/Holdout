@@ -36,6 +36,8 @@ export interface MinimapModel {
   /** Nur die schon aufgedeckten. */
   extractions: { x: number; y: number }[];
   encounters: { x: number; y: number; isFinal: boolean; cleared: boolean }[];
+  /** Gegner, die gerade aufgedeckt sind (Aufklaerungsschuss). */
+  revealed: { x: number; y: number }[];
 }
 
 export function emptyMinimap(): MinimapModel {
@@ -49,6 +51,7 @@ export function emptyMinimap(): MinimapModel {
     mates: [],
     extractions: [],
     encounters: [],
+    revealed: [],
   };
 }
 

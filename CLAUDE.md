@@ -416,6 +416,49 @@ lief. Neueste unten.
   - Im Koop ist das Umräumen per Test und Netzlogik geprüft, aber nicht mit
     zwei Tabs im Browser durchgespielt.
 
+#### Etappe 10 – Tank-Heilfeld, Sniper-Aufklärung, Auto-Aim · 2026-09-24 07:33 UTC
+
+| | alt | neu (Werte aus dem Dokument) |
+| --- | --- | --- |
+| Tank-Fähigkeit | „Zweite Luft“: sofort +1000, nur selbst | **„Heilfeld“**: Radius 220, 80/s, 3 s, alle Stehenden darin, Abklingzeit 12 s |
+| Sniper-Super | „Zielscheinwerfer“: ein Gegner, doppelter Schaden 5 s | **„Aufklärungsschuss“**: Geschoss 700 px/s, beim Einschlag alle Gegner im Umkreis 500 für 6 s aufgedeckt, +50 % Schaden vom ganzen Team |
+| Auto-Aim | 1,15 × Waffenreichweite | **0,69 ×** (−40 %), `PLAYER.autoAimRangeFactor` |
+
+- **Dokument sagt „ersetzt Schildwand“** – die Schildwand gab es schon nicht
+  mehr (seit dem zweiten Spieltest „Zweite Luft“). Ersetzt wurde also die
+  Selbstheilung. Nebeneffekt: Der alte Widerspruch „zwei Heilungen am
+  Tank“ (siehe Tabelle oben) ist damit weg – der Tank heilt jetzt das Team.
+- **Heilfeld:** folgt dem Tank, heilt je Tick, **nicht** am Boden Liegende
+  (sonst wäre es eine zweite Wiederbelebung). Gemeldet wird gesammelt einmal
+  je Sekunde, die echte Menge. Der Ring wird bei allen gezeichnet – dafür
+  reist die Restzeit im Zustandspaket mit (`hf`, optional, alte Pakete
+  bleiben gültig).
+- **Aufklärungsschuss:** läuft über den normalen Projektilweg (Wände!),
+  wirkt auch bei Wandtreffer oder Ende der Reichweite – wie die Granate.
+  Aufgedeckte Gegner leuchten gelb, stehen gelb auf der **Minimap**, und
+  jeder Treffer darauf macht 50 % mehr. Die Zielvorschau zeigt Linie und
+  echten Radius.
+- **Nicht übernommen: `cooldown: 14` des Aufklärungsschusses.** Supers laden
+  sich hier über ausgeteilten Schaden auf. Eine zweite Sperre für denselben
+  Knopf wäre eine Regel, die man nicht sieht. Wenn gewünscht: eine Zeile in
+  `supers.ts`.
+- **Auto-Aim:** Einen Zielkegel gibt es nicht und gab es nie – gesucht wird
+  rundum im Radius. Reduziert wurde deshalb nur die Reichweite. Gegner
+  jenseits von 69 % der Reichweite bekommen einen Schuss in Blickrichtung.
+- **Geprüft wie:** 253 Tests, neu: Heilfeld (Menge über 3 s, Radius,
+  niemand am Boden, Meldungen je Sekunde), Aufklärung (Umkreis, Einschlag
+  ins Leere), Schadensbonus 50 %, Zielsuche innen/aussen. **Im Browser:**
+  Tank-Knopf heisst „HEILFELD“, Ring mit echtem Radius und innerem Puls,
+  Abklingring am Knopf; Sniper-Super mit Vorschau (Linie + gelber Kreis),
+  Geschoss und Einschlagring.
+- **Nicht wie geplant – deutlich spürbar:** Der Bot-Sniper fällt von 7,4 auf
+  **4,8 Zonen** (Scout 4,6 unverändert, Tank 3,2 → 3,4). Grund: Der
+  Basisangriff zielt nur automatisch, und die Suche reicht jetzt 621 statt
+  1035 px – der Sniper verliert seine Reichweite, sobald der Gegner nicht in
+  Blickrichtung steht. Das ist die direkte Folge der Vorgabe, keine
+  Nebenwirkung eines Fehlers. Falls es sich im Spiel falsch anfühlt: den
+  Faktor je Charakter statt global setzen.
+
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut

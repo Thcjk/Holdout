@@ -268,6 +268,13 @@ export class Minimap {
       }
     }
 
+    // Aufgedeckte Gegner: gelb wie ihr Leuchten in der Welt.
+    for (const enemy of model.revealed) {
+      const point = toScreen(enemy.x, enemy.y);
+      marks.fillStyle(COLORS.marked, 1);
+      marks.fillCircle(point.x, point.y, r(2.5));
+    }
+
     // Mitspieler vor der eigenen Figur zeichnen, damit die eigene obenauf
     // liegt - sie ist die, die man sucht.
     for (const mate of model.mates) {

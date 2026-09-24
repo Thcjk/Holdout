@@ -11,6 +11,7 @@
 import { LIMITS, PROJECTILE } from "../config/balance";
 import { ABILITIES } from "../config/balance";
 import { detonate } from "./abilities";
+import { revealArea } from "./supers";
 import { damageEnemy, damagePlayer } from "./combat";
 import type {
   EnemyState,
@@ -235,6 +236,10 @@ export function stepProjectiles(state: WorldState, dt: number): void {
       // Eine Granate wirkt auch dort, wo sie auf eine Wand trifft oder ihre
       // Wurfweite aufbraucht - sonst waere ein Wurf ins Leere wirkungslos,
       // obwohl Gegner danebenstehen.
+      if (projectile.effect === "reveal") {
+        const t = wallT ?? 1;
+        revealArea(state, fromX + stepX * t, fromY + stepY * t, projectile.blastRadius);
+      }
       if (projectile.effect === "blast") {
         const t = wallT ?? 1;
         detonate(
@@ -308,6 +313,10 @@ function resolveEnemyHits(
     // Pixel dahinter.
     projectile.position.x = fromX + stepX * bestT;
     projectile.position.y = fromY + stepY * bestT;
+
+    if (projectile.effect === "reveal") {
+      revealArea(state, projectile.position.x, projectile.position.y, projectile.blastRadius);
+    }
 
     if (projectile.effect === "blast") {
       detonate(

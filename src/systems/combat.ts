@@ -68,7 +68,7 @@ function shootDirection(state: WorldState, player: PlayerState, input: InputStat
   }
 
   const range = CHARACTERS[player.character].shot.range;
-  const target = nearestEnemy(state, player.position, range * 1.15);
+  const target = nearestEnemy(state, player.position, range * PLAYER.autoAimRangeFactor);
   if (target) {
     const dx = target.position.x - player.position.x;
     const dy = target.position.y - player.position.y;
@@ -136,8 +136,9 @@ export function damageEnemy(
   sourcePlayerId: string,
   knockbackDirection?: Vec2,
 ): void {
-  // Die Sniper-Markierung verdoppelt den Schaden - egal, wer trifft.
-  const multiplier = enemy.marked > 0 ? SUPERS.sniper.damageMultiplier : 1;
+  // Aufgedeckte Gegner (Aufklaerungsschuss des Snipers) nehmen mehr Schaden -
+  // egal, wer trifft. Das ist der Sinn: eine Ansage fuers ganze Team.
+  const multiplier = enemy.marked > 0 ? 1 + SUPERS.sniper.teamDamageBonus : 1;
   const applied = Math.round(amount * multiplier);
   enemy.health -= applied;
 

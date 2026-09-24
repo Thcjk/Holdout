@@ -9,7 +9,12 @@
 import { describe, expect, it } from "vitest";
 import { ABILITIES, CHARACTERS } from "../../src/config/balance";
 import { TICK_SECONDS } from "../../src/config/constants";
-import { isAbilityReady, stepAbilities, tryAbility } from "../../src/systems/abilities";
+import {
+  isAbilityReady,
+  stepAbilities,
+  stepHealFields,
+  tryAbility,
+} from "../../src/systems/abilities";
 import { createEnemy } from "../../src/systems/enemies";
 import { stepProjectiles } from "../../src/systems/projectiles";
 import { createWorld, stepWorld } from "../../src/systems/world";
@@ -139,32 +144,76 @@ describe("Scout: Splittergranate", () => {
   });
 });
 
-describe("Tank: Zweite Luft", () => {
-  it("heilt den angeschlagenen Tank um den vollen Betrag", () => {
-    const { state, player } = world("tank");
-    player.health = player.maxHealth - 2000;
+describe("Tank: Heilfeld (Etappe 10)", () => {
+  function team() {
+    const state = createWorld([
+      { id: "tank", name: "T", character: "tank" },
+      { id: "near", name: "N", character: "scout" },
+      { id: "far", name: "F", character: "sniper" },
+      { id: "down", name: "D", character: "scout" },
+    ]);
+    state.enemies.length = 0;
+    state.walls.length = 0;
+    const [tank, near, far, down] = state.players;
+    if (!tank || !near || !far || !down) throw new Error("Testaufbau");
+    tank.position = { x: 1000, y: 1000 };
+    near.position = { x: 1000 + ABILITIES.tank.radius - 20, y: 1000 };
+    far.position = { x: 1000 + ABILITIES.tank.radius + 60, y: 1000 };
+    down.position = { x: 1000, y: 1060 };
+    for (const player of state.players) {
+      player.health = player.maxHealth - 1000;
+    }
+    down.down = true;
+    return { state, tank, near, far, down };
+  }
 
-    tryAbility(state, player, useAbility());
+  it("heilt alle Stehenden im Radius um 80 je Sekunde, drei Sekunden lang", () => {
+    const { state, tank, near } = team();
+    const start = near.health;
+    tryAbility(state, tank, useAbility());
 
-    expect(player.health).toBe(player.maxHealth - 2000 + ABILITIES.tank.heal);
+    for (let i = 0; i < Math.round(4 / TICK_SECONDS); i += 1) {
+      stepHealFields(state, TICK_SECONDS);
+    }
+
+    const expected = ABILITIES.tank.healPerSecond * ABILITIES.tank.duration;
+    expect(near.health - start).toBeCloseTo(expected, 0);
+    // Auch der Tank selbst steht im Feld.
+    expect(tank.health - (tank.maxHealth - 1000)).toBeCloseTo(expected, 0);
+    // Nach Ablauf ist das Feld weg.
+    expect(tank.healField).toBe(0);
   });
 
-  it("heilt nicht ueber das Maximum hinaus und meldet den echten Betrag", () => {
-    const { state, player } = world("tank");
-    player.health = player.maxHealth - 100;
-
-    tryAbility(state, player, useAbility());
-
-    expect(player.health).toBe(player.maxHealth);
-
-    // Gemeldet wird, was wirklich angekommen ist (100) - nicht der Wert aus
-    // der Tabelle (1000). Sonst schwebte eine erfundene Zahl ueber der Figur.
-    const geheilt = state.events.find((event) => event.type === "healed");
-    expect(geheilt).toBeDefined();
-    expect(geheilt?.type === "healed" && geheilt.amount).toBe(100);
+  it("heilt niemanden ausserhalb des Radius und niemanden am Boden", () => {
+    const { state, tank, far, down } = team();
+    const farBefore = far.health;
+    const downBefore = down.health;
+    tryAbility(state, tank, useAbility());
+    for (let i = 0; i < Math.round(4 / TICK_SECONDS); i += 1) {
+      stepHealFields(state, TICK_SECONDS);
+    }
+    expect(far.health).toBe(farBefore);
+    expect(down.health).toBe(downBefore);
   });
 
-  it("dreht die Blickrichtung nicht - sie wirkt auf einen selbst", () => {
+  it("meldet die Heilung gesammelt je Sekunde, nicht dreissigmal", () => {
+    const { state, tank } = team();
+    tryAbility(state, tank, useAbility());
+    state.events.length = 0;
+    const events: number[] = [];
+    for (let i = 0; i < Math.round(4 / TICK_SECONDS); i += 1) {
+      stepHealFields(state, TICK_SECONDS);
+      for (const event of state.events) {
+        if (event.type === "healed" && event.playerId === "tank") events.push(event.amount);
+      }
+      state.events.length = 0;
+    }
+    // Drei Sekunden -> drei Meldungen (plus hoechstens eine fuer den Rest).
+    expect(events.length).toBeGreaterThanOrEqual(3);
+    expect(events.length).toBeLessThanOrEqual(4);
+  });
+
+  it("dreht die Blickrichtung nicht - sie wirkt um einen selbst", () => {
     const { state, player } = world("tank");
     player.facing = { x: 0, y: -1 };
 
@@ -174,7 +223,6 @@ describe("Tank: Zweite Luft", () => {
     expect(player.facing.y).toBe(-1);
   });
 });
-
 describe("Sniper: Laehmschuss", () => {
   it("wurzelt den Getroffenen fest und macht weniger Schaden als ein Schuss", () => {
     const { state, player } = world("sniper");

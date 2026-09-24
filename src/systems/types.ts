@@ -224,6 +224,10 @@ export interface PlayerState {
   shootCooldown: number;
   /** Restliche Abklingzeit der zweiten Faehigkeit in Sekunden. 0 = bereit. */
   abilityCooldown: number;
+  /** Restzeit des Heilfelds (nur Tank, Etappe 10). 0 = kein Feld. */
+  healField: number;
+  /** Aufgelaufene Heilung je Mitspieler seit der letzten Meldung. */
+  healFieldPending: Record<string, number>;
   /**
    * Der Rucksack dieses Spielers.
    *
@@ -302,7 +306,7 @@ export interface EnemyState {
 export type ProjectileOwner = "player" | "enemy";
 
 /** Zusatzwirkung eines Projektils - normale Schuesse haben "none". */
-export type ProjectileEffect = "none" | "blast" | "root";
+export type ProjectileEffect = "none" | "blast" | "root" | "reveal";
 
 export interface ProjectileState {
   id: number;
@@ -360,6 +364,8 @@ export type GameEvent =
   | { type: "superUsed"; playerId: string; character: CharacterId; x: number; y: number }
   | { type: "abilityUsed"; playerId: string; character: CharacterId; x: number; y: number }
   | { type: "blast"; x: number; y: number; radius: number }
+  /** Aufklaerungsschuss eingeschlagen: Umkreis, in dem aufgedeckt wurde. */
+  | { type: "revealed"; x: number; y: number; radius: number }
   | { type: "healed"; playerId: string; amount: number; x: number; y: number }
   | { type: "spawnWarning"; x: number; y: number }
   /**

@@ -332,6 +332,7 @@ export class ClientView implements WorldView {
       player.down = netPlayer.down;
       player.reviveProgress = netPlayer.revive;
       player.invulnerable = netPlayer.inv;
+      player.healField = netPlayer.hf ?? 0;
 
       /*
        * Der Rucksack kommt vollstaendig vom Host und wird hier neu aufgebaut.

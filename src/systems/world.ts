@@ -15,7 +15,7 @@ import { stepReload, stepRevive, tryShoot } from "./combat";
 import { stepEnemies } from "./enemies";
 import { clampToArena, stepPlayerMovement } from "./movement";
 import { stepProjectiles } from "./projectiles";
-import { stepAbilities, tryAbility } from "./abilities";
+import { stepAbilities, stepHealFields, tryAbility } from "./abilities";
 import { stepDashDamage, trySuper } from "./supers";
 import { stepEncounters } from "./encounters";
 import { applyInventoryCommand, stepLoot } from "./loot";
@@ -136,6 +136,8 @@ export function createPlayer(
     inBush: false,
     shootCooldown: 0,
     abilityCooldown: 0,
+    healField: 0,
+    healFieldPending: {},
     backpack: buildBackpack(setup.backpack),
   };
 }
@@ -243,6 +245,7 @@ export function stepWorld(
   }
 
   stepAbilities(state, dt);
+  stepHealFields(state, dt);
   stepEnemies(state, dt);
   stepProjectiles(state, dt);
   stepRevive(state, dt);

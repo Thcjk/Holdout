@@ -136,6 +136,9 @@ export class Juice {
           this.deathParticles.emitParticleAt(event.x, event.y, 16);
           this.shake(0.006, 160);
           break;
+        case "revealed":
+          this.revealRing(event.x, event.y, event.radius);
+          break;
         case "healed":
           // Nur melden, wenn wirklich etwas angekommen ist: Bei vollem Leben
           // waere eine gruene Null nur eine Luege mit Animation.
@@ -169,6 +172,26 @@ export class Juice {
       scale: { from: 0.35, to: 1 },
       alpha: { from: 1, to: 0 },
       duration: 320,
+      ease: "Quad.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  /**
+   * Der Aufklaerungsschuss schlaegt ein: ein gelber Ring laeuft auf den
+   * ECHTEN Aufdeck-Radius hinaus. Gelb wie die aufgedeckten Gegner selbst -
+   * Ring und Gegner gehoeren sichtbar zusammen.
+   */
+  revealRing(x: number, y: number, radius: number): void {
+    const ring = this.scene.add.circle(x, y, radius);
+    ring.setStrokeStyle(4, COLORS.marked, 0.95);
+    ring.setDepth(DEPTH.projectiles);
+
+    this.scene.tweens.add({
+      targets: ring,
+      scale: { from: 0.1, to: 1 },
+      alpha: { from: 1, to: 0 },
+      duration: 600,
       ease: "Quad.easeOut",
       onComplete: () => ring.destroy(),
     });

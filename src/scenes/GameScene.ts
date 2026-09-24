@@ -539,7 +539,7 @@ export class GameScene extends Phaser.Scene {
     const strength = Math.max(0.35, this.hud?.inputManager.aimStrength ?? 1);
 
     if (which === "super") {
-      this.drawSuperAim(player, position, direction, strength);
+      this.drawSuperAim(player, position, direction);
       return;
     }
 
@@ -572,12 +572,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Zielanzeige des Supers, ebenfalls mit den echten Werten. */
-  private drawSuperAim(
-    player: PlayerState,
-    position: Vec2,
-    direction: Vec2,
-    strength: number,
-  ): void {
+  private drawSuperAim(player: PlayerState, position: Vec2, direction: Vec2): void {
     if (player.character === "tank") {
       // Bodenstampfer wirkt rund um den Spieler, nicht in eine Richtung.
       this.aimLine.lineStyle(3, COLORS.superReady, 0.9);
@@ -585,13 +580,26 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const reach =
-      player.character === "scout"
-        ? SUPERS.scout.speed * SUPERS.scout.duration
-        : SUPERS.sniper.searchRange;
-    const length = player.character === "scout" ? reach : reach * strength;
-    const endX = position.x + direction.x * length;
-    const endY = position.y + direction.y * length;
+    if (player.character === "sniper") {
+      /*
+       * Aufklaerungsschuss: Linie bis zur vollen Reichweite, am Ende der
+       * Kreis, der dort aufgedeckt WUERDE. Trifft das Geschoss vorher einen
+       * Gegner oder eine Wand, liegt der Kreis entsprechend frueher - die
+       * Anzeige zeigt den weitesten Fall, mit dem echten Radius.
+       */
+      const recon = SUPERS.sniper;
+      const endX = position.x + direction.x * recon.range;
+      const endY = position.y + direction.y * recon.range;
+      this.aimLine.lineStyle(4, COLORS.superReady, 0.55);
+      this.aimLine.lineBetween(position.x, position.y, endX, endY);
+      this.aimLine.lineStyle(2, COLORS.marked, 0.8);
+      this.aimLine.strokeCircle(endX, endY, recon.revealRadius);
+      return;
+    }
+
+    const reach = SUPERS.scout.speed * SUPERS.scout.duration;
+    const endX = position.x + direction.x * reach;
+    const endY = position.y + direction.y * reach;
 
     this.aimLine.lineStyle(4, COLORS.superReady, 0.55);
     this.aimLine.lineBetween(position.x, position.y, endX, endY);
@@ -605,7 +613,13 @@ export class GameScene extends Phaser.Scene {
       return input.aim;
     }
 
-    const target = nearestEnemy(this.session.view.state, player.position, range * 1.15);
+    // Dieselbe Reichweite wie die Simulation (`combat.ts`) - sonst zeigte die
+    // Linie auf einen Gegner, auf den gar nicht geschossen wird.
+    const target = nearestEnemy(
+      this.session.view.state,
+      player.position,
+      range * PLAYER.autoAimRangeFactor,
+    );
     if (!target) {
       return null;
     }
@@ -716,6 +730,15 @@ export class GameScene extends Phaser.Scene {
           isFinal: spot.isFinal,
           cleared: spot.status === "cleared",
         });
+      }
+    }
+
+    // Vom Aufklaerungsschuss aufgedeckte Gegner (Etappe 10). Nur die: Eine
+    // Karte mit ALLEN Gegnern nahme dem Erkunden seinen Sinn.
+    map.revealed.length = 0;
+    for (const enemy of state.enemies) {
+      if (enemy.marked > 0) {
+        map.revealed.push({ x: enemy.position.x, y: enemy.position.y });
       }
     }
   }

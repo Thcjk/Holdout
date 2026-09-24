@@ -276,4 +276,10 @@ Punkt „Gitter-Inventar“: war 8 × 4, ein Gitter, kein Rucksack im Run. Jetzt
 die Simulation. **Neu gefunden:** Das Starter-Set vermehrte sich bei jedem
 Erfolg – behoben.
 
+### Etappe 10 · 2026-09-24 07:33 UTC
+
+Tank-Heilfeld und Sniper-Aufklärungsschuss nach Dokumentwerten, Auto-Aim
+−40 %. Abklingzeit 14 für einen ladungsbasierten Super nicht übernommen.
+Folge: Bot-Sniper 7,4 → 4,8 Zonen.
+
 *(wird fortgeschrieben)*

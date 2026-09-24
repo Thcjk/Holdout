@@ -8,7 +8,7 @@
 
 import { SUPERS } from "../config/balance";
 import { damageEnemy, isSuperReady } from "./combat";
-import { nearestEnemy } from "./targeting";
+import { spawnProjectile } from "./projectiles";
 import type { InputState, PlayerState, Vec2, WorldState } from "./types";
 
 /** Loest die Super-Faehigkeit aus, wenn sie bereit ist und gewuenscht wird. */
@@ -27,7 +27,7 @@ export function trySuper(state: WorldState, player: PlayerState, input: InputSta
       groundSlam(state, player);
       break;
     case "sniper":
-      markTarget(state, player, direction);
+      fireRecon(state, player, direction);
       break;
   }
 
@@ -117,20 +117,38 @@ function groundSlam(state: WorldState, player: PlayerState): void {
 }
 
 /**
- * Sniper: markiert einen Gegner in Zielrichtung. Markierte Gegner nehmen von
- * jedem Treffer doppelten Schaden - auch von Mitspielern, das ist der Koop-Reiz.
+ * Aufklaerungsschuss (Etappe 10): ein Geschoss, das beim Einschlag alle
+ * Gegner im Umkreis aufdeckt. Die Wirkung selbst steht in `revealArea`,
+ * ausgeloest wird sie im Projektilweg - dieselbe Flugbahn- und Wandpruefung
+ * wie fuer jeden anderen Schuss, genau wie bei der Granate.
  */
-function markTarget(state: WorldState, player: PlayerState, direction: Vec2): void {
-  const searchPoint = {
-    x: player.position.x + direction.x * SUPERS.sniper.searchRange * 0.5,
-    y: player.position.y + direction.y * SUPERS.sniper.searchRange * 0.5,
-  };
+function fireRecon(state: WorldState, player: PlayerState, direction: Vec2): void {
+  const recon = SUPERS.sniper;
+  spawnProjectile(state, {
+    owner: "player",
+    ownerId: player.id,
+    position: player.position,
+    direction,
+    speed: recon.projectileSpeed,
+    damage: 0,
+    range: recon.range,
+    radius: 10,
+    piercing: false,
+    effect: "reveal",
+    blastRadius: recon.revealRadius,
+    blastDamage: 0,
+  });
+}
 
-  const target =
-    nearestEnemy(state, searchPoint, SUPERS.sniper.searchRange * 0.5) ??
-    nearestEnemy(state, player.position, SUPERS.sniper.searchRange);
-
-  if (target) {
-    target.marked = SUPERS.sniper.duration;
+/** Deckt alle Gegner im Umkreis auf - sie nehmen mehr Schaden vom Team. */
+export function revealArea(state: WorldState, x: number, y: number, radius: number): void {
+  for (const enemy of state.enemies) {
+    const dx = enemy.position.x - x;
+    const dy = enemy.position.y - y;
+    const reach = radius + enemy.radius;
+    if (dx * dx + dy * dy <= reach * reach) {
+      enemy.marked = Math.max(enemy.marked, SUPERS.sniper.revealDuration);
+    }
   }
+  state.events.push({ type: "revealed", x, y, radius });
 }

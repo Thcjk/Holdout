@@ -57,7 +57,7 @@ export function tryAbility(state: WorldState, player: PlayerState, input: InputS
       throwFragGrenade(state, player, direction);
       break;
     case "tank":
-      secondWind(state, player);
+      startHealField(player);
       break;
     case "sniper":
       fireRootShot(state, player, direction);
@@ -123,20 +123,76 @@ function throwFragGrenade(state: WorldState, player: PlayerState, direction: Vec
  * Werten: Bei fast vollem Leben soll die Anzeige nicht 1000 behaupten, wenn
  * nur 80 angekommen sind.
  */
-function secondWind(state: WorldState, player: PlayerState): void {
-  const before = player.health;
-  player.health = Math.min(player.maxHealth, player.health + ABILITIES.tank.heal);
-
-  state.events.push({
-    type: "healed",
-    playerId: player.id,
-    amount: player.health - before,
-    x: player.position.x,
-    y: player.position.y,
-  });
+/**
+ * Heilfeld des Tanks (Etappe 10): ein Feld um ihn, das drei Sekunden lang
+ * alle STEHENDEN Mitspieler darin heilt, ihn selbst eingeschlossen.
+ *
+ * Wer am Boden liegt, wird nicht geheilt - aufstehen geht nur ueber die
+ * Wiederbelebung, sonst waere das Feld nebenbei eine zweite, schnellere.
+ */
+function startHealField(player: PlayerState): void {
+  player.healField = ABILITIES.tank.duration;
+  player.healFieldPending = {};
 }
 
-/** Sniper: Laehmschuss - langsam, weniger Schaden, wurzelt den Getroffenen fest. */
+/**
+ * Heilt, solange das Feld steht - ein Stueck je Tick.
+ *
+ * Gemeldet wird gesammelt, einmal je Sekunde und am Ende: Eine Zahl je Tick
+ * (30 je Sekunde) waere ein Schwarm von "+3", den niemand liest.
+ */
+export function stepHealFields(state: WorldState, dt: number): void {
+  const ability = ABILITIES.tank;
+  const radiusSquared = ability.radius * ability.radius;
+
+  for (const tank of state.players) {
+    if (tank.healField <= 0) {
+      continue;
+    }
+
+    const before = tank.healField;
+    tank.healField = Math.max(0, tank.healField - dt);
+    const step = before - tank.healField;
+
+    for (const mate of state.players) {
+      if (mate.down) {
+        continue;
+      }
+      const dx = mate.position.x - tank.position.x;
+      const dy = mate.position.y - tank.position.y;
+      if (dx * dx + dy * dy > radiusSquared) {
+        continue;
+      }
+      const healed = Math.min(mate.maxHealth - mate.health, ability.healPerSecond * step);
+      if (healed <= 0) {
+        continue;
+      }
+      mate.health += healed;
+      tank.healFieldPending[mate.id] = (tank.healFieldPending[mate.id] ?? 0) + healed;
+    }
+
+    // Volle Sekunde vorbei oder Feld zu Ende: sammeln und melden.
+    const crossedSecond = Math.floor(before) !== Math.floor(tank.healField);
+    if (crossedSecond || tank.healField <= 0) {
+      for (const [id, amount] of Object.entries(tank.healFieldPending)) {
+        const mate = state.players.find((entry) => entry.id === id);
+        // Gemeldet wird die echte Heilung, nicht der Tabellenwert.
+        const rounded = Math.round(amount);
+        if (mate && rounded > 0) {
+          state.events.push({
+            type: "healed",
+            playerId: id,
+            amount: rounded,
+            x: mate.position.x,
+            y: mate.position.y,
+          });
+        }
+      }
+      tank.healFieldPending = {};
+    }
+  }
+}
+
 function fireRootShot(state: WorldState, player: PlayerState, direction: Vec2): void {
   const ability = ABILITIES.sniper;
   spawnProjectile(state, {

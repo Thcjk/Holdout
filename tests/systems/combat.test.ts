@@ -112,6 +112,44 @@ describe("Schuesse", () => {
   });
 });
 
+describe("Automatische Zielsuche (Etappe 10)", () => {
+  function shotAt(distanceFactor: number): { x: number; y: number } | undefined {
+    const state = world();
+    state.walls.length = 0;
+    const player = firstPlayer(state);
+    player.facing = { x: 1, y: 0 };
+    const range = CHARACTERS[player.character].shot.range;
+    state.enemies.push(
+      createEnemy(
+        1,
+        "runner",
+        { x: player.position.x, y: player.position.y - range * distanceFactor },
+        1,
+        1,
+        false,
+      ),
+    );
+    tryShoot(state, player, makeInput({ x: 0, y: 0 }, { fire: true }));
+    return state.projectiles.find((entry) => entry.active)?.velocity;
+  }
+
+  it("nimmt Gegner im inneren Teil der Reichweite", () => {
+    expect(shotAt(PLAYER.autoAimRangeFactor - 0.1)?.y).toBeLessThan(0);
+  });
+
+  it("laesst Gegner weiter draussen liegen und schiesst in Blickrichtung", () => {
+    // Vorher reichte die Suche bis 115 % der Waffenreichweite - man traf ohne
+    // hinzusehen, was irgendwo im Bild stand.
+    const velocity = shotAt(PLAYER.autoAimRangeFactor + 0.15);
+    expect(velocity?.x).toBeGreaterThan(0);
+    expect(Math.abs(velocity?.y ?? 1)).toBeLessThan(Math.abs(velocity?.x ?? 0));
+  });
+
+  it("ist rund 40 % kuerzer als vorher (1,15 x Reichweite)", () => {
+    expect(PLAYER.autoAimRangeFactor / 1.15).toBeCloseTo(0.6, 1);
+  });
+});
+
 describe("Projektile", () => {
   it("ueberschreitet das harte Limit nicht", () => {
     const state = world();
@@ -234,15 +272,15 @@ describe("Projektile", () => {
 });
 
 describe("Schaden", () => {
-  it("verdoppelt den Schaden auf markierten Gegnern", () => {
+  it("gibt auf aufgedeckte Gegner 50 % mehr Schaden - fuer das ganze Team", () => {
     const state = world();
     const enemy = createEnemy(1, "runner", { x: 900, y: 600 }, 1, 1, false);
-    enemy.marked = SUPERS.sniper.duration;
+    enemy.marked = SUPERS.sniper.revealDuration;
     state.enemies.push(enemy);
 
-    damageEnemy(state, enemy, 100, "p1");
+    damageEnemy(state, enemy, 100, "irgendwer");
 
-    expect(enemy.health).toBe(enemy.maxHealth - 200);
+    expect(enemy.health).toBe(enemy.maxHealth - 150);
   });
 
   it("zaehlt beim Tod den Score hoch und meldet das Ereignis", () => {

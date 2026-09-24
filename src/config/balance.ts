@@ -12,6 +12,19 @@ export const PLAYER = {
   /** Grundtempo in Pixel pro Sekunde (je Charakter ueberschrieben). */
   speed: 220,
   /**
+   * Wie weit die automatische Zielsuche reicht, als Anteil der
+   * Waffenreichweite.
+   *
+   * ETAPPE 10: 1,15 -> 0,69 (rund 40 % weniger, Vorgabe des
+   * Arbeitsdokuments). Vorher suchte sie sogar ETWAS UEBER die eigene
+   * Reichweite hinaus, damit ein Gegner am Rand nicht verloren ging. Folge:
+   * Man traf ohne hinzusehen, was irgendwo im Bild war. Jetzt nimmt sie nur
+   * noch Gegner im inneren Teil der Reichweite; alles dahinter bekommt einen
+   * Schuss in Blickrichtung. Einen Kegel gibt es nicht - gesucht wird rundum,
+   * das war schon vorher so.
+   */
+  autoAimRangeFactor: 0.69,
+  /**
    * Zeit in Sekunden bis Vollgeschwindigkeit - 0,10 -> 0,06.
    *
    * Das ist der groesste Einzelposten an der gefuehlten Verzoegerung. Die Kette
@@ -135,8 +148,8 @@ export const CHARACTERS: Record<CharacterId, CharacterDefinition> = {
     reloadTime: 2.2,
     shot: { bullets: 1, damage: 900, range: 900, spread: 0, piercing: true },
     super: {
-      name: "Zielscheinwerfer",
-      description: "Markiert einen Gegner: doppelter Schaden für 5 s",
+      name: "Aufklärungsschuss",
+      description: "Deckt Gegner im Umkreis auf: +50 % Schaden fürs Team, 6 s",
     },
   },
 };
@@ -191,36 +204,32 @@ export const ABILITIES = {
   },
   tank: {
     /*
-     * Frueher "Schildwand": eine Barriere, die gegnerische SCHUESSE blockte.
-     * Zwei Gruende, warum sie nicht passte. Erstens kaempft der Tank auf 250
-     * Pixel mitten im Getuemmel, und dort kommt der Schaden von Laeufern, die
-     * einen beruehren - genau davor schuetzte die Wand nicht. Zweitens musste
-     * man sie im Laufen vor sich hinstellen und dann dahinter bleiben; das ist
-     * Stellungsspiel, und der Tank ist der Charakter, der genau das NICHT
-     * noetig haben soll.
+     * GESCHICHTE: zuerst "Schildwand" (blockte Schuesse - passte nicht zu
+     * jemandem, der mitten im Getuemmel steht), dann "Zweite Luft" (heilte
+     * sofort 1000 nur den Tank selbst).
      *
-     * Jetzt heilt er sich. Das passt zu seiner Rolle ("haelt aus"), ist die
-     * einzige Heilung im Spiel ausser der Wiederbelebung - und es ist sofort zu
-     * sehen: Der Lebensbalken springt hoch.
+     * SEIT ETAPPE 10: "Heilfeld", Werte aus dem Arbeitsdokument
+     * (`tankHeal`). Ein Feld um den Tank heilt drei Sekunden lang ALLE
+     * stehenden Mitspieler darin, auch ihn selbst. Das macht aus dem
+     * Selbstversorger den, um den sich das Team sammelt - und loest nebenbei
+     * den Widerspruch aus CLAUDE.md, dass der Tank zwei Heilungen fuer sich
+     * allein hatte.
      *
-     * Warum keine Schockwelle: Sein Super (Bodenstampfer) macht bereits
-     * Flaechenschaden MIT Rueckstoss. Eine zweite Faehigkeit derselben Art
-     * waere nur eine schwaechere Kopie davon.
+     * Deutlich weniger Heilung fuer den Tank selbst als vorher: 80 x 3 = 240
+     * statt 1000. Dafuer wirkt sie bei vier Spielern bis zu viermal.
      */
-    name: "Zweite Luft",
-    short: "HEILEN",
-    description: "Heilt sofort einen Teil der Lebenspunkte",
-    /** Wirkt auf einen selbst - es gibt nichts zu zielen. */
+    name: "Heilfeld",
+    short: "HEILFELD",
+    description: "Heilt alle im Umkreis ueber drei Sekunden",
+    /** Wirkt um einen selbst - es gibt nichts zu zielen. */
     aimStyle: "self",
     cooldown: 12,
-    /**
-     * Sofort geheilte Lebenspunkte.
-     *
-     * Der Tank hat 4200 Leben; 1000 sind knapp ein Viertel davon. Genug, dass
-     * man es deutlich sieht und eine brenzlige Lage ueberlebt - zu wenig, um
-     * sich damit aus jedem Fehler herauszuheilen.
-     */
-    heal: 1000,
+    /** Radius des Felds um den Tank. Gezeichnet wird genau dieser Kreis. */
+    radius: 220,
+    /** Heilung je Sekunde fuer jeden Stehenden im Feld. */
+    healPerSecond: 80,
+    /** So lange haelt das Feld. */
+    duration: 3,
   },
   sniper: {
     name: "Lähmschuss",
@@ -288,11 +297,32 @@ export const SUPERS = {
     knockback: 420,
   },
   sniper: {
-    /** Dauer der Markierung in Sekunden. */
-    duration: 5.0,
-    damageMultiplier: 2,
-    /** Suchradius um die Zielrichtung. */
-    searchRange: 900,
+    /*
+     * SEIT ETAPPE 10: "Aufklaerungsschuss" statt "Zielscheinwerfer", Werte
+     * aus dem Arbeitsdokument (`scoutRecon`).
+     *
+     * Vorher markierte der Super EINEN Gegner, der 5 s doppelten Schaden nahm.
+     * Jetzt fliegt ein Geschoss, und wo es einschlaegt - Gegner, Wand oder
+     * Ende der Reichweite -, werden ALLE Gegner im Umkreis aufgedeckt: Sie
+     * leuchten, stehen auf der Karte und nehmen vom ganzen Team 50 % mehr
+     * Schaden. Aus einem Einzelschuss wird eine Teamansage.
+     *
+     * NICHT UEBERNOMMEN: `cooldown: 14` aus dem Dokument. Ein Super laedt
+     * sich in diesem Spiel ueber ausgeteilten Schaden auf, nicht ueber Zeit
+     * (`PLAYER.superChargePerDamage`). Eine zusaetzliche Abklingzeit waere
+     * eine zweite Regel fuer denselben Knopf - siehe CLAUDE.md, Etappe 10.
+     */
+    name: "Aufklärungsschuss",
+    /** Fluggeschwindigkeit des Geschosses. */
+    projectileSpeed: 700,
+    /** So weit fliegt es hoechstens - die Reichweite der eigenen Waffe. */
+    range: 900,
+    /** Umkreis um den Einschlag, in dem aufgedeckt wird. */
+    revealRadius: 500,
+    /** So lange bleiben die Gegner aufgedeckt. */
+    revealDuration: 6,
+    /** Zusaetzlicher Schaden, den aufgedeckte Gegner vom ganzen Team nehmen. */
+    teamDamageBonus: 0.5,
   },
 } as const;
 
