@@ -16,7 +16,12 @@
  *    nach OBEN versetzt: Man sieht, was man traegt, und man sieht die
  *    Zielzelle darunter.
  *
- * 2. GETIPPT WIRD GEDREHT, GEZOGEN WIRD VERSCHOBEN.
+ * 2. GETIPPT WIRD GEDREHT, GEZOGEN WIRD VERSCHOBEN - AUSSER BEI WAFFEN.
+ *    Seit der Waffen-Ausruestung heisst ein Tipp auf eine Waffe "ausruesten"
+ *    (wo das Gitter es erlaubt: `equipOnTap`). Gedreht wird eine Waffe dann
+ *    mit dem DREHEN-Knopf, der waehrend des Haltens erscheint. Ausruesten ist
+ *    die haeufigere Handlung - sie bekommt den einfachsten Griff.
+ *
  *    Ein Doppeltipp waere auf einem kleinen Bildschirm unzuverlaessig (der
  *    zweite Tipp landet leicht eine Zelle daneben), und ein Drehknopf, den
  *    man nur mit der zweiten Hand erreicht, hilft niemandem, der das Handy
@@ -45,6 +50,7 @@ import {
   removeAt,
 } from "../systems/InventoryGridSystem";
 import type { InventoryGrid as GridData, ItemInstance } from "../systems/types";
+import { equipAt, isWeapon } from "../systems/weapons";
 
 /**
  * Ab dieser Zugstrecke gilt eine Beruehrung als Ziehen und nicht als Tipp.
@@ -85,6 +91,13 @@ export interface InventoryGridOptions {
    * springt er zurueck wie bisher.
    */
   onDiscard?: (from: { x: number; y: number }) => void;
+  /**
+   * Tipp auf eine Waffe ruestet sie aus, statt sie zu drehen. Nur im
+   * Rucksack - im Lager gibt es nichts auszuruesten.
+   */
+  equipOnTap?: boolean;
+  /** Nach einem Ausruesten per Tipp: welche Zelle. Im Run ein Befehl. */
+  onEquipped?: (at: { x: number; y: number }) => void;
   /**
    * Unterste Zeichenebene. Im Run liegt das Gitter in einem Fenster UEBER
    * einem abdunkelnden Hintergrund - mit der festen HUD-Ebene lag es darunter,
@@ -407,6 +420,16 @@ export class InventoryGrid {
     this.rotateHint.setVisible(false);
 
     if (!drag.moved) {
+      const entry = this.grid.items[drag.index];
+      if (this.options.equipOnTap && entry && isWeapon(entry.item.def)) {
+        // Ein Tipp auf eine Waffe: ausruesten (siehe Kopfkommentar, Punkt 2).
+        if (equipAt(this.grid, entry.x, entry.y)) {
+          this.options.onEquipped?.({ x: entry.x, y: entry.y });
+          this.options.onChange?.();
+        }
+        this.draw();
+        return;
+      }
       // Ein Tipp: an Ort und Stelle drehen, wenn es so passt.
       this.rotateInPlace(drag.index);
       this.draw();
@@ -713,6 +736,23 @@ export class InventoryGrid {
       if (entry.item.starter) {
         g.fillStyle(COLORS.superReady, 1);
         g.fillTriangle(px + 5, py + 5, px + 21, py + 5, px + 5, py + 21);
+      }
+
+      // Ausgeruestete Waffe: heller Rahmen plus Haekchen oben rechts. Beides,
+      // weil ein Rahmen allein auf der hellen Seltenheitsfarbe untergeht.
+      if (entry.item.equipped) {
+        g.lineStyle(3, 0xffffff, 1);
+        g.strokeRoundedRect(px + 1, py + 1, w + 4, h + 4, 7);
+        const cx = px + w - 9;
+        const cy = py + 13;
+        g.fillStyle(0x11161f, 0.95);
+        g.fillCircle(cx, cy, 9);
+        g.lineStyle(3, COLORS.mate, 1);
+        g.beginPath();
+        g.moveTo(cx - 5, cy);
+        g.lineTo(cx - 1, cy + 4);
+        g.lineTo(cx + 5, cy - 4);
+        g.strokePath();
       }
 
       const label = held ? this.heldLabelObject() : this.labelFor(labelIndex);

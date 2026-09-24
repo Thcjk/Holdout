@@ -16,7 +16,7 @@
  * zum Treffen, weit genug, um nicht im Nahkampf zu stehen.
  */
 
-import { CHARACTERS } from "../src/config/balance";
+import { attackRange } from "../src/systems/weapons";
 import { nearestEnemy } from "../src/systems/targeting";
 import type { InputState, Vec2, WorldState } from "../src/systems/types";
 import { makeInput } from "./helpers";
@@ -69,9 +69,9 @@ function botInput(
     return new Map();
   }
 
-  const range = CHARACTERS[player.character].shot.range;
-  // Wunschabstand: knapp innerhalb der eigenen Reichweite. Der Sniper (900)
-  // bleibt damit weit weg, der Tank (250) muss ran - genau wie gedacht.
+  const range = attackRange(player);
+  // Wunschabstand: knapp innerhalb der Reichweite der ausgeruesteten Waffe.
+  // Mit dem Gewehr (800) bleibt er weit weg, mit der Faust muss er ran.
   const wanted = range * 0.7;
   const tooClose = range * 0.45;
 

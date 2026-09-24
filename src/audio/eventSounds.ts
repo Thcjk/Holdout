@@ -15,6 +15,9 @@ function soundFor(event: GameEvent): SoundName | null {
       return event.owner === "player" ? "shoot" : "enemyShoot";
     case "hit":
       return "hit";
+    case "punch":
+      // Der Treffer klingt zusaetzlich ueber sein eigenes "hit".
+      return "swing";
     case "enemyDied":
       return "enemyDied";
     case "playerHit":

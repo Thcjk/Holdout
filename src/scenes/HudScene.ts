@@ -343,6 +343,7 @@ export class HudScene extends Phaser.Scene {
       abilityCooldownMax: this.model.abilityCooldownMax,
       superCharge: this.model.superCharge,
       abilityLabel: this.model.abilityLabel,
+      attackLabel: this.model.attackLabel,
     });
   }
 

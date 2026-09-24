@@ -4,7 +4,9 @@
  * Die kurze Messung in `balanceProbe.test.ts` sagt nur, wie tief ein Bot kommt.
  * Das hier beantwortet die Fragen dahinter:
  *
- *   - Wie schnell stirbt ein durchschnittlicher Gegner pro Charakter?
+ *   - Wie schnell stirbt ein durchschnittlicher Gegner pro WAFFE? (Seit der
+ *     Waffen-Ausruestung schiesst die Waffe, nicht der Charakter. Gemessen
+ *     wird jeder Charakter mit der Starter-Pistole.)
  *   - Ab welcher Zone wird es spuerbar schwer?
  *   - Ist einer der drei deutlich staerker oder schwaecher?
  *
@@ -16,8 +18,8 @@
  * Zwei Sorten Zahlen, und der Unterschied ist wichtig:
  *
  *   RECHNERISCH  Was auf dem Papier steht, wenn jede Kugel trifft. Fuer den
- *                Tank ist das eine Wunschzahl: Er streut 34 Grad, seine fuenf
- *                Kugeln treffen nur aus naechster Naehe alle.
+ *                Maschinenpistole ist das eine Wunschzahl: Sie streut 8 Grad,
+ *                ihre drei Kugeln treffen auf Distanz nicht alle.
  *   GEMESSEN     Was im Durchlauf tatsaechlich passiert ist - Schaden aus den
  *                Treffer-Ereignissen geteilt durch die Zeit im Gefecht.
  *
@@ -26,10 +28,11 @@
  */
 
 import { describe, it } from "vitest";
-import { CHARACTERS, DIFFICULTY, ENEMIES, PLAYER } from "../../src/config/balance";
+import { DIFFICULTY, ENEMIES, PLAYER, WEAPONS } from "../../src/config/balance";
 import { TICK_RATE, TICK_SECONDS } from "../../src/config/constants";
 import { createWorld, stepWorld } from "../../src/systems/world";
 import { createBot } from "../bot";
+import { armed } from "../helpers";
 import type { CharacterId, EnemyType } from "../../src/systems/types";
 
 /**
@@ -39,14 +42,14 @@ import type { CharacterId, EnemyType } from "../../src/systems/types";
  * Wiederholung) und dem Nachladen (drei Ladungen, jede braucht `reloadTime`).
  * Auf Dauer ist das Nachladen der Engpass, im ersten Ansturm der Schusstakt.
  */
-function sustainedShotsPerSecond(character: CharacterId): number {
-  const reload = CHARACTERS[character].reloadTime;
-  return Math.min(1 / PLAYER.shootCooldown, PLAYER.ammoCharges / reload);
+function sustainedShotsPerSecond(weapon: string): number {
+  const stats = WEAPONS[weapon]!;
+  return Math.min(1 / stats.cooldown, PLAYER.ammoCharges / stats.reloadTime);
 }
 
-function paperDps(character: CharacterId): number {
-  const shot = CHARACTERS[character].shot;
-  return sustainedShotsPerSecond(character) * shot.bullets * shot.damage;
+function paperDps(weapon: string): number {
+  const stats = WEAPONS[weapon]!;
+  return sustainedShotsPerSecond(weapon) * stats.bullets * stats.damage;
 }
 
 /** Gegnerleben in einer bestimmten Zone - Wachstum aus der Distanzformel. */
@@ -72,7 +75,7 @@ interface ZoneRecord {
  * je Besuch: Was interessiert, ist "wie teuer war Zone 4 insgesamt".
  */
 function runOnce(character: CharacterId, seed: number, maxZone: number): ZoneRecord[] {
-  const state = createWorld([{ id: "p", name: "Bot", character }], seed);
+  const state = createWorld([{ id: "p", name: "Bot", character, backpack: armed() }], seed);
   const bot = createBot();
   const byZone = new Map<number, ZoneRecord>();
 
@@ -122,12 +125,13 @@ describe("Balancing-Protokoll", () => {
     const lines: string[] = [];
     lines.push("");
     lines.push("=== RECHNERISCH: Dauerfeuer, wenn jede Kugel trifft ===");
-    lines.push("Charakter  Schuss/s  Schaden/s   Laeufer(600)  Schuetze(900)  Brocken(2800)");
-    for (const character of characters) {
-      const dps = paperDps(character);
+    lines.push("Waffe      Schuss/s  Schaden/s   Laeufer(600)  Schuetze(900)  Brocken(2800)");
+    const weapons = Object.keys(WEAPONS);
+    for (const weapon of weapons) {
+      const dps = paperDps(weapon);
       const ttk = (type: EnemyType, zone: number) => (enemyHealth(type, zone) / dps).toFixed(2);
       lines.push(
-        `${character.padEnd(10)} ${sustainedShotsPerSecond(character).toFixed(2).padStart(8)} ` +
+        `${weapon.padEnd(10)} ${sustainedShotsPerSecond(weapon).toFixed(2).padStart(8)} ` +
           `${Math.round(dps).toString().padStart(9)}   ` +
           `${ttk("runner", 0).padStart(10)} s  ${ttk("shooter", 0).padStart(11)} s  ` +
           `${ttk("brute", 0).padStart(11)} s`,
@@ -135,11 +139,11 @@ describe("Balancing-Protokoll", () => {
     }
     lines.push("");
     lines.push("Dieselben Gegner in Zone 8 (Leben waechst 8 % je Zone, also x1,85):");
-    for (const character of characters) {
-      const dps = paperDps(character);
+    for (const weapon of weapons) {
+      const dps = paperDps(weapon);
       const ttk = (type: EnemyType) => (enemyHealth(type, 8) / dps).toFixed(2);
       lines.push(
-        `${character.padEnd(10)} ${"".padStart(8)} ${"".padStart(9)}   ` +
+        `${weapon.padEnd(10)} ${"".padStart(8)} ${"".padStart(9)}   ` +
           `${ttk("runner").padStart(10)} s  ${ttk("shooter").padStart(11)} s  ` +
           `${ttk("brute").padStart(11)} s`,
       );
@@ -147,7 +151,7 @@ describe("Balancing-Protokoll", () => {
 
     for (const character of characters) {
       lines.push("");
-      lines.push(`=== GEMESSEN: ${character} (Schnitt aus ${seeds.length} Durchlaeufen) ===`);
+      lines.push(`=== GEMESSEN: ${character} mit Pistole (Schnitt aus ${seeds.length} Durchlaeufen) ===`);
       lines.push("Zone   Dauer   Schaden/s  erlitten  Kills  Leben danach  am Boden");
 
       const perZone = new Map<number, ZoneRecord[]>();

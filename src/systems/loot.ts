@@ -39,6 +39,7 @@ import { ITEMS } from "../config/items";
 import { LOOT } from "../config/balance";
 import { findFreeSpot, move, place, removeAt } from "./InventoryGridSystem";
 import { nextRandom } from "./rng";
+import { equipAt, settleEquipped } from "./weapons";
 import { zoneOf } from "./zones";
 import type {
   EnemyState,
@@ -157,7 +158,8 @@ export function dropFromEnemy(state: WorldState, enemy: EnemyState): void {
 
 /** Ein Tick: Liegezeit abziehen und aufheben, was nah genug ist. */
 /**
- * Fuehrt einen Rucksack-Befehl aus (Etappe 9).
+ * Fuehrt einen Rucksack-Befehl aus (Etappe 9, Ausruesten seit der
+ * Waffen-Ausruestung).
  *
  * Verschieben geht ueber `move` aus dem Gittersystem - dieselbe Pruefung wie
  * im Packbildschirm. Wegwerfen legt den Gegenstand vor die Fuesse: Er ist
@@ -182,7 +184,14 @@ export function applyInventoryCommand(
     return;
   }
 
+  if (command.op === "equip") {
+    equipAt(grid, command.fromX, command.fromY);
+    return;
+  }
+
   const removed = removeAt(grid, index);
+  // War es die aktive Waffe, springt die naechste ein (`settleEquipped`).
+  settleEquipped(grid);
   if (removed) {
     // Etwas neben die Figur, sonst hebt sie es im selben Tick wieder auf.
     const spot = {
@@ -289,6 +298,8 @@ function pickUp(state: WorldState): void {
     }
 
     place(best.backpack, { id: state.nextItemId++, def: item.def }, spot.x, spot.y, spot.rotated);
+    // Wer mit blossen Faeusten eine Waffe aufhebt, hat sie sofort in der Hand.
+    settleEquipped(best.backpack);
     state.groundItems.splice(i, 1);
     state.events.push({
       type: "itemPicked",

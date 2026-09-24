@@ -71,7 +71,9 @@ export interface InputState {
  */
 export type InventoryCommand =
   | { op: "move"; fromX: number; fromY: number; x: number; y: number; rotated: boolean }
-  | { op: "drop"; fromX: number; fromY: number };
+  | { op: "drop"; fromX: number; fromY: number }
+  /** Die Waffe an dieser Stelle ausruesten (nur eine ist aktiv). */
+  | { op: "equip"; fromX: number; fromY: number };
 
 export function emptyInput(): InputState {
   return {
@@ -118,6 +120,14 @@ export interface ItemInstance {
    * er steht im naechsten Packen ohnehin wieder bereit (Etappe 9).
    */
   starter?: boolean;
+  /**
+   * Die ausgeruestete Waffe - hoechstens EIN Gegenstand im Rucksack traegt
+   * das. Aus ihr liest der Kampf Schaden, Reichweite und Takt
+   * (`systems/weapons.ts`). Steht am Gegenstand und nicht als Nummer am
+   * Spieler: So wandert es beim Umraeumen von selbst mit, und ein
+   * weggeworfener Gegenstand nimmt es mit hinaus.
+   */
+  equipped?: boolean;
 }
 
 /**
@@ -160,6 +170,8 @@ export interface PackedItem {
   rotated: boolean;
   /** Starter-Set, siehe `ItemInstance.starter`. */
   starter?: boolean;
+  /** Ausgeruestet, siehe `ItemInstance.equipped`. */
+  equipped?: boolean;
 }
 
 /**
@@ -355,6 +367,8 @@ export type RoundPhase = "running" | "ended";
  */
 export type GameEvent =
   | { type: "shot"; x: number; y: number; dx: number; dy: number; owner: ProjectileOwner }
+  /** Faustschlag ohne Waffe - `hit`, ob ein Gegner getroffen wurde. */
+  | { type: "punch"; playerId: string; x: number; y: number; dx: number; dy: number; hit: boolean }
   | { type: "hit"; x: number; y: number; damage: number; enemyId: number }
   | { type: "enemyDied"; x: number; y: number; enemyType: EnemyType; isBoss: boolean }
   | { type: "playerHit"; playerId: string; x: number; y: number; damage: number }

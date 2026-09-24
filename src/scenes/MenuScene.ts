@@ -14,7 +14,7 @@
 import Phaser from "phaser";
 import { CHARACTER_TILES, SHEET_KEY, WORLD_SCALE } from "../config/assets";
 import { audio } from "../audio/AudioEngine";
-import { CHARACTERS, CHARACTER_ORDER } from "../config/balance";
+import { ABILITIES, CHARACTERS, CHARACTER_ORDER } from "../config/balance";
 import { COLORS, SAFE, VIEWPORT } from "../config/constants";
 import { isInstalledApp } from "../platform/device";
 import {
@@ -338,15 +338,16 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const shot = definition.shot;
     this.add
       .text(
         centerX,
         CARD_Y + 30,
         [
           `Leben ${definition.health}   Tempo ${definition.speed}`,
-          `${shot.bullets} × ${shot.damage} Schaden, Reichweite ${shot.range}`,
-          `Nachladen ${definition.reloadTime.toFixed(1)} s`,
+          // Seit der Waffen-Ausruestung schiesst die Waffe, nicht der
+          // Charakter - die Karte nennt deshalb Faehigkeit und Super.
+          `Fähigkeit: ${ABILITIES[definition.id].name}`,
+          `Super: ${definition.super.name}`,
         ].join("\n"),
         {
           fontFamily: "system-ui, sans-serif",

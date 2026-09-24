@@ -6,9 +6,11 @@
  * Phase 6 werden genau diese Ereignisse an die Mitspieler geschickt.
  */
 
-import { CHARACTERS, PLAYER, PROJECTILE, SUPERS } from "../config/balance";
+import { FIST, PLAYER, PROJECTILE, SUPERS } from "../config/balance";
+import { hasLineOfSight } from "./collision";
 import { spawnProjectile } from "./projectiles";
 import { nearestEnemy } from "./targeting";
+import { activeWeapon, autoAimReach, reloadTimeOf } from "./weapons";
 import type { EnemyState, InputState, PlayerState, Vec2, WorldState } from "./types";
 import { dropFromEnemy } from "./loot";
 
@@ -45,7 +47,7 @@ export function stepReload(player: PlayerState, dt: number): void {
 function consumeAmmo(player: PlayerState): boolean {
   for (let i = 0; i < player.reloadTimers.length; i += 1) {
     if ((player.reloadTimers[i] ?? 0) <= 0) {
-      player.reloadTimers[i] = CHARACTERS[player.character].reloadTime;
+      player.reloadTimers[i] = reloadTimeOf(player);
       return true;
     }
   }
@@ -67,8 +69,7 @@ function shootDirection(state: WorldState, player: PlayerState, input: InputStat
     }
   }
 
-  const range = CHARACTERS[player.character].shot.range;
-  const target = nearestEnemy(state, player.position, range * PLAYER.autoAimRangeFactor);
+  const target = nearestEnemy(state, player.position, autoAimReach(player));
   if (target) {
     const dx = target.position.x - player.position.x;
     const dy = target.position.y - player.position.y;
@@ -81,17 +82,31 @@ function shootDirection(state: WorldState, player: PlayerState, input: InputStat
   return { x: player.facing.x, y: player.facing.y };
 }
 
-/** Ein Schussversuch. Gibt zurueck, ob tatsaechlich geschossen wurde. */
+/**
+ * Ein Angriffsversuch. Gibt zurueck, ob tatsaechlich angegriffen wurde.
+ *
+ * Mit Waffe: Geschosse nach den Werten der AUSGERUESTETEN Waffe
+ * (`systems/weapons.ts`) - Schaden, Reichweite, Faecher, Nachladen, Takt.
+ * Ohne Waffe: der Faustschlag.
+ */
 export function tryShoot(state: WorldState, player: PlayerState, input: InputState): boolean {
-  if (!input.fire || player.down || player.shootCooldown > 0 || ammoCount(player) === 0) {
+  if (!input.fire || player.down || player.shootCooldown > 0) {
     return false;
   }
 
-  const definition = CHARACTERS[player.character];
+  const weapon = activeWeapon(player);
+  if (!weapon) {
+    punch(state, player, shootDirection(state, player, input));
+    return true;
+  }
+  if (ammoCount(player) === 0) {
+    return false;
+  }
+
   const direction = shootDirection(state, player, input);
   const baseAngle = Math.atan2(direction.y, direction.x);
-  const spread = (definition.shot.spread * Math.PI) / 180;
-  const bullets = definition.shot.bullets;
+  const spread = (weapon.spread * Math.PI) / 180;
+  const bullets = weapon.bullets;
 
   for (let i = 0; i < bullets; i += 1) {
     // Kugeln gleichmaessig ueber den Faecher verteilen, mittlere Kugel gerade aus.
@@ -104,15 +119,15 @@ export function tryShoot(state: WorldState, player: PlayerState, input: InputSta
       position: player.position,
       direction: { x: Math.cos(angle), y: Math.sin(angle) },
       speed: PROJECTILE.speed,
-      damage: definition.shot.damage,
-      range: definition.shot.range,
+      damage: weapon.damage,
+      range: weapon.range,
       radius: PROJECTILE.radius,
-      piercing: definition.shot.piercing,
+      piercing: weapon.piercing,
     });
   }
 
   consumeAmmo(player);
-  player.shootCooldown = PLAYER.shootCooldown;
+  player.shootCooldown = weapon.cooldown;
   player.facing.x = direction.x;
   player.facing.y = direction.y;
 
@@ -126,6 +141,59 @@ export function tryShoot(state: WorldState, player: PlayerState, input: InputSta
   });
 
   return true;
+}
+
+/**
+ * Der Faustschlag: trifft den naechsten Gegner vor der Figur, sofort.
+ *
+ * Kein Geschoss - eine Faust, die man fliegen sieht, waere keine. Getroffen
+ * wird hoechstens EIN Gegner (der naechste), und nur innerhalb eines Bogens
+ * von `FIST.arc` Grad zu beiden Seiten der Schlagrichtung, mit
+ * `FIST.reach` Pixeln ab Koerperrand zu Koerperrand. Durch Waende schlaegt
+ * man nicht: Eine Wand ist 48 px dick und passt in die Reichweite.
+ */
+function punch(state: WorldState, player: PlayerState, direction: Vec2): void {
+  const cosArc = Math.cos((FIST.arc * Math.PI) / 180);
+  let best: EnemyState | null = null;
+  let bestGap = Number.POSITIVE_INFINITY;
+
+  for (const enemy of state.enemies) {
+    const dx = enemy.position.x - player.position.x;
+    const dy = enemy.position.y - player.position.y;
+    const distance = Math.hypot(dx, dy);
+    const gap = distance - player.radius - enemy.radius;
+    if (gap > FIST.reach || gap >= bestGap) {
+      continue;
+    }
+    // Wer schon ueberlappt, wird immer getroffen - die Richtung ist dann
+    // kaum bestimmbar und ein Vorbeischlagen fuehlte sich falsch an.
+    if (gap > 0 && (dx * direction.x + dy * direction.y) / distance < cosArc) {
+      continue;
+    }
+    if (!hasLineOfSight(state.walls, player.position, enemy.position)) {
+      continue;
+    }
+    best = enemy;
+    bestGap = gap;
+  }
+
+  player.shootCooldown = FIST.cooldown;
+  player.facing.x = direction.x;
+  player.facing.y = direction.y;
+
+  state.events.push({
+    type: "punch",
+    playerId: player.id,
+    x: player.position.x,
+    y: player.position.y,
+    dx: direction.x,
+    dy: direction.y,
+    hit: best !== null,
+  });
+
+  if (best) {
+    damageEnemy(state, best, FIST.damage, player.id, direction);
+  }
 }
 
 /** Schaden an einem Gegner, inklusive Rueckstoss und Super-Aufladung. */

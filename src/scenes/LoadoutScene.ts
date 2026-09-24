@@ -57,6 +57,7 @@ import {
   stashItems,
 } from "../storage/carried";
 import { packGrid } from "../systems/backpackCodec";
+import { clearEquipped, settleEquipped, weaponLabel } from "../systems/weapons";
 import {
   createGrid,
   findFreeSpot,
@@ -142,6 +143,7 @@ export class LoadoutScene extends Phaser.Scene {
     this.backpack = createGrid(INVENTORY.width, INVENTORY.height);
     this.stash = createGrid(INVENTORY.stashWidth, INVENTORY.stashHeight);
     this.fillFromStorage();
+    settleEquipped(this.backpack);
 
     this.add
       .text(VIEWPORT.width / 2, SAFE.top + 18, "Rucksack packen", {
@@ -157,7 +159,7 @@ export class LoadoutScene extends Phaser.Scene {
       .text(
         VIEWPORT.width / 2,
         SAFE.top + 44,
-        "Ziehen verschiebt · Tippen dreht · Goldene Ecke = Starter-Set, geht nie verloren",
+        "Ziehen verschiebt · Tippen dreht, bei Waffen: ausrüsten ✓ · Goldene Ecke = Starter-Set",
         { fontFamily: "system-ui, sans-serif", fontSize: "13px", color: "#8ea6c4" },
       )
       .setOrigin(0.5);
@@ -202,6 +204,7 @@ export class LoadoutScene extends Phaser.Scene {
       y: top,
       cellSize: cell,
       onChange: () => this.updateSummary(),
+      equipOnTap: true,
       rotateButtonAt,
       rotateButtonWidth,
     });
@@ -257,7 +260,11 @@ export class LoadoutScene extends Phaser.Scene {
    */
   private fillFromStorage(): void {
     for (const entry of backpackForNextRun()) {
-      this.put(this.backpack, { id: this.nextId++, def: entry.def, starter: entry.starter }, entry);
+      this.put(
+        this.backpack,
+        { id: this.nextId++, def: entry.def, starter: entry.starter, equipped: entry.equipped },
+        entry,
+      );
     }
     for (const entry of stashItems()) {
       this.put(this.stash, { id: this.nextId++, def: entry.def }, entry);
@@ -293,9 +300,18 @@ export class LoadoutScene extends Phaser.Scene {
   }
 
   private updateSummary(): void {
+    /*
+     * Nach JEDER Aenderung: Im Lager ist nichts ausgeruestet, im Rucksack
+     * genau eine Waffe, wenn eine da ist. Wird die aktive Waffe ins Lager
+     * gezogen, springt die naechste ein; kommt die erste Waffe in den
+     * Rucksack, ist sie sofort ausgeruestet (`systems/weapons.ts`).
+     */
+    clearEquipped(this.stash);
+    settleEquipped(this.backpack);
+
     const cells = this.backpack.width * this.backpack.height;
     this.summary.setText(
-      `Rucksack · ${this.backpack.items.length} ${this.backpack.items.length === 1 ? "Gegenstand" : "Gegenstände"} · ${usedCells(this.backpack)} von ${cells} Zellen`,
+      `Rucksack · ${this.backpack.items.length} ${this.backpack.items.length === 1 ? "Gegenstand" : "Gegenstände"} · ${usedCells(this.backpack)} von ${cells} Zellen · Waffe: ${weaponLabel(this.backpack)}`,
     );
   }
 

@@ -29,6 +29,7 @@ import { loadHighscore } from "../storage/highscore";
 import { extractionFraction, leftBehind } from "../systems/encounters";
 import { distanceFromStart, safeRadiusOf } from "../systems/zones";
 import { nearestEnemy } from "../systems/targeting";
+import { attackLabel, attackRange, autoAimReach, reloadTimeOf } from "../systems/weapons";
 import { emptyInput } from "../systems/types";
 import type {
   CharacterId,
@@ -551,8 +552,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     const position = this.session.view.renderPlayerPosition(player.id);
-    const range = CHARACTERS[player.character].shot.range;
-    const direction = this.aimDirection(player, input, range);
+    // Reichweite der AUSGERUESTETEN Waffe (oder der Faust) - dieselbe Zahl,
+    // mit der die Simulation rechnet.
+    const range = attackRange(player);
+    const direction = this.aimDirection(player, input, autoAimReach(player));
     if (!direction) {
       return;
     }
@@ -643,7 +646,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Gezogene Richtung, sonst die Richtung zum automatisch gewaehlten Ziel. */
-  private aimDirection(player: PlayerState, input: InputState, range: number): Vec2 | null {
+  private aimDirection(player: PlayerState, input: InputState, reach: number): Vec2 | null {
     if (input.aim) {
       return input.aim;
     }
@@ -653,7 +656,7 @@ export class GameScene extends Phaser.Scene {
     const target = nearestEnemy(
       this.session.view.state,
       player.position,
-      range * PLAYER.autoAimRangeFactor,
+      reach,
     );
     if (!target) {
       return null;
@@ -698,14 +701,16 @@ export class GameScene extends Phaser.Scene {
   /** Fuellt das Objekt, das die HudScene liest. */
   private updateHudModel(player: PlayerState): void {
     const state = this.session.view.state;
-    const reloadTime = CHARACTERS[player.character].reloadTime;
+    // Die Faust braucht keine Munition (Nachladezeit 0): Ring immer voll.
+    const reloadTime = reloadTimeOf(player);
 
     this.hudModel.characterName = CHARACTERS[player.character].name;
     this.hudModel.health = player.health;
     this.hudModel.maxHealth = player.maxHealth;
     this.hudModel.ammo = player.reloadTimers.map((timer) =>
-      timer <= 0 ? 1 : 1 - timer / reloadTime,
+      timer <= 0 || reloadTime <= 0 ? 1 : 1 - timer / reloadTime,
     );
+    this.hudModel.attackLabel = attackLabel(player);
     this.hudModel.superCharge = player.superCharge;
     this.hudModel.abilityCooldown = player.abilityCooldown;
     this.hudModel.abilityCooldownMax = ABILITIES[player.character].cooldown;

@@ -26,11 +26,13 @@ import {
   DIFFICULTY,
   ENCOUNTERS,
   ENEMIES,
+  FIST,
   LIMITS,
   LOOT,
   PLAYER,
   PROJECTILE,
   SUPERS,
+  WEAPONS,
   WORLD,
 } from "./balance";
 import { CAMERA, TOUCH, VIEW3D } from "./constants";
@@ -40,6 +42,9 @@ const ROOTS: Record<string, unknown> = {
   player: PLAYER,
   projectile: PROJECTILE,
   characters: CHARACTERS,
+  // Waffen: ?tune=weapons.pistol.damage=400,fist.reach=80
+  weapons: WEAPONS,
+  fist: FIST,
   supers: SUPERS,
   enemies: ENEMIES,
   world: WORLD,

@@ -68,6 +68,8 @@ export interface HudModel {
   abilityCooldownMax: number;
   /** Kurzname der Faehigkeit fuer die Beschriftung des Knopfs. */
   abilityLabel: string;
+  /** Beschriftung des FEUER-Knopfs: ausgeruestete Waffe oder "FAUST". */
+  attackLabel: string;
   /** Distanzzone, in der das Team gerade unterwegs ist. 0 = sicherer Start. */
   zone: number;
   /** Tiefste je erreichte Zone. */
@@ -125,6 +127,7 @@ export function createHudModel(): HudModel {
     abilityCooldown: 0,
     abilityCooldownMax: 1,
     abilityLabel: "",
+    attackLabel: "FEUER",
     zone: 0,
     deepestZone: 0,
     score: 0,

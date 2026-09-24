@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { CHARACTERS, PLAYER } from "../../src/config/balance";
+import { PLAYER, WEAPONS } from "../../src/config/balance";
 import { TICK_MS, TICK_SECONDS } from "../../src/config/constants";
 import { ammoCount, stepReload, tryShoot } from "../../src/systems/combat";
 import { activeProjectileCount } from "../../src/systems/projectiles";
@@ -64,7 +64,7 @@ describe("Verzoegerung vom Antippen bis zum Schuss", () => {
 
   it("laedt die Ladungen einzeln nach, nicht gemeinsam", () => {
     const { state, player } = setup();
-    const reloadTime = CHARACTERS[player.character].reloadTime;
+    const reloadTime = WEAPONS.pistol!.reloadTime;
 
     // Alle Ladungen verschiessen, mit etwas Abstand dazwischen.
     for (let i = 0; i < PLAYER.ammoCharges; i += 1) {
@@ -90,7 +90,7 @@ describe("Verzoegerung vom Antippen bis zum Schuss", () => {
     const { state, player } = setup();
 
     // Dauerfeuer: Der Schusstakt erlaubt hoechstens einen Schuss je
-    // PLAYER.shootCooldown, auch wenn drei Ladungen bereitliegen.
+    // WEAPONS.pistol.cooldown, auch wenn drei Ladungen bereitliegen.
     let shots = 0;
     for (let tick = 0; tick < 6; tick += 1) {
       stepReload(player, TICK_SECONDS);
@@ -99,7 +99,7 @@ describe("Verzoegerung vom Antippen bis zum Schuss", () => {
       }
     }
 
-    const maxShots = Math.floor((6 * TICK_SECONDS) / PLAYER.shootCooldown) + 1;
+    const maxShots = Math.floor((6 * TICK_SECONDS) / WEAPONS.pistol!.cooldown) + 1;
     expect(shots).toBeGreaterThan(0);
     expect(shots).toBeLessThanOrEqual(maxShots);
   });

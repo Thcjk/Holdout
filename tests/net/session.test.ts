@@ -16,6 +16,7 @@ import { createEnemy } from "../../src/systems/enemies";
 import type { PlayerSetup } from "../../src/systems/world";
 import type { NetMessage } from "../../src/net/protocol";
 import { BaseTransport } from "../../src/net/Transport";
+import { itemIndex } from "../../src/config/items";
 import { makeInput } from "../helpers";
 
 /** Zwei Enden, die sich direkt beliefern - mit einstellbarem Paketverlust. */
@@ -272,6 +273,41 @@ describe("Rucksack-Befehl uebers Netz (Etappe 9)", () => {
     // Und er kommt im Zustandspaket zum Client zurueck.
     const onClient = client.view.state.players.find((player) => player.id === "client");
     expect(onClient?.backpack.items[0]).toMatchObject({ x: 4, y: 3 });
+  });
+});
+
+describe("Waffe ausruesten uebers Netz", () => {
+  it("ruestet beim Host aus und das Merkmal kommt beim Client an", () => {
+    const { hostTransport, clientTransport } = pair();
+    const pistol = itemIndex("pistol");
+    const rifle = itemIndex("rifle");
+    const setups: PlayerSetup[] = [
+      { id: "host", name: "Host", character: "scout" },
+      {
+        id: "client",
+        name: "Client",
+        character: "sniper",
+        backpack: [
+          { def: pistol, x: 0, y: 0, rotated: false, equipped: true },
+          { def: rifle, x: 0, y: 2, rotated: false },
+        ],
+      },
+    ];
+    const host = new HostSession(hostTransport, setups, "host", 3);
+    const client = new ClientSession(clientTransport, setups, "client", 3);
+
+    client.update(TICK_MS * 3, makeInput({ x: 0, y: 0 }, {
+      inventory: { op: "equip", fromX: 0, fromY: 2 },
+    }));
+    run(10, host, client, 0);
+
+    const onHost = host.view.state.players.find((player) => player.id === "client");
+    const onClient = client.view.state.players.find((player) => player.id === "client");
+    for (const player of [onHost, onClient]) {
+      const equipped = player?.backpack.items.filter((entry) => entry.item.equipped);
+      expect(equipped).toHaveLength(1);
+      expect(equipped?.[0]?.item.def).toBe(rifle);
+    }
   });
 });
 

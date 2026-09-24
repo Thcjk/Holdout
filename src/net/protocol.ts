@@ -338,13 +338,14 @@ function encodePlayer(player: PlayerState): NetPlayer {
     revive: round1(player.reviveProgress),
     inv: round1(player.invulnerable),
     hf: round1(player.healField),
-    // Vierter Wert je Gegenstand: Merkmale als Bits (gedreht, Starter) -
+    // Vierter Wert je Gegenstand: Merkmale als Bits (gedreht, Starter,
+    // ausgeruestet) -
     // siehe `systems/backpackCodec.ts`.
     bp: player.backpack.items.flatMap((entry) => [
       entry.item.def,
       entry.x,
       entry.y,
-      flagsOf(entry.rotated, entry.item.starter),
+      flagsOf(entry.rotated, entry.item.starter, entry.item.equipped),
     ]),
   };
 }

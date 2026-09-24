@@ -16,7 +16,7 @@
  */
 
 import { unflattenPacked } from "../systems/backpackCodec";
-import { CHARACTERS } from "../config/balance";
+import { reloadTimeOf } from "../systems/weapons";
 import { TICK_MS, TICK_SECONDS } from "../config/constants";
 import { stepPlayerMovement } from "../systems/movement";
 import { createPlayer, createWorld, isInBush } from "../systems/world";
@@ -346,7 +346,7 @@ export class ClientView implements WorldView {
       player.backpack.items.length = 0;
       unflattenPacked(netPlayer.bp).forEach((entry, index) => {
         player.backpack.items.push({
-          item: { id: index + 1, def: entry.def, starter: entry.starter },
+          item: { id: index + 1, def: entry.def, starter: entry.starter, equipped: entry.equipped },
           x: entry.x,
           y: entry.y,
           rotated: entry.rotated,
@@ -355,7 +355,8 @@ export class ClientView implements WorldView {
 
       // Nachladeuhren gibt es auf dem Client nicht - nur die Anzahl voller
       // Ladungen. Das HUD braucht nicht mehr.
-      const reloadTime = CHARACTERS[player.character].reloadTime;
+      // Die Nachladezeit haengt an der Waffe - der Rucksack steht oben schon.
+      const reloadTime = reloadTimeOf(player) || 1;
       for (let i = 0; i < player.reloadTimers.length; i += 1) {
         player.reloadTimers[i] = i < netPlayer.ammo ? 0 : reloadTime * 0.5;
       }

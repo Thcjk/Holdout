@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHARACTERS, LIMITS, PLAYER, SUPERS } from "../../src/config/balance";
+import { LIMITS, PLAYER, SUPERS, WEAPONS } from "../../src/config/balance";
 import { TICK_SECONDS } from "../../src/config/constants";
 import {
   ammoCount,
@@ -63,10 +63,10 @@ describe("Munition", () => {
   it("laedt alle Ladungen gleichzeitig nach, nicht nacheinander", () => {
     const state = world();
     const player = firstPlayer(state);
-    player.reloadTimers.fill(CHARACTERS.scout.reloadTime);
+    player.reloadTimers.fill(WEAPONS.pistol!.reloadTime);
 
     // Etwas mehr als eine Nachladezeit vergehen lassen.
-    const ticks = Math.ceil(CHARACTERS.scout.reloadTime / TICK_SECONDS) + 1;
+    const ticks = Math.ceil(WEAPONS.pistol!.reloadTime / TICK_SECONDS) + 1;
     for (let i = 0; i < ticks; i += 1) {
       stepReload(player, TICK_SECONDS);
     }
@@ -85,7 +85,7 @@ describe("Munition", () => {
 });
 
 describe("Schuesse", () => {
-  it("erzeugt so viele Projektile wie der Charakter Kugeln hat", () => {
+  it("erzeugt so viele Projektile wie die Waffe Kugeln hat", () => {
     const state = world();
     tryShoot(
       state,
@@ -93,7 +93,7 @@ describe("Schuesse", () => {
       makeInput({ x: 0, y: 0 }, { aim: { x: 1, y: 0 }, fire: true }),
     );
 
-    expect(activeProjectileCount(state)).toBe(CHARACTERS.scout.shot.bullets);
+    expect(activeProjectileCount(state)).toBe(WEAPONS.pistol!.bullets);
   });
 
   it("zielt ohne eigene Zielangabe automatisch auf den naechsten Gegner", () => {
@@ -118,7 +118,7 @@ describe("Automatische Zielsuche (Etappe 10)", () => {
     state.walls.length = 0;
     const player = firstPlayer(state);
     player.facing = { x: 1, y: 0 };
-    const range = CHARACTERS[player.character].shot.range;
+    const range = WEAPONS.pistol!.range;
     state.enemies.push(
       createEnemy(
         1,

@@ -7,6 +7,7 @@
  *
  *   Bit 0 (Wert 1)  gedreht
  *   Bit 1 (Wert 2)  gehoert zum Starter-Set
+ *   Bit 2 (Wert 4)  ausgeruestete Waffe (seit der Waffen-Ausruestung)
  *
  * Warum kein fuenfter Wert: Alte Pakete bleiben so lesbar (ein "1" ist
  * weiterhin "gedreht, kein Starter"), und die Reihe waechst nicht.
@@ -22,13 +23,22 @@ import type { InventoryGrid, PackedItem } from "./types";
 
 const ROTATED = 1;
 const STARTER = 2;
+const EQUIPPED = 4;
 
-export function flagsOf(rotated: boolean, starter: boolean | undefined): number {
-  return (rotated ? ROTATED : 0) | (starter ? STARTER : 0);
+export function flagsOf(
+  rotated: boolean,
+  starter: boolean | undefined,
+  equipped?: boolean,
+): number {
+  return (rotated ? ROTATED : 0) | (starter ? STARTER : 0) | (equipped ? EQUIPPED : 0);
 }
 
-export function readFlags(flags: number): { rotated: boolean; starter: boolean } {
-  return { rotated: (flags & ROTATED) !== 0, starter: (flags & STARTER) !== 0 };
+export function readFlags(flags: number): { rotated: boolean; starter: boolean; equipped: boolean } {
+  return {
+    rotated: (flags & ROTATED) !== 0,
+    starter: (flags & STARTER) !== 0,
+    equipped: (flags & EQUIPPED) !== 0,
+  };
 }
 
 /** Gepackte Gegenstaende als flache Reihe. */
@@ -37,7 +47,7 @@ export function flattenPacked(items: readonly PackedItem[]): number[] {
     entry.def,
     entry.x,
     entry.y,
-    flagsOf(entry.rotated, entry.starter),
+    flagsOf(entry.rotated, entry.starter, entry.equipped),
   ]);
 }
 
@@ -55,13 +65,14 @@ export function unflattenPacked(flat: readonly number[] | undefined): PackedItem
     return items;
   }
   for (let i = 0; i + 3 < flat.length; i += 4) {
-    const { rotated, starter } = readFlags(flat[i + 3] as number);
+    const { rotated, starter, equipped } = readFlags(flat[i + 3] as number);
     items.push({
       def: flat[i] as number,
       x: flat[i + 1] as number,
       y: flat[i + 2] as number,
       rotated,
       starter,
+      equipped,
     });
   }
   return items;
@@ -75,5 +86,6 @@ export function packGrid(grid: InventoryGrid): PackedItem[] {
     y: entry.y,
     rotated: entry.rotated,
     starter: entry.item.starter === true,
+    equipped: entry.item.equipped === true,
   }));
 }

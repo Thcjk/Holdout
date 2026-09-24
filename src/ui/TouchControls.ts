@@ -64,6 +64,12 @@ export interface TouchStatus {
   superCharge: number;
   /** Kurzname der Faehigkeit fuer die Beschriftung des Knopfs. */
   abilityLabel: string;
+  /**
+   * Beschriftung des FEUER-Knopfs: die ausgeruestete Waffe ("PISTOLE") oder
+   * "FAUST". So sieht man im Gefecht, womit man gerade angreift - und dass
+   * eine weggeworfene Waffe wirklich weg ist.
+   */
+  attackLabel: string;
 }
 
 /**
@@ -188,6 +194,9 @@ export class TouchControls {
     // Im Gefecht zaehlt, WAS passiert, nicht in welche Kategorie es faellt.
     if (this.ability.label.text !== status.abilityLabel) {
       this.ability.label.setText(status.abilityLabel);
+    }
+    if (status.attackLabel && this.fireLabel.text !== status.attackLabel) {
+      this.fireLabel.setText(status.attackLabel);
     }
 
     const ammoChanged = status.ammo !== this.ammo;

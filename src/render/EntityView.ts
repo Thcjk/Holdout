@@ -101,7 +101,12 @@ interface FigureSlot {
   yaw: number;
   /** Noch nicht an die Animation weitergegebene Zeit (gedrosselte Gegner). */
   pending: number;
+  /** Restzeit der Schlag-Animation (Faust ohne Waffe), Sekunden. */
+  punch: number;
 }
+
+/** So lange steht der Schlag-Clip, bevor die Bewegung wieder uebernimmt. */
+const PUNCH_SECONDS = 0.4;
 
 export class EntityView {
   private readonly root = new Group();
@@ -171,6 +176,13 @@ export class EntityView {
    */
   sync(view: WorldView, seconds: number): void {
     this.frame += 1;
+    // Faustschlaege dieses Bildes: Die Figur holt aus (Clip "punch").
+    for (const event of view.events) {
+      if (event.type === "punch") {
+        const slot = this.players.get(event.playerId);
+        if (slot) slot.punch = PUNCH_SECONDS;
+      }
+    }
     this.syncPlayers(view, seconds);
     this.syncEnemies(view, seconds);
     this.syncProjectiles(view);
@@ -217,6 +229,9 @@ export class EntityView {
       if (slot.figure) {
         if (player.down) {
           slot.figure.play("death", 1, true);
+        } else if (slot.punch > 0) {
+          slot.punch -= seconds;
+          slot.figure.play("punch", 1.6);
         } else {
           this.playMovement(slot);
         }
@@ -294,6 +309,7 @@ export class EntityView {
       speed: 0,
       yaw: 0,
       pending: 0,
+      punch: 0,
     };
   }
 

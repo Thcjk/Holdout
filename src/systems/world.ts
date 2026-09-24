@@ -23,6 +23,7 @@ import { createGrid, findFreeSpot, place } from "./InventoryGridSystem";
 import { stepRound } from "./spawning";
 import { gameplaySeed, generateWorld } from "./WorldGenerator";
 import { generateNodeArena } from "./NodeArenaGenerator";
+import { settleEquipped } from "./weapons";
 import { emptyInput } from "./types";
 import type {
   CharacterId,
@@ -93,7 +94,12 @@ function buildBackpack(packed: readonly PackedItem[] | undefined): InventoryGrid
 
   let nextId = 1;
   for (const entry of packed) {
-    const item: ItemInstance = { id: nextId++, def: entry.def, starter: entry.starter === true };
+    const item: ItemInstance = {
+      id: nextId++,
+      def: entry.def,
+      starter: entry.starter === true,
+      equipped: entry.equipped === true,
+    };
     if (place(grid, item, entry.x, entry.y, entry.rotated)) {
       continue;
     }
@@ -103,6 +109,8 @@ function buildBackpack(packed: readonly PackedItem[] | undefined): InventoryGrid
     }
   }
 
+  // Eingepackte Waffe ohne Haken (aeltere Clients, Tests): die erste nehmen.
+  settleEquipped(grid);
   return grid;
 }
 

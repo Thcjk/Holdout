@@ -28,6 +28,7 @@ import { findFreeSpot, place, removeAt } from "../../src/systems/InventoryGridSy
 import { killEnemy } from "../../src/systems/combat";
 import { generateWorld } from "../../src/systems/WorldGenerator";
 import { createWorld, stepWorld } from "../../src/systems/world";
+import type { PlayerSetup } from "../../src/systems/world";
 import {
   backpackForNextRun,
   finishRun,
@@ -54,8 +55,17 @@ function place_ground(state: WorldState, x: number, y: number): void {
   dropItem(state, itemIndex("scrap"), { x: x + 10, y });
 }
 
+/**
+ * Ein Spieler mit LEEREM Rucksack. `soloSetup()` bringt seit der
+ * Waffen-Ausruestung eine Pistole mit - hier wird aber gezaehlt, was
+ * hineinkommt.
+ */
+function bareSetup(): PlayerSetup[] {
+  return [{ id: "p1", name: "Test", character: "scout" }];
+}
+
 /** Eine Welt ohne Bodenfunde aus der Karte - damit nur zaehlt, was der Test legt. */
-function emptyWorld(setups = soloSetup()): WorldState {
+function emptyWorld(setups = bareSetup()): WorldState {
   const state = createWorld(setups, 4242);
   state.groundItems.length = 0;
   return state;
@@ -348,7 +358,7 @@ describe("Der gepackte Rucksack im Run", () => {
   it("startet ohne Angabe mit leerem Rucksack", () => {
     // Kein Fehlerfall: Wer direkt ins Spiel springt, soll nicht daran
     // scheitern.
-    const state = createWorld(soloSetup(), 4242);
+    const state = createWorld(bareSetup(), 4242);
     expect(state.players[0]?.backpack.items.length).toBe(0);
   });
 });

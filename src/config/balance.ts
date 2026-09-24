@@ -63,8 +63,6 @@ export const PLAYER = {
    * Sekunden Dauerfeuer bis zum Super, bei allen dreien.
    */
   superChargePerDamage: 26,
-  /** Mindestabstand zwischen zwei Schuessen in Sekunden. */
-  shootCooldown: 0.18,
   /**
    * Anteil des Lebens, der je Sekunde in der sicheren Startzone zurueckkommt.
    *
@@ -96,22 +94,22 @@ export interface CharacterDefinition {
   role: string;
   health: number;
   speed: number;
-  reloadTime: number;
-  shot: {
-    bullets: number;
-    damage: number;
-    range: number;
-    /** Gesamter Fächerwinkel in Grad. */
-    spread: number;
-    piercing: boolean;
-  };
   super: {
     name: string;
     description: string;
   };
 }
 
-/** Die drei Charaktere. Drei Archetypen, nicht drei Varianten derselben Figur. */
+/**
+ * Die drei Charaktere. Drei Archetypen, nicht drei Varianten derselben Figur.
+ *
+ * SEIT DER WAFFEN-AUSRUESTUNG OHNE EIGENEN SCHUSS. Bis dahin hatte jeder
+ * Charakter einen festen Basisangriff (`shot`, `reloadTime`), und die Waffe
+ * im Rucksack war nur Ballast. Jetzt schiesst, was ausgeruestet ist
+ * (`WEAPONS` unten). Die Charaktere unterscheiden sich ueber Leben, Tempo,
+ * Faehigkeit und Super - die alten Schusswerte leben als Vorlage in den
+ * Waffen weiter (Maschinenpistole ~ Scout, Gewehr ~ Sniper).
+ */
 export const CHARACTERS: Record<CharacterId, CharacterDefinition> = {
   scout: {
     id: "scout",
@@ -119,14 +117,6 @@ export const CHARACTERS: Record<CharacterId, CharacterDefinition> = {
     role: "Beweglich, Dauerfeuer",
     health: 2400,
     speed: 250,
-    reloadTime: 1.3,
-    // Streuung 9 -> 6 Grad. Begruendung: Bei 9 Grad liegen die aeusseren beiden
-    // Kugeln am Ende der Reichweite (450 px) rund 35 Pixel neben der Mitte -
-    // der Trefferradius gegen einen Laeufer betraegt aber nur 23. Auf Distanz
-    // traf also nur die mittlere Kugel, und der "Dauerfeuer"-Charakter hatte in
-    // Wahrheit ein Drittel seines Schadens. Bei 6 Grad sind es 23 Pixel: alle
-    // drei treffen noch, wenn man ordentlich zielt.
-    shot: { bullets: 3, damage: 220, range: 450, spread: 6, piercing: false },
     super: { name: "Dash", description: "Kurzer Sprint, der Gegner auf dem Weg zurückstösst" },
   },
   tank: {
@@ -135,8 +125,6 @@ export const CHARACTERS: Record<CharacterId, CharacterDefinition> = {
     role: "Nahkampf, hält aus",
     health: 4200,
     speed: 190,
-    reloadTime: 1.9,
-    shot: { bullets: 5, damage: 320, range: 250, spread: 34, piercing: false },
     super: { name: "Bodenstampfer", description: "800 Flächenschaden im Radius 200, betäubt 1 s" },
   },
   sniper: {
@@ -145,8 +133,6 @@ export const CHARACTERS: Record<CharacterId, CharacterDefinition> = {
     role: "Reichweite, Präzision",
     health: 1800,
     speed: 220,
-    reloadTime: 2.2,
-    shot: { bullets: 1, damage: 900, range: 900, spread: 0, piercing: true },
     super: {
       name: "Aufklärungsschuss",
       description: "Deckt Gegner im Umkreis auf: +50 % Schaden fürs Team, 6 s",
@@ -155,6 +141,71 @@ export const CHARACTERS: Record<CharacterId, CharacterDefinition> = {
 };
 
 export const CHARACTER_ORDER: CharacterId[] = ["scout", "tank", "sniper"];
+
+/**
+ * ================================================================
+ * WAFFEN - was ausgeruestet ist, bestimmt den Basisangriff
+ * ================================================================
+ *
+ * Schluessel ist die Katalog-ID aus `config/items.ts`. Jede Waffe dort
+ * (`type: "weapon"`) braucht hier einen Eintrag; ein Test prueft das.
+ *
+ * Munition bleibt wie vorher: `PLAYER.ammoCharges` Ladungen, die einzeln
+ * nachladen - nur die Nachladezeit kommt jetzt von der Waffe. `cooldown`
+ * ist der Mindestabstand zwischen zwei Schuessen (frueher fest 0,18 s).
+ */
+export interface WeaponStats {
+  /** Beschriftung des FEUER-Knopfs, solange diese Waffe ausgeruestet ist. */
+  short: string;
+  /** Kugeln je Schuss. */
+  bullets: number;
+  /** Schaden je Kugel. */
+  damage: number;
+  /** Reichweite in Pixeln. */
+  range: number;
+  /** Gesamter Faecherwinkel in Grad. */
+  spread: number;
+  /** Fliegt durch Gegner hindurch. */
+  piercing: boolean;
+  /** Nachladezeit je Munitionsladung in Sekunden. */
+  reloadTime: number;
+  /** Mindestabstand zwischen zwei Schuessen in Sekunden. */
+  cooldown: number;
+}
+
+export const WEAPONS: Record<string, WeaponStats> = {
+  /** Starter-Waffe: ein Schuss, mittlere Reichweite. Solide, nie glaenzend. */
+  pistol: { short: "PISTOLE", bullets: 1, damage: 300, range: 450, spread: 0, piercing: false, reloadTime: 1.4, cooldown: 0.25 },
+  /**
+   * Drei Kugeln im Faecher - das alte Scout-Muster. 8 Grad: Auf 400 px liegen
+   * die aeusseren Kugeln rund 28 px neben der Mitte, gegen einen Laeufer
+   * (Trefferradius 23) treffen aus der Naehe alle drei.
+   */
+  smg: { short: "MP", bullets: 3, damage: 180, range: 400, spread: 8, piercing: false, reloadTime: 1.1, cooldown: 0.18 },
+  /** Weit und durchschlagend - das alte Sniper-Muster, etwas schwaecher. */
+  rifle: { short: "GEWEHR", bullets: 1, damage: 750, range: 800, spread: 0, piercing: true, reloadTime: 2.0, cooldown: 0.3 },
+  /** Der seltenste Fund: ein Schuss, der eine Reihe Gegner umlegt. */
+  railgun: { short: "RAILGUN", bullets: 1, damage: 1200, range: 1000, spread: 0, piercing: true, reloadTime: 2.4, cooldown: 0.35 },
+};
+
+/**
+ * Ohne ausgeruestete Waffe: der Faustschlag.
+ *
+ * Kein Geschoss, sondern ein Treffer an den naechsten Gegner vor einem -
+ * `reach` zaehlt ab dem Koerperrand, nicht ab der Mitte. Keine Munition: Wer
+ * nichts hat, soll sich trotzdem wehren koennen, aber merken, dass eine Waffe
+ * fehlt (rund ein Drittel des Schadens je Sekunde einer Pistole, und man muss
+ * hin).
+ */
+export const FIST = {
+  short: "FAUST",
+  damage: 120,
+  /** Reichweite ab Koerperrand, in Pixeln. */
+  reach: 60,
+  /** Halber Oeffnungswinkel vor der Figur, in Grad. */
+  arc: 60,
+  cooldown: 0.45,
+} as const;
 
 /**
  * Die zweite aktive Faehigkeit je Charakter.

@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { ABILITIES, CHARACTERS } from "../../src/config/balance";
+import { ABILITIES, WEAPONS } from "../../src/config/balance";
 import { TICK_SECONDS } from "../../src/config/constants";
 import {
   isAbilityReady,
@@ -238,7 +238,7 @@ describe("Sniper: Laehmschuss", () => {
 
     expect(enemy.rooted).toBeCloseTo(ABILITIES.sniper.rootDuration, 5);
     expect(enemy.maxHealth - enemy.health).toBe(ABILITIES.sniper.damage);
-    expect(ABILITIES.sniper.damage).toBeLessThan(CHARACTERS.sniper.shot.damage);
+    expect(ABILITIES.sniper.damage).toBeLessThan(WEAPONS.pistol!.damage);
   });
 
   it("haelt einen gewurzelten Gegner tatsaechlich auf der Stelle", () => {

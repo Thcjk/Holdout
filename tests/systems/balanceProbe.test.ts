@@ -3,6 +3,7 @@ import { TICK_RATE, TICK_SECONDS } from "../../src/config/constants";
 import { createWorld, stepWorld } from "../../src/systems/world";
 import { createBot } from "../bot";
 import type { CharacterId } from "../../src/systems/types";
+import { armed } from "../helpers";
 
 /**
  * Balancing-Werkzeug, kein normaler Test.
@@ -21,15 +22,28 @@ import type { CharacterId } from "../../src/systems/types";
  * Seine Zahlen sind also eine Untergrenze, kein Zielwert - das Briefing sagt
  * ausdruecklich, dass ueber Game Feel nur das eigene Spielen entscheidet.
  *
+ * SEIT DER WAFFEN-AUSRUESTUNG schiesst die Waffe, nicht der Charakter. Jeder
+ * Charakter wird deshalb mit der Starter-Pistole gemessen (so beginnt jeder
+ * Run), und dazu jede Fundwaffe einmal am Scout - drei Laeufe, weil es dort
+ * um den Unterschied der Waffen geht, nicht um eine genaue Zahl.
+ *
  * Die Zusicherung unten ist bewusst grosszuegig: Sie soll nur auffallen, wenn
  * eine Aenderung das Spiel unspielbar macht.
  */
 describe("Balancing-Messung", () => {
-  for (const character of ["scout", "tank", "sniper"] as CharacterId[]) {
+  const cases: Array<{ character: CharacterId; weapon: string; runs: number }> = [
+    { character: "scout", weapon: "pistol", runs: 5 },
+    { character: "tank", weapon: "pistol", runs: 5 },
+    { character: "sniper", weapon: "pistol", runs: 5 },
+    { character: "scout", weapon: "smg", runs: 3 },
+    { character: "scout", weapon: "rifle", runs: 3 },
+    { character: "scout", weapon: "railgun", runs: 3 },
+  ];
+  for (const { character, weapon, runs } of cases) {
     /*
      * Eigenes Zeitlimit statt der fuenf Sekunden von Vitest.
      *
-     * Das hier ist ein MESSWERKZEUG, kein normaler Test: Es spielt fuenf
+     * Das hier ist ein MESSWERKZEUG, kein normaler Test: Es spielt mehrere
      * volle Runden zu je bis zu 900 Sekunden durch. Seit den Gebaeuden hat
      * die Welt 800 statt 550 Waende, und die Laeufe dauern entsprechend
      * laenger - Scout und Sniper lagen bei 4,9 und 5,5 Sekunden und fielen
@@ -38,11 +52,14 @@ describe("Balancing-Messung", () => {
      * Am Tick liegt es NICHT, das ist gemessen: 0,366 ms bei einem Budget von
      * 33 ms (`tickCost.test.ts`). Es ist schlicht viel Simulation.
      */
-    it(`misst ${character}`, () => {
+    it(`misst ${character} mit ${weapon}`, () => {
       const zones: number[] = [];
       const seconds: number[] = [];
-      for (let seed = 1; seed <= 5; seed += 1) {
-        const state = createWorld([{ id: "p", name: "Bot", character }], seed * 7919);
+      for (let seed = 1; seed <= runs; seed += 1) {
+        const state = createWorld(
+          [{ id: "p", name: "Bot", character, backpack: armed(weapon) }],
+          seed * 7919,
+        );
         const bot = createBot();
         for (let i = 0; i < TICK_RATE * 900 && state.phase !== "ended"; i += 1) {
           stepWorld(state, bot(state), TICK_SECONDS);
@@ -53,7 +70,7 @@ describe("Balancing-Messung", () => {
       const average = zones.reduce((a, b) => a + b, 0) / zones.length;
       const averageTime = seconds.reduce((a, b) => a + b, 0) / seconds.length;
       console.log(
-        `${character}: Zonen ${zones.join(", ")} (Schnitt ${average.toFixed(1)}), ` +
+        `${character} mit ${weapon}: Zonen ${zones.join(", ")} (Schnitt ${average.toFixed(1)}), ` +
           `ueberlebt ${averageTime.toFixed(0)} s`,
       );
 

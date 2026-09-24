@@ -29,6 +29,7 @@ export type MusicTrack = "menu" | "wave";
 export type SoundName =
   | "pickup"
   | "shoot"
+  | "swing"
   | "enemyShoot"
   | "hit"
   | "enemyDied"
@@ -134,6 +135,10 @@ export class AudioEngine {
         break;
       case "enemyShoot":
         this.tone(300, 0.1, "sawtooth", 0.1, 150);
+        break;
+      case "swing":
+        // Faustschlag: ein tiefes, kurzes Rauschen - ein Luftzug, kein Knall.
+        this.noise(0.08, 0.06, 900);
         break;
       case "hit":
         this.noise(0.045, 0.07, 3600);

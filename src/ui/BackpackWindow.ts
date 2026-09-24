@@ -77,7 +77,7 @@ export class BackpackWindow {
       .text(
         0,
         0,
-        "Die Runde läuft weiter · Tippen dreht · aus dem Gitter ziehen wirft weg",
+        "Die Runde läuft weiter · Waffe antippen = ausrüsten · aus dem Gitter ziehen wirft weg",
         { fontFamily: "system-ui, sans-serif", fontSize: "13px", color: "#ffd166" },
       )
       .setDepth(DEPTH.hud + 15);
@@ -172,7 +172,7 @@ export class BackpackWindow {
     this.lastSignature = signature(backpack);
     const data = createGrid(INVENTORY.width, INVENTORY.height);
     backpack.forEach((entry, index) => {
-      const item = { id: index + 1, def: entry.def, starter: entry.starter };
+      const item = { id: index + 1, def: entry.def, starter: entry.starter, equipped: entry.equipped };
       if (!place(data, item, entry.x, entry.y, entry.rotated)) {
         const spot = findFreeSpot(data, entry.def);
         if (spot) {
@@ -198,6 +198,10 @@ export class BackpackWindow {
       onDiscard: (from) => {
         this.queue.push({ op: "drop", fromX: from.x, fromY: from.y });
       },
+      equipOnTap: true,
+      onEquipped: (at) => {
+        this.queue.push({ op: "equip", fromX: at.x, fromY: at.y });
+      },
     });
     this.grid.setVisible(this.open);
   }
@@ -214,6 +218,7 @@ export class BackpackWindow {
         y: entry.y,
         rotated: entry.rotated,
         starter: entry.item.starter,
+        equipped: entry.item.equipped,
       })),
     );
   }
@@ -221,5 +226,7 @@ export class BackpackWindow {
 
 /** Ein kurzer Vergleichswert fuer "hat sich der Rucksack geaendert?". */
 function signature(items: readonly PackedItem[]): string {
-  return items.map((entry) => `${entry.def},${entry.x},${entry.y},${entry.rotated ? 1 : 0}`).join(";");
+  return items
+    .map((entry) => `${entry.def},${entry.x},${entry.y},${entry.rotated ? 1 : 0}${entry.equipped ? "e" : ""}`)
+    .join(";");
 }
