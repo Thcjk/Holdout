@@ -21,16 +21,22 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
-> **Stand 2026-09-24 abends: 3D mit echten Modellen, Knoten-Gebiete, Beute
-> in 3D.** Siehe **„3D-Assets und Knoten-Gebiete“** direkt unten, davor
-> **„3D-Umbau“** (Grundlage vom Mittag). Alles auf dem Branch
-> `claude/artifact-session-70nhy4`, **nicht auf `main`/Pages**. Auf `main`
-> ging nur die Reparatur nach dem Asset-Upload (Tilesheet zurück, langsamer
-> Test behoben – `d69bdf7`).
+> **Stand 2026-09-24 spätabends: alles auf `main` und Pages** (`1a7cf2a`,
+> auf Wunsch „merge mal“): 3D mit echten Modellen, Knoten-Gebiete mit
+> Umgebung, Beute in 3D. Siehe **„3D-Assets und Knoten-Gebiete“** direkt
+> unten, davor **„3D-Umbau“** (Grundlage).
+>
+> **Zuletzt behoben – „das Game kann nicht starten“:** Auf dem iPhone lagen
+> „Run starten“ und „Zurück“ im Packbildschirm verdeckt unter den Gittern.
+> Ursache: Sicherheitsabstände vom Hochformat (oben ~43 px), weil iOS sie
+> nach dem Drehen verzögert meldet und nur einmal gemessen wurde. Jetzt:
+> bei jeder Grössenänderung neu messen (plus zweimal nach dem Start), Zellen
+> im Packbildschirm passen sich dem Platz an (40–62), Knöpfe liegen immer
+> oben, die Minimap wird kleiner statt auf SUPER zu rutschen. Nachgestellt
+> und geprüft mit `?safe=43,59,21,59`.
 >
 > **BRIEFING.md ist seit 2026-09-24 die neue Fassung** (Abschnitte 2, 4, 5:
-> Three.js, Knoten-Karte, Vorbild „Deadly Days: Roadtrip“), vom Nutzer im
-> Chat geliefert und eingespielt.
+> Three.js, Knoten-Karte, Vorbild „Deadly Days: Roadtrip“).
 
 ## 3D-Assets und Knoten-Gebiete
 
