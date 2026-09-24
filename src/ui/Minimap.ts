@@ -51,11 +51,13 @@
  */
 
 import Phaser from "phaser";
-import { COLORS, DEPTH, SAFE, VIEWPORT } from "../config/constants";
+import { COLORS, DEPTH, SAFE, TOUCH, VIEWPORT } from "../config/constants";
 import type { MinimapModel } from "./HudModel";
 
 /** Kantenlaenge der kleinen Karte (Arbeitsdokument: rund 120 x 120). */
 export const SMALL_SIZE = 120;
+/** Kleiner wird die Karte nie - darunter ist sie nicht mehr lesbar. */
+const MIN_SMALL_SIZE = 72;
 
 /**
  * Abstand der grossen Karte zur oberen Kante, zusaetzlich zum Geraeterand.
@@ -151,7 +153,7 @@ export class Minimap {
 
   /** Die kleine Karte als Rechteck - fuer die Sperrflaechen des Kompasses. */
   get smallBounds(): { x: number; y: number; width: number; height: number } {
-    return { x: this.small.left, y: this.small.top, width: SMALL_SIZE, height: SMALL_SIZE };
+    return { x: this.small.left, y: this.small.top, width: this.small.size, height: this.small.size };
   }
 
   /** Die grosse Karte, wenn offen - sonst `null`. */
@@ -173,10 +175,18 @@ export class Minimap {
   layout(anchorTop: number = this.anchorTop): void {
     this.anchorTop = anchorTop;
 
-    this.small.size = SMALL_SIZE;
-    this.small.left = VIEWPORT.width - SAFE.right - 14 - SMALL_SIZE;
+    /*
+     * Nie auf den SUPER-Knopf darunter. Bei einem grossen oberen Rand (auf
+     * einem iPhone gesehen) rutschte die Karte sonst auf den Knopfbogen -
+     * dann wird sie lieber kleiner. Normal bleibt sie 120.
+     */
+    const superTop =
+      VIEWPORT.height - SAFE.bottom - TOUCH.superButton.marginY - TOUCH.superButton.radius - 10;
+    this.small.size = Math.max(MIN_SMALL_SIZE, Math.min(SMALL_SIZE, superTop - anchorTop));
+    this.small.left = VIEWPORT.width - SAFE.right - 14 - this.small.size;
     this.small.top = anchorTop;
     this.hitZone.setPosition(this.small.left, this.small.top);
+    this.hitZone.setSize(this.small.size, this.small.size);
 
     const availableHeight = VIEWPORT.height - SAFE.top - LARGE_TOP_MARGIN - BOTTOM_KEEPOUT;
     // Quadratisch, weil die Welt quadratisch ist. Eine verzerrte Karte waere

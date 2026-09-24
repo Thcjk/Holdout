@@ -224,8 +224,27 @@ async function startWhenLandscape(): Promise<void> {
       game.scale.refresh();
       return;
     }
+    /*
+     * Sicherheitsabstaende IMMER neu messen, nicht nur bei neuer Breite.
+     *
+     * DER FEHLER, DEN DAS BEHEBT: Auf dem iPhone kam der Packbildschirm mit
+     * einem oberen Rand von rund 43 Pixeln - im Querformat hat ein iPhone
+     * dort nichts. Das waren die Werte vom HOCHFORMAT: iOS liefert die neuen
+     * `env(safe-area-inset-*)` nach einer Drehung erst etwas spaeter, und
+     * gemessen wurde nur einmal beim Start. Mit dem falschen Rand passten
+     * die Gitter nicht mehr in die Hoehe, und "Run starten" lag verdeckt
+     * darunter - das Spiel liess sich nicht starten.
+     *
+     * `refresh` meldet danach `RESIZE`; das HUD setzt sich darauf neu.
+     */
+    setSafeAreaFromScreen(readSafeArea(), window.innerWidth);
     game.scale.refresh();
   };
+
+  // Nach dem Start noch zweimal nachmessen - fuer den Fall, dass die
+  // Abstaende beim Start noch vom Hochformat stammten.
+  window.setTimeout(refit, 500);
+  window.setTimeout(refit, 1500);
 
   window.addEventListener("resize", refit);
   window.addEventListener("orientationchange", () => {

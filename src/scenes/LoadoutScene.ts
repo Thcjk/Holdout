@@ -103,6 +103,14 @@ function starterItems(startId: number): ItemInstance[] {
  * Apples Mindestmass von 44.
  */
 const LOADOUT_CELL = 62;
+/** Kleiner wird eine Zelle nie - darunter trifft kein Daumen mehr sicher. */
+const MIN_CELL = 40;
+/** Hoehe der Knopfzeile unten, samt Luft zum Gitter. */
+const FOOTER_HEIGHT = 66;
+/** Platz zwischen den Gittern fuer den Drehknopf. */
+const MIN_MIDDLE_GAP = 96;
+/** Ueber den Gittern und gezogenen Gegenstaenden. */
+const BUTTON_DEPTH = 1000;
 
 export class LoadoutScene extends Phaser.Scene {
   // NICHT `data` nennen: Phasers `Scene` hat bereits ein Feld dieses
@@ -155,22 +163,36 @@ export class LoadoutScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const top = SAFE.top + 82;
+    /*
+     * Zellgroesse nach dem Platz, der WIRKLICH da ist: zwischen Kopfzeile und
+     * Knopfzeile, und zwischen linkem und rechtem Rand. Fest 62 ging auf
+     * einem iPhone mit grossem oberen Rand schief - die Gitter ragten ueber
+     * die Knoepfe, und "Run starten" war nicht mehr zu erreichen. Lieber
+     * etwas kleinere Zellen als ein Spiel, das sich nicht starten laesst.
+     */
+    const footer = FOOTER_HEIGHT + SAFE.bottom;
+    const byHeight = Math.floor((VIEWPORT.height - footer - top) / INVENTORY.height);
+    const byWidth = Math.floor(
+      (VIEWPORT.width - SAFE.left - SAFE.right - 40 - MIN_MIDDLE_GAP) /
+        (INVENTORY.stashWidth + INVENTORY.width),
+    );
+    const cell = Math.max(MIN_CELL, Math.min(LOADOUT_CELL, byHeight, byWidth));
     const stashLeft = SAFE.left + 20;
-    const backpackLeft = VIEWPORT.width - SAFE.right - 20 - INVENTORY.width * LOADOUT_CELL;
-    const stashRight = stashLeft + INVENTORY.stashWidth * LOADOUT_CELL;
+    const backpackLeft = VIEWPORT.width - SAFE.right - 20 - INVENTORY.width * cell;
+    const stashRight = stashLeft + INVENTORY.stashWidth * cell;
     const gap = backpackLeft - stashRight;
     // Der Drehknopf sitzt zwischen den Gittern - unter ihnen waere er der
     // Knopfzeile im Weg.
     const rotateButtonAt = {
       x: stashRight + gap / 2,
-      y: top + (INVENTORY.height * LOADOUT_CELL) / 2,
+      y: top + (INVENTORY.height * cell) / 2,
     };
     const rotateButtonWidth = Math.max(80, Math.min(140, gap - 16));
 
     this.stashView = new InventoryGrid(this, this.stash, {
       x: stashLeft,
       y: top,
-      cellSize: LOADOUT_CELL,
+      cellSize: cell,
       onChange: () => this.updateSummary(),
       rotateButtonAt,
       rotateButtonWidth,
@@ -178,7 +200,7 @@ export class LoadoutScene extends Phaser.Scene {
     this.view = new InventoryGrid(this, this.backpack, {
       x: backpackLeft,
       y: top,
-      cellSize: LOADOUT_CELL,
+      cellSize: cell,
       onChange: () => this.updateSummary(),
       rotateButtonAt,
       rotateButtonWidth,
@@ -192,6 +214,8 @@ export class LoadoutScene extends Phaser.Scene {
       .setShadow(1, 1, "#00000066", 2);
     this.updateSummary();
 
+    // Knoepfe ueber allem - selbst wenn es einmal eng wird, liegen sie nie
+    // unter einem Gitter.
     new Button(
       this,
       VIEWPORT.width - SAFE.right - 96,
@@ -199,7 +223,7 @@ export class LoadoutScene extends Phaser.Scene {
       "Run starten",
       () => this.startRun(),
       { width: 170, height: 46, fontSize: 18 },
-    );
+    ).setDepth(BUTTON_DEPTH);
 
     new Button(
       this,
@@ -212,7 +236,7 @@ export class LoadoutScene extends Phaser.Scene {
         this.scene.start("Menu");
       },
       { width: 140, height: 46, fontSize: 16, color: COLORS.hudDim },
-    );
+    ).setDepth(BUTTON_DEPTH);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.view.destroy();

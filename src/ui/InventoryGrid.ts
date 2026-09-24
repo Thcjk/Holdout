@@ -723,6 +723,12 @@ export class InventoryGrid {
       // Einzelne Zellen: kleinere Schrift. "Verband" lief bei 12 Punkt ueber
       // den Rand einer 62er Zelle - im Emulator gesehen.
       label.setFontSize(size.width === 1 ? 10 : 12);
+      // Passt es trotzdem nicht (kleinere Zellen, wenn der Bildschirm wenig
+      // Hoehe hat), wird die Beschriftung gestaucht statt abgeschnitten.
+      label.setScale(1);
+      if (label.width > w - 4) {
+        label.setScale((w - 4) / label.width);
+      }
       label.setPosition(px + 3 + w / 2, py + 3 + h / 2);
       label.setVisible(true);
     }
