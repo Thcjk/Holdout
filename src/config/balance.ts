@@ -899,3 +899,55 @@ export const LIMITS = {
   maxEnemies: 40,
   maxProjectiles: 60,
 } as const;
+
+/**
+ * Die Knoten-Karte eines Runs (3D-Umbau, BRIEFING Abschnitt 4).
+ *
+ * ================================================================
+ * VORLAEUFIG - DAS NEUE BRIEFING WAR BEIM BAUEN NICHT IM REPO
+ * ================================================================
+ *
+ * Abschnitt 4 des ueberarbeiteten Briefings (Vorbild "Deadly Days:
+ * Roadtrip") beschreibt die Karte. Er lag beim Bauen noch nicht im Repo;
+ * die Werte hier sind deshalb Annahmen nach dem ueblichen Muster solcher
+ * Karten. JEDER Wert, der sich aendern kann, steht hier - der Generator
+ * selbst muss dafuer nicht angefasst werden.
+ *
+ * Das Muster: Schichten von oben (Start) nach unten (Ziel). In jeder Schicht
+ * liegen bis zu `columns` Knoten nebeneinander. Mehrere Pfade laufen von
+ * Schicht zu Schicht, jeweils nur in eine NACHBARspalte - so entstehen
+ * parallele Wege, die sich trennen und wieder treffen, ohne sich zu kreuzen.
+ */
+export const NODE_MAP = {
+  /** Anzahl Schichten, Start und Ziel eingeschlossen. */
+  depth: 12,
+  /** Spalten nebeneinander. 4 passt quer auf ein Handy, ohne zu scrollen. */
+  columns: 4,
+  /**
+   * Wie viele Pfade gezogen werden. Mehr Pfade = mehr Verzweigungen. Zwei
+   * Pfade starten garantiert in verschiedenen Spalten, sonst gaebe es
+   * gleich am Anfang keine Wahl.
+   */
+  paths: 5,
+  /**
+   * Gewichte der Knotentypen fuer die Schichten dazwischen. Ein Gewicht ist
+   * kein Prozentwert - 5 gegen 1 heisst "fuenfmal so haeufig".
+   */
+  typeWeights: {
+    combat: 5,
+    loot: 2,
+    rest: 1,
+    elite: 1,
+  },
+  /** Ab welcher Schicht Elite-Knoten vorkommen duerfen (0 = Start). */
+  eliteFromLayer: 4,
+  /** Ab welcher Schicht Rastplaetze vorkommen duerfen. */
+  restFromLayer: 3,
+  /**
+   * Gefahrenstufe: Grundwert je Schicht. Knoten in Schicht n haben
+   * mindestens `1 + floor(n * dangerPerLayer)`.
+   */
+  dangerPerLayer: 0.75,
+  /** Elite-Knoten liegen so viele Stufen ueber ihrer Schicht. */
+  eliteDangerBonus: 1,
+} as const;
