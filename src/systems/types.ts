@@ -51,7 +51,27 @@ export interface InputState {
    * kurzen Antippen ohne Ziehen.
    */
   abilityAim: Vec2 | null;
+  /**
+   * Einmaliger Wunsch, im Rucksack etwas umzuraeumen oder wegzuwerfen
+   * (Etappe 9). Wie Super und Faehigkeit: Die Anzeige aendert den Rucksack
+   * NICHT selbst - im Koop gehoert er dem Host, und zwei Stellen, die ihn
+   * aendern, liefen auseinander.
+   */
+  inventory: InventoryCommand | null;
 }
+
+/**
+ * Ein Befehl an den Rucksack.
+ *
+ * Der Gegenstand wird ueber seine LAGE (linke obere Zelle) benannt, nicht
+ * ueber seine Nummer in der Liste: Auf dem Client entsteht die Liste bei
+ * jedem Zustandspaket neu, und eine Nummer koennte zwischen Tippen und
+ * Ankommen auf einen anderen Gegenstand zeigen. Eine Zelle nicht - dort liegt
+ * entweder genau dieser Gegenstand, oder der Befehl geht ins Leere.
+ */
+export type InventoryCommand =
+  | { op: "move"; fromX: number; fromY: number; x: number; y: number; rotated: boolean }
+  | { op: "drop"; fromX: number; fromY: number };
 
 export function emptyInput(): InputState {
   return {
@@ -61,6 +81,7 @@ export function emptyInput(): InputState {
     useSuper: false,
     useAbility: false,
     abilityAim: null,
+    inventory: null,
   };
 }
 
@@ -91,6 +112,12 @@ export interface ItemInstance {
   id: number;
   /** Index in `ITEMS` aus `config/items.ts`. */
   def: number;
+  /**
+   * Gehoert zum Starter-Set? Dann ist er geschuetzt: Er geht bei einem Wipe
+   * nicht verloren und wird bei einem Erfolg nicht zusaetzlich gesichert -
+   * er steht im naechsten Packen ohnehin wieder bereit (Etappe 9).
+   */
+  starter?: boolean;
 }
 
 /**
@@ -131,6 +158,8 @@ export interface PackedItem {
   x: number;
   y: number;
   rotated: boolean;
+  /** Starter-Set, siehe `ItemInstance.starter`. */
+  starter?: boolean;
 }
 
 /**

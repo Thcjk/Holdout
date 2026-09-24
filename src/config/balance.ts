@@ -554,10 +554,26 @@ export const LOOT = {
  *  - Voll ausgereizt soll der Rucksack sein. Waere er so gross, dass alles
  *    hineinpasst, gaebe es nichts zu entscheiden - und die Entscheidung ist
  *    der Sinn des Gitters.
+ *
+ * SEIT ETAPPE 9: 8 x 6 = 48 Zellen, weil das Arbeitsdokument es so vorgibt.
+ * Das ist die Haelfte mehr als gemessen noetig - mit den ebenfalls
+ * angehobenen Dropquoten (Etappe 8) und Fundorten in Gebaeuden wird sich
+ * erst im Spiel zeigen, ob sich der Rucksack noch voll anfuehlt.
  */
 export const INVENTORY = {
   width: 8,
-  height: 4,
+  height: 6,
+
+  /**
+   * Das Lager links im Packbildschirm: Starter-Set plus alles, was man aus
+   * dem Rucksack herausgenommen hat.
+   *
+   * Nur fuenf Spalten breit, weil beide Gitter nebeneinander auch auf einem
+   * 16:9-Geraet (Entwurfsbreite 960) Platz haben muessen - bei 64er Zellen:
+   * 5 x 64 + 8 x 64 = 832, bleiben 128 fuer Raender und den Drehknopf.
+   */
+  stashWidth: 5,
+  stashHeight: 6,
 
   /**
    * Kantenlaenge einer Zelle in Entwurfseinheiten.
@@ -571,8 +587,9 @@ export const INVENTORY = {
    *
    * 64 liegt knapp darueber - ein 1x1-Gegenstand ist damit rund 46 Punkte
    * gross und bleibt auch fuer einen breiten Daumen treffbar. Das ganze
-   * Gitter misst 8 x 64 = 512 auf 4 x 64 = 256 Einheiten und passt damit
-   * neben die Liste der verfuegbaren Gegenstaende.
+   * Gitter misst 8 x 64 = 512 auf 6 x 64 = 384 Einheiten - bei 540 Hoehe
+   * bleibt darueber Platz fuer die Ueberschrift und darunter fuer die
+   * Knoepfe.
    */
   cellSize: 64,
 

@@ -269,4 +269,11 @@ Offen: Start, bevor alle zurück sind, lässt Nachzügler draussen.
 Dropquoten auf 15/30/20 % (vorher 8/28/16), Boss-Mindestseltenheit in die
 Konfiguration gezogen. Sonst wie im Audit: vorhanden.
 
+### Etappe 9 · 2026-09-24 07:25 UTC
+
+Punkt „Gitter-Inventar“: war 8 × 4, ein Gitter, kein Rucksack im Run. Jetzt
+8 × 6, Lager links/Rucksack rechts, Rucksack-Fenster im Run über Befehle an
+die Simulation. **Neu gefunden:** Das Starter-Set vermehrte sich bei jedem
+Erfolg – behoben.
+
 *(wird fortgeschrieben)*

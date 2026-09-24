@@ -97,6 +97,11 @@ export class Button {
     this.label.setVisible(visible);
   }
 
+  destroy(): void {
+    this.background.destroy();
+    this.label.destroy();
+  }
+
   setDepth(depth: number): void {
     this.background.setDepth(depth);
     this.label.setDepth(depth);

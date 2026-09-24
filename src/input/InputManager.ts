@@ -46,6 +46,9 @@ export class InputManager {
       useSuper: output.useSuper,
       useAbility: output.useAbility,
       abilityAim: output.abilityAim,
+      // Rucksack-Befehle kommen nicht vom Daumen auf dem Spielfeld, sondern
+      // aus dem Rucksack-Fenster der HUD-Szene - die Spielszene setzt sie ein.
+      inventory: null,
     };
   }
 

@@ -15,6 +15,7 @@
  *    Host ab, wird sanft korrigiert statt hart gesetzt.
  */
 
+import { unflattenPacked } from "../systems/backpackCodec";
 import { CHARACTERS } from "../config/balance";
 import { TICK_MS, TICK_SECONDS } from "../config/constants";
 import { stepPlayerMovement } from "../systems/movement";
@@ -341,14 +342,14 @@ export class ClientView implements WorldView {
        * wird hier nichts: Ob etwas hineinpasst, entscheidet der Host.
        */
       player.backpack.items.length = 0;
-      for (let i = 0; i + 3 < netPlayer.bp.length; i += 4) {
+      unflattenPacked(netPlayer.bp).forEach((entry, index) => {
         player.backpack.items.push({
-          item: { id: i / 4 + 1, def: netPlayer.bp[i] as number },
-          x: netPlayer.bp[i + 1] as number,
-          y: netPlayer.bp[i + 2] as number,
-          rotated: netPlayer.bp[i + 3] === 1,
+          item: { id: index + 1, def: entry.def, starter: entry.starter },
+          x: entry.x,
+          y: entry.y,
+          rotated: entry.rotated,
         });
-      }
+      });
 
       // Nachladeuhren gibt es auf dem Client nicht - nur die Anzahl voller
       // Ladungen. Das HUD braucht nicht mehr.

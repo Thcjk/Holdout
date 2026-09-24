@@ -18,7 +18,7 @@ import { stepProjectiles } from "./projectiles";
 import { stepAbilities, tryAbility } from "./abilities";
 import { stepDashDamage, trySuper } from "./supers";
 import { stepEncounters } from "./encounters";
-import { stepLoot } from "./loot";
+import { applyInventoryCommand, stepLoot } from "./loot";
 import { createGrid, findFreeSpot, place } from "./InventoryGridSystem";
 import { stepRound } from "./spawning";
 import { gameplaySeed, generateWorld } from "./WorldGenerator";
@@ -92,7 +92,7 @@ function buildBackpack(packed: readonly PackedItem[] | undefined): InventoryGrid
 
   let nextId = 1;
   for (const entry of packed) {
-    const item: ItemInstance = { id: nextId++, def: entry.def };
+    const item: ItemInstance = { id: nextId++, def: entry.def, starter: entry.starter === true };
     if (place(grid, item, entry.x, entry.y, entry.rotated)) {
       continue;
     }
@@ -235,6 +235,11 @@ export function stepWorld(
     tryAbility(state, player, input);
     stepDashDamage(state, player);
     tryShoot(state, player, input);
+    // Rucksack-Befehle gehen auch am Boden: Umraeumen braucht keine Haende,
+    // die gerade schiessen koennen, und wer liegt, hat Zeit dafuer.
+    if (input.inventory) {
+      applyInventoryCommand(state, player, input.inventory);
+    }
   }
 
   stepAbilities(state, dt);

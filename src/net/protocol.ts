@@ -11,9 +11,11 @@
  * Unterschied zwischen ein paar KB/s und einem Vielfachen davon.
  */
 
+import { flagsOf } from "../systems/backpackCodec";
 import type {
   CharacterId,
   GameEvent,
+  InventoryCommand,
   PlayerState,
   RoundPhase,
   Vec2,
@@ -66,6 +68,11 @@ export interface InputMessage {
    * zielt als den Schuss.
    */
   abilityAim: Vec2 | null;
+  /**
+   * Einmaliger Rucksack-Befehl (Etappe 9), oder null. Optional, damit ein
+   * Paket von einer aelteren Fassung weiterhin gueltig ist.
+   */
+  inventory?: InventoryCommand | null;
 }
 
 export interface NetPlayer {
@@ -324,11 +331,13 @@ function encodePlayer(player: PlayerState): NetPlayer {
     down: player.down,
     revive: round1(player.reviveProgress),
     inv: round1(player.invulnerable),
+    // Vierter Wert je Gegenstand: Merkmale als Bits (gedreht, Starter) -
+    // siehe `systems/backpackCodec.ts`.
     bp: player.backpack.items.flatMap((entry) => [
       entry.item.def,
       entry.x,
       entry.y,
-      entry.rotated ? 1 : 0,
+      flagsOf(entry.rotated, entry.item.starter),
     ]),
   };
 }

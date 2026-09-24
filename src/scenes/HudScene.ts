@@ -18,6 +18,8 @@ import { Button } from "../ui/Button";
 import { placeOnEdge } from "../ui/compassPlacement";
 import type { Rect } from "../ui/compassPlacement";
 import { Minimap } from "../ui/Minimap";
+import { BackpackWindow } from "../ui/BackpackWindow";
+import type { InventoryCommand } from "../systems/types";
 import type { HudModel } from "../ui/HudModel";
 
 /** Dauer des Extraktions-Countdowns, fuer die Restzeit in der Anzeige. */
@@ -31,6 +33,8 @@ export interface HudSceneData {
   onResume: () => void;
   /** Runde aufgeben und zurueck ins Menue. */
   onQuit: () => void;
+  /** Das Rucksack-Fenster geht auf oder zu - die Figur bleibt dann stehen. */
+  onBackpack: (open: boolean) => void;
 }
 
 
@@ -86,6 +90,32 @@ export class HudScene extends Phaser.Scene {
     this.onPause = data.onPause;
     this.onResume = data.onResume;
     this.onQuit = data.onQuit;
+    this.onBackpack = data.onBackpack;
+  }
+
+  private onBackpack: (open: boolean) => void = () => {};
+  private backpackButton!: Button;
+  private backpackWindow!: BackpackWindow;
+
+  /** Fuer die Spielszene: der naechste Rucksack-Befehl an die Simulation. */
+  peekInventoryCommand(): InventoryCommand | null {
+    return this.backpackWindow?.peekCommand() ?? null;
+  }
+
+  shiftInventoryCommand(): void {
+    this.backpackWindow?.shiftCommand();
+  }
+
+  private setBackpackOpen(open: boolean): void {
+    if (open === this.backpackWindow.isOpen) {
+      return;
+    }
+    if (open) {
+      this.backpackWindow.show(this.model.backpack);
+    } else {
+      this.backpackWindow.hide();
+    }
+    this.onBackpack(open);
   }
 
   private minimap!: Minimap;
@@ -198,6 +228,22 @@ export class HudScene extends Phaser.Scene {
     this.menuButton.setDepth(DEPTH.hud);
 
     /*
+     * Der Rucksack im Run (Etappe 9): links neben Pause und Ton, aus
+     * demselben Grund dort oben - hier kommt man mit Absicht hin, nicht aus
+     * Versehen mit dem Daumen, der gerade FEUER haelt.
+     */
+    this.backpackButton = new Button(
+      this,
+      rightEdge - 246,
+      topEdge + BUTTON_ROW_Y,
+      "Rucksack",
+      () => this.setBackpackOpen(!this.backpackWindow.isOpen),
+      { width: 100, height: 30, fontSize: 13, color: COLORS.hudDim },
+    );
+    this.backpackButton.setDepth(DEPTH.hud);
+    this.backpackWindow = new BackpackWindow(this, () => this.setBackpackOpen(false));
+
+    /*
      * Die Karte - klein und immer sichtbar rechts oben (Arbeitsdokument,
      * Etappe 6). Antippen oeffnet die grosse Ansicht, OHNE anzuhalten. Der
      * fruehere Knopf "Karte" ist damit weggefallen: Die Karte selbst ist der
@@ -257,6 +303,7 @@ export class HudScene extends Phaser.Scene {
     );
     this.drawCompass();
     this.minimap.update(this.model.minimap);
+    this.backpackWindow.sync(this.model.backpack);
     /*
      * Die Beute steht bei der Punktzahl und nicht unten.
      *
@@ -412,6 +459,11 @@ export class HudScene extends Phaser.Scene {
     if (visible && this.minimap.isOpen) {
       this.minimap.toggle();
     }
+    // Der Rucksack ebenso: Pause und Rucksack gleichzeitig waeren zwei
+    // Fenster uebereinander.
+    if (visible && this.backpackWindow?.isOpen) {
+      this.setBackpackOpen(false);
+    }
 
     this.paused = visible && this.canPause;
   }
@@ -556,6 +608,7 @@ export class HudScene extends Phaser.Scene {
         this.scoreText.getBounds(),
         this.muteButton.getBounds(),
         this.menuButton.getBounds(),
+        this.backpackButton.getBounds(),
       ]),
       this.minimap.smallBounds,
       ...(this.minimap.largeBounds ? [this.minimap.largeBounds] : []),
@@ -579,6 +632,8 @@ export class HudScene extends Phaser.Scene {
     this.announceText.setPosition(VIEWPORT.width / 2, 132);
     this.muteButton.setPosition(rightEdge - 44, topEdge + BUTTON_ROW_Y);
     this.menuButton.setPosition(rightEdge - 146, topEdge + BUTTON_ROW_Y);
+    this.backpackButton.setPosition(rightEdge - 246, topEdge + BUTTON_ROW_Y);
+    this.backpackWindow.layout();
     this.minimap.layout(topEdge + MINIMAP_Y);
 
     // Das Pausenbild sitzt in der Mitte - die verschiebt sich mit der Breite.

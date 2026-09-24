@@ -30,26 +30,61 @@
  * jemand seine Beute unverdient verliert.
  */
 
-import type { ItemInstance, RunOutcome } from "../systems/types";
+import type { PackedItem, PlacedItem, RunOutcome } from "../systems/types";
 
-let carried: ItemInstance[] = [];
+/*
+ * ================================================================
+ * SEIT ETAPPE 9: RUCKSACK UND LAGER GETRENNT
+ * ================================================================
+ *
+ * Vorher war hier eine einzige Liste "gesicherte Beute", und in sie wanderte
+ * nach einem Erfolg ALLES aus dem Rucksack - auch das Starter-Set. Weil das
+ * Starter-Set beim naechsten Packen frisch dazukommt, haette es sich mit
+ * jedem erfolgreichen Run verdoppelt. Und die Anordnung im Rucksack ging
+ * verloren.
+ *
+ * Jetzt zwei Dinge:
+ *
+ *   backpack  Der Rucksack, wie er aus einem ERFOLGREICHEN Run kam - mit
+ *             Lage und Drehung. Er ist der Ausgangspunkt des naechsten
+ *             Packens. Nach einem Wipe ist er leer.
+ *   stash     Das Lager links im Packbildschirm: was man aus dem Rucksack
+ *             herausgenommen hat. Ein Wipe fasst es nicht an.
+ *
+ * Das Starter-Set steht in keiner der beiden Listen als eigener Besitz: Es
+ * ist GESCHUETZT. Liegt ein Starter-Gegenstand nicht im Rucksack, legt ihn
+ * der Packbildschirm ins Lager. Verloren geht er nie, gezaehlt wird er nie.
+ */
 
-/** Was aus erfolgreichen Runs dieser Sitzung noch da ist. */
-export function carriedItems(): readonly ItemInstance[] {
-  return carried;
+let backpack: PackedItem[] = [];
+let stash: PackedItem[] = [];
+
+/** Der Rucksack fuer das naechste Packen (nach einem Wipe leer). */
+export function backpackForNextRun(): readonly PackedItem[] {
+  return backpack;
+}
+
+/** Das Lager ohne Starter-Set - das ergaenzt der Packbildschirm selbst. */
+export function stashItems(): readonly PackedItem[] {
+  return stash;
+}
+
+/** Merkt sich das Lager, wie es beim Loslaufen aussah. */
+export function saveStash(items: readonly PackedItem[]): void {
+  stash = items.filter((entry) => !entry.starter).map((entry) => ({ ...entry }));
 }
 
 /**
  * Schliesst einen Run ab.
  *
- * Bei Erfolg (Extraktion oder Bosssieg) wandert die Beute in die Liste, bei
- * einem Team-Wipe ist sie weg. Gibt zurueck, wie viele Gegenstaende der Run
- * eingebracht beziehungsweise gekostet hat - der Ergebnisbildschirm sagt es
- * damit ausdruecklich, statt es den Spieler selbst herausfinden zu lassen.
+ * Bei Erfolg (Extraktion oder Bosssieg) bleibt der Rucksack, wie er ist, und
+ * ist der Ausgangspunkt des naechsten Packens; bei einem Wipe ist er leer.
+ * Gibt zurueck, wie viele Gegenstaende der Run eingebracht beziehungsweise
+ * gekostet hat - OHNE Starter-Set, das weder gewonnen noch verloren wird.
  */
 export function finishRun(
   outcome: RunOutcome,
-  runItems: readonly ItemInstance[],
+  items: readonly PlacedItem[],
   /**
    * Bei der Extraktion am Boden liegend zurueckgelassen? Das Team ist raus,
    * dieser Spieler aber nicht wirklich - fuer seine Beute zaehlt es wie ein
@@ -57,15 +92,25 @@ export function finishRun(
    */
   wasLeftBehind = false,
 ): { kept: number; lost: number } {
+  const counted = items.filter((entry) => !entry.item.starter).length;
+
   if (outcome === "wipe" || wasLeftBehind) {
-    return { kept: 0, lost: runItems.length };
+    backpack = [];
+    return { kept: 0, lost: counted };
   }
 
-  carried = [...carried, ...runItems];
-  return { kept: runItems.length, lost: 0 };
+  backpack = items.map((entry) => ({
+    def: entry.item.def,
+    x: entry.x,
+    y: entry.y,
+    rotated: entry.rotated,
+    starter: entry.item.starter === true,
+  }));
+  return { kept: counted, lost: 0 };
 }
 
 /** Setzt alles zurueck. Nur fuer Tests. */
 export function resetCarried(): void {
-  carried = [];
+  backpack = [];
+  stash = [];
 }

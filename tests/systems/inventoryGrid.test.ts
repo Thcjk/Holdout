@@ -204,7 +204,11 @@ describe("Automatisch einsortieren", () => {
   });
 
   it("dreht erst, wenn es ungedreht nicht mehr passt", () => {
-    const grid = createGrid();
+    // Ausdruecklich 8 x 4: Der Aufbau unten stellt genau vier Zeilen zu. Seit
+    // der Rucksack 8 x 6 ist (Etappe 9), passte das Gewehr sonst unten
+    // ungedreht hin - der Test hing an der Standardgroesse, nicht an der
+    // Drehlogik, die er pruefen soll.
+    const grid = createGrid(8, 4);
     // Alles bis auf eine Spalte von 2 Breite zustellen.
     place(grid, item("rifle"), 0, 0);
     place(grid, item("rifle"), 0, 2);

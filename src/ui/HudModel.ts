@@ -9,6 +9,8 @@
 
 import type { RoundPhase } from "../systems/types";
 
+import type { PackedItem } from "../systems/types";
+
 export interface HudMate {
   name: string;
   healthFraction: number;
@@ -100,6 +102,8 @@ export interface HudModel {
   minimap: MinimapModel;
   /** Wie viele Gegenstaende man im Run schon eingesammelt hat. */
   carriedItems: number;
+  /** Der eigene Rucksack, wie ihn die Simulation gerade hat (Etappe 9). */
+  backpack: PackedItem[];
   enemiesLeft: number;
   down: boolean;
   reviveProgress: number;
@@ -125,6 +129,7 @@ export function createHudModel(): HudModel {
     extractionCompass: null,
     minimap: emptyMinimap(),
     carriedItems: 0,
+    backpack: [],
     phase: "running",
     runTime: 0,
     inSafeZone: true,

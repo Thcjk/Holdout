@@ -10,6 +10,7 @@
  * zurueckkommt, `start` bis jeder Client sich gemeldet hat.
  */
 
+import { unflattenPacked } from "../systems/backpackCodec";
 import type { CharacterId, PackedItem } from "../systems/types";
 import type { PlayerSetup } from "../systems/world";
 import type { NetMessage, NetPlayerInfo } from "./protocol";
@@ -247,26 +248,8 @@ function toSetups(players: readonly NetPlayerInfo[]): PlayerSetup[] {
   }));
 }
 
-/**
- * Macht aus der flachen Zahlenreihe wieder gepackte Gegenstaende.
- *
- * Unvollstaendige Viererbloecke werden stillschweigend verworfen (`i + 3 <
- * length`). Das ist kein Schlampen: Die Reihe kommt vom Netz, und ein halber
- * Block waere ein Gegenstand ohne Position - besser einer weniger als ein
- * Rucksack, der bei Host und Client verschieden aussieht.
- */
+/** Die flache Reihe aus der Lobby als Rucksack - `undefined`, wenn leer. */
 function unpack(flat: readonly number[] | undefined): PackedItem[] | undefined {
-  if (!flat || flat.length === 0) {
-    return undefined;
-  }
-  const items: PackedItem[] = [];
-  for (let i = 0; i + 3 < flat.length; i += 4) {
-    items.push({
-      def: flat[i] as number,
-      x: flat[i + 1] as number,
-      y: flat[i + 2] as number,
-      rotated: flat[i + 3] === 1,
-    });
-  }
-  return items;
+  const items = unflattenPacked(flat);
+  return items.length > 0 ? items : undefined;
 }

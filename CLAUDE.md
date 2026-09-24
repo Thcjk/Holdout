@@ -360,6 +360,62 @@ lief. Neueste unten.
 - **Nicht wie geplant:** nichts – bis auf die Waffen-Symbole, die das Paket
   nicht hat (siehe Etappe 5).
 
+#### Etappe 9 – Gitter-Inventar vervollständigt · 2026-09-24 07:25 UTC
+
+- **Rucksack 8 × 6** statt 8 × 4 (Dokumentwert). Zellen im Spiel 64,
+  im Packbildschirm 62 Entwurfseinheiten = 44,8 Punkte auf dem iPhone 13 –
+  über Apples Mindestmass 44.
+- **Packbildschirm: Lager links (5 × 6), Rucksack rechts (8 × 6).** Nach
+  einem Wipe (und beim ersten Start) liegt das Starter-Set links und der
+  Rucksack ist leer – so verlangt es das Dokument. Gezogen wird zwischen den
+  Gittern wie innerhalb eines Gitters, mit grüner/roter Zielfläche; der
+  Gegenstand wechselt erst, wenn das Ziel ihn annimmt (`acceptForeign`),
+  dann nimmt ihn die Quelle heraus. Drehen per Tipp oder Knopf „DREHEN“
+  (sitzt zwischen den Gittern).
+- **Starter-Set geschützt, und das war vorher kaputt:** Nach einem Erfolg
+  wanderte alles in die gesicherte Beute – auch das Starter-Set, das beim
+  nächsten Packen frisch dazukam. Zwei Erfolge, drei Pistolen. Jetzt tragen
+  Starter-Stücke ein Merkmal (goldene Ecke), das auch übers Netz reist
+  (Bit im vierten Wert des Rucksack-Codes, `systems/backpackCodec.ts`, alte
+  Pakete bleiben lesbar). Sie gehen nie verloren und werden nie gezählt.
+- **Wipe leert, Erfolg behält – samt Anordnung:** `storage/carried.ts`
+  merkt sich den Rucksack nach einem Erfolg mit Lage und Drehung; er ist
+  der Ausgangspunkt des nächsten Packens. Nach einem Wipe ist er leer. Das
+  Lager fasst ein Wipe nicht an.
+- **Rucksack im Run:** Knopf „Rucksack“ links neben Pause/Ton öffnet ein
+  Fenster mit dem Gitter. Umräumen, Drehen, **aus dem Gitter ziehen =
+  wegwerfen** (der Gegenstand liegt dann neben der Figur am Boden). Das
+  Fenster ändert den Rucksack **nicht selbst**: Es schickt einen
+  `InventoryCommand` mit der nächsten Eingabe, im Koop also zum Host, der
+  ihn mit denselben Regeln ausführt. Der Gegenstand wird über seine Zelle
+  benannt, nicht über seine Listennummer – die entsteht auf dem Client bei
+  jedem Zustandspaket neu. **Kein Anhalten, auch solo nicht**; die Figur
+  steht still, solange das Fenster offen ist.
+- **Geprüft wie:** 248 Tests, neu: Codec (Rundreise, altes Format, halber
+  Block), Abrechnung (Wipe ohne Starter, Erfolg mit Anordnung, keine
+  Vermehrung, Lager unberührt, Zurückgelassene), Befehle in der Simulation
+  (verschieben/drehen, wegwerfen landet am Boden, leere Zelle tut nichts)
+  und **übers Netz** (Client-Befehl kommt beim Host an und im
+  Zustandspaket zurück). **Im Browser:** Pistole vom Lager in den Rucksack
+  gezogen; im Run verschoben und weggeworfen („Beute 0“, Kiste am Boden);
+  Wipe → Pistole zurück im Lager; Extraktion → Pistole bleibt im Rucksack,
+  Lager ohne zweite Pistole.
+- **Fehler, die erst das Bild gezeigt hat:** Das Gitter im Run-Fenster lag
+  unter dem abdunkelnden Hintergrund (feste Zeichenebenen) – dunkel und
+  ohne Berührung; jetzt mit einstellbarer Grundebene. „Verband“ lief bei
+  1 × 1 über den Zellrand; „Schliessen“ lag auf dem Hinweistext.
+- **Nicht wie geplant / offen:**
+  - Ein bestehender Test hing still an der alten Gittergrösse 8 × 4 und
+    schlug mit 8 × 6 fehl; er prüft die Drehlogik und hat jetzt sein
+    eigenes 8 × 4-Gitter.
+  - Doppeltippen zum Drehen gibt es bewusst nicht (bestehende Begründung
+    in `ui/InventoryGrid.ts`: ein Tipp dreht bereits, der zweite landet auf
+    dem Handy leicht daneben).
+  - Das Lager ist wie bisher nur im Arbeitsspeicher (dauerhaft erst in
+    Phase 13 laut Briefing).
+  - Im Koop ist das Umräumen per Test und Netzlogik geprüft, aber nicht mit
+    zwei Tabs im Browser durchgespielt.
+
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut

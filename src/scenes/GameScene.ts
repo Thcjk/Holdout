@@ -37,6 +37,7 @@ import { createHudModel } from "../ui/HudModel";
 import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
 import { finishRun } from "../storage/carried";
+import { packGrid } from "../systems/backpackCodec";
 
 /**
  * ================================================================
@@ -115,6 +116,8 @@ export class GameScene extends Phaser.Scene {
   private paused = false;
   /** Ist die Sitzung schon an den naechsten Run weitergegeben? */
   private released = false;
+  /** Ist das Rucksack-Fenster offen? Dann ruht die Eingabe, die Runde nicht. */
+  private backpackOpen = false;
 
   constructor() {
     super("Game");
@@ -124,6 +127,7 @@ export class GameScene extends Phaser.Scene {
     this.character = data.character ?? "scout";
     this.finished = false;
     this.released = false;
+    this.backpackOpen = false;
     this.hudModel = createHudModel();
     this.hudModel.highscore = loadHighscore()?.score ?? 0;
 
@@ -155,6 +159,12 @@ export class GameScene extends Phaser.Scene {
       onQuit: () => {
         this.scene.stop("Hud");
         this.scene.start("Menu");
+      },
+      onBackpack: (open: boolean) => {
+        // Kein Anhalten, auch solo nicht - siehe `ui/BackpackWindow.ts`.
+        // Nur die Eingabe ruht, damit Finger im Fenster nicht die Figur
+        // steuern.
+        this.backpackOpen = open;
       },
     });
     this.hud = this.scene.get("Hud") as HudScene;
@@ -226,10 +236,13 @@ export class GameScene extends Phaser.Scene {
      * wuerde sonst nebenbei den Joystick ziehen oder einen Schuss ausloesen.
      * Stehenbleiben ist das ehrlichere Verhalten: Man spielt gerade nicht.
      */
-    const input = this.overlayOpen ? emptyInput() : this.hud.inputManager.getState();
-    if (this.overlayOpen) {
+    const idle = this.overlayOpen || this.backpackOpen;
+    const input = idle ? emptyInput() : this.hud.inputManager.getState();
+    if (idle) {
       this.hud.inputManager.clearOneShots();
     }
+    // Rucksack-Befehle kommen aus dem Fenster der HUD-Szene, nicht vom Daumen.
+    input.inventory = this.hud.peekInventoryCommand();
 
     // Beim Super laeuft die Zeit kurz langsamer. Die Simulation merkt davon
     // nichts - sie bekommt einfach weniger Zeit zugeteilt.
@@ -239,6 +252,9 @@ export class GameScene extends Phaser.Scene {
       // Einmalige Wuensche (Schuss, Super) erst loeschen, wenn sie verarbeitet
       // wurden - sonst geht ein Klick zwischen zwei Ticks verloren.
       this.hud.inputManager.clearOneShots();
+      if (input.inventory) {
+        this.hud.shiftInventoryCommand();
+      }
     }
 
     this.handleEvents();
@@ -404,7 +420,7 @@ export class GameScene extends Phaser.Scene {
           // gibt es keinen Zustand mehr, aus dem man lesen koennte.
           const loot = finishRun(
             event.outcome,
-            (this.selfPlayer()?.backpack.items ?? []).map((entry) => entry.item),
+            this.selfPlayer()?.backpack.items ?? [],
             leftBehind(this.session.view.state, this.session.selfId),
           );
           const coop = !this.session.canPause;
@@ -638,6 +654,7 @@ export class GameScene extends Phaser.Scene {
       nearest && !onScreen ? { angle: nearest.angle, distance: nearest.distance } : null;
     this.fillMinimap(state, player);
     this.hudModel.carriedItems = player.backpack.items.length;
+    this.hudModel.backpack = packGrid(player.backpack);
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
     this.hudModel.runTime = state.runTime;

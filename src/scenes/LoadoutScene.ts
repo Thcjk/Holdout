@@ -28,6 +28,22 @@
  *
  * Ab Phase 13, wenn das Lager echte Alternativen bietet, wird das Packen von
  * selbst interessant. Dann kann man die Frage neu stellen.
+ *
+ * ================================================================
+ * SEIT ETAPPE 9: LAGER LINKS, RUCKSACK RECHTS
+ * ================================================================
+ *
+ * Das Arbeitsdokument verlangt: Starter-Set links, LEERER Rucksack rechts.
+ * Vorher lag das Starter-Set schon fertig im Rucksack - es gab nichts zu
+ * packen, nur umzuraeumen. Jetzt:
+ *
+ *   links   Lager (5 x 6): das Starter-Set, soweit es nicht schon im
+ *           Rucksack liegt, plus alles, was man frueher herausgenommen hat.
+ *   rechts  Rucksack (8 x 6): leer nach einem Wipe; nach einem Erfolg so,
+ *           wie er aus dem Run kam.
+ *
+ * Gezogen wird zwischen beiden wie innerhalb eines Gitters. Starter-Stuecke
+ * tragen eine goldene Ecke: Sie gehen nie verloren (`storage/carried.ts`).
  */
 
 import Phaser from "phaser";
@@ -35,6 +51,12 @@ import { audio } from "../audio/AudioEngine";
 import { INVENTORY } from "../config/balance";
 import { COLORS, SAFE, VIEWPORT } from "../config/constants";
 import { itemIndex } from "../config/items";
+import {
+  backpackForNextRun,
+  saveStash,
+  stashItems,
+} from "../storage/carried";
+import { packGrid } from "../systems/backpackCodec";
 import {
   createGrid,
   findFreeSpot,
@@ -68,8 +90,19 @@ function starterItems(startId: number): ItemInstance[] {
   return INVENTORY.starterSet.map((id, offset) => ({
     id: startId + offset,
     def: itemIndex(id),
+    starter: true,
   }));
 }
+
+/**
+ * Zellengroesse im Packbildschirm - zwei Einheiten kleiner als im Spiel.
+ *
+ * Mit 64 waeren beide Gitter zusammen 6 x 64 = 384 hoch, und auf einem
+ * iPhone (unterer Rand 21) laege die Knopfzeile ueber der letzten Gitterzeile.
+ * 62 sind auf dem iPhone 13 quer 62 x 0,722 = 44,8 Punkte - weiterhin ueber
+ * Apples Mindestmass von 44.
+ */
+const LOADOUT_CELL = 62;
 
 export class LoadoutScene extends Phaser.Scene {
   // NICHT `data` nennen: Phasers `Scene` hat bereits ein Feld dieses
@@ -77,8 +110,11 @@ export class LoadoutScene extends Phaser.Scene {
   // zu Recht zurueck.
   private setup!: LoadoutData;
   private backpack!: GridData;
+  private stash!: GridData;
   private view!: InventoryGrid;
+  private stashView!: InventoryGrid;
   private summary!: Phaser.GameObjects.Text;
+  private nextId = 1;
 
   constructor() {
     super("Loadout");
@@ -94,41 +130,66 @@ export class LoadoutScene extends Phaser.Scene {
     setReloadSafe(true);
     this.cameras.main.setBackgroundColor(COLORS.background);
 
-    this.backpack = createGrid();
-    this.fillWithStarterSet();
+    this.nextId = 1;
+    this.backpack = createGrid(INVENTORY.width, INVENTORY.height);
+    this.stash = createGrid(INVENTORY.stashWidth, INVENTORY.stashHeight);
+    this.fillFromStorage();
 
     this.add
-      .text(VIEWPORT.width / 2, SAFE.top + 22, "Rucksack packen", {
+      .text(VIEWPORT.width / 2, SAFE.top + 18, "Rucksack packen", {
         fontFamily: "system-ui, sans-serif",
-        fontSize: "26px",
-        color: "#dce8f7",
+        fontSize: "24px",
+        color: "#ffffff",
         fontStyle: "bold",
       })
+      .setShadow(1, 2, "#00000066", 2)
       .setOrigin(0.5);
 
     this.add
       .text(
         VIEWPORT.width / 2,
-        SAFE.top + 54,
-        "Ziehen verschiebt · Tippen dreht · DREHEN dreht beim Halten",
-        { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#8ea6c4" },
+        SAFE.top + 44,
+        "Ziehen verschiebt · Tippen dreht · Goldene Ecke = Starter-Set, geht nie verloren",
+        { fontFamily: "system-ui, sans-serif", fontSize: "13px", color: "#8ea6c4" },
       )
       .setOrigin(0.5);
 
-    const gridWidth = INVENTORY.width * INVENTORY.cellSize;
-    this.view = new InventoryGrid(this, this.backpack, {
-      x: (VIEWPORT.width - gridWidth) / 2,
-      y: SAFE.top + 92,
-      onChange: () => this.updateSummary(),
-    });
+    const top = SAFE.top + 82;
+    const stashLeft = SAFE.left + 20;
+    const backpackLeft = VIEWPORT.width - SAFE.right - 20 - INVENTORY.width * LOADOUT_CELL;
+    const stashRight = stashLeft + INVENTORY.stashWidth * LOADOUT_CELL;
+    const gap = backpackLeft - stashRight;
+    // Der Drehknopf sitzt zwischen den Gittern - unter ihnen waere er der
+    // Knopfzeile im Weg.
+    const rotateButtonAt = {
+      x: stashRight + gap / 2,
+      y: top + (INVENTORY.height * LOADOUT_CELL) / 2,
+    };
+    const rotateButtonWidth = Math.max(80, Math.min(140, gap - 16));
 
+    this.stashView = new InventoryGrid(this, this.stash, {
+      x: stashLeft,
+      y: top,
+      cellSize: LOADOUT_CELL,
+      onChange: () => this.updateSummary(),
+      rotateButtonAt,
+      rotateButtonWidth,
+    });
+    this.view = new InventoryGrid(this, this.backpack, {
+      x: backpackLeft,
+      y: top,
+      cellSize: LOADOUT_CELL,
+      onChange: () => this.updateSummary(),
+      rotateButtonAt,
+      rotateButtonWidth,
+    });
+    this.stashView.link(this.view);
+
+    const labelStyle = { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#ffffff" };
+    this.add.text(stashLeft, top - 22, "Lager", labelStyle).setShadow(1, 1, "#00000066", 2);
     this.summary = this.add
-      .text(VIEWPORT.width / 2, SAFE.top + 92 + INVENTORY.height * INVENTORY.cellSize + 62, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "14px",
-        color: "#8ea6c4",
-      })
-      .setOrigin(0.5);
+      .text(backpackLeft, top - 22, "", labelStyle)
+      .setShadow(1, 1, "#00000066", 2);
     this.updateSummary();
 
     new Button(
@@ -153,30 +214,64 @@ export class LoadoutScene extends Phaser.Scene {
       { width: 140, height: 46, fontSize: 16, color: COLORS.hudDim },
     );
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.view.destroy());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.view.destroy();
+      this.stashView.destroy();
+    });
   }
 
   /**
-   * Legt das Starter-Set ein.
+   * Fuellt beide Gitter aus dem, was der letzte Run hinterlassen hat.
    *
-   * Ueber `findFreeSpot`, also genau ueber den Weg, den auch das Aufsammeln
-   * im Gefecht nimmt. Eine eigene Anordnung von Hand waere eine zweite
-   * Platzierungslogik - und die erste, die nicht mehr stimmt, sobald jemand
-   * die Gittergroesse aendert.
+   * Rucksack: nach einem Erfolg wie er war, nach einem Wipe leer. Lager:
+   * was man frueher herausgenommen hat, plus die Starter-Stuecke, die NICHT
+   * schon im Rucksack liegen - sonst gaebe es nach einem Erfolg zwei
+   * Pistolen.
+   *
+   * Wo die gespeicherte Lage nicht mehr passt, sucht `findFreeSpot` einen
+   * Platz - derselbe Weg wie beim Aufsammeln im Gefecht.
    */
-  private fillWithStarterSet(): void {
-    for (const item of starterItems(1)) {
-      const spot = findFreeSpot(this.backpack, item.def);
-      if (spot) {
-        place(this.backpack, item, spot.x, spot.y, spot.rotated);
+  private fillFromStorage(): void {
+    for (const entry of backpackForNextRun()) {
+      this.put(this.backpack, { id: this.nextId++, def: entry.def, starter: entry.starter }, entry);
+    }
+    for (const entry of stashItems()) {
+      this.put(this.stash, { id: this.nextId++, def: entry.def }, entry);
+    }
+
+    const alreadyPacked = this.backpack.items
+      .filter((entry) => entry.item.starter)
+      .map((entry) => entry.item.def);
+    for (const item of starterItems(this.nextId)) {
+      this.nextId += 1;
+      const packedIndex = alreadyPacked.indexOf(item.def);
+      if (packedIndex >= 0) {
+        alreadyPacked.splice(packedIndex, 1);
+        continue;
       }
+      this.put(this.stash, item, null);
+    }
+  }
+
+  /** Legt an die gewuenschte Stelle, sonst an die erste freie. */
+  private put(
+    grid: GridData,
+    item: ItemInstance,
+    at: { x: number; y: number; rotated: boolean } | null,
+  ): void {
+    if (at && place(grid, item, at.x, at.y, at.rotated)) {
+      return;
+    }
+    const spot = findFreeSpot(grid, item.def);
+    if (spot) {
+      place(grid, item, spot.x, spot.y, spot.rotated);
     }
   }
 
   private updateSummary(): void {
     const cells = this.backpack.width * this.backpack.height;
     this.summary.setText(
-      `${this.backpack.items.length} Gegenstände · ${usedCells(this.backpack)} von ${cells} Zellen belegt`,
+      `Rucksack · ${this.backpack.items.length} ${this.backpack.items.length === 1 ? "Gegenstand" : "Gegenstände"} · ${usedCells(this.backpack)} von ${cells} Zellen`,
     );
   }
 
@@ -187,17 +282,15 @@ export class LoadoutScene extends Phaser.Scene {
    * von Hand eingeraeumt hat, soll seinen Rucksack im Run genauso vorfinden.
    */
   private packed(): PackedItem[] {
-    return this.backpack.items.map((entry) => ({
-      def: entry.item.def,
-      x: entry.x,
-      y: entry.y,
-      rotated: entry.rotated,
-    }));
+    return packGrid(this.backpack);
   }
 
   private startRun(): void {
     audio.unlock();
     const backpack = this.packed();
+    // Das Lager bleibt, wie es beim Loslaufen aussah - ein Wipe fasst es
+    // nicht an.
+    saveStash(packGrid(this.stash));
 
     if (this.setup.coop) {
       // Im Koop geht der Rucksack ueber die Lobby: Der Client meldet ihn im

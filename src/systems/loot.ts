@@ -37,10 +37,17 @@
 
 import { ITEMS } from "../config/items";
 import { LOOT } from "../config/balance";
-import { findFreeSpot, place } from "./InventoryGridSystem";
+import { findFreeSpot, move, place, removeAt } from "./InventoryGridSystem";
 import { nextRandom } from "./rng";
 import { distanceFromStart, zoneAt } from "./zones";
-import type { EnemyState, GroundItem, PlayerState, Vec2, WorldState } from "./types";
+import type {
+  EnemyState,
+  GroundItem,
+  InventoryCommand,
+  PlayerState,
+  Vec2,
+  WorldState,
+} from "./types";
 
 /**
  * Eine Zufallszahl aus dem SPIELSTROM - Host und Client ziehen dieselbe.
@@ -149,6 +156,43 @@ export function dropFromEnemy(state: WorldState, enemy: EnemyState): void {
 }
 
 /** Ein Tick: Liegezeit abziehen und aufheben, was nah genug ist. */
+/**
+ * Fuehrt einen Rucksack-Befehl aus (Etappe 9).
+ *
+ * Verschieben geht ueber `move` aus dem Gittersystem - dieselbe Pruefung wie
+ * im Packbildschirm. Wegwerfen legt den Gegenstand vor die Fuesse: Er ist
+ * nicht weg, sondern liegt da wie jeder Drop und verfaellt nach einer Weile.
+ * Ein Befehl, der nicht passt (Platz belegt, Zelle leer), tut nichts.
+ */
+export function applyInventoryCommand(
+  state: WorldState,
+  player: PlayerState,
+  command: InventoryCommand,
+): void {
+  const grid = player.backpack;
+  const index = grid.items.findIndex(
+    (entry) => entry.x === command.fromX && entry.y === command.fromY,
+  );
+  if (index < 0) {
+    return;
+  }
+
+  if (command.op === "move") {
+    move(grid, index, command.x, command.y, command.rotated);
+    return;
+  }
+
+  const removed = removeAt(grid, index);
+  if (removed) {
+    // Etwas neben die Figur, sonst hebt sie es im selben Tick wieder auf.
+    const spot = {
+      x: player.position.x + player.facing.x * (LOOT.pickupRadius + 30),
+      y: player.position.y + player.facing.y * (LOOT.pickupRadius + 30),
+    };
+    dropItem(state, removed.def, spot);
+  }
+}
+
 export function stepLoot(state: WorldState, dt: number): void {
   expireDrops(state, dt);
   pickUp(state);

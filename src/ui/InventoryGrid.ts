@@ -41,8 +41,10 @@ import {
   footprint,
   itemIndexAt,
   move,
+  place,
+  removeAt,
 } from "../systems/InventoryGridSystem";
-import type { InventoryGrid as GridData } from "../systems/types";
+import type { InventoryGrid as GridData, ItemInstance } from "../systems/types";
 
 /**
  * Ab dieser Zugstrecke gilt eine Beruehrung als Ziehen und nicht als Tipp.
@@ -63,6 +65,41 @@ export interface InventoryGridOptions {
   cellSize?: number;
   /** Wird gerufen, sobald sich am Inhalt etwas geaendert hat. */
   onChange?: () => void;
+  /**
+   * Wo der Drehknopf sitzt. Ohne Angabe mittig unter dem Gitter. Im
+   * Packbildschirm liegen zwei Gitter nebeneinander, dort sitzt er dazwischen
+   * - unter dem Gitter kaeme er dem Knopf "Run starten" ins Gehege.
+   */
+  rotateButtonAt?: { x: number; y: number };
+  /** Breite des Drehknopfs (Standard 150). Zwischen zwei Gittern ist es eng. */
+  rotateButtonWidth?: number;
+  /**
+   * Nach jedem erfolgreichen Verschieben oder Drehen: woher, wohin. Im Run
+   * wird daraus ein Befehl an die Simulation (Etappe 9) - das Gitter hier ist
+   * dort nur eine Vorschau, der Rucksack gehoert der Simulation.
+   */
+  onMoved?: (from: { x: number; y: number }, to: { x: number; y: number; rotated: boolean }) => void;
+  /**
+   * Wird ein Gegenstand AUS dem Gitter gezogen (und nicht in ein zweites),
+   * gilt das als Wegwerfen - aber nur, wenn es diesen Haken gibt. Ohne ihn
+   * springt er zurueck wie bisher.
+   */
+  onDiscard?: (from: { x: number; y: number }) => void;
+  /**
+   * Unterste Zeichenebene. Im Run liegt das Gitter in einem Fenster UEBER
+   * einem abdunkelnden Hintergrund - mit der festen HUD-Ebene lag es darunter,
+   * war dunkel und nahm keine Beruehrung an (im Emulator gesehen).
+   */
+  depth?: number;
+}
+
+/** Was ein anderes Gitter gerade ueber diesem schweben laesst. */
+interface ForeignHover {
+  def: number;
+  rotated: boolean;
+  x: number;
+  y: number;
+  valid: boolean;
 }
 
 interface DragState {
@@ -94,7 +131,20 @@ export class InventoryGrid {
   private readonly rotateHint: Phaser.GameObjects.Container;
 
   private readonly cellSize: number;
+  private readonly baseDepth: number;
   private drag: DragState | null = null;
+
+  /**
+   * Das zweite Gitter, in das man hinueberziehen kann (Lager <-> Rucksack).
+   *
+   * Seit Etappe 9: Der Packbildschirm hat links das Lager, rechts den
+   * Rucksack. Jedes Gitter bleibt Herr ueber seinen Inhalt - ein Gegenstand
+   * wechselt nur, wenn das ZIEL ihn per `acceptForeign` annimmt. Erst dann
+   * nimmt ihn die Quelle heraus. So kann nichts verlorengehen und nichts
+   * doppelt auftauchen.
+   */
+  private peer: InventoryGrid | null = null;
+  private foreign: ForeignHover | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -102,9 +152,10 @@ export class InventoryGrid {
     private readonly options: InventoryGridOptions,
   ) {
     this.cellSize = options.cellSize ?? INVENTORY.cellSize;
+    this.baseDepth = options.depth ?? DEPTH.hud;
 
-    this.cells = scene.add.graphics().setDepth(DEPTH.hud);
-    this.contents = scene.add.graphics().setDepth(DEPTH.hud + 1);
+    this.cells = scene.add.graphics().setDepth(this.baseDepth);
+    this.contents = scene.add.graphics().setDepth(this.baseDepth + 1);
     /*
      * EIGENE EBENE FUER DAS GETRAGENE.
      *
@@ -118,14 +169,14 @@ export class InventoryGrid {
      * Das Getragene bekommt deshalb eine Ebene UEBER allen Beschriftungen,
      * seine eigene noch eine darueber.
      */
-    this.heldLayer = scene.add.graphics().setDepth(DEPTH.hud + 4);
+    this.heldLayer = scene.add.graphics().setDepth(this.baseDepth + 4);
 
     const width = grid.width * this.cellSize;
     const height = grid.height * this.cellSize;
     this.hitArea = scene.add
       .rectangle(options.x, options.y, width, height, 0x000000, 0)
       .setOrigin(0)
-      .setDepth(DEPTH.hud + 2)
+      .setDepth(this.baseDepth + 2)
       .setInteractive();
 
     /*
@@ -147,6 +198,97 @@ export class InventoryGrid {
 
     this.rotateHint = this.buildRotateButton();
     this.draw();
+  }
+
+  /** Verbindet zwei Gitter, damit man zwischen ihnen ziehen kann. */
+  link(other: InventoryGrid): void {
+    this.peer = other;
+    other.peer = this;
+  }
+
+  /** Der aktuelle Inhalt. */
+  get data(): GridData {
+    return this.grid;
+  }
+
+  /** Liegt dieser Bildschirmpunkt ueber dem Gitter? */
+  contains(screenX: number, screenY: number): boolean {
+    return this.cellAt(screenX, screenY) !== null;
+  }
+
+  /** Zeigt, wohin ein Gegenstand aus dem anderen Gitter fallen wuerde. */
+  showForeign(
+    def: number,
+    rotated: boolean,
+    grabX: number,
+    grabY: number,
+    screenX: number,
+    screenY: number,
+  ): void {
+    const cell = this.cellAt(screenX, screenY, true);
+    this.foreign = cell
+      ? {
+          def,
+          rotated,
+          x: cell.x - grabX,
+          y: cell.y - grabY,
+          valid: fits(this.grid, def, rotated, cell.x - grabX, cell.y - grabY),
+        }
+      : null;
+    this.draw();
+  }
+
+  clearForeign(): void {
+    if (this.foreign) {
+      this.foreign = null;
+      this.draw();
+    }
+  }
+
+  /** Nimmt einen Gegenstand aus dem anderen Gitter an - wenn er passt. */
+  acceptForeign(
+    item: ItemInstance,
+    rotated: boolean,
+    grabX: number,
+    grabY: number,
+    screenX: number,
+    screenY: number,
+  ): boolean {
+    this.foreign = null;
+    const cell = this.cellAt(screenX, screenY, true);
+    const ok = cell !== null && place(this.grid, item, cell.x - grabX, cell.y - grabY, rotated);
+    if (ok) {
+      this.options.onChange?.();
+    }
+    this.draw();
+    return ok;
+  }
+
+  /** Wird gerade ein Gegenstand gehalten? Dann nicht von aussen umbauen. */
+  get busy(): boolean {
+    return this.drag !== null;
+  }
+
+  /** Blendet das ganze Gitter ein oder aus (samt Beruehrungsfeld). */
+  setVisible(visible: boolean): void {
+    this.cells.setVisible(visible);
+    this.contents.setVisible(visible);
+    this.heldLayer.setVisible(visible);
+    this.hitArea.setVisible(visible);
+    if (visible) {
+      this.hitArea.setInteractive();
+    } else {
+      this.hitArea.disableInteractive();
+      this.drag = null;
+      this.rotateHint.setVisible(false);
+    }
+    for (const label of this.labels) {
+      label.setVisible(visible && label.visible);
+    }
+    this.heldLabel?.setVisible(false);
+    if (visible) {
+      this.draw();
+    }
   }
 
   /** Tauscht den dargestellten Rucksack aus. */
@@ -225,7 +367,34 @@ export class InventoryGrid {
       this.drag.moved = true;
     }
 
+    // Ueber dem anderen Gitter? Dann zeigt DAS die Zielmarkierung.
+    if (this.drag.moved && this.peer) {
+      const liftedY = pointer.y - DRAG_LIFT;
+      const entry = this.grid.items[this.drag.index];
+      if (entry && this.overPeer(pointer.x, liftedY)) {
+        this.peer.showForeign(
+          entry.item.def,
+          this.drag.rotated,
+          this.drag.grabX,
+          this.drag.grabY,
+          pointer.x,
+          liftedY,
+        );
+      } else {
+        this.peer.clearForeign();
+      }
+    }
+
     this.draw();
+  }
+
+  /** Zeigt der angehobene Griffpunkt auf das ANDERE Gitter? */
+  private overPeer(screenX: number, liftedY: number): boolean {
+    return (
+      this.peer !== null &&
+      this.peer.contains(screenX, liftedY) &&
+      !this.contains(screenX, liftedY)
+    );
   }
 
   private onUp(): void {
@@ -244,13 +413,53 @@ export class InventoryGrid {
       return;
     }
 
-    const target = this.targetCell(drag);
-    if (target) {
+    // Ins andere Gitter hinueber: Erst wenn das Ziel ihn annimmt, nimmt die
+    // Quelle ihn heraus.
+    const liftedY = drag.pointerY - DRAG_LIFT;
+    if (this.peer && this.overPeer(drag.pointerX, liftedY)) {
       const entry = this.grid.items[drag.index];
       if (
         entry &&
+        this.peer.acceptForeign(
+          entry.item,
+          drag.rotated,
+          drag.grabX,
+          drag.grabY,
+          drag.pointerX,
+          liftedY,
+        )
+      ) {
+        removeAt(this.grid, drag.index);
+        this.options.onChange?.();
+      }
+      this.draw();
+      return;
+    }
+    this.peer?.clearForeign();
+
+    // Aus dem Gitter hinaus: wegwerfen, wenn das hier erlaubt ist.
+    if (this.options.onDiscard && !this.contains(drag.pointerX, liftedY)) {
+      const entry = this.grid.items[drag.index];
+      if (entry) {
+        const from = { x: entry.x, y: entry.y };
+        removeAt(this.grid, drag.index);
+        this.options.onDiscard(from);
+        this.options.onChange?.();
+      }
+      this.draw();
+      return;
+    }
+
+    const target = this.targetCell(drag);
+    if (target) {
+      const entry = this.grid.items[drag.index];
+      const from = entry ? { x: entry.x, y: entry.y } : null;
+      if (
+        entry &&
+        from &&
         move(this.grid, drag.index, target.x, target.y, drag.rotated)
       ) {
+        this.options.onMoved?.(from, { x: target.x, y: target.y, rotated: drag.rotated });
         this.options.onChange?.();
       }
     }
@@ -271,7 +480,9 @@ export class InventoryGrid {
     if (!entry) {
       return;
     }
-    if (move(this.grid, index, entry.x, entry.y, !entry.rotated)) {
+    const rotated = !entry.rotated;
+    if (move(this.grid, index, entry.x, entry.y, rotated)) {
+      this.options.onMoved?.({ x: entry.x, y: entry.y }, { x: entry.x, y: entry.y, rotated });
       this.options.onChange?.();
     }
   }
@@ -348,7 +559,14 @@ export class InventoryGrid {
     g.lineStyle(2, COLORS.hudDim, 0.7);
     g.strokeRoundedRect(left - 6, top - 6, width + 12, height + 12, 8);
 
+    if (this.foreign) {
+      this.drawTarget(this.foreign.def, this.foreign.rotated, this.foreign.x, this.foreign.y, this.foreign.valid);
+    }
+
     if (!this.drag || !this.drag.moved) {
+      return;
+    }
+    if (this.overPeer(this.drag.pointerX, this.drag.pointerY - DRAG_LIFT)) {
       return;
     }
 
@@ -364,11 +582,6 @@ export class InventoryGrid {
       return;
     }
 
-    const size = footprint(entry.item.def, this.drag.rotated);
-    if (!size) {
-      return;
-    }
-
     const valid = fits(
       this.grid,
       entry.item.def,
@@ -377,6 +590,17 @@ export class InventoryGrid {
       target.y,
       this.drag.index,
     );
+    this.drawTarget(entry.item.def, this.drag.rotated, target.x, target.y, valid);
+  }
+
+  /** Die gruene oder rote Zielflaeche - genau die Zellen, die belegt wuerden. */
+  private drawTarget(def: number, rotated: boolean, x: number, y: number, valid: boolean): void {
+    const g = this.cells;
+    const size = footprint(def, rotated);
+    if (!size) {
+      return;
+    }
+    const { x: left, y: top } = this.options;
 
     /*
      * Fuellung UND kraeftiger Rahmen - im ersten Versuch nur Fuellung, und
@@ -390,8 +614,8 @@ export class InventoryGrid {
      * Bild durchscheint.
      */
     const color = valid ? COLORS.mate : COLORS.danger;
-    const px = left + target.x * this.cellSize;
-    const py = top + target.y * this.cellSize;
+    const px = left + x * this.cellSize;
+    const py = top + y * this.cellSize;
     const pw = size.width * this.cellSize;
     const ph = size.height * this.cellSize;
 
@@ -484,11 +708,21 @@ export class InventoryGrid {
       g.lineStyle(held ? 3 : 2, 0x0d1420, 0.95);
       g.strokeRoundedRect(px + 3, py + 3, w, h, 6);
 
+      // Starter-Set: goldene Ecke oben links. Geschuetzt, geht nie verloren -
+      // das soll man sehen, bevor man entscheidet, was mitkommt.
+      if (entry.item.starter) {
+        g.fillStyle(COLORS.superReady, 1);
+        g.fillTriangle(px + 5, py + 5, px + 21, py + 5, px + 5, py + 21);
+      }
+
       const label = held ? this.heldLabelObject() : this.labelFor(labelIndex);
       if (!held) {
         labelIndex += 1;
       }
       label.setText(shortLabel(def.name, size.width));
+      // Einzelne Zellen: kleinere Schrift. "Verband" lief bei 12 Punkt ueber
+      // den Rand einer 62er Zelle - im Emulator gesehen.
+      label.setFontSize(size.width === 1 ? 10 : 12);
       label.setPosition(px + 3 + w / 2, py + 3 + h / 2);
       label.setVisible(true);
     }
@@ -513,7 +747,7 @@ export class InventoryGrid {
           fontStyle: "bold",
         })
         .setOrigin(0.5)
-        .setDepth(DEPTH.hud + 5);
+        .setDepth(this.baseDepth + 5);
     }
     return this.heldLabel;
   }
@@ -532,7 +766,7 @@ export class InventoryGrid {
         fontStyle: "bold",
       })
       .setOrigin(0.5)
-      .setDepth(DEPTH.hud + 2);
+      .setDepth(this.baseDepth + 2);
     this.labels.push(label);
     return label;
   }
@@ -547,17 +781,18 @@ export class InventoryGrid {
   private buildRotateButton(): Phaser.GameObjects.Container {
     const width = this.grid.width * this.cellSize;
     const height = this.grid.height * this.cellSize;
-    const x = this.options.x + width / 2;
-    const y = this.options.y + height + 34;
+    const x = this.options.rotateButtonAt?.x ?? this.options.x + width / 2;
+    const y = this.options.rotateButtonAt?.y ?? this.options.y + height + 34;
+    const buttonWidth = this.options.rotateButtonWidth ?? 150;
 
     const background = this.scene.add
-      .rectangle(0, 0, 150, 40, COLORS.player, 0.92)
+      .rectangle(0, 0, buttonWidth, 48, COLORS.player, 0.92)
       .setStrokeStyle(2, COLORS.playerOutline)
       .setInteractive();
     const text = this.scene.add
       .text(0, 0, "DREHEN", {
         fontFamily: "system-ui, sans-serif",
-        fontSize: "16px",
+        fontSize: buttonWidth < 100 ? "13px" : "16px",
         color: "#11161f",
         fontStyle: "bold",
       })
@@ -575,7 +810,7 @@ export class InventoryGrid {
     });
 
     const container = this.scene.add.container(x, y, [background, text]);
-    container.setDepth(DEPTH.hud + 6);
+    container.setDepth(this.baseDepth + 6);
     container.setVisible(false);
     return container;
   }

@@ -114,17 +114,21 @@ export class HostSession implements GameSession {
       // genauso wenig verlorengehen, solange kein Tick sie gesehen hat.
       useAbility: message.ability || (existing?.useAbility ?? false),
       abilityAim: message.abilityAim ?? existing?.abilityAim ?? null,
+      // Rucksack-Befehl: einmalig wie Super und Faehigkeit, darf also nicht
+      // von einem spaeteren Paket ohne Befehl ueberschrieben werden.
+      inventory: message.inventory ?? existing?.inventory ?? null,
     });
   }
 
   private clearOneShotInputs(): void {
     for (const [id, input] of this.inputs) {
-      if (input.useSuper || input.useAbility) {
+      if (input.useSuper || input.useAbility || input.inventory) {
         this.inputs.set(id, {
           ...input,
           useSuper: false,
           useAbility: false,
           abilityAim: null,
+          inventory: null,
         });
       }
     }

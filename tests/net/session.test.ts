@@ -239,3 +239,33 @@ describe("Neuer Run im selben Raum (Etappe 7)", () => {
   });
 });
 
+describe("Rucksack-Befehl uebers Netz (Etappe 9)", () => {
+  it("kommt vom Client beim Host an und wird dort ausgefuehrt", () => {
+    const { hostTransport, clientTransport } = pair();
+    const setups: PlayerSetup[] = [
+      { id: "host", name: "Host", character: "scout" },
+      {
+        id: "client",
+        name: "Client",
+        character: "tank",
+        backpack: [{ def: 0, x: 0, y: 0, rotated: false }],
+      },
+    ];
+    const host = new HostSession(hostTransport, setups, "host", 3);
+    const client = new ClientSession(clientTransport, setups, "client", 3);
+
+    // Einmal senden, danach wieder ohne Befehl - er darf trotzdem nicht
+    // verlorengehen, bis ein Tick ihn gesehen hat.
+    client.update(TICK_MS * 3, makeInput({ x: 0, y: 0 }, {
+      inventory: { op: "move", fromX: 0, fromY: 0, x: 4, y: 3, rotated: false },
+    }));
+    run(10, host, client, 0);
+
+    const onHost = host.view.state.players.find((player) => player.id === "client");
+    expect(onHost?.backpack.items[0]).toMatchObject({ x: 4, y: 3 });
+    // Und er kommt im Zustandspaket zum Client zurueck.
+    const onClient = client.view.state.players.find((player) => player.id === "client");
+    expect(onClient?.backpack.items[0]).toMatchObject({ x: 4, y: 3 });
+  });
+});
+

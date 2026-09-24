@@ -18,6 +18,7 @@ import { createRoomCode, isValidRoomCode, normalizeRoomCode } from "../net/roomC
 import type { Transport } from "../net/Transport";
 import type { CharacterId, PackedItem } from "../systems/types";
 import { Button } from "../ui/Button";
+import { flattenPacked } from "../systems/backpackCodec";
 import { setReloadSafe } from "../platform/update";
 
 /** Fester Code fuer den lokalen Zwei-Tab-Test - der muss niemand abtippen. */
@@ -297,12 +298,7 @@ export class LobbyScene extends Phaser.Scene {
       character: this.character,
       // Flach als je vier Zahlen - so reist der Rucksack durch `hello` zum
       // Host und mit der Spielerliste zurueck an alle.
-      backpack: this.backpack.flatMap((entry) => [
-        entry.def,
-        entry.x,
-        entry.y,
-        entry.rotated ? 1 : 0,
-      ]),
+      backpack: flattenPacked(this.backpack),
     });
     this.lobby = lobby;
 

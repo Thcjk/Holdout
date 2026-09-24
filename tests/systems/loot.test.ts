@@ -27,10 +27,16 @@ import { dropItem, stepLoot } from "../../src/systems/loot";
 import { findFreeSpot, place, removeAt } from "../../src/systems/InventoryGridSystem";
 import { killEnemy } from "../../src/systems/combat";
 import { generateWorld } from "../../src/systems/WorldGenerator";
-import { createWorld } from "../../src/systems/world";
-import { finishRun, carriedItems, resetCarried } from "../../src/storage/carried";
-import { soloSetup } from "../helpers";
-import type { WorldState } from "../../src/systems/types";
+import { createWorld, stepWorld } from "../../src/systems/world";
+import {
+  backpackForNextRun,
+  finishRun,
+  resetCarried,
+  saveStash,
+  stashItems,
+} from "../../src/storage/carried";
+import { makeInput, soloSetup } from "../helpers";
+import type { PlacedItem, WorldState } from "../../src/systems/types";
 
 const SEEDS = [1, 42, 4242, 20260918, 999999];
 
@@ -341,6 +347,50 @@ describe("Der gepackte Rucksack im Run", () => {
   });
 });
 
+describe("Rucksack im Run umraeumen (Etappe 9)", () => {
+  function withPistol(): WorldState {
+    const state = emptyWorld([
+      { id: "p1", name: "A", character: "scout", backpack: [{ def: itemIndex("pistol"), x: 0, y: 0, rotated: false }] },
+    ]);
+    place_player(state, 5000, 5000);
+    return state;
+  }
+
+  it("verschiebt und dreht ueber einen Befehl in der Eingabe", () => {
+    const state = withPistol();
+    stepWorld(
+      state,
+      new Map([["p1", makeInput({ x: 0, y: 0 }, { inventory: { op: "move", fromX: 0, fromY: 0, x: 3, y: 2, rotated: true } })]]),
+      TICK_SECONDS,
+    );
+    const entry = state.players[0]?.backpack.items[0];
+    expect(entry).toMatchObject({ x: 3, y: 2, rotated: true });
+  });
+
+  it("wirft weg: der Gegenstand liegt danach am Boden, nicht im Nichts", () => {
+    const state = withPistol();
+    stepWorld(
+      state,
+      new Map([["p1", makeInput({ x: 0, y: 0 }, { inventory: { op: "drop", fromX: 0, fromY: 0 } })]]),
+      TICK_SECONDS,
+    );
+    expect(state.players[0]?.backpack.items).toHaveLength(0);
+    expect(state.groundItems.map((item) => item.def)).toEqual([itemIndex("pistol")]);
+  });
+
+  it("tut nichts, wenn an der genannten Stelle nichts liegt", () => {
+    // Der Befehl benennt den Gegenstand ueber seine Zelle - zeigt sie ins
+    // Leere, darf nichts anderes bewegt werden.
+    const state = withPistol();
+    stepWorld(
+      state,
+      new Map([["p1", makeInput({ x: 0, y: 0 }, { inventory: { op: "drop", fromX: 5, fromY: 5 } })]]),
+      TICK_SECONDS,
+    );
+    expect(state.players[0]?.backpack.items).toHaveLength(1);
+  });
+});
+
 describe("Voller Rucksack", () => {
   it("laesst den Gegenstand liegen, statt ihn verschwinden zu lassen", () => {
     /*
@@ -419,42 +469,60 @@ describe("Voller Rucksack", () => {
   });
 });
 
+/** Ein Gegenstand im Rucksack, wie ihn das Gittersystem ablegt. */
+function placed(id: number, def: number, starter = false): PlacedItem {
+  return { item: { id, def, starter }, x: id, y: 0, rotated: false };
+}
+
 describe("Run-Ende", () => {
   beforeEach(() => resetCarried());
 
-  it("verliert bei einem Team-Wipe alles", () => {
-    const result = finishRun("wipe", [
-      { id: 1, def: 0 },
-      { id: 2, def: 1 },
-    ]);
+  it("verliert bei einem Team-Wipe alles ausser dem Starter-Set", () => {
+    const result = finishRun("wipe", [placed(1, 0), placed(2, 1), placed(3, 5, true)]);
 
+    // Der Starter-Gegenstand zaehlt nicht: Er ist geschuetzt.
     expect(result.lost).toBe(2);
     expect(result.kept).toBe(0);
-    expect(carriedItems().length).toBe(0);
+    expect(backpackForNextRun()).toHaveLength(0);
   });
 
-  it("behaelt, was extrahiert wurde", () => {
-    finishRun("extracted", [{ id: 1, def: 0 }]);
-    expect(carriedItems().length).toBe(1);
+  it("behaelt nach einem Erfolg den Rucksack samt Anordnung", () => {
+    const result = finishRun("extracted", [placed(1, 0), placed(2, 1)]);
+    expect(result.kept).toBe(2);
+    expect(backpackForNextRun().map((entry) => entry.x)).toEqual([1, 2]);
 
-    finishRun("bossDefeated", [{ id: 2, def: 1 }]);
-    expect(carriedItems().length).toBe(2);
+    finishRun("bossDefeated", [placed(3, 2)]);
+    expect(backpackForNextRun()).toHaveLength(1);
   });
 
-  it("laesst einen Wipe das Gesicherte NICHT anfassen", () => {
+  it("vermehrt das Starter-Set nicht", () => {
+    /*
+     * DER FEHLER, DEN ETAPPE 9 BEHEBT: Vorher wanderte nach einem Erfolg
+     * alles in die gesicherte Beute - auch das Starter-Set, das beim
+     * naechsten Packen ohnehin frisch dazukommt. Zwei Erfolge, drei
+     * Pistolen.
+     */
+    const result = finishRun("extracted", [placed(1, 0, true), placed(2, 5, true)]);
+    expect(result.kept).toBe(0);
+    // Im Rucksack bleiben sie liegen - aber als Starter markiert, damit das
+    // Packen sie nicht noch einmal dazulegt.
+    expect(backpackForNextRun().every((entry) => entry.starter)).toBe(true);
+  });
+
+  it("laesst einen Wipe das Lager NICHT anfassen", () => {
     // Das Lager bleibt unberuehrt - so steht es im Briefing, und es ist der
     // Grund, warum man nach einem Wipe ueberhaupt weiterspielt.
-    finishRun("extracted", [{ id: 1, def: 0 }]);
-    finishRun("wipe", [{ id: 2, def: 1 }]);
+    saveStash([{ def: 3, x: 0, y: 0, rotated: false }]);
+    finishRun("wipe", [placed(2, 1)]);
 
-    expect(carriedItems().length).toBe(1);
+    expect(stashItems()).toHaveLength(1);
   });
 
   it("verliert die Beute, wer bei der Extraktion am Boden zurueckbleibt", () => {
     // Das Team ist raus - dieser Spieler aber nicht wirklich.
-    const result = finishRun("extracted", [{ id: 1, def: 0 }], true);
+    const result = finishRun("extracted", [placed(1, 0)], true);
 
     expect(result.lost).toBe(1);
-    expect(carriedItems().length).toBe(0);
+    expect(backpackForNextRun()).toHaveLength(0);
   });
 });
