@@ -307,6 +307,11 @@ export const COLORS = {
   critText: 0xffd166,
   hudText: 0xdce8f7,
   hudDim: 0x8ea6c4,
-  danger: 0xff5470,
+  /**
+   * Warnung und Gefahr: warmes Rot-Orange aus der Palette des
+   * Arbeitsdokuments. Vorher 0xff5470 - ein Pink, das auf dem Sandboden
+   * grell wirkte und die "pinke Linie" quer durchs Bild ausmachte.
+   */
+  danger: 0xe4572e,
   superReady: 0xffd166,
 } as const;

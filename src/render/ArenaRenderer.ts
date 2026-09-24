@@ -154,13 +154,34 @@ export class ArenaRenderer {
       // hat sich entschieden - vorher passiert nichts.
       const radius = ENCOUNTERS.triggerRadius * (spot.isFinal ? 1.35 : 1);
 
-      this.markers.lineStyle(cleared ? 2 : 4, COLORS.danger, cleared ? 0.25 : 0.75);
-      this.markers.strokeCircle(x, y, radius);
-
-      if (!cleared) {
-        this.markers.fillStyle(COLORS.danger, 0.06);
-        this.markers.fillCircle(x, y, radius);
-      }
+      /*
+       * ================================================================
+       * DAS WAR DIE "GRELLE PINKE LINIE QUER UEBER DEN BILDSCHIRM"
+       * ================================================================
+       *
+       * Vorher: durchgezogen, 4 Pixel, in 0xff5470, dazu eine leichte
+       * Fuellung. Der Ring hat 420 Pixel Radius (Ende-Boss 567) - bei Zoom
+       * 0,8 ist das mehr als die halbe Bildhoehe. Im Bild war also nie ein
+       * Kreis zu sehen, sondern ein pinker Bogen, der das ganze Bild
+       * durchschnitt.
+       *
+       * Jetzt: GESTRICHELT, 2 Pixel, im Warnton #E4572E aus der Palette, ohne
+       * Fuellung. Eine gestrichelte Linie liest man als Grenze, nicht als
+       * Objekt - genau das ist der Ring: die Stelle, ab der der Boss erwacht.
+       *
+       * Der Radius bleibt EXAKT der Ausloeseradius. Eine dezentere Linie ist
+       * gut, eine, die woanders liegt als die Wirkung, waere schlimmer als gar
+       * keine.
+       */
+      strokeDashedCircle(
+        this.markers,
+        x,
+        y,
+        radius,
+        2,
+        COLORS.danger,
+        cleared ? 0.25 : 0.8,
+      );
     }
 
     /*
@@ -415,5 +436,43 @@ export class ArenaRenderer {
   private addCullable(object: Phaser.GameObjects.TileSprite, rect: Rect): void {
     this.parts.push(object);
     this.cullable.push({ object, rect });
+  }
+}
+
+/**
+ * Ein gestrichelter Kreis.
+ *
+ * Phaser kann Linien nicht selbst stricheln, also wird der Umfang in kurze
+ * Bogenstuecke zerlegt. Die Zahl der Striche haengt am Umfang, nicht an einer
+ * festen Anzahl: Sonst waeren die Striche am grossen Ende-Boss-Ring dreimal so
+ * lang wie am kleinen, und die beiden saehen nicht mehr aus wie dieselbe Art
+ * Grenze.
+ *
+ * Strich 22, Luecke 14 Weltpixel - bei Zoom 0,8 rund 18 und 11 Bildpunkte:
+ * lang genug, um als Linie gelesen zu werden, kurz genug, um nie wie eine
+ * durchgezogene zu wirken.
+ */
+function strokeDashedCircle(
+  graphics: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  radius: number,
+  width: number,
+  color: number,
+  alpha: number,
+): void {
+  const dash = 22;
+  const gap = 14;
+  const circumference = 2 * Math.PI * radius;
+  const count = Math.max(8, Math.floor(circumference / (dash + gap)));
+  const step = (Math.PI * 2) / count;
+  const dashAngle = step * (dash / (dash + gap));
+
+  graphics.lineStyle(width, color, alpha);
+  for (let i = 0; i < count; i += 1) {
+    const start = i * step;
+    graphics.beginPath();
+    graphics.arc(x, y, radius, start, start + dashAngle, false);
+    graphics.strokePath();
   }
 }

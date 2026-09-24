@@ -221,6 +221,8 @@ export class EntityRenderer {
   }
 
   private updatePlayers(state: WorldState): void {
+    this.pruneLeftPlayers(state);
+
     for (const player of state.players) {
       const visual = this.playerVisual(player);
       const position = this.simulation.renderPlayerPosition(player.id);
@@ -257,6 +259,35 @@ export class EntityRenderer {
         36,
         player.down ? COLORS.danger : COLORS.mate,
       );
+    }
+  }
+
+  /**
+   * Raeumt Figuren ab, deren Spieler nicht mehr im Zustand steht.
+   *
+   * ================================================================
+   * EINER DER GRUENDE FUER DEN "DURCHSICHTIGEN DOPPEL-CHARAKTER"
+   * ================================================================
+   *
+   * Bis hierher wurde eine Figur beim ersten Auftauchen eines Spielers
+   * angelegt und danach NIE wieder entfernt. Verschwand der Spieler aus dem
+   * Zustand - etwa weil er die Koop-Runde verlassen hat -, blieb sein Bild
+   * einfach an der letzten Stelle stehen: eingefroren, und wenn er zuletzt am
+   * Boden lag, halbdurchsichtig. Kam er danach mit neuer Verbindung wieder,
+   * stand er ein zweites Mal im Bild.
+   *
+   * Zerstoert wird mit `destroy()`, nicht nur ausgeblendet: Ein unsichtbares
+   * Objekt kostet weiter Speicher und kann durch eine vergessene
+   * `setVisible(true)` jederzeit wieder auftauchen.
+   */
+  private pruneLeftPlayers(state: WorldState): void {
+    for (const [id, visual] of this.playerVisuals) {
+      if (state.players.some((player) => player.id === id)) {
+        continue;
+      }
+      visual.body.destroy();
+      visual.label.destroy();
+      this.playerVisuals.delete(id);
     }
   }
 

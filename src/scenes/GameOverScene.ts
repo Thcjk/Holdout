@@ -51,7 +51,7 @@ export interface GameOverData {
 const OUTCOMES: Record<RunOutcome, { title: string; color: string; note: string }> = {
   wipe: {
     title: "Team am Boden",
-    color: "#ff5470",
+    color: "#e4572e",
     note: "Kein Ausstieg geschafft.",
   },
   extracted: {
@@ -175,7 +175,7 @@ export class GameOverScene extends Phaser.Scene {
         {
           fontFamily: "system-ui, sans-serif",
           fontSize: "17px",
-          color: loot.lost > 0 ? "#ff5470" : loot.kept > 0 ? "#7ee08a" : "#8ea6c4",
+          color: loot.lost > 0 ? "#e4572e" : loot.kept > 0 ? "#7ee08a" : "#8ea6c4",
           fontStyle: "bold",
         },
       )

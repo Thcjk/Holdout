@@ -122,8 +122,27 @@ export class HostSession implements GameSession {
    * wuerde mitten im Gefecht ein Spieler aus dem Bild springen. Er zaehlt fuer
    * das Rundenende weiter mit, sobald er am Boden ist.
    */
+  /**
+   * Ein Mitspieler hat die Verbindung verloren oder die Runde verlassen.
+   *
+   * Frueher wurde hier nur seine Eingabe vergessen - seine Figur blieb in der
+   * Welt stehen, bewegungslos, bis Gegner sie zu Boden brachten. Danach lag
+   * sie halbdurchsichtig fuer den Rest der Runde da. Das hatte zwei Folgen:
+   * ein "Geist" im Bild, und eine Extraktion, die nie gelingen konnte, solange
+   * diese Figur noch stand, weil sie die Ausstiegszone nie erreicht.
+   *
+   * Jetzt verschwindet der Spieler aus der Simulation. Mit dem naechsten
+   * Zustandspaket ist er auch bei allen anderen weg, und
+   * `EntityRenderer.pruneLeftPlayers` raeumt sein Bild ab.
+   */
   private handleLeave(peerId: string): void {
     this.inputs.delete(peerId);
     this.lastSeq.delete(peerId);
+
+    const players = this.simulation.state.players;
+    const index = players.findIndex((player) => player.id === peerId);
+    if (index >= 0) {
+      players.splice(index, 1);
+    }
   }
 }

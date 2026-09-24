@@ -42,6 +42,11 @@ class FakeTransport extends BaseTransport {
     this.other = null;
   }
 
+  /** Tut so, als haette ein Mitspieler die Verbindung verloren. */
+  simulateLeave(peerId: string): void {
+    this.peerLeaveHandler(peerId);
+  }
+
   private deliver(message: NetMessage): void {
     if (!this.other || Math.random() < this.dropRate) {
       return;
@@ -138,5 +143,25 @@ describe("Host und Client", () => {
     host.destroy();
 
     expect(client.connectionLost).toContain("Host");
+  });
+});
+
+describe("Ein Mitspieler verlaesst die Runde", () => {
+  it("verschwindet aus der Simulation, statt als Geist stehenzubleiben", () => {
+    /*
+     * Frueher vergass der Host nur die Eingabe des Gegangenen. Seine Figur
+     * blieb bewegungslos stehen, bis Gegner sie zu Boden brachten, und lag
+     * danach halbdurchsichtig fuer den Rest der Runde da - einer der Wege zum
+     * "durchsichtigen Doppel-Charakter". Ausserdem konnte das Team nie
+     * extrahieren, solange die Figur noch stand: Sie erreichte die Zone nie.
+     */
+    const { hostTransport } = pair();
+    const host = new HostSession(hostTransport, SETUPS, "host", 42);
+    expect(host.view.state.players.map((player) => player.id)).toContain("client");
+
+    hostTransport.simulateLeave("client");
+
+    expect(host.view.state.players.map((player) => player.id)).toEqual(["host"]);
+    host.destroy();
   });
 });

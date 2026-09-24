@@ -610,13 +610,13 @@ export class HudScene extends Phaser.Scene {
   private updateAnnouncement(): void {
     if (this.model.connectionMessage) {
       this.announceText.setText(this.model.connectionMessage);
-      this.announceText.setColor("#ff5470");
+      this.announceText.setColor("#e4572e");
       return;
     }
 
     if (this.model.down) {
       this.announceText.setText("Am Boden - ein Mitspieler kann dich aufheben");
-      this.announceText.setColor("#ff5470");
+      this.announceText.setColor("#e4572e");
       return;
     }
 

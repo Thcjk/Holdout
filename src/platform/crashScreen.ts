@@ -18,7 +18,7 @@
 
 const BACKGROUND = "#11161f";
 const TEXT = "#dce8f7";
-const ACCENT = "#ff5470";
+const ACCENT = "#e4572e";
 
 let shown = false;
 

@@ -223,4 +223,11 @@ entfernt; über die Git-Historie bleibt es wiederherstellbar.
 Punkt 19 erledigt: Skillpunkte-System vollständig entfernt. Siehe CLAUDE.md,
 Protokoll Etappe 1.
 
+### Etappe 2 · 2026-09-24 06:25 UTC
+
+Punkt 18 erledigt: Ring gestrichelt, 2 px, `#E4572E`, ohne Füllung.
+Doppel-Charakter: nicht nachgestellt; zwei passende Sprite-Lebensdauer-Fehler
+behoben (Figuren Gegangener blieben stehen). Siehe CLAUDE.md, Protokoll
+Etappe 2.
+
 *(wird fortgeschrieben)*

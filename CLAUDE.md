@@ -75,6 +75,46 @@ lief. Neueste unten.
   Scout 5,6 · Tank 3,4 · Sniper 6,0 Zonen (vorher 5,4 · 3,6 · 7,8).
 - **Nicht wie geplant:** nichts.
 
+#### Etappe 2 – Pinke Linie und Doppel-Charakter · 2026-09-24 06:25 UTC
+
+- **Pinke Linie – behoben.** Ursache war der Encounter-Ring
+  (`ArenaRenderer.drawMarkers`): durchgezogen, 4 px, `0xff5470`, Radius 420
+  (Ende-Boss 567). Bei Zoom 0,8 grösser als die halbe Bildhöhe, im Bild also
+  ein pinker Bogen quer über alles. Jetzt **gestrichelt, 2 px, `#E4572E`,
+  ohne Füllung** (`strokeDashedCircle`, Strichzahl am Umfang bemessen, damit
+  grosser und kleiner Ring gleich aussehen). Der Radius ist unverändert der
+  Auslöseradius.
+- **Palettenfarbe:** `COLORS.danger` ist jetzt `#E4572E` (war `#ff5470`),
+  ebenso die drei Text-Literale im Ergebnisbildschirm, HUD und
+  Absturzbildschirm. Betrifft alles, was „Gefahr“ bedeutet.
+- **Durchsichtiger Doppel-Charakter – NICHT nachgestellt, zwei passende
+  Fehler behoben.** Versucht: Koop mit zwei Tabs (lokaler Transport), beide
+  Seiten sehen je genau zwei Figuren. Beim Lesen gefunden:
+  1. `EntityRenderer.playerVisuals` wurde **nie aufgeräumt**. Verschwand ein
+     Spieler aus dem Zustand, blieb sein Bild stehen – eingefroren, und wenn
+     er zuletzt am Boden lag, halbdurchsichtig. Jetzt `pruneLeftPlayers`, mit
+     `destroy()` statt Ausblenden.
+  2. `HostSession.handleLeave` vergass nur die Eingabe. Die Figur eines
+     Gegangenen blieb **bewegungslos in der Welt**, wurde zu Boden gebracht und
+     lag dann halbdurchsichtig da. Nebenfolge: Solange sie stand, war keine
+     Extraktion möglich. Jetzt wird der Spieler aus der Simulation entfernt.
+  Beides passt zur Beschreibung („alte Sprite-Instanzen“, „durchsichtig“),
+  **bewiesen ist die Ursache damit nicht**. Taucht der Doppel-Charakter
+  wieder auf, braucht es die genaue Situation (solo oder Koop? nach
+  Wiederbelebung? nach Verbindungsabbruch?).
+- **Geprüft wie:** Emulator, zum nächsten Encounter von Seed 4242 gelaufen
+  (2000 px links oben vom Start) – der Ring erscheint als dünne gestrichelte
+  Linie. Neuer Test `tests/net/session.test.ts`: Verlässt ein Client die
+  Runde, steht beim Host nur noch der Host im Zustand. 218 Tests, Typecheck,
+  Lint grün.
+- **Nebenbei:** Meine Prüfskripte liegen jetzt unter `node_modules/.cache/shots/`
+  statt im Projektordner – dort ignoriert ESLint sie, und sie können nicht
+  versehentlich mit eingecheckt werden.
+- **Nicht wie geplant:** Die Datei `ClientGame.ts` aus dem Arbeitsdokument
+  existiert nicht; gemeint ist `net/ClientView.ts`. Dort liegt beim
+  Herunterfallen und Wiederbeleben kein Fehler: Die Vorhersage springt auf
+  die Host-Position, sobald der Spieler am Boden ist.
+
 Was weiterhin aussteht, ist kein Code, sondern dein Urteil:
 
 - **Phase 2 ist ein Gefühlstest.** Ob sich die Steuerung auf dem Handy gut
