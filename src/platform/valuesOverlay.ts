@@ -24,6 +24,10 @@ export interface OverlayValues {
   superCharge: number;
   /** Ausgeteilter Schaden je Sekunde, gemittelt ueber die Runde. */
   dps: number;
+  /** Eigene Position in Simulationspixeln - zum Pruefen der Laufrichtung. */
+  position: { x: number; y: number };
+  /** Welche Ansicht, bei 3D mit Kamerawerten - zum Justieren am Geraet. */
+  view: string;
 }
 
 function ensureElement(): HTMLDivElement | null {
@@ -77,6 +81,7 @@ export function updateValuesOverlay(values: OverlayValues, now: number): void {
     `Gegner ${String(values.enemies).padStart(2)}  Projektile ${String(values.projectiles).padStart(2)}`,
     `Leben ${Math.round(values.health)}/${values.maxHealth}  Munition ${values.ammo}`,
     `Super ${values.superCharge.toFixed(0)}%   Schaden/s ${values.dps.toFixed(0)}`,
+    `Position ${Math.round(values.position.x)}/${Math.round(values.position.y)}   ${values.view}`,
   ];
 
   if (appliedTuning.length > 0) {

@@ -74,3 +74,24 @@ export const FORCED_SEED: number | null = (() => {
     return null;
   }
 })();
+
+/**
+ * Welche Ansicht die Welt zeichnet: `"3d"` (Three.js, Standard seit dem
+ * 3D-Umbau) oder `"2d"` (die alte Phaser-Darstellung).
+ *
+ *   .../Holdout/?view=2d
+ *
+ * WOZU DIE 2D-ANSICHT NOCH DA IST: Waehrend des Umbaus zeigt die 3D-Welt nur
+ * Figuren, Gegner, Geschosse, Boden und Waende - Beute, Ausstiegszonen,
+ * Effekte und Schadenszahlen fehlen noch. Mit `?view=2d` laesst sich das
+ * ganze Spiel weiter spielen und beides vergleichen. Die Simulation ist in
+ * beiden Faellen dieselbe; nur die Darstellung wechselt.
+ */
+export const VIEW_MODE: "3d" | "2d" = (() => {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("view");
+    return raw?.trim().toLowerCase() === "2d" ? "2d" : "3d";
+  } catch {
+    return "3d";
+  }
+})();

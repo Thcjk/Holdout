@@ -20,6 +20,7 @@ import { applyTuningFromUrl } from "./config/tuning";
 import { lockLandscape } from "./platform/orientation";
 import { waitForLandscape, watchOrientation } from "./platform/rotateGate";
 import { readSafeArea } from "./platform/safeArea";
+import { VIEW_MODE } from "./platform/debugFlags";
 import { installNetLogOverlay } from "./platform/netLogOverlay";
 import {
   COLORS,
@@ -45,9 +46,21 @@ import { MenuScene } from "./scenes/MenuScene";
  * berechnet, also mit den alten 960x540.
  */
 function buildConfig(): Phaser.Types.Core.GameConfig {
+  const world3d = VIEW_MODE === "3d";
   return {
-    // AUTO nimmt WebGL, wenn das Geraet es kann, sonst Canvas.
-    type: Phaser.AUTO,
+    /*
+     * In der 3D-Ansicht zeichnet Phaser nur noch Menues, HUD und Knoepfe -
+     * durchsichtig UEBER dem Three.js-Canvas (siehe `render/SceneSetup.ts`).
+     * Dafuer reicht der Canvas-Renderer, und das hat einen handfesten Grund:
+     * Mit WebGL haette die Seite ZWEI WebGL-Kontexte, einen fuer Phaser und
+     * einen fuer Three.js. Auf dem Handy ist jeder Kontext Grafikspeicher
+     * und Umschaltzeit. So gibt es genau einen, und der gehoert der Welt.
+     *
+     * In der alten 2D-Ansicht (`?view=2d`) bleibt alles wie vorher: AUTO
+     * nimmt WebGL, wenn das Geraet es kann.
+     */
+    type: world3d ? Phaser.CANVAS : Phaser.AUTO,
+    transparent: world3d,
     parent: "game-root",
     backgroundColor: COLORS.background,
     scale: {

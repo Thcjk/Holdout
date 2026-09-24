@@ -11,13 +11,18 @@ import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import { playEventSounds } from "../audio/eventSounds";
 import { ABILITIES, CHARACTERS, PLAYER, SUPERS, WORLD } from "../config/balance";
-import { COLORS, DEPTH } from "../config/constants";
+import { COLORS, DEPTH, VIEW3D } from "../config/constants";
 import type { GameSession } from "../net/GameSession";
 import { SoloSession } from "../net/SoloSession";
 import { ArenaRenderer } from "../render/ArenaRenderer";
 import { CameraController } from "../render/CameraController";
 import { EntityRenderer } from "../render/EntityRenderer";
 import { Juice } from "../render/Juice";
+import { graphicsPainter } from "../render/AimPainter";
+import type { AimPainter } from "../render/AimPainter";
+import { World3D } from "../render/World3D";
+import { VIEW_MODE } from "../platform/debugFlags";
+import { TOP_DOWN, groundToScreen } from "../input/viewMapping";
 import { setReloadSafe } from "../platform/update";
 import { hideValuesOverlay, updateValuesOverlay } from "../platform/valuesOverlay";
 import { loadHighscore } from "../storage/highscore";
@@ -84,12 +89,21 @@ export interface GameSceneData {
 
 export class GameScene extends Phaser.Scene {
   private session!: GameSession;
-  private cameraController!: CameraController;
-  private arena!: ArenaRenderer;
-  private entities!: EntityRenderer;
-  private juice!: Juice;
 
-  private aimLine!: Phaser.GameObjects.Graphics;
+  /*
+   * Die Darstellung der Welt: ENTWEDER die 3D-Welt (Standard seit dem
+   * 3D-Umbau) ODER die vier 2D-Teile (`?view=2d`). Die Szene selbst - Eingabe,
+   * Musik, HUD, Run-Ende - ist fuer beide dieselbe; nur diese Felder
+   * unterscheiden sich. Deshalb sind sie alle optional.
+   */
+  private world3d?: World3D;
+  private cameraController?: CameraController;
+  private arena?: ArenaRenderer;
+  private entities?: EntityRenderer;
+  private juice?: Juice;
+
+  /** Zeichnet die Zielvorschau - in 2D mit Graphics, in 3D am Boden. */
+  private aimPainter!: AimPainter;
   private hudModel: HudModel = createHudModel();
   /** Wie lange schon kein Gegner mehr in der Naehe war - steuert die Musik. */
   private calmSeconds = COMBAT_LEAVE_SECONDS;
@@ -142,14 +156,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.arena = new ArenaRenderer(this, this.session.view.state);
-    this.juice = new Juice(this);
-    this.entities = new EntityRenderer(this, this.session.view, this.session.selfId);
-    // Grenzen aus der GENERIERTEN Welt, nicht aus der alten Konstanten: Jeder
-    // Run hat seine eigene Karte, und die Kamera darf genau bis an deren Rand.
-    const bounds = this.session.view.state.bounds;
-    this.cameraController = new CameraController(this, bounds.width, bounds.height);
-    this.aimLine = this.add.graphics().setDepth(DEPTH.projectiles);
+    this.world3d = undefined;
+    this.arena = undefined;
+    this.juice = undefined;
+    this.entities = undefined;
+    this.cameraController = undefined;
+
+    if (VIEW_MODE === "3d") {
+      // Three.js zeichnet die Welt UNTER dieser Szene; Phaser bleibt fuer
+      // HUD und Touch zustaendig (siehe CLAUDE.md, "3D-Umbau").
+      this.world3d = new World3D(this.session.view.state);
+      this.aimPainter = this.world3d.aim;
+    } else {
+      this.arena = new ArenaRenderer(this, this.session.view.state);
+      this.juice = new Juice(this);
+      this.entities = new EntityRenderer(this, this.session.view, this.session.selfId);
+      // Grenzen aus der GENERIERTEN Welt, nicht aus der alten Konstanten: Jeder
+      // Run hat seine eigene Karte, und die Kamera darf genau bis an deren Rand.
+      const bounds = this.session.view.state.bounds;
+      this.cameraController = new CameraController(this, bounds.width, bounds.height);
+      this.aimPainter = graphicsPainter(this.add.graphics().setDepth(DEPTH.projectiles));
+    }
 
     this.scene.launch("Hud", {
       model: this.hudModel,
@@ -200,10 +227,11 @@ export class GameScene extends Phaser.Scene {
       if (!this.released) {
         this.session.destroy();
       }
-      this.cameraController.destroy();
-      this.entities.destroy();
-      this.juice.destroy();
-      this.arena.destroy();
+      this.cameraController?.destroy();
+      this.entities?.destroy();
+      this.juice?.destroy();
+      this.arena?.destroy();
+      this.world3d?.destroy();
     });
   }
 
@@ -216,7 +244,14 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // Der Daumen liefert Bildschirmrichtungen; wie die in Bodenrichtungen
+    // umzurechnen sind, haengt an der Kamera. In 2D ist es die Identitaet.
+    this.hud.inputManager.view = this.world3d?.orientation ?? TOP_DOWN;
+
     if (this.paused) {
+      // Weiterzeichnen, damit die Welt auch nach einer Drehung des Handys
+      // in der Pause deckungsgleich unter dem HUD liegt.
+      this.drawWorld3d(0);
       /*
        * Angehalten: Die Simulation bekommt keine Zeit. Einmalige Wuensche
        * werden trotzdem geloescht - sonst laege ein Schuss oder eine Faehigkeit
@@ -246,8 +281,8 @@ export class GameScene extends Phaser.Scene {
 
     // Beim Super laeuft die Zeit kurz langsamer. Die Simulation merkt davon
     // nichts - sie bekommt einfach weniger Zeit zugeteilt.
-    this.juice.update(delta);
-    const consumed = this.session.update(delta * this.juice.currentTimeScale, input);
+    this.juice?.update(delta);
+    const consumed = this.session.update(delta * (this.juice?.currentTimeScale ?? 1), input);
     if (consumed) {
       // Einmalige Wuensche (Schuss, Super) erst loeschen, wenn sie verarbeitet
       // wurden - sonst geht ein Klick zwischen zwei Ticks verloren.
@@ -260,22 +295,28 @@ export class GameScene extends Phaser.Scene {
     this.handleEvents();
     this.updateValues(player, delta);
     this.checkConnection();
-    this.entities.update();
+    this.entities?.update();
+    this.drawWorld3d(delta);
     this.drawAim(player, input);
     this.updateHudModel(player);
     this.updateMusic(delta);
 
     // Boden, Deckung und Buesche nach Kamerasicht ein- und ausblenden. In einer
     // Welt dieser Groesse ist das der Unterschied zwischen "laeuft" und "ruckelt".
-    this.arena.update();
+    this.arena?.update();
 
-    this.cameraController.update(
+    this.cameraController?.update(
       this.session.view.state.players.map((entry) => ({
         position: this.session.view.renderPlayerPosition(entry.id),
         isSelf: entry.id === this.session.selfId,
         down: entry.down,
       })),
     );
+  }
+
+  /** Die 3D-Welt ein Bild weiterzeichnen - in der 2D-Ansicht nichts. */
+  private drawWorld3d(delta: number): void {
+    this.world3d?.update(this.session.view, this.session.selfId, delta, this.game.canvas);
   }
 
   /**
@@ -399,6 +440,10 @@ export class GameScene extends Phaser.Scene {
         maxHealth: player.maxHealth,
         superCharge: player.superCharge,
         dps: this.fightSeconds > 0 ? this.damageDealt / this.fightSeconds : 0,
+        position: player.position,
+        view: this.world3d
+          ? `3D Neigung ${VIEW3D.pitch} Drehung ${VIEW3D.yaw} Abstand ${VIEW3D.distance} Bildwinkel ${VIEW3D.fov}`
+          : "2D",
       },
       this.time.now,
     );
@@ -409,7 +454,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const event of events) {
       if (event.type === "hit") {
-        this.entities.flashEnemy(event.enemyId);
+        this.entities?.flashEnemy(event.enemyId);
       }
       if (event.type === "runEnded" && !this.finished) {
         this.finished = true;
@@ -453,7 +498,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.juice.handle(events);
+    this.juice?.handle(events);
     playEventSounds(events);
   }
 
@@ -486,7 +531,7 @@ export class GameScene extends Phaser.Scene {
    * Linie zum Gegner, den die Simulation automatisch anvisiert.
    */
   private drawAim(player: PlayerState, input: InputState): void {
-    this.aimLine.clear();
+    this.aimPainter.clear();
     if (player.down || !this.hud) {
       return;
     }
@@ -511,13 +556,10 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const endX = position.x + direction.x * range;
-    const endY = position.y + direction.y * range;
+    const end = { x: position.x + direction.x * range, y: position.y + direction.y * range };
 
-    this.aimLine.lineStyle(3, COLORS.playerBullet, 0.45);
-    this.aimLine.lineBetween(position.x, position.y, endX, endY);
-    this.aimLine.lineStyle(2, COLORS.playerBullet, 0.8);
-    this.aimLine.strokeCircle(endX, endY, 12);
+    this.aimPainter.line(position, end, 3, COLORS.playerBullet, 0.45);
+    this.aimPainter.circle(end, 12, 2, COLORS.playerBullet, 0.8);
   }
 
   /**
@@ -553,30 +595,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     const reach = ability.range * (ability.aimStyle === "circle" ? strength : 1);
-    const endX = position.x + direction.x * reach;
-    const endY = position.y + direction.y * reach;
+    const end = { x: position.x + direction.x * reach, y: position.y + direction.y * reach };
 
-    this.aimLine.lineStyle(3, COLORS.superReady, 0.5);
-    this.aimLine.lineBetween(position.x, position.y, endX, endY);
+    this.aimPainter.line(position, end, 3, COLORS.superReady, 0.5);
 
     if (player.character === "scout") {
       // Splittergranate: der Kreis ist der echte Schadensradius.
-      this.aimLine.lineStyle(2, COLORS.superReady, 0.9);
-      this.aimLine.strokeCircle(endX, endY, ABILITIES.scout.blastRadius);
+      this.aimPainter.circle(end, ABILITIES.scout.blastRadius, 2, COLORS.superReady, 0.9);
       return;
     }
 
     // Sniper: Laehmschuss - gerade Linie bis zur vollen Reichweite.
-    this.aimLine.lineStyle(2, COLORS.superReady, 0.9);
-    this.aimLine.strokeCircle(endX, endY, 14);
+    this.aimPainter.circle(end, 14, 2, COLORS.superReady, 0.9);
   }
 
   /** Zielanzeige des Supers, ebenfalls mit den echten Werten. */
   private drawSuperAim(player: PlayerState, position: Vec2, direction: Vec2): void {
     if (player.character === "tank") {
       // Bodenstampfer wirkt rund um den Spieler, nicht in eine Richtung.
-      this.aimLine.lineStyle(3, COLORS.superReady, 0.9);
-      this.aimLine.strokeCircle(position.x, position.y, SUPERS.tank.radius);
+      this.aimPainter.circle(position, SUPERS.tank.radius, 3, COLORS.superReady, 0.9);
       return;
     }
 
@@ -588,23 +625,20 @@ export class GameScene extends Phaser.Scene {
        * Anzeige zeigt den weitesten Fall, mit dem echten Radius.
        */
       const recon = SUPERS.sniper;
-      const endX = position.x + direction.x * recon.range;
-      const endY = position.y + direction.y * recon.range;
-      this.aimLine.lineStyle(4, COLORS.superReady, 0.55);
-      this.aimLine.lineBetween(position.x, position.y, endX, endY);
-      this.aimLine.lineStyle(2, COLORS.marked, 0.8);
-      this.aimLine.strokeCircle(endX, endY, recon.revealRadius);
+      const end = {
+        x: position.x + direction.x * recon.range,
+        y: position.y + direction.y * recon.range,
+      };
+      this.aimPainter.line(position, end, 4, COLORS.superReady, 0.55);
+      this.aimPainter.circle(end, recon.revealRadius, 2, COLORS.marked, 0.8);
       return;
     }
 
     const reach = SUPERS.scout.speed * SUPERS.scout.duration;
-    const endX = position.x + direction.x * reach;
-    const endY = position.y + direction.y * reach;
+    const end = { x: position.x + direction.x * reach, y: position.y + direction.y * reach };
 
-    this.aimLine.lineStyle(4, COLORS.superReady, 0.55);
-    this.aimLine.lineBetween(position.x, position.y, endX, endY);
-    this.aimLine.lineStyle(2, COLORS.superReady, 0.9);
-    this.aimLine.strokeCircle(endX, endY, 16);
+    this.aimPainter.line(position, end, 4, COLORS.superReady, 0.55);
+    this.aimPainter.circle(end, 16, 2, COLORS.superReady, 0.9);
   }
 
   /** Gezogene Richtung, sonst die Richtung zum automatisch gewaehlten Ziel. */
@@ -628,6 +662,36 @@ export class GameScene extends Phaser.Scene {
     const dy = target.position.y - player.position.y;
     const distance = Math.hypot(dx, dy);
     return distance > 1e-6 ? { x: dx / distance, y: dy / distance } : null;
+  }
+
+  /** Liegt ein Weltpunkt sichtbar im Bild (mit etwas Rand)? */
+  private isOnScreen(position: Vec2): boolean {
+    if (this.world3d) {
+      return this.world3d.isOnScreen(position);
+    }
+    const view = this.cameras.main.worldView;
+    return (
+      position.x > view.x + 60 &&
+      position.x < view.right - 60 &&
+      position.y > view.y + 60 &&
+      position.y < view.bottom - 60
+    );
+  }
+
+  /**
+   * Eine Richtung am Boden (Winkel in der Simulation) als Richtung auf dem
+   * Bildschirm. In 2D dasselbe; in 3D gedreht und gestaucht wie die Kamera -
+   * sonst zeigte der Kompass am Rand schraeg an der Zone vorbei.
+   */
+  private screenAngle(groundAngle: number): number {
+    if (!this.world3d) {
+      return groundAngle;
+    }
+    const screen = groundToScreen(
+      { x: Math.cos(groundAngle), y: Math.sin(groundAngle) },
+      this.world3d.orientation,
+    );
+    return Math.atan2(screen.y, screen.x);
   }
 
   /** Fuellt das Objekt, das die HudScene liest. */
@@ -657,15 +721,10 @@ export class GameScene extends Phaser.Scene {
      * So im Emulator gesehen, deshalb diese Pruefung.
      */
     const nearest = nearestKnownExtraction(state, player.position);
-    const view = this.cameras.main.worldView;
-    const onScreen =
-      nearest !== null &&
-      nearest.position.x > view.x + 60 &&
-      nearest.position.x < view.right - 60 &&
-      nearest.position.y > view.y + 60 &&
-      nearest.position.y < view.bottom - 60;
     this.hudModel.extractionCompass =
-      nearest && !onScreen ? { angle: nearest.angle, distance: nearest.distance } : null;
+      nearest && !this.isOnScreen(nearest.position)
+        ? { angle: this.screenAngle(nearest.angle), distance: nearest.distance }
+        : null;
     this.fillMinimap(state, player);
     this.hudModel.carriedItems = player.backpack.items.length;
     this.hudModel.backpack = packGrid(player.backpack);
