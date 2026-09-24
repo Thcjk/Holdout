@@ -180,11 +180,17 @@ describe("Drops von Gegnern", () => {
     expect(LOOT.dropChance.brute).toBe(0.3);
     expect(LOOT.dropChance.shooter).toBe(0.2);
 
+    // EINE Welt fuer alle 3000 Tode, zwischendurch nur aufgeraeumt. Eine
+    // neue Welt je Tod (16000 px, Waende, Encounter) kostete fast 4 s und
+    // lief auf dem CI-Rechner in die 5-Sekunden-Grenze.
+    const state = emptyWorld();
     for (const type of ["runner", "brute", "shooter"] as const) {
       let drops = 0;
       const runs = 1000;
       for (let i = 0; i < runs; i += 1) {
-        const state = emptyWorld();
+        state.groundItems.length = 0;
+        state.enemies.length = 0;
+        state.events.length = 0;
         state.rngState = i * 7919 + 13;
         const enemy = createEnemy(1, type, { x: 5000, y: 5000 }, 1, 1, false);
         state.enemies.push(enemy);
