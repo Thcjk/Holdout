@@ -58,7 +58,7 @@ import {
 } from "../storage/carried";
 import { packGrid } from "../systems/backpackCodec";
 import { createRun } from "../systems/run";
-import { FORCED_SEED } from "../platform/debugFlags";
+import { FORCED_SEED, PLACE_FROM_URL } from "../platform/debugFlags";
 import { clearEquipped, settleEquipped, weaponLabel } from "../systems/weapons";
 import {
   createGrid,
@@ -343,6 +343,11 @@ export class LoadoutScene extends Phaser.Scene {
         backpack,
         transport: this.setup.transport,
       });
+      return;
+    }
+    if (PLACE_FROM_URL) {
+      // `?knoten=` / `?welt=offen`: direkt ins Gebiet, ohne Karte.
+      this.scene.start("Game", { character: this.setup.character, backpack });
       return;
     }
     // Solo geht es zuerst auf die Knoten-Karte (seit 2026-09-25): Dort

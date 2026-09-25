@@ -121,3 +121,17 @@ export const FORCED_PLACE: "open" | { nodeId: number | null } = (() => {
     return { nodeId: null };
   }
 })();
+
+/**
+ * Wurde ein Gebiet ausdruecklich ueber die Adresse gewaehlt (`?knoten=` oder
+ * `?welt=offen`)? Dann ueberspringt solo der Packbildschirm die Karte und
+ * startet direkt dort - zum Nachstellen und fuer Bildschirmfotos.
+ */
+export const PLACE_FROM_URL: boolean = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return params.has("knoten") || params.has("welt");
+  } catch {
+    return false;
+  }
+})();

@@ -212,6 +212,9 @@ export function createWorld(
     fixedZone: arena?.fixedZone,
     safeRadius: arena?.safeRadius,
     props: arena?.props ?? [],
+    roads: arena?.roads,
+    lots: arena?.lots,
+    theme: arena?.theme,
     encounters: world.encounters,
     extractions: world.extractions,
     // Im Knoten fuehrt der Ausgang zurueck zur Karte - ausser in einem

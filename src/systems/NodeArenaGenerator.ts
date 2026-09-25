@@ -51,7 +51,11 @@
  * Ablauf gibt, bleibt sie nur in Extraktions-Knoten.
  */
 
-import { ENCOUNTERS, LOOT, NODE_ARENA, WORLD } from "../config/balance";
+import { ENCOUNTERS, LOOT, NODE_ARENA, NODE_MAP, WORLD } from "../config/balance";
+import { regionOfLayer } from "../config/story";
+import type { RegionTheme } from "../config/story";
+import { PLACES_BY_THEME, footprint } from "./arenaPlaces";
+import type { Frame, PlaceContext, PlaceDef } from "./arenaPlaces";
 import { ITEMS } from "../config/items";
 import { generateNodeMap } from "./NodeMapGenerator";
 import type { MapNode, NodeMap } from "./NodeMapGenerator";
@@ -69,7 +73,6 @@ import {
   buildingWalls,
   bushCluster,
   hasGap,
-  outerWalls,
   overlaps,
   randomRect,
 } from "./WorldGenerator";
@@ -84,6 +87,11 @@ export interface NodeArena extends GeneratedWorld {
   safeRadius: 0;
   /** Der Knoten, zu dem das Gebiet gehoert. */
   node: MapNode;
+  /** Region: bestimmt Boden und Orte. */
+  theme: RegionTheme;
+  /** Strassen und befestigte Flaechen - nur zum Zeichnen. */
+  roads: Rect[];
+  lots: Rect[];
 }
 
 /** Ein eigener Seed je Knoten, abgeleitet aus Karten-Seed und Knotennummer. */
@@ -135,98 +143,181 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
   const rng: RngHolder = { rngState: seed | 0 };
   const grid = WORLD.grid;
   const g = Math.max(1, node.danger);
-  const tiles = NODE_ARENA.sizeTiles[node.arenaSize - 1] ?? 48;
-  const size = tiles * grid;
+  const theme = regionOfLayer(node.layer, NODE_MAP.depth).theme;
+
+  /*
+   * ================================================================
+   * DIE FORM: LAENGLICH, MIT EINER STRASSE HINDURCH
+   * ================================================================
+   *
+   * Rueckmeldung 2026-09-25: groesser, und so, dass man erkunden will. Das
+   * Gebiet ist jetzt ein Streifen laengs einer Strasse (Vorbild "Deadly
+   * Days: ROADTRIP"): Start am westlichen Ende, Ausgang am oestlichen, an
+   * der Strasse die Orte. Wer nur durchrennt, schafft es - wer die Orte
+   * abklappert, findet die Beute.
+   */
+  const [lengthTiles, widthTiles] = NODE_ARENA.sizeTiles[node.arenaSize - 1] ?? [88, 48];
+  const width = lengthTiles * grid;
+  const height = widthTiles * grid;
   const t = WORLD.wallThickness;
   const gap = NODE_ARENA.minGap;
 
-  const walls = outerWalls(size);
-  const bounds: Rect = { x: 0, y: 0, width: size, height: size };
-  const center: Vec2 = { x: size / 2, y: size / 2 };
-  // Hindernisse haben Abstand `gap` zur Aussenmauer: Die Flaeche beginnt
-  // dahinter.
-  const area: Area = { x0: t + gap, y0: t + gap, x1: size - t - gap, y1: size - t - gap };
+  // Die Aussenmauer bleibt als Kollision (und fuer Sichtlinien), wird aber
+  // NICHT mehr gezeichnet - der Rand ist dichter Wald bzw. Fels (siehe unten).
+  const walls = rectWalls(width, height);
+  const bounds: Rect = { x: 0, y: 0, width, height };
+  const area: Area = { x0: t + gap, y0: t + gap, x1: width - t - gap, y1: height - t - gap };
 
-  // --- Wegmarken zuerst: Start, Ausstieg, Boss --------------------------
-  const angle = randomRange(rng, 0, Math.PI * 2);
-  const reach = size * NODE_ARENA.landmarkDistance;
-  const exitPoint = {
-    x: Math.round(center.x + Math.cos(angle) * reach),
-    y: Math.round(center.y + Math.sin(angle) * reach),
-  };
-  const bossPoint = {
-    x: Math.round(center.x - Math.cos(angle) * reach),
-    y: Math.round(center.y - Math.sin(angle) * reach),
-  };
+  // --- Die Strasse -------------------------------------------------------
+  const roadTiles = NODE_ARENA.roadTiles;
+  const roadY = Math.round((height / 2 - (roadTiles * grid) / 2) / grid) * grid;
+  const road: Rect = { x: 0, y: roadY, width, height: roadTiles * grid };
+  const roadCenter = roadY + (roadTiles * grid) / 2;
+  // Zum Zeichnen laeuft sie ueber den Rand hinaus weiter - die Welt endet
+  // nicht an der Gebietsgrenze.
+  const roads: Rect[] = [
+    {
+      x: -NODE_ARENA.outskirtsDepth - 900,
+      y: roadY,
+      width: width + 2 * (NODE_ARENA.outskirtsDepth + 900),
+      height: roadTiles * grid,
+    },
+  ];
+  const lots: Rect[] = [];
+
+  // --- Wegmarken: Start im Westen, Ausgang im Osten, Boss dazwischen -----
+  // So weit vom Rand, dass der Startplatz ganz frei bleibt (`spawnClear`).
+  const spawnPoint: Vec2 = { x: t + 8 * grid, y: roadCenter };
+  const exitPoint: Vec2 = { x: width - t - 8 * grid, y: roadCenter };
   const hasBoss = node.type === "elite" || node.type === "boss";
+  const bossSide = nextRandom(rng) < 0.5 ? -1 : 1;
+  const bossPoint: Vec2 = {
+    x: Math.round(width * 0.72),
+    y: Math.round(roadCenter + bossSide * height * 0.26),
+  };
 
-  // Freizuhaltende Kreise: Hier steht nichts, damit man dort ankommt,
-  // aussteigt oder kaempft, ohne gegen eine Kiste zu laufen.
   const reserved: Circle[] = [
-    { ...center, r: NODE_ARENA.spawnClear },
+    { ...spawnPoint, r: NODE_ARENA.spawnClear },
     { ...exitPoint, r: ENCOUNTERS.extractionRadius + grid },
   ];
   if (hasBoss) {
     reserved.push({ ...bossPoint, r: 240 });
   }
 
-  const obstacles: Rect[] = [];
+  // Die Strasse ist frei zu halten wie ein Hindernis - nur liegengebliebene
+  // Autos stehen darauf (weiter unten, bewusst).
+  const obstacles: Rect[] = [road];
   const fits = (rect: Rect, clearance: number = gap): boolean =>
+    rect.x >= area.x0 &&
+    rect.y >= area.y0 &&
+    rect.x + rect.width <= area.x1 &&
+    rect.y + rect.height <= area.y1 &&
     obstacles.every((other) => hasGap(rect, other, clearance)) &&
     reserved.every((circle) => distanceToRect(rect, circle) >= circle.r);
 
-  // --- Haeuser ----------------------------------------------------------
+  const props: ArenaProp[] = [];
   const buildings: Rect[] = [];
-  const buildingCount = densityCount(NODE_ARENA.buildings, g);
-  const maxSide = Math.min(
-    NODE_ARENA.buildingTiles.maxCap,
-    Math.round(NODE_ARENA.buildingTiles.max + NODE_ARENA.buildingTiles.maxPerDanger * g),
+  const lootSpots: GroundItem[] = [];
+  let nextItemId = 1;
+  const addLoot = (x: number, y: number): void => {
+    lootSpots.push({
+      id: nextItemId++,
+      def: rollItem(rng, g),
+      position: { x: Math.round(x), y: Math.round(y) },
+      lifetime: Number.POSITIVE_INFINITY,
+      fromWorld: true,
+    });
+  };
+  const ctx: PlaceContext = { rng, walls, props, buildings, lots, addLoot };
+
+  // --- Orte an der Strasse --------------------------------------------------
+  /*
+   * Von West nach Ost, abwechselnd auf beiden Seiten, mit Luecken dazwischen.
+   * Welche Orte, bestimmt die Region (Stadtrand: Tankstelle, Wohnhaeuser ...).
+   * Passt ein Ort nicht (Start, Ausgang, Boss im Weg), wird der naechste
+   * versucht - die Reihenfolge der Zufallszuege bleibt fest.
+   */
+  const catalog = PLACES_BY_THEME[theme];
+  const placeCount = Math.min(
+    NODE_ARENA.places.max,
+    Math.round(NODE_ARENA.places.base + NODE_ARENA.places.perSize * node.arenaSize),
   );
-  for (let i = 0; i < buildingCount; i += 1) {
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      const width = randomRange(rng, NODE_ARENA.buildingTiles.min, maxSide + 1) * grid;
-      const height = randomRange(rng, NODE_ARENA.buildingTiles.min, maxSide + 1) * grid;
-      const door = Math.floor(randomRange(rng, 0, 4)) % 4;
-      const along = randomRange(rng, 0.25, 0.75);
-      const footprint = randomRect(rng, area, width, height);
-      if (!footprint || !fits(footprint)) {
-        continue;
-      }
-      walls.push(...buildingWalls(footprint, door, along));
-      buildings.push(footprint);
-      obstacles.push(footprint);
-      break;
+  let cursor = t + 12 * grid;
+  let side: -1 | 1 = nextRandom(rng) < 0.5 ? -1 : 1;
+  for (let placed = 0; placed < placeCount && cursor < width - t - 12 * grid; ) {
+    const def = catalog[Math.floor(nextRandom(rng) * catalog.length)] as PlaceDef;
+    const distance = Math.floor(nextRandom(rng) * 3) * grid; // 0-2 Kacheln weiter weg
+    const frame: Frame = {
+      x0: cursor,
+      yNear: side > 0 ? road.y + road.height + gap + distance : road.y - gap - distance,
+      side,
+    };
+    const rect = placeFootprint(def, frame);
+    if (fits(rect)) {
+      def.build(ctx, frame);
+      obstacles.push(rect);
+      placed += 1;
+      side = side > 0 ? -1 : 1;
+      // Naechster Ort: auf der anderen Seite darf er ueberlappend beginnen,
+      // auf derselben Seite braucht es Abstand.
+      cursor += Math.round((def.w * grid) / 2 / grid) * grid + Math.floor(randomRange(rng, 2, 7)) * grid;
+    } else {
+      cursor += 4 * grid;
     }
   }
 
+  // --- Liegengebliebene Autos auf der Strasse (Deckung) ----------------------
+  const wrecks = densityCount(NODE_ARENA.roadCars, g);
+  const onRoad: Rect[] = [];
+  for (let i = 0; i < wrecks; i += 1) {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const lane = nextRandom(rng) < 0.5 ? 0 : roadTiles - 2;
+      const x = Math.round(randomRange(rng, area.x0, area.x1 - 4 * grid) / grid) * grid;
+      const car: Rect = { x, y: road.y + lane * grid, width: 4 * grid, height: 2 * grid };
+      const clear =
+        onRoad.every((other) => hasGap(car, other, 5 * grid)) &&
+        reserved.every((circle) => distanceToRect(car, circle) >= circle.r) &&
+        obstacles.every((other) => other === road || hasGap(car, other, gap));
+      if (!clear) continue;
+      onRoad.push(car);
+      walls.push(car);
+      props.push({
+        kind: "car",
+        x: car.x + car.width / 2,
+        y: car.y + car.height / 2,
+        rotation: randomRange(rng, -0.12, 0.12) + (nextRandom(rng) < 0.5 ? 0 : Math.PI),
+        level: 0,
+        lootable: false,
+        scale: 1,
+        variant: 4 + Math.floor(nextRandom(rng) * 2), // ausgebrannt: grau/rostig
+      });
+      break;
+    }
+  }
+  obstacles.push(...onRoad);
+
   // --- Kistenreihen (Deckung) -------------------------------------------
-  const props: ArenaProp[] = [];
   let crates = 0;
   const coverCount = densityCount(NODE_ARENA.cover, g);
   // Laengere Reihen erst bei hoeherer Gefahr: g 1-2 nur kurze.
-  const lengthChoices = Math.min(
-    NODE_ARENA.coverTiles.length,
-    1 + Math.floor(g / 3),
-  );
+  const lengthChoices = Math.min(NODE_ARENA.coverTiles.length, 1 + Math.floor(g / 3));
   for (let i = 0; i < coverCount && crates < NODE_ARENA.maxCrates; i += 1) {
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const lengthTiles =
+      const lengthTilesCover =
         NODE_ARENA.coverTiles[Math.floor(nextRandom(rng) * lengthChoices)] ?? 2;
       const horizontal = nextRandom(rng) < 0.5;
       const rect = randomRect(
         rng,
         area,
-        (horizontal ? lengthTiles : 1) * grid,
-        (horizontal ? 1 : lengthTiles) * grid,
+        (horizontal ? lengthTilesCover : 1) * grid,
+        (horizontal ? 1 : lengthTilesCover) * grid,
       );
       if (!rect || !fits(rect)) {
         continue;
       }
       walls.push(rect);
       obstacles.push(rect);
-      // Eine Kiste je zwei Kacheln, laengs der Reihe; manche mit einer
-      // zweiten obendrauf.
-      for (let k = 0; k < lengthTiles / 2 && crates < NODE_ARENA.maxCrates; k += 1) {
+      for (let k = 0; k < lengthTilesCover / 2 && crates < NODE_ARENA.maxCrates; k += 1) {
         const along = (k * 2 + 1) * grid;
         const x = horizontal ? rect.x + along : rect.x + grid / 2;
         const y = horizontal ? rect.y + grid / 2 : rect.y + along;
@@ -251,32 +342,38 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
     }
   }
 
-  // --- Beute: in Haeusern und an Beutekisten ------------------------------
-  const lootSpots: GroundItem[] = [];
-  let nextItemId = 1;
-  const addLoot = (x: number, y: number): void => {
-    lootSpots.push({
-      id: nextItemId++,
-      def: rollItem(rng, g),
-      position: { x: Math.round(x), y: Math.round(y) },
-      lifetime: Number.POSITIVE_INFINITY,
-      fromWorld: true,
-    });
-  };
-
-  for (const house of buildings) {
-    const count = Math.floor(
-      randomRange(rng, LOOT.spotsPerBuildingMin, LOOT.spotsPerBuildingMax + 1),
-    );
-    const pad = WORLD.buildingWall + 24;
-    for (let i = 0; i < count; i += 1) {
-      addLoot(
-        randomRange(rng, house.x + pad, house.x + house.width - pad),
-        randomRange(rng, house.y + pad, house.y + house.height - pad),
-      );
+  // --- Einzelne Haeuser abseits der Strasse --------------------------------
+  const extraHouses = densityCount(NODE_ARENA.buildings, g);
+  const maxSide = Math.min(
+    NODE_ARENA.buildingTiles.maxCap,
+    Math.round(NODE_ARENA.buildingTiles.max + NODE_ARENA.buildingTiles.maxPerDanger * g),
+  );
+  for (let i = 0; i < extraHouses; i += 1) {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const w = randomRange(rng, NODE_ARENA.buildingTiles.min, maxSide + 1) * grid;
+      const h = randomRange(rng, NODE_ARENA.buildingTiles.min, maxSide + 1) * grid;
+      const door = Math.floor(randomRange(rng, 0, 4)) % 4;
+      const along = randomRange(rng, 0.25, 0.75);
+      const rect = randomRect(rng, area, w, h);
+      if (!rect || !fits(rect)) {
+        continue;
+      }
+      walls.push(...buildingWalls(rect, door, along));
+      buildings.push(rect);
+      obstacles.push(rect);
+      const count = Math.floor(randomRange(rng, LOOT.spotsPerBuildingMin, LOOT.spotsPerBuildingMax + 1));
+      const pad = WORLD.buildingWall + 36;
+      for (let k = 0; k < count; k += 1) {
+        addLoot(
+          randomRange(rng, rect.x + pad, rect.x + rect.width - pad),
+          randomRange(rng, rect.y + pad, rect.y + rect.height - pad),
+        );
+      }
+      break;
     }
   }
 
+  // --- Beutekisten ---------------------------------------------------------
   const lootCrateCount = densityCount(NODE_ARENA.lootCrates, g);
   for (let i = 0; i < lootCrateCount && crates < NODE_ARENA.maxCrates; i += 1) {
     for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -300,20 +397,23 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
         variant: 0,
       });
       crates += 1;
-      // Die Beute liegt VOR der Kiste - eine Kiste zu oeffnen waere eine neue
-      // Mechanik. Die Kiste markiert, wo es etwas gibt.
-      const side = nextRandom(rng) < 0.5 ? -1 : 1;
+      // Die Beute liegt VOR der Kiste - die Kiste markiert, wo es etwas gibt.
+      const sideOffset = nextRandom(rng) < 0.5 ? -1 : 1;
       const offset = grid / 2 + 40;
-      addLoot(horizontal ? cx : cx + side * offset, horizontal ? cy + side * offset : cy);
+      addLoot(horizontal ? cx : cx + sideOffset * offset, horizontal ? cy + sideOffset * offset : cy);
       break;
     }
   }
 
   // --- Umgebung, die blockiert: Baeume, Felsen, Fassgruppen, Zaeune --------
-  // Jedes Stueck ist eine Wand in `walls` (Kollision, Sichtschutz, Schuesse)
-  // UND ein Kulissenteil (Aussehen). Dieselben Abstandsregeln wie fuer
-  // Kisten - die Erreichbarkeit bleibt gebaut, nicht gehofft.
-  const decor = (kind: ArenaProp["kind"], x: number, y: number, rotation: number, scale: number, variant: number): void => {
+  const decor = (
+    kind: ArenaProp["kind"],
+    x: number,
+    y: number,
+    rotation: number,
+    scale: number,
+    variant: number,
+  ): void => {
     props.push({ kind, x, y, rotation, level: 0, lootable: false, scale, variant });
   };
   const placeSolid = (tiles: number, onPlace: (rect: Rect) => void): void => {
@@ -329,14 +429,20 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
     }
   };
 
-  for (let i = 0; i < densityCount(NODE_ARENA.trees, g); i += 1) {
-    const kind = nextRandom(rng) < 0.5 ? "tree" : "pine";
+  const areaFactor = (width * height) / (48 * 48 * grid * grid);
+  const scaled = (rule: { base: number; perDanger: number; max: number }): number =>
+    Math.round(densityCount(rule, g) * areaFactor);
+  // Im Wald mehr Baeume, an der Kueste mehr Felsen, im Industriegebiet Faesser.
+  const bias = THEME_BIAS[theme];
+
+  for (let i = 0; i < scaled(NODE_ARENA.trees) * bias.trees; i += 1) {
+    const kind = nextRandom(rng) < bias.pineShare ? "pine" : "tree";
     const scale = randomRange(rng, 0.85, 1.3);
     const variant = Math.floor(nextRandom(rng) * 3);
     const rotation = randomRange(rng, 0, Math.PI * 2);
     placeSolid(1, (rect) => decor(kind, rect.x + grid / 2, rect.y + grid / 2, rotation, scale, variant));
   }
-  for (let i = 0; i < densityCount(NODE_ARENA.rocks, g); i += 1) {
+  for (let i = 0; i < scaled(NODE_ARENA.rocks) * bias.rocks; i += 1) {
     const big = nextRandom(rng) < 0.4;
     const variant = Math.floor(nextRandom(rng) * 3);
     const rotation = randomRange(rng, 0, Math.PI * 2);
@@ -345,7 +451,7 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
       decor("rock", rect.x + rect.width / 2, rect.y + rect.height / 2, rotation, tiles * 0.95, variant),
     );
   }
-  for (let i = 0; i < densityCount(NODE_ARENA.barrels, g); i += 1) {
+  for (let i = 0; i < scaled(NODE_ARENA.barrels) * bias.barrels; i += 1) {
     const variant = Math.floor(nextRandom(rng) * 3);
     const rotation = randomRange(rng, 0, Math.PI * 2);
     placeSolid(1, (rect) => decor("barrels", rect.x + grid / 2, rect.y + grid / 2, rotation, 1, variant));
@@ -366,7 +472,6 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
       }
       walls.push(rect);
       obstacles.push(rect);
-      // Ein Zaunfeld je Kachel, laengs der Reihe.
       for (let k = 0; k < length; k += 1) {
         const along = k * grid + grid / 2;
         decor(
@@ -384,16 +489,17 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
 
   // --- Buesche ------------------------------------------------------------
   const bushes: Rect[] = [];
-  for (let i = 0; i < NODE_ARENA.bushes; i += 1) {
-    const width = randomRange(rng, 4, 8) * grid;
-    const height = randomRange(rng, 4, 8) * grid;
+  const bushCount = Math.round(NODE_ARENA.bushes * areaFactor);
+  for (let i = 0; i < bushCount; i += 1) {
+    const w = randomRange(rng, 4, 8) * grid;
+    const h = randomRange(rng, 4, 8) * grid;
     const bites = [0, 1, 2, 3].map(() => ({
       columns: randomRange(rng, 0, WORLD.bushCornerBite),
       rows: randomRange(rng, 0, WORLD.bushCornerBite),
     }));
-    const field = randomRect(rng, area, width, height);
+    const field = randomRect(rng, area, w, h);
     // Buesche blockieren nicht - sie duerfen nah an Hindernisse, aber nicht
-    // hinein, und nicht auf die Wegmarken.
+    // hinein, nicht auf die Strasse und nicht auf die Wegmarken.
     if (!field || obstacles.some((other) => overlaps(field, other))) {
       continue;
     }
@@ -402,9 +508,6 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
     }
     const pieces = bushCluster(field, bites);
     bushes.push(...pieces);
-    // Jedes Stueck mit Straeuchern fuellen - dicht, damit man darin
-    // verschwindet und es von aussen wie ein Busch aussieht, nicht wie eine
-    // gruene Flaeche.
     const step = NODE_ARENA.shrubSpacing;
     for (const piece of pieces) {
       for (let y = piece.y + step / 2; y < piece.y + piece.height; y += step) {
@@ -424,88 +527,89 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
     }
   }
 
-  // --- Deko: Rauch ueber den Daechern, Zielscheiben -----------------------
-  const decoCount = densityCount(NODE_ARENA.deco, g);
-  let deco = 0;
-  for (const house of buildings) {
-    if (deco >= decoCount) break;
-    props.push({
-      kind: "smoke",
-      x: randomRange(rng, house.x + grid, house.x + house.width - grid),
-      y: randomRange(rng, house.y + grid, house.y + house.height - grid),
-      rotation: randomRange(rng, 0, Math.PI * 2),
-      level: 0,
-      lootable: false,
-      scale: 1,
-      variant: 0,
-    });
-    deco += 1;
-  }
-  for (let attempt = 0; deco < decoCount && attempt < decoCount * 4; attempt += 1) {
-    const spot = randomRect(rng, area, grid, grid);
-    if (!spot || !fits(spot, grid)) {
-      continue;
-    }
-    props.push({
-      kind: "target",
-      x: spot.x + grid / 2,
-      y: spot.y + grid / 2,
-      rotation: randomRange(rng, 0, Math.PI * 2),
-      level: 0,
-      lootable: false,
-      scale: 1,
-      variant: 0,
-    });
-    deco += 1;
+  // --- Rauch ueber einzelnen Daechern ------------------------------------
+  const smokeCount = Math.min(buildings.length, densityCount(NODE_ARENA.deco, g));
+  for (let i = 0; i < smokeCount; i += 1) {
+    const house = buildings[i] as Rect;
+    decor(
+      "smoke",
+      randomRange(rng, house.x + grid, house.x + house.width - grid),
+      randomRange(rng, house.y + grid, house.y + house.height - grid),
+      randomRange(rng, 0, Math.PI * 2),
+      1,
+      0,
+    );
   }
 
-  // --- Kleinkram ohne Kollision: Gras, Steine, Blumen, Schutt, Flecken ----
-  // Nicht in Hindernisse hinein (dort saehe man ihn durch die Wand stechen).
+  // --- Kleinkram ohne Kollision -------------------------------------------
   const free = (x: number, y: number): boolean =>
     obstacles.every(
       (rect) =>
-        x < rect.x - 16 || x > rect.x + rect.width + 16 || y < rect.y - 16 || y > rect.y + rect.height + 16,
-    );
+        rect === road ||
+        x < rect.x - 16 ||
+        x > rect.x + rect.width + 16 ||
+        y < rect.y - 16 ||
+        y > rect.y + rect.height + 16,
+    ) &&
+    walls.every(
+      (rect) => x < rect.x - 8 || x > rect.x + rect.width + 8 || y < rect.y - 8 || y > rect.y + rect.height + 8,
+    ) &&
+    (y < road.y - 8 || y > road.y + road.height + 8);
   const scatter = (kind: ArenaProp["kind"], count: number, variants: number, scaleMin: number, scaleMax: number): void => {
     for (let i = 0; i < count; i += 1) {
-      const x = randomRange(rng, t + 24, size - t - 24);
-      const y = randomRange(rng, t + 24, size - t - 24);
+      const x = randomRange(rng, t + 24, width - t - 24);
+      const y = randomRange(rng, t + 24, height - t - 24);
       const rotation = randomRange(rng, 0, Math.PI * 2);
       const scale = randomRange(rng, scaleMin, scaleMax);
       const variant = Math.floor(nextRandom(rng) * variants);
-      if (kind === "patch" || free(x, y)) {
+      if (free(x, y)) {
         decor(kind, Math.round(x), Math.round(y), rotation, scale, variant);
       }
     }
   };
-  scatter("patch", NODE_ARENA.patches, 3, 0.7, 1.4);
-  scatter("grass", NODE_ARENA.grass, 3, 0.8, 1.4);
-  scatter("stone", NODE_ARENA.stones, 3, 0.6, 1.5);
-  scatter("flower", NODE_ARENA.flowers, 3, 0.8, 1.2);
+  scatter("patch", Math.round(NODE_ARENA.patches * areaFactor), 3, 0.7, 1.4);
+  scatter("grass", Math.round(NODE_ARENA.grass * areaFactor * bias.grass), 3, 0.8, 1.4);
+  scatter("stone", Math.round(NODE_ARENA.stones * areaFactor), 3, 0.6, 1.5);
+  scatter("flower", Math.round(NODE_ARENA.flowers * areaFactor * bias.grass), 3, 0.8, 1.2);
   scatter("debris", densityCount(NODE_ARENA.debris, g), 3, 0.8, 1.3);
 
-  // --- Umland ausserhalb der Mauer: Wald und Felsen -------------------------
-  // Unerreichbar, nur Kulisse. Ein lockeres Raster mit Versatz, dichter
-  // Wald direkt an der Mauer, nach aussen lichter.
+  // --- Der Rand: dichter Wald (bzw. Fels), keine Mauer ---------------------
+  /*
+   * Rueckmeldung: "Eine Mauer und danach Wald macht keinen Sinn, es ist ja
+   * eh schon draussen." Die Mauer ist deshalb unsichtbar. Man sieht einen
+   * DICHTEN Streifen Baeume und Felsen direkt an der Grenze, nach aussen
+   * lichter - die Welt geht weiter, man kommt nur nicht durch. Wo die
+   * Strasse das Gebiet verlaesst, stehen stattdessen Strassensperren.
+   */
   const depth = NODE_ARENA.outskirtsDepth;
-  const spacing = NODE_ARENA.outskirtsSpacing;
-  for (let y = -depth; y < size + depth; y += spacing) {
-    for (let x = -depth; x < size + depth; x += spacing) {
-      const px = x + randomRange(rng, -spacing * 0.4, spacing * 0.4);
-      const py = y + randomRange(rng, -spacing * 0.4, spacing * 0.4);
-      const roll = nextRandom(rng);
-      const rotation = randomRange(rng, 0, Math.PI * 2);
-      const scale = randomRange(rng, 0.9, 1.5);
-      const variant = Math.floor(nextRandom(rng) * 3);
-      // Innerhalb der Mauer (plus etwas Luft) nichts.
-      if (px > -40 && px < size + 40 && py > -40 && py < size + 40) {
-        continue;
+  for (let y = -depth; y < height + depth; y += 1) {
+    const rowSpacing = NODE_ARENA.outskirtsSpacing;
+    if ((y + depth) % rowSpacing !== 0) continue;
+    for (let x = -depth; x < width + depth; x += rowSpacing) {
+      const outside = Math.max(-x, x - width, -y, y - height);
+      // Direkt an der Grenze doppelt so dicht: ein zweiter, versetzter Punkt.
+      const points = outside < 220 ? 2 : 1;
+      for (let k = 0; k < points; k += 1) {
+        const px = x + randomRange(rng, -rowSpacing * 0.45, rowSpacing * 0.45);
+        const py = y + randomRange(rng, -rowSpacing * 0.45, rowSpacing * 0.45);
+        const roll = nextRandom(rng);
+        const rotation = randomRange(rng, 0, Math.PI * 2);
+        const scale = randomRange(rng, 0.9, 1.5);
+        const variant = Math.floor(nextRandom(rng) * 3);
+        if (px > -30 && px < width + 30 && py > -30 && py < height + 30) continue;
+        if (props.length >= NODE_ARENA.maxProps) continue;
+        // Auf der Strasse keine Baeume - dort stehen Sperren.
+        if (py > road.y - 30 && py < road.y + road.height + 30) continue;
+        const kind =
+          roll < bias.edgePine ? "pine" : roll < bias.edgePine + bias.edgeTree ? "tree" : roll < 0.93 ? "rock" : "shrub";
+        decor(kind, Math.round(px), Math.round(py), rotation, kind === "rock" ? scale * 1.4 : scale, variant);
       }
-      if (props.length >= NODE_ARENA.maxProps) {
-        continue;
-      }
-      const kind = roll < 0.45 ? "pine" : roll < 0.8 ? "tree" : roll < 0.92 ? "rock" : "shrub";
-      decor(kind, Math.round(px), Math.round(py), rotation, kind === "rock" ? scale * 1.4 : scale, variant);
+    }
+  }
+  // Strassensperren an beiden Enden, knapp ausserhalb.
+  for (const x of [-2 * grid, width + 2 * grid]) {
+    for (let lane = 0; lane < roadTiles; lane += 2) {
+      decor("roadblock", x, road.y + (lane + 1) * grid, Math.PI / 2, 1, 0);
     }
   }
 
@@ -532,14 +636,44 @@ export function buildArena(seed: number, node: MapNode): NodeArena {
     buildings,
     lootSpots,
     nextItemId,
-    spawnPoint: center,
+    spawnPoint,
     encounters,
     extractions,
     props,
     fixedZone: g,
     safeRadius: 0,
     node,
+    theme,
+    roads,
+    lots,
   };
+}
+
+/** Wie stark jede Region ihre Umgebung gewichtet (1 = wie bisher). */
+const THEME_BIAS: Record<
+  RegionTheme,
+  { trees: number; pineShare: number; rocks: number; barrels: number; grass: number; edgePine: number; edgeTree: number }
+> = {
+  suburb: { trees: 1, pineShare: 0.3, rocks: 0.6, barrels: 0.6, grass: 1.2, edgePine: 0.25, edgeTree: 0.55 },
+  industry: { trees: 0.4, pineShare: 0.4, rocks: 0.8, barrels: 2, grass: 0.5, edgePine: 0.35, edgeTree: 0.3 },
+  forest: { trees: 2.2, pineShare: 0.65, rocks: 1, barrels: 0.3, grass: 1, edgePine: 0.6, edgeTree: 0.25 },
+  coast: { trees: 0.5, pineShare: 0.4, rocks: 1.6, barrels: 0.7, grass: 0.7, edgePine: 0.2, edgeTree: 0.2 },
+};
+
+/** Die Grundflaeche eines Orts (Kacheln -> Weltpixel). */
+function placeFootprint(def: PlaceDef, frame: Frame): Rect {
+  return footprint(def, frame);
+}
+
+/** Unsichtbare Aussenmauer eines rechteckigen Gebiets. */
+function rectWalls(width: number, height: number): Rect[] {
+  const t = WORLD.wallThickness;
+  return [
+    { x: 0, y: 0, width, height: t },
+    { x: 0, y: height - t, width, height: t },
+    { x: 0, y: 0, width: t, height },
+    { x: width - t, y: 0, width: t, height },
+  ];
 }
 
 /**

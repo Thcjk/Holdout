@@ -252,6 +252,168 @@ function patch(variant: number): BufferGeometry {
   ]);
 }
 
+
+// ------------------------------------------------------------------
+// Orte an der Strasse (2026-09-25, `systems/arenaPlaces.ts`)
+// ------------------------------------------------------------------
+//
+// Alle laengs der x-Achse gebaut, Fuss auf y = 0, Mitte im Ursprung - so
+// passen sie auf das Rechteck, das die Simulation als Wand kennt.
+// Farbige Teile sind hell gebaut; die eigentliche Farbe kommt aus der
+// Instanz-Toenung (`KIND_TINTS`), damit alle Autos EIN Zeichenaufruf sind.
+
+const GLASS = 0x3d4f63;
+const TIRE = 0x222222;
+const METAL = 0x9aa0a6;
+
+/** Auto, 4 x 2 m. Karosserie hell - die Farbe macht die Toenung. */
+function car(): BufferGeometry {
+  const wheel = (x: number, z: number): Part => ({
+    geometry: new CylinderGeometry(0.34, 0.34, 0.26, 10),
+    color: TIRE,
+    x,
+    y: 0.34,
+    z,
+    rotateX: Math.PI / 2,
+  });
+  return build([
+    { geometry: new BoxGeometry(3.8, 0.62, 1.7), color: 0xf0f0f0, y: 0.62 },
+    { geometry: new BoxGeometry(2.0, 0.55, 1.5), color: 0xf0f0f0, x: -0.2, y: 1.2 },
+    { geometry: new BoxGeometry(2.04, 0.4, 1.36), color: GLASS, x: -0.2, y: 1.2 },
+    { geometry: new BoxGeometry(0.1, 0.18, 1.2), color: 0xfff1b0, x: 1.91, y: 0.72 },
+    wheel(1.2, 0.8),
+    wheel(1.2, -0.8),
+    wheel(-1.2, 0.8),
+    wheel(-1.2, -0.8),
+  ]);
+}
+
+/** Zapfsaeule, 1 x 1 m. */
+function pump(): BufferGeometry {
+  return build([
+    { geometry: new BoxGeometry(0.9, 0.2, 0.9), color: 0x9a9a92, y: 0.1 },
+    { geometry: new BoxGeometry(0.55, 1.5, 0.45), color: 0xd84a3a, y: 0.95 },
+    { geometry: new BoxGeometry(0.4, 0.35, 0.47), color: 0xf2f2ec, y: 1.35 },
+    { geometry: new BoxGeometry(0.08, 0.6, 0.08), color: TIRE, x: 0.32, y: 0.8 },
+  ]);
+}
+
+/** Wartehaeuschen, 4 x 1 m. */
+function busStop(): BufferGeometry {
+  return build([
+    { geometry: new BoxGeometry(4, 0.12, 1.3), color: 0x6f7a86, y: 2.35 },
+    { geometry: new BoxGeometry(3.9, 1.9, 0.06), color: 0x9fc3d8, y: 1.3, z: -0.5 },
+    { geometry: new BoxGeometry(0.1, 2.35, 0.1), color: METAL, x: -1.95, y: 1.17, z: -0.5 },
+    { geometry: new BoxGeometry(0.1, 2.35, 0.1), color: METAL, x: 1.95, y: 1.17, z: -0.5 },
+    { geometry: new BoxGeometry(0.1, 2.35, 0.1), color: METAL, x: -1.95, y: 1.17, z: 0.55 },
+    { geometry: new BoxGeometry(0.1, 2.35, 0.1), color: METAL, x: 1.95, y: 1.17, z: 0.55 },
+    { geometry: new BoxGeometry(2.4, 0.1, 0.45), color: 0x8b6a45, y: 0.5, z: -0.2 },
+  ]);
+}
+
+/** Seecontainer, 6 x 2 m, mit Rippen. Farbe aus der Toenung. */
+function container(): BufferGeometry {
+  const parts: Part[] = [{ geometry: new BoxGeometry(5.9, 2.4, 2.3), color: 0xeeeeee, y: 1.2 }];
+  for (let i = 0; i < 9; i += 1) {
+    const x = -2.6 + i * 0.65;
+    parts.push({ geometry: new BoxGeometry(0.08, 2.3, 2.36), color: 0xd0d0d0, x, y: 1.2 });
+  }
+  parts.push({ geometry: new BoxGeometry(0.06, 2.2, 2.2), color: 0x777777, x: 2.97, y: 1.2 });
+  return build(parts);
+}
+
+/** Zelt, 2 x 2 m: eine vierseitige Pyramide. */
+function tent(): BufferGeometry {
+  return build([
+    { geometry: new ConeGeometry(1.35, 1.6, 4), color: 0xf0f0f0, y: 0.8, rotateZ: 0 },
+    { geometry: new BoxGeometry(0.5, 0.9, 0.05), color: 0x3b3027, x: 0.62, y: 0.45 },
+  ]);
+}
+
+/** Holzstapel, 3 x 1 m: drei liegende Staemme. */
+function logs(): BufferGeometry {
+  const log = (y: number, z: number): Part => ({
+    geometry: new CylinderGeometry(0.25, 0.25, 2.9, 7),
+    color: 0x7a5534,
+    y,
+    z,
+    rotateZ: Math.PI / 2,
+  });
+  return build([log(0.25, -0.26), log(0.25, 0.26), log(0.68, 0)]);
+}
+
+/** Ruderboot, 4 x 2 m, kieloben liegend nicht - einfach auf dem Sand. */
+function boat(): BufferGeometry {
+  return build([
+    { geometry: new BoxGeometry(3.0, 0.55, 1.4), color: 0xf0f0f0, x: -0.3, y: 0.3 },
+    { geometry: new ConeGeometry(0.72, 1.1, 4), color: 0xf0f0f0, x: 1.7, y: 0.3, rotateZ: -Math.PI / 2 },
+    { geometry: new BoxGeometry(2.8, 0.08, 1.2), color: 0x8b6a45, x: -0.3, y: 0.55 },
+    { geometry: new BoxGeometry(0.25, 0.1, 1.2), color: 0x8b6a45, x: -0.4, y: 0.62 },
+  ]);
+}
+
+/** Leuchtturm, 3 x 3 m Grundflaeche, rot-weiss geringelt. */
+function lighthouse(): BufferGeometry {
+  const parts: Part[] = [{ geometry: new CylinderGeometry(1.5, 1.6, 0.4, 10), color: 0x8a8a86, y: 0.2 }];
+  for (let i = 0; i < 5; i += 1) {
+    const radius = 1.25 - i * 0.12;
+    parts.push({
+      geometry: new CylinderGeometry(radius - 0.12, radius, 1.4, 10),
+      color: i % 2 === 0 ? 0xf2f2ec : 0xc8423a,
+      y: 0.4 + i * 1.4 + 0.7,
+    });
+  }
+  parts.push({ geometry: new CylinderGeometry(0.7, 0.7, 0.9, 8), color: 0xffe08a, y: 7.85 });
+  parts.push({ geometry: new ConeGeometry(0.85, 0.8, 8), color: 0x3b3b3b, y: 8.7 });
+  return build(parts);
+}
+
+/** Strassensperre: rot-weisse Bake. */
+function roadblock(): BufferGeometry {
+  return build([
+    { geometry: new BoxGeometry(1.8, 0.35, 0.18), color: 0xd84a3a, y: 0.75 },
+    { geometry: new BoxGeometry(0.5, 0.36, 0.2), color: 0xf2f2ec, x: -0.5, y: 0.75 },
+    { geometry: new BoxGeometry(0.5, 0.36, 0.2), color: 0xf2f2ec, x: 0.5, y: 0.75 },
+    { geometry: new BoxGeometry(0.1, 0.9, 0.1), color: METAL, x: -0.75, y: 0.45 },
+    { geometry: new BoxGeometry(0.1, 0.9, 0.1), color: METAL, x: 0.75, y: 0.45 },
+  ]);
+}
+
+/** Schild auf einem Mast (Tankstelle: rot, Haltestelle: gelb ueber Toenung). */
+function sign(): BufferGeometry {
+  return build([
+    { geometry: new CylinderGeometry(0.07, 0.07, 3.2, 6), color: METAL, y: 1.6 },
+    { geometry: new BoxGeometry(1.3, 0.9, 0.12), color: 0xf0f0f0, y: 3.1 },
+    { geometry: new BoxGeometry(1.1, 0.7, 0.14), color: 0xd84a3a, y: 3.1 },
+  ]);
+}
+
+function bench(): BufferGeometry {
+  return build([
+    { geometry: new BoxGeometry(1.6, 0.08, 0.45), color: WOOD, y: 0.45 },
+    { geometry: new BoxGeometry(1.6, 0.35, 0.06), color: WOOD, y: 0.75, z: -0.22 },
+    { geometry: new BoxGeometry(0.08, 0.45, 0.4), color: METAL, x: -0.7, y: 0.22 },
+    { geometry: new BoxGeometry(0.08, 0.45, 0.4), color: METAL, x: 0.7, y: 0.22 },
+  ]);
+}
+
+function campfire(): BufferGeometry {
+  const parts: Part[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    const angle = (i / 7) * Math.PI * 2;
+    parts.push({
+      geometry: lumpy(new IcosahedronGeometry(0.16, 0), 0.3, 601 + i),
+      color: ROCK[i % ROCK.length] as number,
+      x: Math.cos(angle) * 0.55,
+      y: 0.08,
+      z: Math.sin(angle) * 0.55,
+    });
+  }
+  parts.push({ geometry: new ConeGeometry(0.3, 0.7, 5), color: 0xf28c28, y: 0.35 });
+  parts.push({ geometry: new ConeGeometry(0.16, 0.45, 5), color: 0xffd166, y: 0.3 });
+  return build(parts);
+}
+
 /** Welche Arten hier gebaut werden, und wie viele Spielarten sie haben. */
 export const DECOR_BUILDERS: Partial<Record<ArenaPropKind, (variant: number) => BufferGeometry>> = {
   tree,
@@ -265,6 +427,54 @@ export const DECOR_BUILDERS: Partial<Record<ArenaPropKind, (variant: number) => 
   flower,
   debris,
   patch,
+  car: () => car(),
+  pump: () => pump(),
+  busStop: () => busStop(),
+  container: () => container(),
+  tent: () => tent(),
+  logs: () => logs(),
+  boat: () => boat(),
+  lighthouse: () => lighthouse(),
+  roadblock: () => roadblock(),
+  sign: () => sign(),
+  bench: () => bench(),
+  campfire: () => campfire(),
+};
+
+/**
+ * Eigene Farben je Spielart fuer die Orte. Anders als `VARIANT_TINTS` (leichte
+ * Abwandlung) sind das hier echte Farben: rotes, blaues, gelbes Auto.
+ */
+export const KIND_TINTS: Partial<Record<ArenaPropKind, readonly number[][]>> = {
+  car: [
+    [0.85, 0.28, 0.22], // rot
+    [0.3, 0.45, 0.8], // blau
+    [0.95, 0.8, 0.3], // gelb
+    [0.4, 0.66, 0.42], // gruen
+    [0.42, 0.42, 0.42], // ausgebrannt
+    [0.62, 0.4, 0.28], // rostig
+  ],
+  container: [
+    [0.75, 0.28, 0.22],
+    [0.28, 0.45, 0.7],
+    [0.35, 0.58, 0.4],
+    [0.9, 0.55, 0.2],
+  ],
+  tent: [
+    [0.95, 0.55, 0.2],
+    [0.35, 0.6, 0.4],
+    [0.35, 0.5, 0.85],
+  ],
+  boat: [
+    [0.95, 0.95, 0.95],
+    [0.35, 0.5, 0.85],
+    [0.85, 0.35, 0.28],
+  ],
+  // Schild: Tankstelle rot (Standard), Haltestelle gelblich.
+  sign: [
+    [1, 1, 1],
+    [1, 1.2, 0.2],
+  ],
 };
 
 /**

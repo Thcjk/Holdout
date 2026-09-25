@@ -87,6 +87,8 @@ export function emptyInput(): InputState {
   };
 }
 
+import type { RegionTheme } from "../config/story";
+
 export type CharacterId = "scout" | "tank" | "sniper";
 
 /**
@@ -505,7 +507,20 @@ export type ArenaPropKind =
   | "stone"
   | "flower"
   | "debris"
-  | "patch";
+  | "patch"
+  // Orte an der Strasse (seit 2026-09-25, `systems/arenaPlaces.ts`)
+  | "car"
+  | "pump"
+  | "busStop"
+  | "container"
+  | "tent"
+  | "logs"
+  | "boat"
+  | "lighthouse"
+  | "roadblock"
+  | "sign"
+  | "bench"
+  | "campfire";
 
 /** Arten, die als Wand in `walls` stehen - die Darstellung zeichnet sie selbst. */
 export const SOLID_PROP_KINDS: ReadonlySet<ArenaPropKind> = new Set([
@@ -517,6 +532,14 @@ export const SOLID_PROP_KINDS: ReadonlySet<ArenaPropKind> = new Set([
   "rock",
   "barrels",
   "fence",
+  "car",
+  "pump",
+  "busStop",
+  "container",
+  "tent",
+  "logs",
+  "boat",
+  "lighthouse",
 ]);
 
 /** Eine Zone, in der das Team den Run beenden kann. */
@@ -628,6 +651,10 @@ export interface WorldState {
    * `walls`. Aus dem Seed erzeugt wie alles andere, geht also nie uebers Netz.
    */
   props?: ArenaProp[];
+  /** Knoten-Gebiet: Strassen, befestigte Flaechen, Region - nur zum Zeichnen. */
+  roads?: Rect[];
+  lots?: Rect[];
+  theme?: RegionTheme;
   /**
    * Was das Erreichen der Ausstiegszone bedeutet. In der offenen Welt
    * "extracted" (Run gewonnen). Im Gebiet eines Knotens "exited" (weiter zur

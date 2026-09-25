@@ -28,7 +28,7 @@
 import { Color, InstancedMesh, Matrix4, MeshToonMaterial, Quaternion, Vector3 } from "three";
 import type { BufferGeometry, Scene } from "three";
 import type { ArenaProp } from "../systems/types";
-import { DECOR_BUILDERS, SWAYING, VARIANT_TINTS } from "./decorModels";
+import { DECOR_BUILDERS, KIND_TINTS, SWAYING, VARIANT_TINTS } from "./decorModels";
 import { TOON_STEPS } from "./FigureModel";
 import { toThree } from "./space3d";
 
@@ -79,7 +79,8 @@ export class DecorView {
         rotation.setFromAxisAngle(up, prop.rotation);
         scale.setScalar(prop.scale);
         mesh.setMatrixAt(index, matrix.compose(position, rotation, scale));
-        const tint = VARIANT_TINTS[prop.variant % VARIANT_TINTS.length] as number[];
+        const tints = KIND_TINTS[prop.kind] ?? VARIANT_TINTS;
+        const tint = tints[prop.variant % tints.length] as readonly number[];
         mesh.setColorAt(index, color.setRGB(tint[0] ?? 1, tint[1] ?? 1, tint[2] ?? 1));
       });
       mesh.instanceMatrix.needsUpdate = true;

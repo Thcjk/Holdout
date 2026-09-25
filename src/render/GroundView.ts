@@ -54,6 +54,7 @@ import {
 } from "three";
 import type { Scene, Texture, WebGLRenderer } from "three";
 import { NODE_ARENA } from "../config/balance";
+import type { RegionTheme } from "../config/story";
 import { SOLID_PROP_KINDS } from "../systems/types";
 import type { Rect, WorldState } from "../systems/types";
 import { TOON_STEPS } from "./FigureModel";
@@ -73,10 +74,13 @@ export class GroundView {
     const anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
     const isArena = (state.props?.length ?? 0) > 0;
 
-    this.buildFloor(scene, state.bounds, groundTexture(SAND, 7, anisotropy), 0);
     if (isArena) {
-      // Umland: grosszuegig ueber den Rand hinaus, damit auch am Bildrand
-      // Land zu sehen ist und kein Nichts.
+      /*
+       * Seit 2026-09-25 EIN Boden fuer drinnen und draussen, in der Farbe der
+       * Region: Die Welt geht ueber die Gebietsgrenze hinaus weiter, statt an
+       * einer Mauer in eine andere Landschaft zu kippen (Rueckmeldung: "eine
+       * Mauer und danach Wald macht keinen Sinn").
+       */
       const margin = NODE_ARENA.outskirtsDepth + 900;
       const outer = {
         x: state.bounds.x - margin,
@@ -84,7 +88,12 @@ export class GroundView {
         width: state.bounds.width + margin * 2,
         height: state.bounds.height + margin * 2,
       };
-      this.buildFloor(scene, outer, groundTexture(MEADOW, 13, anisotropy), -0.02);
+      const palette = THEME_GROUND[state.theme ?? "suburb"];
+      this.buildFloor(scene, outer, groundTexture(palette, 7, anisotropy), 0);
+      this.buildLots(scene, state.lots ?? [], anisotropy);
+      this.buildRoads(scene, state.roads ?? [], anisotropy);
+    } else {
+      this.buildFloor(scene, state.bounds, groundTexture(SAND, 7, anisotropy), 0);
     }
     this.buildHouseFloors(scene, state.buildings, anisotropy);
 
@@ -93,7 +102,13 @@ export class GroundView {
       if (carriesProp(wall, state)) {
         continue;
       }
-      groups[wallKind(wall, state)].push(wall);
+      const kind = wallKind(wall, state);
+      // Im Knoten-Gebiet ist die Aussenmauer unsichtbar - den Rand bildet
+      // dichter Wald (`NodeArenaGenerator`). Kollision hat sie weiterhin.
+      if (kind === "outer" && isArena) {
+        continue;
+      }
+      groups[kind].push(wall);
     }
     // Buesche als gruene Quader nur noch in der offenen Welt - im Knoten-
     // Gebiet stehen dort echte Straeucher (`DecorView`).
@@ -120,6 +135,85 @@ export class GroundView {
     scene.add(floor);
     this.objects.push(floor);
     this.disposables.push(texture, geometry, material);
+  }
+
+  /** Beton- und Parkplatzflaechen der Orte (Tankstelle, Lagerhalle ...). */
+  private buildLots(scene: Scene, lots: readonly Rect[], anisotropy: number): void {
+    if (lots.length === 0) return;
+    const texture = groundTexture(CONCRETE, 17, anisotropy);
+    const material = new MeshLambertMaterial({ map: texture });
+    this.disposables.push(texture, material);
+    lots.forEach((lot, index) => {
+      this.flatRect(scene, lot, material, 0.006 + index * 0.0005, 6);
+    });
+  }
+
+  /**
+   * Die Strasse: Asphalt, Randlinien, gestrichelte Mittellinie. Die Linien
+   * sind flache Instanzen - alle Striche ein Zeichenaufruf.
+   */
+  private buildRoads(scene: Scene, roads: readonly Rect[], anisotropy: number): void {
+    if (roads.length === 0) return;
+    const texture = groundTexture(ASPHALT, 23, anisotropy);
+    const material = new MeshLambertMaterial({ map: texture });
+    this.disposables.push(texture, material);
+
+    const marks: Rect[] = [];
+    for (const road of roads) {
+      this.flatRect(scene, road, material, 0.012, 6);
+      const horizontal = road.width >= road.height;
+      const length = horizontal ? road.width : road.height;
+      const middle = horizontal ? road.y + road.height / 2 : road.x + road.width / 2;
+      // Randlinien (6 px) und Mittelstriche (96 px Strich, 96 px Luecke).
+      if (horizontal) {
+        marks.push({ x: road.x, y: road.y + 8, width: length, height: 5 });
+        marks.push({ x: road.x, y: road.y + road.height - 13, width: length, height: 5 });
+        for (let x = road.x; x < road.x + length; x += 192) {
+          marks.push({ x, y: middle - 3, width: 96, height: 6 });
+        }
+      } else {
+        marks.push({ x: road.x + 8, y: road.y, width: 5, height: length });
+        marks.push({ x: road.x + road.width - 13, y: road.y, width: 5, height: length });
+        for (let y = road.y; y < road.y + length; y += 192) {
+          marks.push({ x: middle - 3, y, width: 6, height: 96 });
+        }
+      }
+    }
+    const lineGeometry = new PlaneGeometry(1, 1);
+    lineGeometry.rotateX(-Math.PI / 2);
+    const lineMaterial = new MeshLambertMaterial({ color: 0xece6d6 });
+    const mesh = new InstancedMesh(lineGeometry, lineMaterial, marks.length);
+    const matrix = new Matrix4();
+    const rotation = new Quaternion();
+    const position = new Vector3();
+    const scale = new Vector3();
+    marks.forEach((mark, index) => {
+      scale.set(meters(mark.width), 1, meters(mark.height));
+      position.set(meters(mark.x + mark.width / 2), 0.016, meters(mark.y + mark.height / 2));
+      mesh.setMatrixAt(index, matrix.compose(position, rotation, scale));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    scene.add(mesh);
+    this.objects.push(mesh);
+    this.disposables.push(lineGeometry, lineMaterial);
+  }
+
+  /** Ein flaches Rechteck am Boden, Textur alle `tileMeters` wiederholt. */
+  private flatRect(scene: Scene, rect: Rect, material: MeshLambertMaterial, height: number, tileMeters: number): void {
+    const width = meters(rect.width);
+    const depth = meters(rect.height);
+    const geometry = new PlaneGeometry(width, depth);
+    const uv = geometry.getAttribute("uv");
+    for (let i = 0; i < uv.count; i += 1) {
+      uv.setXY(i, (uv.getX(i) * width) / tileMeters, (uv.getY(i) * depth) / tileMeters);
+    }
+    geometry.rotateX(-Math.PI / 2);
+    const mesh = new Mesh(geometry, material);
+    mesh.position.set(meters(rect.x) + width / 2, height, meters(rect.y) + depth / 2);
+    scene.add(mesh);
+    this.objects.push(mesh);
+    this.disposables.push(geometry);
   }
 
   /** Holzboden in jedem Haus - innen und aussen auf einen Blick getrennt. */
@@ -217,6 +311,20 @@ export class GroundView {
 const SAND = { base: "#d8c29a", blotches: ["#cfb68a", "#e0cca6"], grains: ["#b99f74", "#eadbbd"] };
 /** Umland: Wiese mit Erdstellen. */
 const MEADOW = { base: "#7c9a52", blotches: ["#6f8e49", "#8aa65c", "#8f8558"], grains: ["#5f7f40", "#9bb56a"] };
+/** Asphalt und Beton fuer Strasse und Plaetze. */
+const ASPHALT = { base: "#55575a", blotches: ["#4d4f52", "#5e6063"], grains: ["#46484b", "#696b6e"] };
+const CONCRETE = { base: "#a7a59e", blotches: ["#9d9b94", "#b2b0a8"], grains: ["#8f8d87", "#bdbbb3"] };
+
+/**
+ * Boden je Region. Bewusst gedaempft: Gruen heisst "Versteck" (die hellen
+ * Buesche), der Boden darf ihnen die Bedeutung nicht nehmen.
+ */
+const THEME_GROUND: Record<RegionTheme, typeof SAND> = {
+  suburb: { base: "#94a067", blotches: ["#88955e", "#a0a872", "#a3966a"], grains: ["#7c8a55", "#aab47c"] },
+  industry: { base: "#a49e8f", blotches: ["#999384", "#b0aa9a", "#8f8a7c"], grains: ["#86806f", "#bbb5a5"] },
+  forest: { base: MEADOW.base, blotches: MEADOW.blotches, grains: MEADOW.grains },
+  coast: SAND,
+};
 
 /**
  * Eine Bodentextur, im Code gemalt: weiche Flecken, dann Koernung. Mit

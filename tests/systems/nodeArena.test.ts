@@ -19,9 +19,17 @@ import { soloSetup } from "../helpers";
 
 const SEEDS = [1, 42, 4242, 90210, -7, 777, 31337, 2024];
 
-function node(danger: number, type: MapNode["type"] = "combat", arenaSize: 1 | 2 | 3 = 2): MapNode {
-  return { id: 3, layer: 3, column: 1, type, danger, arenaSize, loot: danger, next: [] };
+function node(
+  danger: number,
+  type: MapNode["type"] = "combat",
+  arenaSize: 1 | 2 | 3 = 2,
+  layer = 3,
+): MapNode {
+  return { id: 3, layer, column: 1, type, danger, arenaSize, loot: danger, next: [] };
 }
+
+/** Je eine Schicht aus jeder Region: Stadtrand, Industrie, Wald, Kueste. */
+const REGION_LAYERS = [1, 4, 7, 10];
 
 /**
  * Flutfuellung auf einem 24-px-Raster: Welche Zellen erreicht ein Spieler
@@ -97,8 +105,9 @@ describe("Knoten-Gebiet", () => {
 
   it("ist ganz begehbar: jede freie Stelle, jede Beute und der Ausstieg sind erreichbar", () => {
     for (const seed of SEEDS) {
-      for (const danger of [1, 5, 11]) {
-        const arena = buildArena(seed, node(danger, danger > 8 ? "elite" : "combat"));
+      for (const [index, danger] of [1, 5, 11, 7].entries()) {
+        const layer = REGION_LAYERS[index] as number;
+        const arena = buildArena(seed, node(danger, danger > 8 ? "elite" : "combat", 2, layer));
         const { free, reached, cellOf } = reachable(arena);
         // Gegenprobe gegen einen stillen Fehlschlag: Es gibt ueberhaupt Platz.
         expect(free).toBeGreaterThan(1000);
@@ -118,19 +127,25 @@ describe("Knoten-Gebiet", () => {
       let walls = 0;
       let crates = 0;
       let buildings = 0;
+      let wrecks = 0;
       for (const seed of SEEDS) {
         const arena = buildArena(seed, node(danger));
         walls += arena.walls.length;
         buildings += arena.buildings.length;
+        // Ausgebrannte Autos auf der Strasse (Spielart 4 und 5).
+        wrecks += arena.props.filter((prop) => prop.kind === "car" && prop.variant >= 4).length;
         crates += arena.props.filter((prop) => prop.kind.startsWith("crate")).length;
       }
-      return { walls, crates, buildings };
+      return { walls, crates, buildings, wrecks };
     };
     const low = totals(1);
     const high = totals(9);
     console.log("   g=1:", low, " g=9:", high);
     expect(high.crates).toBeGreaterThan(low.crates * 1.5);
-    expect(high.buildings).toBeGreaterThan(low.buildings);
+    // Die Orte an der Strasse (mit ihren Haeusern) haengen an Kartengroesse
+    // und Region, nicht an g - deshalb hier kein Vergleich der Haeuser. Die
+    // Autowracks auf der Strasse wachsen mit g.
+    expect(high.wrecks).toBeGreaterThan(low.wrecks);
     expect(high.walls).toBeGreaterThan(low.walls);
     // Die Formel selbst: Grundwert + Faktor x g, begrenzt.
     expect(densityCount(NODE_ARENA.cover, 1)).toBe(Math.round(6 + 1.5));
@@ -179,6 +194,28 @@ describe("Knoten-Gebiet", () => {
     }
   });
 
+  it("baut je Region passende Orte an eine Strasse", () => {
+    const seen = new Set<string>();
+    for (const seed of SEEDS) {
+      for (const layer of REGION_LAYERS) {
+        const arena = buildArena(seed, node(4, "combat", 3, layer));
+        // Die Strasse laeuft der Laenge nach durch - Start und Ausstieg liegen darauf.
+        const road = arena.roads[0]!;
+        for (const point of [arena.spawnPoint, arena.extractions[0]!.position]) {
+          expect(point.y).toBeGreaterThanOrEqual(road.y);
+          expect(point.y).toBeLessThanOrEqual(road.y + road.height);
+        }
+        expect(arena.extractions[0]!.position.x).toBeGreaterThan(arena.bounds.width * 0.8);
+        for (const prop of arena.props) seen.add(`${arena.theme}:${prop.kind}`);
+      }
+    }
+    // Stichproben: Zapfsaeulen am Stadtrand, Container im Industriegebiet,
+    // Zelte im Wald, Boote an der Kueste.
+    for (const expected of ["suburb:pump", "industry:container", "forest:tent", "coast:boat"]) {
+      expect(seen.has(expected), expected).toBe(true);
+    }
+  });
+
   it("laesst den Startplatz frei", () => {
     for (const seed of SEEDS) {
       const arena = buildArena(seed, node(11));
@@ -224,7 +261,10 @@ describe("Knoten-Gebiet", () => {
     expect(state.fixedZone).toBeGreaterThanOrEqual(1);
     expect(state.safeRadius).toBe(0);
     expect(state.props?.length).toBeGreaterThan(0);
-    expect(state.bounds.width).toBeLessThan(3000);
+    // Laenglich, rund doppelt so gross wie die alten 40-56 m (2026-09-25),
+    // aber weit kleiner als die offene Welt.
+    expect(state.bounds.width).toBeLessThan(6000);
+    expect(state.bounds.width).toBeGreaterThan(state.bounds.height);
     // Die offene Welt bleibt, wie sie war.
     const open = createWorld(soloSetup(), 4242);
     expect(open.fixedZone).toBeUndefined();

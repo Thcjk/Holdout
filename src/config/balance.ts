@@ -1050,8 +1050,23 @@ export const NODE_MAP = {
  * "Leistungsbudget"): Eine Kiste hat rund 630 Dreiecke.
  */
 export const NODE_ARENA = {
-  /** Kantenlaenge je Kartengroesse (1 klein, 2 mittel, 3 gross), in Kacheln (1 m). */
-  sizeTiles: [40, 48, 56] as readonly number[],
+  /**
+   * Laenge (laengs der Strasse) und Breite je Kartengroesse (1 klein,
+   * 2 mittel, 3 gross), in Kacheln (1 m). Seit 2026-09-25 laenglich und
+   * rund doppelt so gross wie vorher (40-56 m im Quadrat): Man soll
+   * erkunden wollen.
+   */
+  sizeTiles: [
+    [72, 40],
+    [88, 48],
+    [104, 56],
+  ] as readonly (readonly [number, number])[],
+  /** Breite der Strasse in Kacheln (zwei Spuren). */
+  roadTiles: 4,
+  /** Orte an der Strasse: Grundwert plus je Kartengroesse. */
+  places: { base: 2, perSize: 1.5, max: 7 },
+  /** Liegengebliebene Autos auf der Strasse (Deckung), steigt mit g. */
+  roadCars: { base: 2, perDanger: 0.3, max: 6 },
   /** Mindestabstand zwischen zwei Hindernissen (Pixel): zwei Kacheln Gasse. */
   minGap: 96,
   /** Um den Startpunkt bleibt so viel frei (Pixel). */
@@ -1114,5 +1129,5 @@ export const NODE_ARENA = {
   outskirtsDepth: 600,
   outskirtsSpacing: 210,
   /** Obergrenze aller Kulissenteile je Knoten (Leistung). */
-  maxProps: 900,
+  maxProps: 1500,
 } as const;
