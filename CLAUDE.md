@@ -21,9 +21,14 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
+> **Stand 2026-09-26: Version 2.3.0 – Waffen in der Hand**, dazu Menüs im
+> Spiel-Look (2.2.1). Auf Wunsch „anpassen und dann alles mergen“ auf dem
+> Branch und auf `main`. Siehe **„Waffen sichtbar in der Hand“** und
+> **„Menüs im Spiel-Look“** direkt unten.
+>
 > **Stand 2026-09-25 abends: Version 2.2.0 – Karte, Gebiete an der Strasse,
 > wachsender Rucksack, Story-Rahmen.** Siehe **„Karte, Gebiete, Rucksack,
-> Story“** direkt unten. Nur auf dem Branch (nach `main` erst auf Wunsch).
+> Story“**.
 >
 > **Stand 2026-09-25: Version 2.1.0 – Waffen wirken, UI-Paket eingebunden.**
 > Siehe **„Waffen-Ausrüstung und UI-Paket“** direkt unten. Auf Wunsch
@@ -45,6 +50,43 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 >
 > **BRIEFING.md ist seit 2026-09-24 die neue Fassung** (Abschnitte 2, 4, 5:
 > Three.js, Knoten-Karte, Vorbild „Deadly Days: Roadtrip“).
+
+## Waffen sichtbar in der Hand (2026-09-26, v2.3.0)
+
+Rückmeldung: „man sieht keine Waffe, sondern der Charakter schiesst einfach“.
+Seit 2.1 bestimmt die ausgerüstete Waffe den Angriff – zu sehen war sie
+nicht.
+
+- **Die ausgerüstete Waffe liegt in der rechten Hand** – dasselbe
+  Blaster-Modell wie am Boden (`HELD_WEAPONS` in `config/models.ts`,
+  Längen 0,42–0,9 m, bewusst grösser als echt: von oben aus 30 m wäre
+  eine echte Pistole ein Punkt). Abgelesen aus dem Rucksack
+  (`equippedEntry`), also auch im Koop auf jedem Gerät richtig. Ohne Waffe
+  leere Hände und Faust wie bisher; am Boden liegend unsichtbar.
+- **Nicht am Handknochen angeheftet**, sondern jedes Bild an die Stelle der
+  Hand geschoben und immer in Blickrichtung (= Schussrichtung) gedreht.
+  Angeheftet drehte sie sich mit jeder Animation mit und zeigte beim
+  Rennen in den Himmel (`FigureModel.update`).
+- **Zielpose:** Wer mit Waffe steht, hält sie im Anschlag. Das Paket hat
+  keine Zielpose; der Clip „schiessen“ hebt den Arm von 0,33 bis 0,67 s
+  und senkt ihn wieder (an den Knochen nachgemessen) – geloopt pumpte der
+  Arm. Deshalb bei 0,5 s angehalten (`FigureModel.aim`). Im Lauf schwingt
+  die Waffe mit der Hand.
+- **Mündungsfeuer** (heller Punkt, 0,09 s) bei jedem Schuss. Das
+  `shot`-Ereignis nennt keinen Schützen – es blitzt an der Figur, an der
+  der Schuss startet (höchstens 90 px entfernt). Kein neues Protokollfeld.
+- **Gegner:** Der Schütze trägt eine MP und legt stehend an, der Boss eine
+  Railgun (`ENEMY_LOOKS[].weapon`). Läufer und Brocken bleiben ohne.
+- **Falle, im Bild gefunden:** Die Blaster-Modelle haben die Mündung bei
+  −z. Mit der ersten Annahme hing der Griff vorn (`HELD_MUZZLE_SIGN`).
+- **Geprüft:** Emulator (iPhone 13 quer), Pistole ins Gepäck gezogen:
+  Nahaufnahme von der Seite (Griff in der Hand, Lauf vorn), Stehen, Rennen,
+  Feuern auf Gegner (Figur dreht sich mit der Waffe zum Ziel), Schütze mit
+  MP. Mündungsfeuer zum Nachweis kurz auf 1 s verlängert – es sitzt an der
+  Mündung. Keine Seitenfehler; 331 Tests, typecheck, lint, Build.
+- **Offen:** Nur eine Hand hält die Waffe (auch Gewehr/Railgun); die
+  linke Hand bleibt, wo die Animation sie hat. Leistung: ein
+  Zeichenaufruf mehr je bewaffneter Figur.
 
 ## Menüs im Spiel-Look (2026-09-25, v2.2.1)
 

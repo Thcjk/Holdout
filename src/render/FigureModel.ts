@@ -28,17 +28,27 @@ import {
   AnimationMixer,
   DataTexture,
   Group,
+  IcosahedronGeometry,
   LoopOnce,
   LoopRepeat,
+  Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   MeshToonMaterial,
   NearestFilter,
   RedFormat,
   Box3,
+  Vector3,
 } from "three";
 import type { AnimationAction, Material, Object3D, SkinnedMesh } from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { BODY_URLS, skinUrl } from "../config/models";
+import {
+  BODY_URLS,
+  HELD_MUZZLE_SIGN,
+  HELD_REFERENCE_HEIGHT,
+  HELD_WEAPONS,
+  skinUrl,
+} from "../config/models";
 import type { ClipId, FigureLook } from "../config/models";
 import { modelLoader } from "./ModelLoader";
 
@@ -85,12 +95,84 @@ function materialForSkin(skin: string): MeshToonMaterial | null {
   return material;
 }
 
+/*
+ * ================================================================
+ * DIE WAFFE IN DER HAND
+ * ================================================================
+ *
+ * Die Waffe haengt NICHT am Handknochen, sondern an der Figur selbst und
+ * wird jedes Bild an die Stelle der Hand geschoben. Grund: Der Knochen dreht
+ * sich mit jeder Animation anders (beim Rennen schwingt der Arm, beim Tod
+ * kippt er) - eine angeheftete Waffe zeigte dann in den Himmel oder in den
+ * Boden. So folgt sie der Hand, zeigt aber immer dorthin, wohin die Figur
+ * schaut: genau die Richtung, in die geschossen wird.
+ */
+
+/** Wie weit vor dem Handgelenk der Griff sitzt (Meter bei 1,65 m Hoehe). */
+const GRIP_FORWARD = 0.08;
+/** Anteil der Waffenlaenge hinter dem Griff (Kolben, Schlitten). */
+const GRIP_FROM_BACK = 0.3;
+/** Zeitpunkt im Clip "schiessen", an dem der Arm ganz oben ist. */
+const AIM_POSE_SECONDS = 0.5;
+/** So lange leuchtet das Muendungsfeuer (Sekunden). */
+const FLASH_SECONDS = 0.09;
+
+/** Je Waffe eine Vorlage: ausgerichtet (Muendung +z), Griff im Ursprung. */
+const heldTemplates = new Map<string, { object: Object3D; muzzle: number }>();
+const flashGeometry = new IcosahedronGeometry(1, 0);
+const flashMaterial = new MeshBasicMaterial({ color: 0xffe07a, toneMapped: false });
+const handWorld = new Vector3();
+
+function heldTemplate(itemId: string): { object: Object3D; muzzle: number } | null {
+  const cached = heldTemplates.get(itemId);
+  if (cached) {
+    return cached;
+  }
+  const spec = HELD_WEAPONS[itemId];
+  const gltf = spec ? modelLoader.model(spec.url) : undefined;
+  if (!spec || !gltf) {
+    return null; // Laedt noch - naechstes Bild wieder fragen.
+  }
+  const source = gltf.scene.clone();
+  source.traverse((node) => {
+    const mesh = node as Mesh;
+    if (mesh.isMesh) mesh.material = toonFrom(mesh.material as Material);
+  });
+  // Die Blaster liegen mit der laengsten Kante entlang z (nachgemessen);
+  // auf `spec.length` bringen und den Griff in den Ursprung legen.
+  const box = new Box3().setFromObject(source);
+  const size = box.getSize(new Vector3());
+  const center = box.getCenter(new Vector3());
+  const scale = spec.length / Math.max(size.z, 1e-6);
+  const inner = new Group();
+  source.position.sub(center);
+  inner.add(source);
+  inner.scale.setScalar(scale);
+  // Muendung nach +z drehen, falls sie im Modell am anderen Ende liegt.
+  inner.rotation.y = HELD_MUZZLE_SIGN > 0 ? 0 : Math.PI;
+  inner.position.z = spec.length * (0.5 - GRIP_FROM_BACK);
+  const object = new Group();
+  object.add(inner);
+  const template = { object, muzzle: spec.length * (1 - GRIP_FROM_BACK) };
+  heldTemplates.set(itemId, template);
+  return template;
+}
+
 export class FigureModel {
   /** Wird von aussen positioniert und gedreht. */
   readonly root = new Group();
   private readonly mixer: AnimationMixer;
   private readonly actions = new Map<ClipId, AnimationAction>();
   private current: ClipId | null = null;
+  /** Rechte Hand im Skelett - dorthin wandert die Waffe. */
+  private readonly hand: Object3D | null;
+  /** Groesse relativ zur Figur, fuer die die Waffenlaengen gelten. */
+  private readonly sizeFactor: number;
+  private held: Object3D | null = null;
+  private heldId: string | null = null;
+  private muzzle = 0;
+  private readonly flash = new Mesh(flashGeometry, flashMaterial);
+  private flashTime = 0;
 
   /**
    * Eine neue Figur - oder `null`, solange Koerper, Haut oder Clips noch
@@ -130,6 +212,54 @@ export class FigureModel {
 
     this.root.add(model);
     this.mixer = new AnimationMixer(model);
+    this.hand = model.getObjectByName("RightHand") ?? null;
+    this.sizeFactor = height / HELD_REFERENCE_HEIGHT;
+    this.flash.visible = false;
+    this.flash.scale.setScalar(0.15 * this.sizeFactor);
+    this.root.add(this.flash);
+  }
+
+  /** Hat die Figur gerade eine Waffe in der Hand? */
+  get armed(): boolean {
+    return this.held !== null;
+  }
+
+  /**
+   * Welche Waffe die Figur haelt (Katalog-ID), oder `null` fuer leere
+   * Haende. Jedes Bild aufrufbar - getauscht wird nur bei einer Aenderung.
+   */
+  holdWeapon(itemId: string | null): void {
+    if (itemId === this.heldId && (this.held !== null || itemId === null)) {
+      return;
+    }
+    this.held?.removeFromParent();
+    this.held = null;
+    this.heldId = itemId;
+    if (!itemId || !this.hand) {
+      return;
+    }
+    const template = heldTemplate(itemId);
+    if (!template) {
+      return;
+    }
+    this.held = template.object.clone();
+    this.held.scale.setScalar(this.sizeFactor);
+    this.muzzle = template.muzzle * this.sizeFactor;
+    this.root.add(this.held);
+  }
+
+  /** Muendungsfeuer: ein kurzer heller Punkt vorn an der Waffe. */
+  fire(): void {
+    if (this.held) {
+      this.flashTime = FLASH_SECONDS;
+    }
+  }
+
+  /** Waffe ausblenden (am Boden liegend), ohne sie zu vergessen. */
+  setWeaponVisible(visible: boolean): void {
+    if (this.held) {
+      this.held.visible = visible;
+    }
   }
 
   /**
@@ -140,7 +270,7 @@ export class FigureModel {
    * @param once      Nur einmal abspielen und in der letzten Pose stehen
    *                  bleiben (Tod).
    */
-  play(id: ClipId, timeScale = 1, once = false): void {
+  play(id: ClipId, timeScale = 1, once = false, startAt = 0): void {
     const action = this.action(id, once);
     if (!action) {
       return;
@@ -151,18 +281,47 @@ export class FigureModel {
     }
     const previous = this.current ? this.actions.get(this.current) : undefined;
     action.reset().play();
+    action.time = startAt;
     if (previous) {
       action.crossFadeFrom(previous, 0.15, false);
     }
     this.current = id;
   }
 
-  /** Zeit weiterlaufen lassen (Sekunden). */
+  /**
+   * Im Anschlag stehen: Waffe vorn auf Brusthoehe.
+   *
+   * Das Paket hat keine eigene Zielpose. Der Clip "schiessen" hebt den Arm
+   * erst an, haelt ihn von 0,33 bis 0,67 s oben und senkt ihn wieder -
+   * in Schleife gespielt, pumpte der Arm auf und ab. Deshalb angehalten in
+   * der Mitte (nachgemessen an den Knochen, siehe CLAUDE.md).
+   */
+  aim(): void {
+    this.play("shoot", 0, false, AIM_POSE_SECONDS);
+  }
+
+  /** Zeit weiterlaufen lassen (Sekunden) - und die Waffe zur Hand bringen. */
   update(seconds: number): void {
     this.mixer.update(seconds);
+    const held = this.held;
+    if (!held || !this.hand) {
+      this.flash.visible = false;
+      return;
+    }
+    // Handposition in den Koordinaten der Figur: +z ist vorn.
+    this.hand.getWorldPosition(handWorld);
+    this.root.worldToLocal(handWorld);
+    held.position.set(handWorld.x, handWorld.y, handWorld.z + GRIP_FORWARD * this.sizeFactor);
+
+    this.flashTime = Math.max(0, this.flashTime - seconds);
+    this.flash.visible = held.visible && this.flashTime > 0;
+    if (this.flash.visible) {
+      this.flash.position.set(held.position.x, held.position.y, held.position.z + this.muzzle);
+    }
   }
 
   dispose(): void {
+    this.held?.removeFromParent();
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.mixer.getRoot());
     this.root.removeFromParent();

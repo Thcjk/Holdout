@@ -60,7 +60,9 @@ import { COLORS } from "../config/constants";
 import { CHARACTER_LOOKS, ENEMY_LOOKS, FIGURE_HEIGHT_PER_DIAMETER } from "../config/models";
 import type { FigureLook } from "../config/models";
 import type { WorldView } from "../net/GameSession";
-import type { EnemyType, Vec2 } from "../systems/types";
+import type { EnemyType, GameEvent, PlayerState, Vec2 } from "../systems/types";
+import { itemAt } from "../config/items";
+import { equippedEntry } from "../systems/weapons";
 import { FigureModel } from "./FigureModel";
 import {
   CHARACTER_COLORS,
@@ -107,6 +109,18 @@ interface FigureSlot {
 
 /** So lange steht der Schlag-Clip, bevor die Bewegung wieder uebernimmt. */
 const PUNCH_SECONDS = 0.4;
+/**
+ * So nah (Pixel) muss ein Schuss an einer Figur starten, damit ihr
+ * Muendungsfeuer aufblitzt. Das Ereignis nennt keinen Schuetzen - die Figur,
+ * an der der Schuss beginnt, ist es.
+ */
+const FLASH_MATCH_DISTANCE = 90;
+
+/** Katalog-ID der ausgeruesteten Waffe, oder `null` (Faust). */
+function heldItemId(player: PlayerState): string | null {
+  const entry = equippedEntry(player.backpack);
+  return entry ? (itemAt(entry.item.def)?.id ?? null) : null;
+}
 
 export class EntityView {
   private readonly root = new Group();
@@ -185,8 +199,28 @@ export class EntityView {
     }
     this.syncPlayers(view, seconds);
     this.syncEnemies(view, seconds);
+    this.flashMuzzles(view.events);
     this.syncProjectiles(view);
     this.syncShadows();
+  }
+
+  /** Muendungsfeuer an der Figur, von der ein Schuss ausgeht. */
+  private flashMuzzles(events: readonly GameEvent[]): void {
+    for (const event of events) {
+      if (event.type !== "shot") continue;
+      const slots: Map<unknown, FigureSlot> = event.owner === "player" ? this.players : this.enemies;
+      let best: FigureSlot | null = null;
+      let bestDistance = FLASH_MATCH_DISTANCE;
+      for (const slot of slots.values()) {
+        if (!slot.last) continue;
+        const distance = Math.hypot(slot.last.x - event.x, slot.last.y - event.y);
+        if (distance < bestDistance) {
+          best = slot;
+          bestDistance = distance;
+        }
+      }
+      best?.figure?.fire();
+    }
   }
 
   /** Ein Schatten je Figur, etwa so breit wie die Schultern. */
@@ -227,6 +261,10 @@ export class EntityView {
       this.turn(slot, player.facing, seconds);
 
       if (slot.figure) {
+        // Die ausgeruestete Waffe in der Hand - dieselbe, mit der geschossen
+        // wird (`systems/weapons.ts`). Ohne Waffe: leere Haende, Faust.
+        slot.figure.holdWeapon(heldItemId(player));
+        slot.figure.setWeaponVisible(!player.down);
         if (player.down) {
           slot.figure.play("death", 1, true);
         } else if (slot.punch > 0) {
@@ -276,11 +314,12 @@ export class EntityView {
       }
 
       if (slot.figure) {
+        slot.figure.holdWeapon(slot.look.weapon ?? null);
         if (enemy.stunned > 0) {
           slot.figure.play("idle", 0.4);
         } else if (enemy.type === "shooter" && slot.speed < MOVING_SPEED) {
           // Ein stehender Schuetze legt an - dafuer steht er ja.
-          slot.figure.play("shoot");
+          slot.figure.aim();
         } else {
           this.playMovement(slot);
         }
@@ -385,7 +424,12 @@ export class EntityView {
       const rate = Math.min(1.8, Math.max(0.5, slot.speed / slot.look.moveClipSpeed));
       figure.play(slot.look.moveClip, rate);
     } else {
-      figure.play("idle");
+      // Mit Waffe im Anschlag stehen (Arm vorn), ohne Waffe locker.
+      if (figure.armed) {
+        figure.aim();
+      } else {
+        figure.play("idle");
+      }
     }
   }
 

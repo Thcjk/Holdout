@@ -62,6 +62,12 @@ export interface FigureLook {
   moveClip: ClipId;
   /** Tempo, bei dem die Laufanimation genau zum Boden passt (Pixel/s). */
   moveClipSpeed: number;
+  /**
+   * Waffe, die die Figur immer in der Hand haelt (Katalog-ID, siehe
+   * `HELD_WEAPONS`). Nur fuer Gegner - Spieler halten, was sie ausgeruestet
+   * haben.
+   */
+  weapon?: string;
 }
 
 /**
@@ -85,8 +91,8 @@ export const CHARACTER_LOOKS: Record<CharacterId, FigureLook> = {
 export const ENEMY_LOOKS: Record<EnemyType, FigureLook> = {
   runner: { body: "small", skin: "zombieA", moveClip: "run", moveClipSpeed: 200 },
   brute: { body: "largeMale", skin: "zombieB", moveClip: "walk", moveClipSpeed: 70 },
-  shooter: { body: "medium", skin: "zombieC", moveClip: "walk", moveClipSpeed: 110 },
-  boss: { body: "largeMale", skin: "cyborg", moveClip: "walk", moveClipSpeed: 90 },
+  shooter: { body: "medium", skin: "zombieC", moveClip: "walk", moveClipSpeed: 110, weapon: "smg" },
+  boss: { body: "largeMale", skin: "cyborg", moveClip: "walk", moveClipSpeed: 90, weapon: "railgun" },
 };
 
 /**
@@ -129,3 +135,36 @@ export const ITEM_MODEL_URLS: Partial<Record<string, string>> = {
 
 /** Laengste Kante eines Beute-Modells am Boden, in Metern. */
 export const ITEM_MODEL_SIZE = 0.7;
+
+/**
+ * Waffen in der Hand: dieselben Blaster-Modelle wie am Boden, aber in
+ * Handgroesse. `length` ist die Laenge fuer eine 1,65-m-Figur
+ * (`HELD_REFERENCE_HEIGHT`) - groessere Figuren (Brocken, Ende-Boss) halten
+ * entsprechend groessere Waffen.
+ *
+ * Laenger als in echt, und das mit Absicht: Von oben aus 30 m Abstand ist
+ * eine 25-cm-Pistole ein Punkt. Die Waffe soll man erkennen, nicht
+ * nachmessen.
+ */
+export interface HeldWeaponSpec {
+  url: string;
+  length: number;
+}
+
+export const HELD_WEAPONS: Partial<Record<string, HeldWeaponSpec>> = {
+  pistol: { url: `${BASE}loot-pistol.glb`, length: 0.42 },
+  smg: { url: `${BASE}loot-smg.glb`, length: 0.55 },
+  rifle: { url: `${BASE}loot-rifle.glb`, length: 0.85 },
+  railgun: { url: `${BASE}loot-railgun.glb`, length: 0.9 },
+};
+
+/** Figurenhoehe, fuer die `HELD_WEAPONS[].length` gilt. */
+export const HELD_REFERENCE_HEIGHT = 1.65;
+
+/**
+ * In welche Richtung (entlang der laengsten Achse) die Blaster-Modelle
+ * zeigen: +1 heisst, die Muendung liegt am positiven Ende. Alle Blaster des
+ * Pakets sind gleich ausgerichtet: Die Muendung liegt bei -z, der Griff
+ * hinten bei +z - im Bild nachgesehen (mit +1 hing der Griff vorn).
+ */
+export const HELD_MUZZLE_SIGN = -1;
