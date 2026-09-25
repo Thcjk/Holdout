@@ -62,7 +62,7 @@ import { packGrid } from "../systems/backpackCodec";
 import { createRun } from "../systems/run";
 import { startSize } from "../systems/InventoryGridSystem";
 import { FORCED_SEED, PLACE_FROM_URL } from "../platform/debugFlags";
-import { clearEquipped, settleEquipped, weaponLabel } from "../systems/weapons";
+import { clearEquipped, isWeapon, settleEquipped, weaponLabel } from "../systems/weapons";
 import {
   createGrid,
   findFreeSpot,
@@ -291,6 +291,15 @@ export class LoadoutScene extends Phaser.Scene {
       const packedIndex = alreadyPacked.indexOf(item.def);
       if (packedIndex >= 0) {
         alreadyPacked.splice(packedIndex, 1);
+        continue;
+      }
+      /*
+       * Die Starter-Waffe kommt gleich in den Rucksack, wenn dort noch keine
+       * Waffe liegt (2026-09-26, "zu schwer"). Vorher lag sie nach jedem Wipe
+       * im Lager - wer sie nicht selbst hinueberzog, ging mit der Faust los.
+       */
+      const hasWeapon = this.backpack.items.some((entry) => isWeapon(entry.item.def));
+      if (isWeapon(item.def) && !hasWeapon && this.put(this.backpack, item, null)) {
         continue;
       }
       this.put(this.stash, item, null);

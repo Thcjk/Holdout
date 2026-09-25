@@ -43,11 +43,14 @@ import type { EnemyType, PlayerState, Vec2, WorldState } from "./types";
 /** Welcher Gegnertyp erscheint in dieser Zone? */
 function pickType(state: WorldState, zone: number): EnemyType {
   const roll = nextRandom(state);
+  const inNode = state.fixedZone !== undefined && state.fixedZone !== null;
+  const bruteFrom = inNode ? DIFFICULTY.node.bruteFromDanger : DIFFICULTY.bruteFromZone;
+  const shooterFrom = inNode ? DIFFICULTY.node.shooterFromDanger : DIFFICULTY.shooterFromZone;
 
-  if (zone >= DIFFICULTY.bruteFromZone && roll < DIFFICULTY.bruteShare) {
+  if (zone >= bruteFrom && roll < DIFFICULTY.bruteShare) {
     return "brute";
   }
-  if (zone >= DIFFICULTY.shooterFromZone && roll < DIFFICULTY.bruteShare + DIFFICULTY.shooterShare) {
+  if (zone >= shooterFrom && roll < DIFFICULTY.bruteShare + DIFFICULTY.shooterShare) {
     return "shooter";
   }
   return "runner";
@@ -271,7 +274,9 @@ function despawnDistant(state: WorldState): void {
 
 /** Legt neuen Nachschub in die Warteschlange, wenn zu wenige unterwegs sind. */
 function queueSpawns(state: WorldState): void {
-  const interval = Math.max(1, Math.round(DIFFICULTY.spawnIntervalSeconds * TICK_RATE));
+  const inNode = state.fixedZone !== undefined && state.fixedZone !== null;
+  const seconds = inNode ? DIFFICULTY.node.spawnIntervalSeconds : DIFFICULTY.spawnIntervalSeconds;
+  const interval = Math.max(1, Math.round(seconds * TICK_RATE));
   if (state.tick % interval !== 0) {
     return;
   }
@@ -283,7 +288,7 @@ function queueSpawns(state: WorldState): void {
 
   // Ist die Horde da (Timer eines Gebiets abgelaufen), sollen deutlich mehr
   // Gegner unterwegs sein - begrenzt bleibt es durch `LIMITS.maxEnemies`.
-  const base = targetPopulation(state.zone, state.players.length);
+  const base = targetPopulation(state.zone, state.players.length, inNode);
   const target = state.horde
     ? Math.min(LIMITS.maxEnemies, Math.round(base * DIFFICULTY.hordeFactor))
     : base;

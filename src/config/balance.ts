@@ -383,7 +383,8 @@ export const ENEMIES = {
     name: "Läufer",
     health: 600,
     speed: 180,
-    contactDamage: 300,
+    // 300 -> 240 (2026-09-26, "zu schwer"): Laeufer kommen in Rudeln.
+    contactDamage: 240,
     score: 10,
     radius: 16,
   },
@@ -402,8 +403,10 @@ export const ENEMIES = {
     contactDamage: 0,
     score: 25,
     radius: 18,
-    shotDamage: 250,
-    shotInterval: 2.0,
+    // 250 / 2,0 s -> 170 / 2,6 s (2026-09-26, "zu schwer"): Ab g 3 fiel der
+    // Bot sonst nach rund 65 s, fast nur durch Schuetzen (nodeBalance).
+    shotDamage: 170,
+    shotInterval: 2.6,
     /**
      * Wunschabstand zum Spieler.
      *
@@ -922,7 +925,27 @@ export const DIFFICULTY = {
   nodeTimerBase: 120,
   nodeTimerPerDanger: 6,
   /** Zielbevoelkerung mal diesem Faktor, sobald die Horde da ist. */
-  hordeFactor: 2,
+  hordeFactor: 1.6,
+
+  /**
+   * Eigene, sanftere Werte fuer die Knoten-Gebiete (so wird seit 2.2 gespielt).
+   *
+   * GEMESSEN (`tests/systems/nodeBalance.test.ts`, Bot mit Pistole, 150 s):
+   * Mit den Werten der offenen Welt hielt der Bot in g 1 noch 130 s, ab g 2
+   * aber nur rund 40 s - 3500 bis 4000 Schaden je Minute bei 2400 Leben
+   * (Rueckmeldung: "zurzeit zu schwer"). Der Sprung kam von den Schuetzen, die
+   * in der offenen Welt ab Zone 2 kommen, und von der Dichte: Ein Gebiet ist
+   * 40-56 m hoch, Nachschub taucht also fast immer im Bild auf.
+   */
+  node: {
+    baseEnemies: 3,
+    enemiesPerDanger: 1.2,
+    /** Schuetzen erst ab g 3, Brocken ab g 5 - das erste Gebiet ist zum Warmwerden. */
+    shooterFromDanger: 3,
+    bruteFromDanger: 5,
+    /** Seltener Nachschub als in der offenen Welt (dort 1,2 s). */
+    spawnIntervalSeconds: 2.2,
+  },
 
   /**
    * Zielbevoelkerung in Zone 0, und wieviel je weiterer Zone dazukommt.
@@ -945,7 +968,7 @@ export const DIFFICULTY = {
 
   /** Leben +8 % je Zone, Schaden +4 % - dieselben Zahlen wie frueher je Welle. */
   healthGrowth: 1.08,
-  damageGrowth: 1.04,
+  damageGrowth: 1.03,
 
   /** Gegnerzahl * (0.6 + 0.4 * Spielerzahl) - unveraendert aus der Wellenformel. */
   playerCountBase: 0.6,

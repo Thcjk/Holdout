@@ -60,8 +60,12 @@ export function zoneScaling(zone: number): { health: number; damage: number } {
  * `playerCount` geht wie frueher mit 0,6 + 0,4 * Spielerzahl ein: Vier Spieler
  * bekommen gut das Doppelte eines Einzelspielers, nicht das Vierfache.
  */
-export function targetPopulation(zone: number, playerCount: number): number {
+export function targetPopulation(zone: number, playerCount: number, inNode = false): number {
   const scale = DIFFICULTY.playerCountBase + DIFFICULTY.playerCountFactor * playerCount;
-  const target = (DIFFICULTY.baseEnemies + DIFFICULTY.enemiesPerZone * zone) * scale;
+  // Knoten-Gebiete haben eigene, sanftere Werte (`DIFFICULTY.node`).
+  const perZone = inNode
+    ? DIFFICULTY.node.baseEnemies + DIFFICULTY.node.enemiesPerDanger * zone
+    : DIFFICULTY.baseEnemies + DIFFICULTY.enemiesPerZone * zone;
+  const target = perZone * scale;
   return Math.min(LIMITS.maxEnemies, Math.round(target));
 }
