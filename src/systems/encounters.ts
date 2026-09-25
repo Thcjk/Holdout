@@ -234,7 +234,7 @@ function stepExtraction(state: WorldState, dt: number): void {
   state.extractionProgress += dt;
 
   if (state.extractionProgress >= ENCOUNTERS.extractionSeconds) {
-    endRun(state, "extracted");
+    endRun(state, state.exitOutcome ?? "extracted");
   }
 }
 

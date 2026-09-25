@@ -10,7 +10,7 @@
  * des letzten.
  */
 
-import { CHARACTERS, PLAYER } from "../config/balance";
+import { CHARACTERS, DIFFICULTY, PLAYER } from "../config/balance";
 import { stepReload, stepRevive, tryShoot } from "./combat";
 import { stepEnemies } from "./enemies";
 import { clampToArena, stepPlayerMovement } from "./movement";
@@ -53,6 +53,8 @@ export interface PlayerSetup {
    * daran scheitern.
    */
   backpack?: readonly PackedItem[];
+  /** Leben beim Betreten - fehlt es, volles Leben (erstes Gebiet eines Runs). */
+  health?: number;
 }
 
 /**
@@ -131,7 +133,9 @@ export function createPlayer(
     velocity: { x: 0, y: 0 },
     radius: PLAYER.radius,
     facing: { x: 0, y: 1 },
-    health: definition.health,
+    // Leben reist zwischen den Gebieten mit (Kartenansicht): Wer angeschlagen
+    // den Ausgang erreicht, kommt angeschlagen im naechsten Gebiet an.
+    health: Math.max(1, Math.min(definition.health, setup.health ?? definition.health)),
     maxHealth: definition.health,
     reloadTimers: new Array<number>(PLAYER.ammoCharges).fill(0),
     superCharge: 0,
@@ -210,6 +214,15 @@ export function createWorld(
     props: arena?.props ?? [],
     encounters: world.encounters,
     extractions: world.extractions,
+    // Im Knoten fuehrt der Ausgang zurueck zur Karte - ausser in einem
+    // Extraktions-Knoten, dort endet der Run mit der Beute.
+    exitOutcome:
+      arena === null ? "extracted" : arena.node.type === "extraction" ? "extracted" : "exited",
+    nodeTimer:
+      arena === null
+        ? undefined
+        : DIFFICULTY.nodeTimerBase + DIFFICULTY.nodeTimerPerDanger * arena.node.danger,
+    horde: false,
     extractionIndex: -1,
     extractionProgress: 0,
     events: [],

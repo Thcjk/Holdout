@@ -44,6 +44,9 @@ import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
 import { finishRun } from "../storage/carried";
 import { packGrid } from "../systems/backpackCodec";
+import { completeNode, currentNode } from "../systems/run";
+import { placeName } from "../config/story";
+import type { RunState } from "../systems/run";
 
 /**
  * ================================================================
@@ -86,6 +89,11 @@ export interface GameSceneData {
    * Host (`PlayerSetup.backpack`), weil er die Runde fuer alle rechnet.
    */
   backpack?: PackedItem[];
+  /**
+   * Der Run auf der Knoten-Karte (seit 2026-09-25). Ist er gesetzt, fuehrt
+   * der Ausgang eines Gebiets zurueck auf die Karte statt zum Ergebnis.
+   */
+  run?: RunState;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -110,6 +118,7 @@ export class GameScene extends Phaser.Scene {
   private calmSeconds = COMBAT_LEAVE_SECONDS;
   private hud?: HudScene;
   private character: CharacterId = "scout";
+  private run?: RunState;
   private finished = false;
 
   /**
@@ -140,6 +149,7 @@ export class GameScene extends Phaser.Scene {
 
   init(data: GameSceneData): void {
     this.character = data.character ?? "scout";
+    this.run = data.run;
     this.finished = false;
     this.released = false;
     this.backpackOpen = false;
@@ -458,6 +468,11 @@ export class GameScene extends Phaser.Scene {
       if (event.type === "hit") {
         this.entities?.flashEnemy(event.enemyId);
       }
+      if (event.type === "runEnded" && !this.finished && event.outcome === "exited" && this.run) {
+        this.finished = true;
+        this.time.delayedCall(700, () => this.backToMap());
+        continue;
+      }
       if (event.type === "runEnded" && !this.finished) {
         this.finished = true;
         // Kurz warten, damit der letzte Effekt noch zu sehen ist.
@@ -502,6 +517,36 @@ export class GameScene extends Phaser.Scene {
 
     this.juice?.handle(events);
     playEventSounds(events);
+  }
+
+  /**
+   * Gebiet geschafft: Rucksaecke und Leben in den Run uebernehmen und zurueck
+   * auf die Karte. Die Verbindung bleibt offen (`release`) - im Koop geht es
+   * im selben Raum weiter.
+   */
+  private backToMap(): void {
+    const run = this.run;
+    if (!run) return;
+    const state = this.session.view.state;
+    completeNode(
+      run,
+      state.players.map((player) => ({
+        id: player.id,
+        health: player.health,
+        down: player.down,
+        backpack: packGrid(player.backpack),
+      })),
+      (id) => state.players.find((player) => player.id === id)?.maxHealth ?? 1,
+    );
+    this.scene.stop("Hud");
+    const transport = this.session.release();
+    this.released = true;
+    this.scene.start("Map", {
+      run,
+      character: this.character,
+      transport: transport ?? undefined,
+      message: `Tag ${run.day} geschafft – ${state.score} Punkte. Wohin als Nächstes?`,
+    });
   }
 
   /**
@@ -716,6 +761,12 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.abilityCooldownMax = ABILITIES[player.character].cooldown;
     this.hudModel.abilityLabel = ABILITIES[player.character].short;
     this.hudModel.zone = state.zone;
+    this.hudModel.nodeTimer = state.nodeTimer ?? null;
+    this.hudModel.horde = state.horde === true;
+    if (this.run && !this.hudModel.placeName) {
+      const node = currentNode(this.run);
+      this.hudModel.placeName = placeName(node, this.run.map.depth, this.run.seed);
+    }
     this.hudModel.deepestZone = state.deepestZone;
     this.hudModel.inSafeZone =
       safeRadiusOf(state) > 0 &&

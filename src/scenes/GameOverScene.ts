@@ -71,6 +71,13 @@ const OUTCOMES: Record<RunOutcome, { title: string; color: string; note: string 
     color: "#ffd166",
     note: "Der Ende-Boss ist gefallen - mehr geht nicht.",
   },
+  // Normalerweise fuehrt ein Ausgang zur Karte, nicht hierher (`MapScene`).
+  // Nur fuer den Fall, dass ein Run ohne Karte ueber einen Ausgang endet.
+  exited: {
+    title: "Gebiet verlassen",
+    color: PALETTE.success,
+    note: "Weiter auf der Karte.",
+  },
 };
 
 /**

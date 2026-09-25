@@ -102,6 +102,8 @@ export interface NodeMapOptions {
   eliteDangerBonus: number;
   lootBonus: Readonly<Record<"combat" | "elite" | "boss", number>>;
   sizeWeights: readonly number[];
+  /** Kampfknoten weichen bis zu so viele Stufen von ihrer Schicht ab. */
+  dangerSpread?: number;
 }
 
 /**
@@ -212,6 +214,18 @@ export function generateNodeMap(seed: number, options: NodeMapOptions = NODE_MAP
   assignTypes(nodes, rng, options, { first, last, depth });
   for (const node of nodes) {
     node.danger = layerDanger(node.layer, options);
+    /*
+     * Leichte und schwere Abzweigungen (Rueckmeldung 2026-09-25): Ein
+     * Kampfknoten liegt eine Stufe unter oder ueber seiner Schicht. Die
+     * Beute haengt an der Gefahr - wer den leichten Weg nimmt, findet
+     * schwaecheres Zeug. Der Zug kommt NACH den Typen, damit die Typen
+     * dieselben bleiben.
+     */
+    if (node.type === "combat") {
+      const spread = options.dangerSpread ?? 0;
+      const offset = spread > 0 ? randomIndex(rng, 2 * spread + 1) - spread : 0;
+      node.danger = Math.max(1, node.danger + offset);
+    }
     if (node.type === "elite") {
       node.danger += options.eliteDangerBonus;
     }

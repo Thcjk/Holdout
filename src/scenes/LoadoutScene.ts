@@ -57,6 +57,8 @@ import {
   stashItems,
 } from "../storage/carried";
 import { packGrid } from "../systems/backpackCodec";
+import { createRun } from "../systems/run";
+import { FORCED_SEED } from "../platform/debugFlags";
 import { clearEquipped, settleEquipped, weaponLabel } from "../systems/weapons";
 import {
   createGrid,
@@ -343,6 +345,11 @@ export class LoadoutScene extends Phaser.Scene {
       });
       return;
     }
-    this.scene.start("Game", { character: this.setup.character, backpack });
+    // Solo geht es zuerst auf die Knoten-Karte (seit 2026-09-25): Dort
+    // waehlt man das erste Gebiet, nicht der Zufall.
+    const run = createRun(FORCED_SEED ?? Date.now() & 0x7fffffff, [
+      { id: "local", name: "Du", character: this.setup.character, backpack },
+    ]);
+    this.scene.start("Map", { run, character: this.setup.character });
   }
 }

@@ -10,7 +10,7 @@
  * zurueckkommt, `start` bis jeder Client sich gemeldet hat.
  */
 
-import { unflattenPacked } from "../systems/backpackCodec";
+import { flattenPacked, unflattenPacked } from "../systems/backpackCodec";
 import type { CharacterId, PackedItem } from "../systems/types";
 import type { PlayerSetup } from "../systems/world";
 import type { NetMessage, NetPlayerInfo } from "./protocol";
@@ -239,12 +239,25 @@ export class Lobby {
   }
 }
 
-function toSetups(players: readonly NetPlayerInfo[]): PlayerSetup[] {
+export function toSetups(players: readonly NetPlayerInfo[]): PlayerSetup[] {
   return players.map((player) => ({
     id: player.id,
     name: player.name,
     character: player.character,
     backpack: unpack(player.backpack),
+    health: player.health,
+  }));
+}
+
+/** Umkehrung von `toSetups` - fuer das `move`-Paket der Kartenansicht. */
+export function toNetPlayers(setups: readonly PlayerSetup[], hostId: string): NetPlayerInfo[] {
+  return setups.map((setup) => ({
+    id: setup.id,
+    name: setup.name,
+    character: setup.character,
+    isHost: setup.id === hostId,
+    backpack: setup.backpack ? flattenPacked(setup.backpack) : undefined,
+    health: setup.health,
   }));
 }
 

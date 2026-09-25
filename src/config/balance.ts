@@ -894,6 +894,17 @@ export const DIFFICULTY = {
   zoneSize: 800,
 
   /**
+   * Zeit bis zur Horde in einem Knoten-Gebiet: Grundwert plus je Stufe g.
+   * Bewusst laenger als die 45-90 s aus dem Briefing - das Gebiet ist zum
+   * ERKUNDEN da (Rueckmeldung 2026-09-25). Nach Ablauf verliert man nicht,
+   * es kommen nur mehr Gegner (`hordeFactor`).
+   */
+  nodeTimerBase: 120,
+  nodeTimerPerDanger: 6,
+  /** Zielbevoelkerung mal diesem Faktor, sobald die Horde da ist. */
+  hordeFactor: 2,
+
+  /**
    * Zielbevoelkerung in Zone 0, und wieviel je weiterer Zone dazukommt.
    *
    * GEMESSEN NACHGEBESSERT: Mit 3 + 1,6 je Zone waren zu keinem Zeitpunkt mehr
@@ -982,8 +993,11 @@ export const NODE_MAP = {
   typeWeights: {
     combat: 5,
     elite: 1,
-    rest: 1,
-    extraction: 1.2,
+    // Rast und Extraktion seltener als zuerst (1 / 1,2): In der Karte vom
+    // 2026-09-25 war fast jede zweite Station ein X oder ein +, und die
+    // Entscheidung "aussteigen oder weiter" wurde beliebig.
+    rest: 0.7,
+    extraction: 0.7,
   },
   /** Ab welcher Schicht Elite-Knoten vorkommen duerfen (0 = Start). */
   eliteFromLayer: 4,
@@ -1011,6 +1025,12 @@ export const NODE_MAP = {
    * Knoten. Elite ist immer klein (eng und heftig), der Boss immer gross.
    */
   sizeWeights: [3, 4, 2] as readonly number[],
+  /**
+   * Kampfknoten liegen zufaellig bis zu eine Stufe leichter oder schwerer
+   * als ihre Schicht - mit entsprechend schwaecherer oder besserer Beute.
+   * So hat man an einer Gabelung eine echte Wahl.
+   */
+  dangerSpread: 1,
 } as const;
 
 /**

@@ -408,7 +408,9 @@ export type GameEvent =
   | { type: "backpackFull"; playerId: string; def: number; x: number; y: number }
   /** Der Boss holt aus: Warnkreis an dieser Stelle, mit diesem Radius. */
   | { type: "bossWindup"; x: number; y: number; radius: number; seconds: number }
-  | { type: "runEnded"; outcome: RunOutcome; score: number; zone: number };
+  | { type: "runEnded"; outcome: RunOutcome; score: number; zone: number }
+  /** Der Timer eines Gebiets ist abgelaufen - jetzt kommt die Horde. */
+  | { type: "hordeStarted" };
 
 export interface SpawnOrder {
   type: EnemyType;
@@ -544,7 +546,14 @@ export interface ExtractionZone {
  * Frueher gab es nur "Game Over". Seit Phase 9 kann ein Run auch GUT enden,
  * und der Ergebnisbildschirm muss den Unterschied sagen koennen.
  */
-export type RunOutcome = "wipe" | "extracted" | "bossDefeated";
+export type RunOutcome = "wipe" | "extracted" | "bossDefeated" | "exited";
+
+/*
+ * "exited" (seit der Kartenansicht): Das Team hat den AUSGANG eines Gebiets
+ * erreicht. Der Run ist damit nicht vorbei - es geht zurueck auf die Karte
+ * und zum naechsten Knoten. Nur der Ausgang eines Extraktions-Knotens
+ * beendet den Run mit "extracted" (`WorldState.exitOutcome`).
+ */
 
 export interface WorldState {
   /** Fortlaufende Nummer des Simulationsschritts. */
@@ -619,6 +628,20 @@ export interface WorldState {
    * `walls`. Aus dem Seed erzeugt wie alles andere, geht also nie uebers Netz.
    */
   props?: ArenaProp[];
+  /**
+   * Was das Erreichen der Ausstiegszone bedeutet. In der offenen Welt
+   * "extracted" (Run gewonnen). Im Gebiet eines Knotens "exited" (weiter zur
+   * Karte) - ausser im Extraktions-Knoten, dort wieder "extracted".
+   */
+  exitOutcome?: RunOutcome;
+  /**
+   * Restzeit bis zur Horde, in Sekunden (nur in Knoten-Gebieten). Laeuft sie
+   * ab, verliert man NICHT - aber es kommen deutlich mehr Gegner. Der Timer
+   * setzt die Grenze fuers Erkunden, ohne es zu verbieten.
+   */
+  nodeTimer?: number;
+  /** Ist die Horde da? Dann gilt `DIFFICULTY.hordeFactor` auf die Gegnerzahl. */
+  horde?: boolean;
   /** Ereignisse dieses Ticks. Die Darstellung leert die Liste nach dem Auswerten. */
   events: GameEvent[];
   /** Zustand des Zufallsgenerators - damit Host und Client gleich rechnen. */

@@ -8,7 +8,7 @@
 
 import { Simulation } from "../systems/Simulation";
 import type { InputState } from "../systems/types";
-import type { PlayerSetup } from "../systems/world";
+import type { PlayerSetup, WorldPlace } from "../systems/world";
 import type { GameSession, WorldView } from "./GameSession";
 import { STATE_RATE, encodeState } from "./protocol";
 import type { NetMessage } from "./protocol";
@@ -33,11 +33,13 @@ export class HostSession implements GameSession {
     setups: readonly PlayerSetup[],
     selfId: string,
     seed: number,
+    /** Welches Gebiet (Kartenansicht). Der Client bekommt dieselbe Nummer. */
+    place: WorldPlace = { nodeId: null },
   ) {
     this.selfId = selfId;
-    // Immer der erste Kampfknoten - der Client baut genau dasselbe
-    // (`ClientView`), ohne dass etwas davon uebers Netz muss.
-    this.simulation = new Simulation(setups, seed, { nodeId: null });
+    // Der Client baut genau dasselbe Gebiet (`ClientView`) - uebers Netz geht
+    // nur die Knotennummer im `move`-Paket, nie die Karte.
+    this.simulation = new Simulation(setups, seed, place);
 
     transport.onMessage((from, message) => this.receive(from, message));
     transport.onPeerLeave((peerId) => this.handleLeave(peerId));

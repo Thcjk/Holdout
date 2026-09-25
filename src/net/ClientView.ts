@@ -20,6 +20,7 @@ import { reloadTimeOf } from "../systems/weapons";
 import { TICK_MS, TICK_SECONDS } from "../config/constants";
 import { stepPlayerMovement } from "../systems/movement";
 import { createPlayer, createWorld, isInBush } from "../systems/world";
+import type { WorldPlace } from "../systems/world";
 import type { PlayerSetup } from "../systems/world";
 import type {
   EnemyState,
@@ -70,6 +71,7 @@ export class ClientView implements WorldView {
     private readonly selfId: string,
     setups: readonly PlayerSetup[],
     seed: number,
+    place: WorldPlace = { nodeId: null },
   ) {
     /*
      * DER SEED MUSS HIER ANKOMMEN - sonst baut der Client eine andere Welt.
@@ -81,8 +83,9 @@ export class ClientView implements WorldView {
      * Waende, waehrend die anderen ihn durch Deckung laufen saehen. Uebertragen
      * wird die Karte nie, nur diese eine Zahl.
      */
-    // Dasselbe Gebiet wie der Host (`HostSession`): erster Kampfknoten.
-    this.state = createWorld(setups, seed, { nodeId: null });
+    // Dasselbe Gebiet wie der Host (`HostSession`) - der Knoten kommt aus
+    // dem `move`-Paket der Kartenansicht, sonst der erste Kampfknoten.
+    this.state = createWorld(setups, seed, place);
     for (const player of this.state.players) {
       this.playerById.set(player.id, player);
     }
@@ -221,6 +224,8 @@ export class ClientView implements WorldView {
     this.state.runTime = to.runTime;
     this.state.extractionIndex = to.extractionIndex;
     this.state.extractionProgress = to.extractionProgress;
+    if (to.nt !== undefined) this.state.nodeTimer = to.nt;
+    this.state.horde = to.hd ?? false;
     // Die Positionen der Encounter stehen schon aus dem Seed fest; vom Host
     // kommt nur, was daraus geworden ist.
     to.encounters.forEach((status, index) => {

@@ -39,6 +39,9 @@ function soundFor(event: GameEvent): SoundName | null {
       return "pickup";
     case "zoneReached":
       return "zoneReached";
+    case "hordeStarted":
+      // Deutlich und tief: Jetzt wird es ernst.
+      return "playerDown";
     case "runEnded":
       // Denselben Klang fuer alle drei Ausgaenge - der Ergebnisbildschirm sagt
       // ohnehin sofort, welcher es war. Eigene Fanfaren waeren Phase 17.

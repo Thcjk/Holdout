@@ -9,8 +9,6 @@
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import { COLORS, SAFE, VIEWPORT } from "../config/constants";
-import { ClientSession } from "../net/ClientSession";
-import { HostSession } from "../net/HostSession";
 import { LocalTransport } from "../net/LocalTransport";
 import { Lobby, MAX_PLAYERS } from "../net/Lobby";
 import { PeerTransport } from "../net/PeerTransport";
@@ -20,6 +18,7 @@ import type { CharacterId, PackedItem } from "../systems/types";
 import { Button } from "../ui/Button";
 import { flattenPacked } from "../systems/backpackCodec";
 import { setReloadSafe } from "../platform/update";
+import { createRun } from "../systems/run";
 
 /** Fester Code fuer den lokalen Zwei-Tab-Test - der muss niemand abtippen. */
 const LOCAL_ROOM_CODE = "LOCAL1";
@@ -336,11 +335,13 @@ export class LobbyScene extends Phaser.Scene {
       lobby.destroy();
       audio.setMusic("menu");
 
-      const session = transport.isHost
-        ? new HostSession(transport, setups, transport.selfId, seed)
-        : new ClientSession(transport, setups, transport.selfId, seed);
-
-      this.scene.start("Game", { character: this.character, session });
+      // Erst auf die Knoten-Karte - dort waehlt der Host das Gebiet und
+      // schickt es an alle (`MapScene`, `move`-Paket).
+      this.scene.start("Map", {
+        run: createRun(seed, setups),
+        character: this.character,
+        transport,
+      });
     });
   }
 

@@ -26,7 +26,7 @@
  * Die Zahlen stammen alle aus `config/balance.ts`.
  */
 
-import { DIFFICULTY, PLAYER, WORLD } from "../config/balance";
+import { DIFFICULTY, LIMITS, PLAYER, WORLD } from "../config/balance";
 import { TICK_RATE } from "../config/constants";
 import { createEnemy } from "./enemies";
 import { nextRandom, randomRange } from "./rng";
@@ -129,6 +129,7 @@ function pointInRect(point: Vec2, rect: { x: number; y: number; width: number; h
  * Zone fortschreiben, dann aufraeumen, dann nachlegen.
  */
 export function stepRound(state: WorldState, dt: number): void {
+  stepNodeTimer(state, dt);
   if (state.phase === "ended") {
     return;
   }
@@ -280,7 +281,12 @@ function queueSpawns(state: WorldState): void {
     return;
   }
 
-  const target = targetPopulation(state.zone, state.players.length);
+  // Ist die Horde da (Timer eines Gebiets abgelaufen), sollen deutlich mehr
+  // Gegner unterwegs sein - begrenzt bleibt es durch `LIMITS.maxEnemies`.
+  const base = targetPopulation(state.zone, state.players.length);
+  const target = state.horde
+    ? Math.min(LIMITS.maxEnemies, Math.round(base * DIFFICULTY.hordeFactor))
+    : base;
   const unterwegs = state.enemies.length + state.pendingSpawns.length;
   if (unterwegs >= target) {
     return;
@@ -339,5 +345,21 @@ function spawnDueEnemies(state: WorldState): void {
       ),
     );
     state.pendingSpawns.splice(i, 1);
+  }
+}
+
+/**
+ * Der Timer eines Knoten-Gebiets. Laeuft er ab, kommt die Horde - einmal, mit
+ * Ereignis fuer Ansage und Ton. Verloren ist damit nichts: Wer schnell zum
+ * Ausgang laeuft, kommt noch raus.
+ */
+function stepNodeTimer(state: WorldState, dt: number): void {
+  if (state.nodeTimer === undefined || state.horde) {
+    return;
+  }
+  state.nodeTimer = Math.max(0, state.nodeTimer - dt);
+  if (state.nodeTimer <= 0) {
+    state.horde = true;
+    state.events.push({ type: "hordeStarted" });
   }
 }

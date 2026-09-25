@@ -105,6 +105,7 @@ export function finishRun(
     y: entry.y,
     rotated: entry.rotated,
     starter: entry.item.starter === true,
+    equipped: entry.item.equipped === true,
   }));
   return { kept: counted, lost: 0 };
 }

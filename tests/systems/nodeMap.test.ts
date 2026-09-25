@@ -128,12 +128,31 @@ describe("Knoten-Karte", () => {
     for (const seed of SEEDS) {
       const map = generateNodeMap(seed);
       for (const node of map.nodes) {
-        expect(node.danger).toBeGreaterThanOrEqual(layerDanger(node.layer));
+        // Kampfknoten duerfen eine Stufe leichter sein (leichte Abzweigung).
+        const slack = node.type === "combat" ? NODE_MAP.dangerSpread : 0;
+        const minimum = node.layer === 0 ? 0 : Math.max(1, layerDanger(node.layer) - slack);
+        expect(node.danger).toBeGreaterThanOrEqual(minimum);
       }
       // Der Boss ist der gefaehrlichste Knoten der Karte.
       const boss = map.nodes[map.bossId] as MapNode;
       expect(Math.max(...map.nodes.map((node) => node.danger))).toBe(boss.danger);
     }
+  });
+
+  it("bietet leichte und schwere Abzweigungen - mit passender Beute", () => {
+    let easier = 0;
+    let harder = 0;
+    for (const seed of SEEDS) {
+      for (const node of generateNodeMap(seed).nodes) {
+        if (node.type !== "combat") continue;
+        if (node.danger < layerDanger(node.layer)) easier += 1;
+        if (node.danger > layerDanger(node.layer)) harder += 1;
+        // Beute haengt an der Gefahr: leichter Weg, schwaechere Beute.
+        expect(node.loot).toBe(node.danger);
+      }
+    }
+    expect(easier).toBeGreaterThan(0);
+    expect(harder).toBeGreaterThan(0);
   });
 
   it("haelt die Regeln fuer Knotentypen ein", () => {

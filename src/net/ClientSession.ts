@@ -10,7 +10,7 @@ import type { NetMessage } from "./protocol";
 import { ClientView } from "./ClientView";
 import type { GameSession, WorldView } from "./GameSession";
 import type { InputState, InventoryCommand, Vec2 } from "../systems/types";
-import type { PlayerSetup } from "../systems/world";
+import type { PlayerSetup, WorldPlace } from "../systems/world";
 import type { Transport } from "./Transport";
 
 const INPUT_INTERVAL_MS = 1000 / INPUT_RATE;
@@ -36,11 +36,13 @@ export class ClientSession implements GameSession {
     setups: readonly PlayerSetup[],
     selfId: string,
     seed: number,
+    /** Welches Gebiet - muss dasselbe sein wie beim Host (`move`-Paket). */
+    place: WorldPlace = { nodeId: null },
   ) {
     this.selfId = selfId;
     // Der Seed kommt aus dem "start"-Paket der Lobby und MUSS weitergereicht
     // werden: Aus ihm baut der Client seine Karte. Siehe `ClientView`.
-    this.clientView = new ClientView(selfId, setups, seed);
+    this.clientView = new ClientView(selfId, setups, seed, place);
 
     transport.onMessage((_from, message) => this.receive(message));
     transport.onPeerLeave(() => {

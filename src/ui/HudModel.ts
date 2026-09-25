@@ -72,6 +72,13 @@ export interface HudModel {
   attackLabel: string;
   /** Distanzzone, in der das Team gerade unterwegs ist. 0 = sicherer Start. */
   zone: number;
+  /**
+   * Im Gebiet eines Knotens: Name des Orts und Restzeit bis zur Horde
+   * (`null` = offene Welt, kein Timer). `horde`: Zeit abgelaufen.
+   */
+  placeName: string;
+  nodeTimer: number | null;
+  horde: boolean;
   /** Tiefste je erreichte Zone. */
   deepestZone: number;
   score: number;
@@ -128,6 +135,9 @@ export function createHudModel(): HudModel {
     abilityCooldownMax: 1,
     abilityLabel: "",
     attackLabel: "FEUER",
+    placeName: "",
+    nodeTimer: null,
+    horde: false,
     zone: 0,
     deepestZone: 0,
     score: 0,

@@ -183,7 +183,7 @@ export class HudScene extends Phaser.Scene {
       .setDepth(DEPTH.hud);
 
     this.mateText = this.add
-      .text(leftEdge, topEdge + 28, "", {
+      .text(leftEdge, topEdge + 54, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "13px",
         color: PALETTE.hudText,
@@ -316,9 +316,7 @@ export class HudScene extends Phaser.Scene {
      * drin". In der sicheren Zone steht das ausdruecklich da, weil dort die
      * Regeln andere sind (man heilt, man verteilt Punkte).
      */
-    this.waveText.setText(
-      this.model.inSafeZone ? "Sichere Zone" : `Zone ${this.model.zone}`,
-    );
+    this.waveText.setText(this.zoneLine());
     this.drawCompass();
     this.minimap.update(this.model.minimap);
     this.backpackWindow.sync(this.model.backpack);
@@ -647,7 +645,7 @@ export class HudScene extends Phaser.Scene {
 
     this.waveText.setPosition(leftEdge, topEdge);
     this.scoreText.setPosition(rightEdge, topEdge);
-    this.mateText.setPosition(leftEdge, topEdge + 28);
+    this.mateText.setPosition(leftEdge, topEdge + 54);
     this.announceText.setPosition(VIEWPORT.width / 2, 132);
     this.muteButton.setPosition(rightEdge - 44, topEdge + BUTTON_ROW_Y);
     this.menuButton.setPosition(rightEdge - 146, topEdge + BUTTON_ROW_Y);
@@ -699,6 +697,23 @@ export class HudScene extends Phaser.Scene {
         .setPosition(VIEWPORT.width / 2 - 92, VIEWPORT.height / 2 + 30)
         .setFraction(Math.min(1, this.model.reviveProgress / 3));
     }
+  }
+
+  /**
+   * Oben links: in einem Knoten-Gebiet der Ortsname und die Zeit bis zur
+   * Horde (Kartenansicht), in der offenen Welt wie bisher die Zone.
+   */
+  private zoneLine(): string {
+    if (this.model.nodeTimer !== null) {
+      const name = this.model.placeName || `Gefahr ${this.model.zone}`;
+      if (this.model.horde) {
+        return `${name}\nDIE HORDE KOMMT – zum Ausgang!`;
+      }
+      const total = Math.ceil(this.model.nodeTimer);
+      const clock = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+      return `${name}\nHorde in ${clock}`;
+    }
+    return this.model.inSafeZone ? "Sichere Zone" : `Zone ${this.model.zone}`;
   }
 
   private updateAnnouncement(): void {

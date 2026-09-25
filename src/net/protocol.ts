@@ -50,6 +50,11 @@ export interface NetPlayerInfo {
    * werden ausser dem, was sich aendert.
    */
   backpack?: number[];
+  /**
+   * Leben beim Betreten des naechsten Gebiets (Kartenansicht). Fehlt es,
+   * volles Leben.
+   */
+  health?: number;
 }
 
 export interface InputMessage {
@@ -182,6 +187,9 @@ export interface StateMessage {
   /** In welcher Ausstiegszone das Team steht (-1 = in keiner) und wie weit. */
   extractionIndex: number;
   extractionProgress: number;
+  /** Restzeit bis zur Horde und ob sie da ist (Knoten-Gebiet). Optional: aeltere Pakete. */
+  nt?: number;
+  hd?: boolean;
   /** Noch nicht erschienene Gegner - damit das HUD bei allen dasselbe zeigt. */
   pending: number;
   /**
@@ -232,7 +240,23 @@ export interface ByeMessage {
   reason: string;
 }
 
+/**
+ * Der Host hat auf der Knoten-Karte gewaehlt (Kartenansicht, 2026-09-25).
+ *
+ * Alle ziehen auf `node`. Ist es ein Gebiet, startet jeder seine Sitzung -
+ * die Karte und das Gebiet kommen aus dem Seed des Runs, uebers Netz geht
+ * nur die Nummer plus der Stand der Spieler (Rucksack, Leben), damit jedes
+ * Geraet dieselben Figuren aufbaut. Rast wird auf jedem Geraet selbst
+ * abgewickelt.
+ */
+export interface MoveMessage {
+  t: "move";
+  node: number;
+  players: NetPlayerInfo[];
+}
+
 export type NetMessage =
+  | MoveMessage
   | InputMessage
   | StateMessage
   | EventMessage
@@ -285,6 +309,8 @@ export function encodeState(state: WorldState): StateMessage {
     seen: state.encounters.flatMap((spot, index) => (spot.discovered ? [index] : [])),
     extractionIndex: state.extractionIndex,
     extractionProgress: round1(state.extractionProgress),
+    nt: state.nodeTimer === undefined ? undefined : round1(state.nodeTimer),
+    hd: state.horde,
     pending: state.pendingSpawns.length,
     items: state.groundItems.map((item) => ({
       id: item.id,
