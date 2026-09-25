@@ -44,7 +44,7 @@ import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
 import { finishRun } from "../storage/carried";
 import { saveActive } from "../storage/saveSlots";
-import { packGrid } from "../systems/backpackCodec";
+import { packCarried, packGrid } from "../systems/backpackCodec";
 import { completeNode, currentNode } from "../systems/run";
 import { placeName, regionOfLayer } from "../config/story";
 import type { RunState } from "../systems/run";
@@ -495,6 +495,7 @@ export class GameScene extends Phaser.Scene {
             event.outcome,
             this.selfPlayer()?.backpack.items ?? [],
             leftBehind(this.session.view.state, this.session.selfId),
+            this.selfPlayer()?.belt.items ?? [],
           );
           // Run vorbei: Lager und (nach Erfolg) Rucksack in den Spielstand,
           // kein laufender Run mehr.
@@ -548,7 +549,8 @@ export class GameScene extends Phaser.Scene {
         id: player.id,
         health: player.health,
         down: player.down,
-        backpack: packGrid(player.backpack),
+        // Rucksack und Guertel zusammen (Guertelstuecke markiert).
+        backpack: packCarried(player.backpack, player.belt),
         size: { width: player.backpack.width, height: player.backpack.height },
       })),
       (id) => state.players.find((player) => player.id === id)?.maxHealth ?? 1,

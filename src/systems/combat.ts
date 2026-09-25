@@ -6,11 +6,11 @@
  * Phase 6 werden genau diese Ereignisse an die Mitspieler geschickt.
  */
 
-import { FIST, PLAYER, PROJECTILE, SUPERS } from "../config/balance";
+import { FIST, PLAYER, PROJECTILE, SUPERS, CONSUMABLES } from "../config/balance";
 import { hasLineOfSight } from "./collision";
 import { spawnProjectile } from "./projectiles";
 import { nearestEnemy } from "./targeting";
-import { activeWeapon, autoAimReach, reloadTimeOf } from "./weapons";
+import { activeWeapon, ammoCapacity, autoAimReach, reloadTimeOf } from "./weapons";
 import type { EnemyState, InputState, PlayerState, Vec2, WorldState } from "./types";
 import { dropFromEnemy } from "./loot";
 
@@ -28,10 +28,22 @@ export function isSuperReady(player: PlayerState): boolean {
  * anderen. Genau das erzeugt das Gefuehl, Schuesse einteilen zu muessen.
  */
 export function stepReload(player: PlayerState, dt: number): void {
+  // Magazin auf- oder abgesetzt, Waffe gewechselt: Anzahl der Ladungen
+  // angleichen. Neue Ladungen muessen erst nachgeladen werden - sonst gaebe
+  // Aufsetzen und Abnehmen freie Schuesse.
+  const capacity = ammoCapacity(player);
+  while (player.reloadTimers.length < capacity) {
+    player.reloadTimers.push(reloadTimeOf(player));
+  }
+  if (player.reloadTimers.length > capacity) {
+    player.reloadTimers.length = capacity;
+  }
+  // Munitionskiste: Nachladen laeuft schneller (`CONSUMABLES.ammoBox`).
+  const reloadStep = player.fastReload > 0 ? dt * CONSUMABLES.ammoBox.reloadFactor : dt;
   for (let i = 0; i < player.reloadTimers.length; i += 1) {
     const timer = player.reloadTimers[i] ?? 0;
     if (timer > 0) {
-      player.reloadTimers[i] = Math.max(0, timer - dt);
+      player.reloadTimers[i] = Math.max(0, timer - reloadStep);
     }
   }
 
@@ -292,7 +304,8 @@ export function killEnemy(state: WorldState, enemy: EnemyState): void {
  * Gegnerhaufen einen Spieler in Sekundenbruchteilen wegputzt.
  */
 export function damagePlayer(state: WorldState, player: PlayerState, amount: number): void {
-  if (player.down || player.invulnerable > 0) {
+  // `shielded`: Rucksack offen - in Ruhe umraeumen (2026-09-26).
+  if (player.down || player.invulnerable > 0 || player.shielded) {
     return;
   }
 

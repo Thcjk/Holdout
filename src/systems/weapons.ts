@@ -28,6 +28,7 @@
  */
 
 import { FIST, PLAYER, WEAPONS } from "../config/balance";
+import { extraCharges, modifiedStats } from "./gear";
 import type { WeaponStats } from "../config/balance";
 import { itemAt } from "../config/items";
 import type { InventoryGrid, PlacedItem, PlayerState } from "./types";
@@ -56,7 +57,14 @@ export function activeWeapon(player: PlayerState): WeaponStats | null {
     return null;
   }
   const item = itemAt(entry.item.def);
-  return (item && WEAPONS[item.id]) ?? null;
+  const base = item && WEAPONS[item.id];
+  // Mit Aufsaetzen (Visier, Lauf, Griff) - siehe `gear.ts`.
+  return base ? modifiedStats(base, entry.item.mods) : null;
+}
+
+/** Munitionsladungen: drei, mit Magazin zwei mehr. */
+export function ammoCapacity(player: PlayerState): number {
+  return PLAYER.ammoCharges + extraCharges(equippedEntry(player.backpack)?.item.mods);
 }
 
 /** Anzeigename fuers HUD: der Waffenname oder "Faust". */

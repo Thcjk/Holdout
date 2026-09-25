@@ -327,6 +327,11 @@ export const ITEM_TILES: Record<string, number> = {
   rifle: tile(21, 10), // Werkzeug auf Brett
   railgun: tile(22, 10), // Teile und Kristalle
   pouch: tile(24, 4), // helle Schachtel - eine Tasche hat das Sheet nicht
+  // Aufsaetze: Das Sheet hat keine Waffenteile - nahe Formen genommen.
+  scope: tile(24, 6), // Ring - die Linse
+  barrel: tile(21, 9), // langer Stab
+  mag: tile(19, 11), // graues Kaestchen
+  grip: tile(20, 11), // Kaestchen mit orangem Kern
 };
 
 export const BIG_BUSH_TILES: readonly number[] = [

@@ -40,7 +40,16 @@
  * Bewusst nur drei. Feiner zu unterteilen waere jetzt geraten: Was ein Item
  * wirklich TUT, entscheidet erst Phase 12 (Waffen) und Phase 13 (Lager).
  */
-export type ItemType = "weapon" | "consumable" | "material" | "upgrade";
+export type ItemType = "weapon" | "consumable" | "material" | "upgrade" | "attachment";
+
+/**
+ * Die vier Waffenaufsaetze (seit 2026-09-26). Jede Waffe hat feste Plaetze
+ * fuer bestimmte Arten (`WEAPON_SLOTS` in `balance.ts`), die Wirkung steht in
+ * `ATTACHMENTS`. Die Reihenfolge hier ist auch die Bit-Reihenfolge im
+ * Rucksack-Code - nicht umsortieren.
+ */
+export const ATTACHMENT_KINDS = ["scope", "barrel", "mag", "grip"] as const;
+export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
 
 export interface ItemDef {
   /** Stabiler Schluessel. Steht im Code, nie der Anzeigename. */
@@ -60,6 +69,8 @@ export interface ItemDef {
    * muss. Die Farbe in der Darstellung leitet sich daraus ab.
    */
   rarity: 1 | 2 | 3 | 4;
+  /** Nur bei Aufsaetzen: welche Art (passt in den gleichnamigen Waffenplatz). */
+  attachment?: AttachmentKind;
 }
 
 /**
@@ -78,7 +89,7 @@ export const ITEMS: readonly ItemDef[] = [
   { id: "circuit", name: "Platine", type: "material", size: { width: 2, height: 1 }, rarity: 3 },
   { id: "core", name: "Reaktorkern", type: "material", size: { width: 2, height: 2 }, rarity: 4 },
 
-  // --- Verbrauchsgueter ---
+  // --- Verbrauchsgueter: wirken nur aus dem Guertel (Knopf im Kampf) ---
   { id: "bandage", name: "Verband", type: "consumable", size: { width: 1, height: 1 }, rarity: 1 },
   { id: "medkit", name: "Medipack", type: "consumable", size: { width: 2, height: 2 }, rarity: 3 },
   { id: "ammoBox", name: "Munitionskiste", type: "consumable", size: { width: 2, height: 1 }, rarity: 2 },
@@ -88,6 +99,12 @@ export const ITEMS: readonly ItemDef[] = [
   { id: "smg", name: "Maschinenpistole", type: "weapon", size: { width: 3, height: 1 }, rarity: 2 },
   { id: "rifle", name: "Gewehr", type: "weapon", size: { width: 4, height: 2 }, rarity: 3 },
   { id: "railgun", name: "Railgun", type: "weapon", size: { width: 4, height: 2 }, rarity: 4 },
+
+  // --- Aufsaetze: kommen auf eine Waffe, nicht in den Rucksack ---
+  { id: "scope", name: "Visier", type: "attachment", attachment: "scope", size: { width: 1, height: 1 }, rarity: 2 },
+  { id: "barrel", name: "Lauf", type: "attachment", attachment: "barrel", size: { width: 1, height: 1 }, rarity: 2 },
+  { id: "mag", name: "Magazin", type: "attachment", attachment: "mag", size: { width: 1, height: 1 }, rarity: 2 },
+  { id: "grip", name: "Griff", type: "attachment", attachment: "grip", size: { width: 1, height: 1 }, rarity: 3 },
 
   // --- Erweiterung: kommt nicht in den Rucksack, sondern VERGROESSERT ihn ---
   { id: "pouch", name: "Tasche", type: "upgrade", size: { width: 1, height: 1 }, rarity: 2 },

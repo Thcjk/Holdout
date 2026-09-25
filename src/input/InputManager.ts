@@ -65,6 +65,8 @@ export class InputManager {
       // Rucksack-Befehle kommen nicht vom Daumen auf dem Spielfeld, sondern
       // aus dem Rucksack-Fenster der HUD-Szene - die Spielszene setzt sie ein.
       inventory: null,
+      // Ebenso der Schutz: Den setzt die Spielszene, solange der Rucksack offen ist.
+      shielded: false,
     };
   }
 

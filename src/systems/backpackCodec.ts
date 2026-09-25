@@ -24,20 +24,41 @@ import type { InventoryGrid, PackedItem } from "./types";
 const ROTATED = 1;
 const STARTER = 2;
 const EQUIPPED = 4;
+/** Liegt im Guertel (seit 2026-09-26); dann ist x der Guertelplatz. */
+const BELT = 8;
+/** Aufsaetze als vier Bits ab hier (Visier, Lauf, Magazin, Griff). */
+const MODS_SHIFT = 4;
+const MODS_MASK = 0b1111;
 
 export function flagsOf(
   rotated: boolean,
   starter: boolean | undefined,
   equipped?: boolean,
+  belt?: boolean,
+  mods?: number,
 ): number {
-  return (rotated ? ROTATED : 0) | (starter ? STARTER : 0) | (equipped ? EQUIPPED : 0);
+  return (
+    (rotated ? ROTATED : 0) |
+    (starter ? STARTER : 0) |
+    (equipped ? EQUIPPED : 0) |
+    (belt ? BELT : 0) |
+    (((mods ?? 0) & MODS_MASK) << MODS_SHIFT)
+  );
 }
 
-export function readFlags(flags: number): { rotated: boolean; starter: boolean; equipped: boolean } {
+export function readFlags(flags: number): {
+  rotated: boolean;
+  starter: boolean;
+  equipped: boolean;
+  belt: boolean;
+  mods: number;
+} {
   return {
     rotated: (flags & ROTATED) !== 0,
     starter: (flags & STARTER) !== 0,
     equipped: (flags & EQUIPPED) !== 0,
+    belt: (flags & BELT) !== 0,
+    mods: (flags >> MODS_SHIFT) & MODS_MASK,
   };
 }
 
@@ -47,7 +68,7 @@ export function flattenPacked(items: readonly PackedItem[]): number[] {
     entry.def,
     entry.x,
     entry.y,
-    flagsOf(entry.rotated, entry.starter, entry.equipped),
+    flagsOf(entry.rotated, entry.starter, entry.equipped, entry.belt, entry.mods),
   ]);
 }
 
@@ -65,7 +86,7 @@ export function unflattenPacked(flat: readonly number[] | undefined): PackedItem
     return items;
   }
   for (let i = 0; i + 3 < flat.length; i += 4) {
-    const { rotated, starter, equipped } = readFlags(flat[i + 3] as number);
+    const { rotated, starter, equipped, belt, mods } = readFlags(flat[i + 3] as number);
     items.push({
       def: flat[i] as number,
       x: flat[i + 1] as number,
@@ -73,6 +94,9 @@ export function unflattenPacked(flat: readonly number[] | undefined): PackedItem
       rotated,
       starter,
       equipped,
+      // Nur setzen, was da ist - aeltere Tests vergleichen Objekte genau.
+      ...(belt ? { belt: true } : {}),
+      ...(mods ? { mods } : {}),
     });
   }
   return items;
@@ -87,5 +111,15 @@ export function packGrid(grid: InventoryGrid): PackedItem[] {
     rotated: entry.rotated,
     starter: entry.item.starter === true,
     equipped: entry.item.equipped === true,
+    ...(entry.item.mods ? { mods: entry.item.mods } : {}),
   }));
+}
+
+/**
+ * Rucksack UND Guertel eines Spielers als eine Liste - Guertelstuecke mit
+ * `belt: true`. So reisen beide durch alle Wege, die es fuer den Rucksack
+ * schon gibt (Karte, Lobby, Spielstand, Abrechnung), ohne ein zweites Feld.
+ */
+export function packCarried(backpack: InventoryGrid, belt: InventoryGrid): PackedItem[] {
+  return [...packGrid(backpack), ...packGrid(belt).map((entry) => ({ ...entry, y: 0, belt: true }))];
 }

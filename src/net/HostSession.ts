@@ -121,6 +121,8 @@ export class HostSession implements GameSession {
       // Rucksack-Befehl: einmalig wie Super und Faehigkeit, darf also nicht
       // von einem spaeteren Paket ohne Befehl ueberschrieben werden.
       inventory: message.inventory ?? existing?.inventory ?? null,
+      // Gehaltener Zustand wie `fire`: Rucksack offen = geschuetzt.
+      shielded: message.sh === true,
     });
   }
 

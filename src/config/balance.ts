@@ -7,6 +7,7 @@
  */
 
 import type { CharacterId } from "../systems/types";
+import type { AttachmentKind } from "./items";
 
 export const PLAYER = {
   /** Grundtempo in Pixel pro Sekunde (je Charakter ueberschrieben). */
@@ -197,6 +198,60 @@ export const WEAPONS: Record<string, WeaponStats> = {
  * fehlt (rund ein Drittel des Schadens je Sekunde einer Pistole, und man muss
  * hin).
  */
+/**
+ * Aufsatzplaetze je Waffe (fest). Ein Platz je Art; was nicht in der Liste
+ * steht, passt nicht auf diese Waffe.
+ */
+export const WEAPON_SLOTS: Record<string, readonly AttachmentKind[]> = {
+  pistol: ["barrel"],
+  smg: ["mag", "grip"],
+  rifle: ["scope", "barrel", "mag"],
+  railgun: ["scope", "mag"],
+};
+
+/**
+ * Was ein Aufsatz bewirkt - als Faktor auf die Waffenwerte (1 = unveraendert)
+ * bzw. als zusaetzliche Ladungen.
+ */
+export const ATTACHMENTS = {
+  /** Visier: weiter schiessen (und die Zielsuche reicht mit). */
+  scope: { range: 1.25 },
+  /** Lauf: mehr Schaden je Kugel. */
+  barrel: { damage: 1.2 },
+  /** Magazin: zwei Ladungen mehr als die drei ueblichen (+ gut 50 %). */
+  mag: { extraCharges: 2 },
+  /** Griff: engerer Faecher, schneller nachladen. */
+  grip: { spread: 0.6, reload: 0.75 },
+} as const;
+
+/**
+ * Verbrauchsgueter - wirken nur aus dem Guertel (Knopf im Kampf).
+ * Heilung als Anteil am vollen Leben.
+ */
+export const CONSUMABLES = {
+  /** Verband: 30 % ueber 3 Sekunden - man muss kurz aus der Schusslinie. */
+  bandage: { healShare: 0.3, seconds: 3 },
+  /** Medipack: 60 % sofort. */
+  medkit: { healShare: 0.6, seconds: 0 },
+  /** Munitionskiste: 30 s lang laedt jede Ladung doppelt so schnell. */
+  ammoBox: { fastReloadSeconds: 30, reloadFactor: 2 },
+} as const;
+
+/**
+ * Rezepte der Werkbank (Rastplatz). Zutaten als Katalog-IDs, mehrfach
+ * genannt = mehrfach gebraucht.
+ */
+export const RECIPES: ReadonlyArray<{ result: string; needs: readonly string[] }> = [
+  { result: "bandage", needs: ["scrap", "scrap"] },
+  { result: "medkit", needs: ["cell", "wire"] },
+  { result: "ammoBox", needs: ["scrap", "scrap", "wire"] },
+  { result: "grip", needs: ["scrap", "scrap", "scrap"] },
+  { result: "barrel", needs: ["circuit", "scrap"] },
+  { result: "mag", needs: ["cell", "scrap", "scrap"] },
+  { result: "scope", needs: ["circuit", "wire"] },
+  { result: "railgun", needs: ["core", "circuit"] },
+];
+
 export const FIST = {
   short: "FAUST",
   damage: 120,
@@ -710,6 +765,11 @@ export const INVENTORY = {
    * nicht.
    */
   starterSet: ["pistol", "bandage", "bandage", "ammoBox"] as readonly string[],
+  /**
+   * Plaetze im Guertel (am Koerper): nur Verbrauchsgueter, jeder mit eigenem
+   * Knopf im Kampf. Aus dem Rucksack heraus wirkt nichts.
+   */
+  beltSize: 3,
 } as const;
 
 /** Wie oft ein Gegner durch Beruehrung Schaden macht (Sekunden). */

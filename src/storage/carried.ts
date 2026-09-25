@@ -91,8 +91,11 @@ export function finishRun(
    * Wipe. Siehe `leftBehind` in `systems/encounters.ts`.
    */
   wasLeftBehind = false,
+  /** Der Guertel - wird abgerechnet wie der Rucksack (2026-09-26). */
+  belt: readonly PlacedItem[] = [],
 ): { kept: number; lost: number } {
-  const counted = items.filter((entry) => !entry.item.starter).length;
+  const counted =
+    items.filter((entry) => !entry.item.starter).length + belt.filter((entry) => !entry.item.starter).length;
 
   if (outcome === "wipe" || wasLeftBehind) {
     backpack = [];
@@ -106,11 +109,14 @@ export function finishRun(
     rotated: entry.rotated,
     starter: entry.item.starter === true,
     equipped: entry.item.equipped === true,
+    ...(entry.item.mods ? { mods: entry.item.mods } : {}),
   }));
+  for (const entry of belt) {
+    backpack.push({ def: entry.item.def, x: entry.x, y: 0, rotated: false, starter: entry.item.starter === true, belt: true });
+  }
   return { kept: counted, lost: 0 };
 }
 
-/** Setzt alles zurueck. Nur fuer Tests. */
 /**
  * Der Rucksack ist gepackt und unterwegs: Ab jetzt steckt er im Run, nicht
  * mehr hier. Ohne das laege er zusaetzlich im Spielstand - wer im Koop die
@@ -126,6 +132,7 @@ export function restoreCarried(nextBackpack: readonly PackedItem[], nextStash: r
   stash = nextStash.filter((entry) => !entry.starter).map((entry) => ({ ...entry }));
 }
 
+/** Setzt alles zurueck. Nur fuer Tests. */
 export function resetCarried(): void {
   backpack = [];
   stash = [];

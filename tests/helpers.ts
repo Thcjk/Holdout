@@ -13,6 +13,7 @@ export function makeInput(move: Vec2, extra: Partial<InputState> = {}): InputSta
     useAbility: false,
     abilityAim: null,
     inventory: null,
+    shielded: false,
     ...extra,
   };
 }

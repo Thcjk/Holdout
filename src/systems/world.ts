@@ -11,6 +11,7 @@
  */
 
 import { CHARACTERS, DIFFICULTY, PLAYER } from "../config/balance";
+import { createBelt, putInBelt, stepGear } from "./gear";
 import { stepReload, stepRevive, tryShoot } from "./combat";
 import { stepEnemies } from "./enemies";
 import { clampToArena, stepPlayerMovement } from "./movement";
@@ -108,6 +109,7 @@ function buildBackpack(
       def: entry.def,
       starter: entry.starter === true,
       equipped: entry.equipped === true,
+      ...(entry.mods ? { mods: entry.mods } : {}),
     };
     if (place(grid, item, entry.x, entry.y, entry.rotated)) {
       continue;
@@ -158,8 +160,26 @@ export function createPlayer(
     abilityCooldown: 0,
     healField: 0,
     healFieldPending: {},
-    backpack: buildBackpack(setup.backpack, setup.backpackSize),
+    backpack: buildBackpack(
+      setup.backpack?.filter((entry) => !entry.belt),
+      setup.backpackSize,
+    ),
+    belt: buildBelt(setup.backpack?.filter((entry) => entry.belt)),
+    regenPerSecond: 0,
+    regenTime: 0,
+    fastReload: 0,
+    shielded: false,
   };
+}
+
+/** Der Guertel aus den gepackten Stuecken mit `belt: true` (x = Platz). */
+function buildBelt(packed: readonly PackedItem[] | undefined): InventoryGrid {
+  const belt = createBelt();
+  let nextId = 1000;
+  for (const entry of packed ?? []) {
+    putInBelt(belt, { id: nextId++, def: entry.def, starter: entry.starter === true }, entry.x);
+  }
+  return belt;
 }
 
 /**
@@ -282,7 +302,10 @@ export function stepWorld(
     const input = inputs.get(player.id) ?? emptyInput();
 
 
+    // Rucksack offen = geschuetzt; gilt genau so lange, wie das Fenster offen ist.
+    player.shielded = input.shielded === true;
     stepReload(player, dt);
+    stepGear(state, player, dt);
     stepPlayerMovement(player, input, state.walls, dt);
     // Notbremse gegen das Durchschlagen der Aussenmauer bei hohem Tempo.
     clampToArena(player.position, player.radius, state.bounds);

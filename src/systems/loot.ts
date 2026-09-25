@@ -35,7 +35,8 @@
  * aus.
  */
 
-import { ITEMS, itemAt } from "../config/items";
+import { ATTACHMENT_KINDS, ITEMS, itemAt, itemIndex } from "../config/items";
+import { attachInGrid, detachInGrid, moveFromBelt, moveToBelt, useBeltItem } from "./gear";
 import { LOOT } from "../config/balance";
 import { findFreeSpot, growGrid, move, place, removeAt } from "./InventoryGridSystem";
 import { nextRandom } from "./rng";
@@ -172,6 +173,34 @@ export function applyInventoryCommand(
   command: InventoryCommand,
 ): void {
   const grid = player.backpack;
+
+  // --- Befehle rund um den Guertel und die Aufsaetze (2026-09-26) ---
+  switch (command.op) {
+    case "use":
+      useBeltItem(state, player, command.slot);
+      return;
+    case "fromBelt":
+      moveFromBelt(player.belt, grid, command.slot, command);
+      return;
+    case "dropBelt": {
+      const index = player.belt.items.findIndex((entry) => entry.x === command.slot);
+      const removed = removeAt(player.belt, index);
+      if (removed) dropItem(state, removed.def, dropSpot(player));
+      return;
+    }
+    case "toBelt":
+      moveToBelt(grid, player.belt, { x: command.fromX, y: command.fromY }, command.slot);
+      return;
+    case "attach":
+      attachInGrid(grid, { x: command.fromX, y: command.fromY }, { x: command.toX, y: command.toY });
+      return;
+    case "detach":
+      detachInGrid(grid, { x: command.fromX, y: command.fromY }, command.kind);
+      return;
+    default:
+      break;
+  }
+
   const index = grid.items.findIndex(
     (entry) => entry.x === command.fromX && entry.y === command.fromY,
   );
@@ -194,12 +223,24 @@ export function applyInventoryCommand(
   settleEquipped(grid);
   if (removed) {
     // Etwas neben die Figur, sonst hebt sie es im selben Tick wieder auf.
-    const spot = {
-      x: player.position.x + player.facing.x * (LOOT.pickupRadius + 30),
-      y: player.position.y + player.facing.y * (LOOT.pickupRadius + 30),
-    };
+    const spot = dropSpot(player);
     dropItem(state, removed.def, spot);
+    // Aufsaetze fallen mit: Am Boden liegt die Waffe nackt, die Aufsaetze
+    // daneben - sonst waeren sie mit dem Wegwerfen verloren.
+    ATTACHMENT_KINDS.forEach((kind, bit) => {
+      if (((removed.mods ?? 0) & (1 << bit)) !== 0) {
+        dropItem(state, itemIndex(kind), { x: spot.x + 24 * (bit + 1), y: spot.y });
+      }
+    });
   }
+}
+
+/** Wohin Weggeworfenes faellt: vor die Figur, ausserhalb des Aufhebe-Radius. */
+function dropSpot(player: PlayerState): { x: number; y: number } {
+  return {
+    x: player.position.x + player.facing.x * (LOOT.pickupRadius + 30),
+    y: player.position.y + player.facing.y * (LOOT.pickupRadius + 30),
+  };
 }
 
 export function stepLoot(state: WorldState, dt: number): void {

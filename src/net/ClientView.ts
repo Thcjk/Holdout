@@ -16,7 +16,7 @@
  */
 
 import { unflattenPacked } from "../systems/backpackCodec";
-import { reloadTimeOf } from "../systems/weapons";
+import { ammoCapacity, reloadTimeOf } from "../systems/weapons";
 import { TICK_MS, TICK_SECONDS } from "../config/constants";
 import { stepPlayerMovement } from "../systems/movement";
 import { createPlayer, createWorld, isInBush } from "../systems/world";
@@ -354,19 +354,31 @@ export class ClientView implements WorldView {
         player.backpack.width = netPlayer.bw;
         player.backpack.height = netPlayer.bh;
       }
+      // Guertelstuecke stehen in derselben Liste, markiert mit `belt`.
+      player.belt.items.length = 0;
       unflattenPacked(netPlayer.bp).forEach((entry, index) => {
-        player.backpack.items.push({
-          item: { id: index + 1, def: entry.def, starter: entry.starter, equipped: entry.equipped },
+        const target = entry.belt ? player.belt : player.backpack;
+        target.items.push({
+          item: {
+            id: index + 1,
+            def: entry.def,
+            starter: entry.starter,
+            equipped: entry.equipped,
+            ...(entry.mods ? { mods: entry.mods } : {}),
+          },
           x: entry.x,
-          y: entry.y,
-          rotated: entry.rotated,
+          y: entry.belt ? 0 : entry.y,
+          rotated: entry.belt ? false : entry.rotated,
         });
       });
+      player.shielded = netPlayer.sh === 1;
 
       // Nachladeuhren gibt es auf dem Client nicht - nur die Anzahl voller
       // Ladungen. Das HUD braucht nicht mehr.
       // Die Nachladezeit haengt an der Waffe - der Rucksack steht oben schon.
       const reloadTime = reloadTimeOf(player) || 1;
+      // Mit Magazin gibt es mehr Ladungen - der Ring am Knopf zeigt alle.
+      player.reloadTimers.length = ammoCapacity(player);
       for (let i = 0; i < player.reloadTimers.length; i += 1) {
         player.reloadTimers[i] = i < netPlayer.ammo ? 0 : reloadTime * 0.5;
       }

@@ -81,6 +81,8 @@ export interface InputMessage {
    * Paket von einer aelteren Fassung weiterhin gueltig ist.
    */
   inventory?: InventoryCommand | null;
+  /** Rucksack offen = geschuetzt (gehalten wie `fire`). Optional: aeltere Pakete. */
+  sh?: boolean;
 }
 
 export interface NetPlayer {
@@ -130,6 +132,8 @@ export interface NetPlayer {
   /** Rucksackgroesse (waechst im Run durch Taschen). Optional: aeltere Pakete. */
   bw?: number;
   bh?: number;
+  /** Rucksack offen = geschuetzt (1) - fuer die Schutzblase bei allen. */
+  sh?: number;
 }
 
 export interface NetEnemy {
@@ -375,11 +379,21 @@ function encodePlayer(player: PlayerState): NetPlayer {
     // Vierter Wert je Gegenstand: Merkmale als Bits (gedreht, Starter,
     // ausgeruestet) -
     // siehe `systems/backpackCodec.ts`.
-    bp: player.backpack.items.flatMap((entry) => [
-      entry.item.def,
-      entry.x,
-      entry.y,
-      flagsOf(entry.rotated, entry.item.starter, entry.item.equipped),
-    ]),
+    bp: [
+      ...player.backpack.items.flatMap((entry) => [
+        entry.item.def,
+        entry.x,
+        entry.y,
+        flagsOf(entry.rotated, entry.item.starter, entry.item.equipped, false, entry.item.mods),
+      ]),
+      // Der Guertel in derselben Liste, markiert (x = Platz).
+      ...player.belt.items.flatMap((entry) => [
+        entry.item.def,
+        entry.x,
+        0,
+        flagsOf(false, entry.item.starter, false, true),
+      ]),
+    ],
+    sh: player.shielded ? 1 : 0,
   };
 }

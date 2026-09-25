@@ -89,6 +89,7 @@ export class ClientSession implements GameSession {
         ability: this.pendingAbility,
         abilityAim: this.pendingAbilityAim,
         inventory: this.pendingInventory,
+        sh: input.shielded,
       });
       this.pendingInventory = null;
       this.pendingSuper = false;

@@ -58,6 +58,11 @@ export interface InputState {
    * aendern, liefen auseinander.
    */
   inventory: InventoryCommand | null;
+  /**
+   * Rucksack offen = geschuetzt (2026-09-26): Wer umraeumt, nimmt keinen
+   * Schaden. Ein GEHALTENER Zustand wie `fire`, kein einmaliger Wunsch.
+   */
+  shielded: boolean;
 }
 
 /**
@@ -73,7 +78,19 @@ export type InventoryCommand =
   | { op: "move"; fromX: number; fromY: number; x: number; y: number; rotated: boolean }
   | { op: "drop"; fromX: number; fromY: number }
   /** Die Waffe an dieser Stelle ausruesten (nur eine ist aktiv). */
-  | { op: "equip"; fromX: number; fromY: number };
+  | { op: "equip"; fromX: number; fromY: number }
+  /** Aufsatz bei (fromX, fromY) auf die Waffe bei (toX, toY) setzen. */
+  | { op: "attach"; fromX: number; fromY: number; toX: number; toY: number }
+  /** Aufsatz dieser Art von der Waffe bei (fromX, fromY) abnehmen. */
+  | { op: "detach"; fromX: number; fromY: number; kind: number }
+  /** Verbrauchsgut aus dem Rucksack in den Guertelplatz `slot`. */
+  | { op: "toBelt"; fromX: number; fromY: number; slot: number }
+  /** Aus dem Guertelplatz `slot` zurueck in den Rucksack. */
+  | { op: "fromBelt"; slot: number; x: number; y: number; rotated: boolean }
+  /** Aus dem Guertel wegwerfen. */
+  | { op: "dropBelt"; slot: number }
+  /** Den Gegenstand im Guertelplatz `slot` benutzen (Knopf im Kampf). */
+  | { op: "use"; slot: number };
 
 export function emptyInput(): InputState {
   return {
@@ -84,6 +101,7 @@ export function emptyInput(): InputState {
     useAbility: false,
     abilityAim: null,
     inventory: null,
+    shielded: false,
   };
 }
 
@@ -130,6 +148,13 @@ export interface ItemInstance {
    * weggeworfener Gegenstand nimmt es mit hinaus.
    */
   equipped?: boolean;
+  /**
+   * Aufsaetze auf dieser Waffe, als Bitmaske ueber `ATTACHMENT_KINDS`
+   * (Bit 0 Visier, 1 Lauf, 2 Magazin, 3 Griff). Je Art hoechstens einer -
+   * deshalb reicht ein Bit, und der Aufsatz selbst liegt nicht mehr im
+   * Gitter: Er reist mit der Waffe, wohin sie auch geraeumt wird.
+   */
+  mods?: number;
 }
 
 /**
@@ -174,6 +199,10 @@ export interface PackedItem {
   starter?: boolean;
   /** Ausgeruestet, siehe `ItemInstance.equipped`. */
   equipped?: boolean;
+  /** Aufsaetze auf dieser Waffe, siehe `ItemInstance.mods`. */
+  mods?: number;
+  /** Liegt im Guertel statt im Rucksack; dann ist `x` der Guertelplatz. */
+  belt?: boolean;
 }
 
 /**
@@ -256,6 +285,18 @@ export interface PlayerState {
    * alles hinein.
    */
   backpack: InventoryGrid;
+  /**
+   * Der Guertel (am Koerper): ein 1-Zeilen-Gitter nur fuer Verbrauchsgueter.
+   * Nur was hier steckt, laesst sich im Kampf benutzen.
+   */
+  belt: InventoryGrid;
+  /** Heilung ueber Zeit (Verband): Leben je Sekunde und Restzeit. */
+  regenPerSecond: number;
+  regenTime: number;
+  /** Restzeit der Munitionskiste (schneller nachladen), Sekunden. */
+  fastReload: number;
+  /** Rucksack offen - nimmt keinen Schaden. */
+  shielded: boolean;
 }
 
 export interface EnemyState {
