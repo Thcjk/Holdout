@@ -107,6 +107,28 @@ export const UI = {
     } satisfies ButtonLook,
   },
 
+  /**
+   * Schriftfarben ausserhalb des Gefechts (Menue, Lobby, Ergebnis, Packen,
+   * Karte). Warm statt des frueheren Blaugraus - passend zu Holz und Sand der
+   * Welt und zu den Paket-Tafeln (Rueckmeldung 2026-09-25: "passt so gar
+   * nicht zum In-Game").
+   */
+  text: {
+    title: "#fff4dc",
+    body: "#f6ead2",
+    muted: "#d9c7a3",
+    accent: "#ffd166",
+    /** Auf hellen Flaechen (beige Einlage). */
+    dark: "#3b2a1a",
+    shadow: "#00000088",
+  },
+
+  /** Einlage auf einer Tafel: Raumcode, Spielerliste, Portraet. */
+  inset: {
+    frame: "panelInset_beige.png",
+    slice: { left: 8, right: 8, top: 8, bottom: 8 } satisfies SliceInsets,
+  },
+
   panel: {
     /** Rahmen um Rucksack und Lager, Fenster im Run. */
     frame: "panel_brown.png",

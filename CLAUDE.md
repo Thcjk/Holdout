@@ -46,6 +46,39 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 > **BRIEFING.md ist seit 2026-09-24 die neue Fassung** (Abschnitte 2, 4, 5:
 > Three.js, Knoten-Karte, Vorbild „Deadly Days: Roadtrip“).
 
+## Menüs im Spiel-Look (2026-09-25, v2.2.1)
+
+Rückmeldung: „Lobby muss auch zum Spiel passen … UI auch da verwenden“.
+Menü, Lobby, Packen, Karte und Ergebnis hatten noch den flachen
+dunkelblauen Hintergrund mit blaugrauer Schrift aus der Zeit vor 3D.
+
+- **Ein gemeinsamer Look** in `ui/menuStyle.ts`: erdiger Hintergrund mit
+  Tannen-Silhouetten (einmal als Canvas-Textur gemalt), `woodPanel`
+  (Holztafel `panel_brown`) und `insetPanel` (beige Einlage
+  `panelInset_beige`), `menuText` mit Schatten. Schriftfarben stehen als
+  `UI.text` in `config/ui.ts` (Creme, Sand, Gold; dunkelbraun auf beige).
+- **Lobby:** alles auf einer Holztafel; Wahl in zwei Spalten („Über das
+  Internet“ / „Ohne Internet“), nach dem Verbinden Raumcode und
+  Spielerliste auf beigen Einlagen. Raumcode-Feld beige im Paket-Stil.
+- **Menü:** Charakterkarten sind Holztafeln, Porträt auf einer Einlage,
+  die gewählte Karte hat einen goldenen Rahmen.
+- **Ergebnis:** Titel über, Zahlen auf einer Holztafel. Beute-Zeile in
+  aufgehellten Farben (`#ff8a65`/`#b5e08c`), die Palettenfarben sind auf
+  Holz kaum lesbar.
+- **Fehler nebenbei behoben – das Raumcode-Feld sass falsch** (eine Spalte
+  zu weit links und zu hoch). Ursache nicht das Feld, sondern Phasers
+  HTML-Ebene: 1184 × 540 gross, von links oben aus verkleinert, aber
+  `#game-root` zentriert seine Kinder (`place-items: center`) – die Ebene
+  begann bei −217, −99. `alignDomLayer` in `main.ts` setzt sie nach jedem
+  `RESIZE` an die linke obere Ecke des Canvas. Gemessen danach: Feld bei
+  764/224 statt Soll 762/222 (Entwurfseinheiten).
+- **Geprüft wie:** Vorher/Nachher-Bilder im Emulator (iPhone 13 quer) von
+  Menü, Packen, Lobby (Wahl und offener Raum), Karte, Ergebnis; keine
+  Seitenfehler. 331 Tests, typecheck, lint, Build.
+- **Nicht angefasst:** die Absturz- und Ladeseite in `index.html` (reines
+  HTML, erscheint nur, wenn das Spiel gar nicht startet) und das HUD im
+  Gefecht.
+
 ## Karte, Gebiete, Rucksack, Story (2026-09-25 abends)
 
 Rückmeldung mit Bildern aus „Deadly Days: Roadtrip“: Die Karte zum Auswählen

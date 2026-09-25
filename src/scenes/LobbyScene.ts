@@ -8,7 +8,8 @@
 
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
-import { COLORS, SAFE, VIEWPORT } from "../config/constants";
+import { SAFE, VIEWPORT } from "../config/constants";
+import { UI } from "../config/ui";
 import { LocalTransport } from "../net/LocalTransport";
 import { Lobby, MAX_PLAYERS } from "../net/Lobby";
 import { PeerTransport } from "../net/PeerTransport";
@@ -19,9 +20,28 @@ import { Button } from "../ui/Button";
 import { flattenPacked } from "../systems/backpackCodec";
 import { setReloadSafe } from "../platform/update";
 import { createRun } from "../systems/run";
+import { insetPanel, menuBackground, menuText, woodPanel } from "../ui/menuStyle";
+import type { UiNineSlice } from "../ui/UiNineSlice";
 
 /** Fester Code fuer den lokalen Zwei-Tab-Test - der muss niemand abtippen. */
 const LOCAL_ROOM_CODE = "LOCAL1";
+
+/*
+ * Aufbau (Entwurfseinheiten, Hoehe fest 540): Titel oben, darunter EINE
+ * Holztafel wie das Rucksackfenster im Spiel. Auf der Tafel entweder die
+ * Wahl (Internet links/rechts, lokaler Test darunter) oder - nach dem
+ * Verbinden - Raumcode und Spielerliste auf beigen Einlagen.
+ */
+const PANEL_TOP = 84;
+const PANEL_BOTTOM = 470;
+const PANEL_MAX_WIDTH = 780;
+/** Abstand der beiden Spalten von der Mitte. */
+const COLUMN = 170;
+const CODE_Y = 146;
+const STATUS_Y_CHOICE = 150;
+const STATUS_Y_ROOM = 210;
+const PLAYERS_Y = 318;
+const START_Y = 420;
 
 export interface LobbySceneData {
   character: CharacterId;
@@ -45,6 +65,8 @@ export class LobbyScene extends Phaser.Scene {
   private pathText!: Phaser.GameObjects.Text;
   private codeText!: Phaser.GameObjects.Text;
   private playerText!: Phaser.GameObjects.Text;
+  /** Beige Einlagen hinter Raumcode und Spielerliste - erst mit einem Raum sichtbar. */
+  private roomInsets: UiNineSlice[] = [];
   private startButton?: Button;
   private codeInput?: HTMLInputElement;
   private choiceObjects: { setVisible(visible: boolean): void }[] = [];
@@ -67,40 +89,46 @@ export class LobbyScene extends Phaser.Scene {
     this.startButton = undefined;
     this.codeInput = undefined;
     this.choiceObjects = [];
+    this.roomInsets = [];
   }
 
   create(): void {
     // Hier nicht neu laden: Das wuerde diesen Bildschirm wegwischen.
     setReloadSafe(false);
-    this.cameras.main.setBackgroundColor(COLORS.background);
+    menuBackground(this);
 
-    this.add
-      .text(VIEWPORT.width / 2, 48, "Zusammen spielen", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "34px",
-        color: "#dce8f7",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
+    const centerX = VIEWPORT.width / 2;
+    menuText(this, centerX, 46, "Zusammen spielen", 32, UI.text.title, true);
+    woodPanel(
+      this,
+      centerX,
+      (PANEL_TOP + PANEL_BOTTOM) / 2,
+      Math.min(PANEL_MAX_WIDTH, VIEWPORT.width - 2 * (SAFE.left + SAFE.right + 40)),
+      PANEL_BOTTOM - PANEL_TOP,
+    );
+
+    // Raumcode und Spielerliste liegen auf hellen Einlagen - dunkle Schrift,
+    // wie die Infotafel auf der Karte. Sichtbar erst, wenn es einen Raum gibt.
+    this.roomInsets = [
+      insetPanel(this, centerX, CODE_Y, 300, 64),
+      insetPanel(this, centerX, PLAYERS_Y, 440, 118),
+    ];
+    for (const inset of this.roomInsets) {
+      inset.setVisible(false);
+    }
 
     this.codeText = this.add
-      .text(VIEWPORT.width / 2, 108, "", {
-        fontFamily: "system-ui, monospace",
-        fontSize: "40px",
-        color: "#ffd166",
+      .text(centerX, CODE_Y, "", {
+        fontFamily: "ui-monospace, system-ui, monospace",
+        fontSize: "38px",
+        color: UI.text.dark,
         fontStyle: "bold",
       })
       .setOrigin(0.5);
 
-    this.statusText = this.add
-      .text(VIEWPORT.width / 2, 160, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "16px",
-        color: "#8ea6c4",
-        align: "center",
-        wordWrap: { width: VIEWPORT.width - 120 },
-      })
-      .setOrigin(0.5);
+    this.statusText = menuText(this, centerX, STATUS_Y_CHOICE, "", 16, UI.text.body).setWordWrapWidth(
+      Math.min(PANEL_MAX_WIDTH, VIEWPORT.width) - 100,
+    );
 
     /*
      * Der Verbindungsweg, direkt unter der Statuszeile.
@@ -110,21 +138,13 @@ export class LobbyScene extends Phaser.Scene {
      * oder ging es auch so? Sie nur unter `?debug=netz` zu zeigen hiesse, dass
      * man sie genau dann nicht hat, wenn man normal spielt und es klemmt.
      */
-    this.pathText = this.add
-      .text(VIEWPORT.width / 2, 196, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "13px",
-        color: "#8ea6c4",
-        align: "center",
-        wordWrap: { width: VIEWPORT.width - 120 },
-      })
-      .setOrigin(0.5);
+    this.pathText = menuText(this, centerX, STATUS_Y_ROOM + 30, "", 13, UI.text.muted);
 
     this.playerText = this.add
-      .text(VIEWPORT.width / 2, 250, "", {
-        fontFamily: "system-ui, sans-serif",
+      .text(centerX, PLAYERS_Y, "", {
+        fontFamily: UI.font,
         fontSize: "18px",
-        color: "#dce8f7",
+        color: UI.text.dark,
         align: "center",
         lineSpacing: 6,
       })
@@ -182,28 +202,34 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private buildChoices(): void {
-    const hostButton = new Button(
-      this,
-      VIEWPORT.width / 2 - 170,
-      330,
-      "Raum erstellen",
-      () => void this.hostRoom(),
-      { width: 300 },
-    );
+    const centerX = VIEWPORT.width / 2;
+    const left = centerX - COLUMN;
+    const right = centerX + COLUMN;
 
-    const joinButton = new Button(
+    const internet = menuText(this, centerX, 118, "Über das Internet", 15, UI.text.accent, true);
+
+    const hostHint = menuText(
       this,
-      VIEWPORT.width / 2 + 170,
-      330,
-      "Beitreten",
-      () => void this.joinRoom(),
-      { width: 300 },
+      left,
+      194,
+      "Eigenen Raum öffnen –\ndie anderen treten mit dem Code bei.",
+      14,
+      UI.text.muted,
     );
+    const hostButton = new Button(this, left, 256, "Raum erstellen", () => void this.hostRoom(), {
+      width: 300,
+    });
+
+    const joinButton = new Button(this, right, 256, "Beitreten", () => void this.joinRoom(), {
+      width: 300,
+    });
+
+    const local = menuText(this, centerX, 330, "Ohne Internet", 15, UI.text.accent, true);
 
     const localHost = new Button(
       this,
-      VIEWPORT.width / 2 - 170,
-      450,
+      left,
+      378,
       "Lokaler Test: Raum",
       () => this.startLocal(true),
       { width: 300, height: 44, fontSize: 16, variant: "secondary" },
@@ -211,40 +237,77 @@ export class LobbyScene extends Phaser.Scene {
 
     const localJoin = new Button(
       this,
-      VIEWPORT.width / 2 + 170,
-      450,
+      right,
+      378,
       "Lokaler Test: beitreten",
       () => this.startLocal(false),
       { width: 300, height: 44, fontSize: 16, variant: "secondary" },
     );
 
-    const hint = this.add
-      .text(
-        VIEWPORT.width / 2,
-        494,
-        "Lokaler Test verbindet zwei Tabs desselben Browsers - ohne Internet.",
-        { fontFamily: "system-ui, sans-serif", fontSize: "13px", color: "#8ea6c4" },
-      )
-      .setOrigin(0.5);
-
-    // Texteingabe als echtes HTML-Feld: Nur so oeffnet sich auf dem Handy die
-    // Tastatur des Systems. Phaser positioniert es passend ueber dem Canvas.
-    const dom = this.add.dom(VIEWPORT.width / 2 + 170, 386).createFromHTML(
-      `<input type="text" maxlength="6" placeholder="RAUMCODE"
-        style="width:280px;padding:8px 10px;font:600 20px system-ui,sans-serif;
-               text-align:center;letter-spacing:4px;text-transform:uppercase;
-               border-radius:8px;border:2px solid #5f7191;background:#1e2734;color:#dce8f7;" />`,
+    const hint = menuText(
+      this,
+      centerX,
+      426,
+      "Verbindet zwei Tabs desselben Browsers.",
+      13,
+      UI.text.muted,
     );
-    this.codeInput =
-      dom.node instanceof HTMLElement ? (dom.node.querySelector("input") ?? undefined) : undefined;
 
-    this.choiceObjects = [hostButton, joinButton, localHost, localJoin, hint, dom];
+    /*
+     * Texteingabe als echtes HTML-Feld: Nur so oeffnet sich auf dem Handy die
+     * Tastatur des Systems. Phaser legt es passend ueber das Canvas.
+     *
+     * Das Feld wird SELBST erzeugt und direkt uebergeben, nicht ueber
+     * `createFromHTML`. Dort steckt es in einem Block-`div`, das so breit wird
+     * wie die Spielflaeche - Phaser zentriert dann dieses `div`, und das Feld
+     * sass am linken Rand davon, eine Spalte zu weit links (bis 2026-09-25
+     * unter "Raum erstellen" statt ueber "Beitreten").
+     */
+    const field = document.createElement("input");
+    field.type = "text";
+    field.maxLength = 6;
+    field.placeholder = "RAUMCODE";
+    field.autocomplete = "off";
+    field.setAttribute(
+      "style",
+      [
+        "width:280px",
+        "box-sizing:border-box",
+        "padding:8px 10px",
+        `font:700 20px ${UI.font}`,
+        "text-align:center",
+        "letter-spacing:4px",
+        "text-transform:uppercase",
+        "border-radius:6px",
+        "border:3px solid #8b6a45",
+        "background:#f3e6c8",
+        `color:${UI.text.dark}`,
+        "outline:none",
+        "box-shadow:inset 0 2px 0 rgba(0,0,0,0.12)",
+      ].join(";"),
+    );
+    const dom = this.add.dom(right, 194, field);
+    this.codeInput = field;
+
+    this.choiceObjects = [
+      internet,
+      hostHint,
+      hostButton,
+      joinButton,
+      local,
+      localHost,
+      localJoin,
+      hint,
+      dom,
+    ];
   }
 
   private hideChoices(): void {
     for (const object of this.choiceObjects) {
       object.setVisible(false);
     }
+    // Ohne die Wahl ist oben Platz fuer den Raumcode - der Status rueckt darunter.
+    this.statusText.setY(STATUS_Y_ROOM);
   }
 
   private startLocal(isHost: boolean): void {
@@ -302,6 +365,9 @@ export class LobbyScene extends Phaser.Scene {
     this.lobby = lobby;
 
     this.codeText.setText(transport.roomCode);
+    for (const inset of this.roomInsets) {
+      inset.setVisible(true);
+    }
 
     lobby.onPlayersChanged((players) => {
       this.playerText.setText(
@@ -352,7 +418,7 @@ export class LobbyScene extends Phaser.Scene {
     this.startButton = new Button(
       this,
       VIEWPORT.width / 2,
-      420,
+      START_Y,
       "Runde starten",
       () => this.lobby?.start(),
       { width: 280 },
@@ -362,7 +428,7 @@ export class LobbyScene extends Phaser.Scene {
   private showError(error: unknown): void {
     const message = error instanceof Error ? error.message : "Verbindung fehlgeschlagen.";
     this.statusText.setText(`${message}\n\nDer Solo-Modus geht immer.`);
-    new Button(this, VIEWPORT.width / 2, 400, "Zurück zum Menü", () => this.leave(), {
+    new Button(this, VIEWPORT.width / 2, START_Y, "Zurück zum Menü", () => this.leave(), {
       width: 280,
       variant: "secondary",
     });

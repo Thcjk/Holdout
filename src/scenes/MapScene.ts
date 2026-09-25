@@ -49,6 +49,7 @@ import type { CharacterId } from "../systems/types";
 import type { PlayerSetup } from "../systems/world";
 import { Button } from "../ui/Button";
 import { UiBar, UiNineSlice } from "../ui/UiNineSlice";
+import { menuBackground } from "../ui/menuStyle";
 
 export interface MapSceneData {
   run: RunState;
@@ -116,7 +117,7 @@ export class MapScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x11161f);
+    menuBackground(this);
     audio.setMusic("menu");
     // Auf der Karte darf eine neue Version noch nicht greifen - der Run laeuft.
     setReloadSafe(false);
@@ -291,18 +292,18 @@ export class MapScene extends Phaser.Scene {
     this.add.text(left, SAFE.top + 10, `Tag ${this.run.day + 1} · ${STORY.title}`, {
       fontFamily: UI.font,
       fontSize: "22px",
-      color: "#ffffff",
+      color: UI.text.title,
       fontStyle: "bold",
-    });
+    }).setShadow(1, 2, UI.text.shadow, 3);
     const line =
       this.message ||
       (this.run.day === 0 ? STORY.intro : `${region.name}: ${region.intro}`);
     this.add.text(left, SAFE.top + 40, line, {
       fontFamily: UI.font,
       fontSize: "13px",
-      color: "#c9d6e6",
+      color: UI.text.muted,
       wordWrap: { width: VIEWPORT.width - SAFE.left - SAFE.right - 32 },
-    });
+    }).setShadow(1, 1, UI.text.shadow, 2);
   }
 
   /** Die Tafel unten: was der gewaehlte Knoten bietet, und Losziehen. */

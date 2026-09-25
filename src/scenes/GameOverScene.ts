@@ -8,7 +8,9 @@
 import { STORY } from "../config/story";
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
-import { COLORS, PALETTE, VIEWPORT } from "../config/constants";
+import { PALETTE, VIEWPORT } from "../config/constants";
+import { UI } from "../config/ui";
+import { menuBackground, woodPanel } from "../ui/menuStyle";
 import { loadHighscore, saveHighscore } from "../storage/highscore";
 import type { CharacterId, RunOutcome } from "../systems/types";
 import { Button } from "../ui/Button";
@@ -117,50 +119,60 @@ export class GameOverScene extends Phaser.Scene {
     const isRecord = saveHighscore(this.result.score, this.result.zone);
     const best = loadHighscore();
 
-    this.cameras.main.setBackgroundColor(COLORS.background);
+    menuBackground(this);
+    // Die Zahlen liegen auf einer Holztafel wie Karte und Lobby - der Titel
+    // darueber auf dem Hintergrund, damit seine Farbe (rot/gruen/gold)
+    // nicht gegen das Holz kaempfen muss.
+    woodPanel(this, VIEWPORT.width / 2, 222, Math.min(760, VIEWPORT.width - 120), 200);
 
     const outcome = OUTCOMES[this.result.outcome] ?? OUTCOMES.wipe;
 
     this.add
-      .text(VIEWPORT.width / 2, 100, outcome.title, {
-        fontFamily: "system-ui, sans-serif",
+      .text(VIEWPORT.width / 2, 58, outcome.title, {
+        fontFamily: UI.font,
         fontSize: "44px",
         color: outcome.color,
         fontStyle: "bold",
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setShadow(2, 3, UI.text.shadow, 4);
 
     this.add
-      .text(VIEWPORT.width / 2, 142, outcome.note, {
-        fontFamily: "system-ui, sans-serif",
+      .text(VIEWPORT.width / 2, 100, outcome.note, {
+        fontFamily: UI.font,
         fontSize: "16px",
-        color: "#8ea6c4",
+        color: UI.text.body,
+        align: "center",
+        wordWrap: { width: VIEWPORT.width - 160 },
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setShadow(1, 2, UI.text.shadow, 3);
 
     this.add
       .text(
         VIEWPORT.width / 2,
-        190,
+        168,
         `Zone ${this.result.zone}   ·   ${this.result.score} Punkte`,
-        { fontFamily: "system-ui, sans-serif", fontSize: "26px", color: "#ffd166" },
+        { fontFamily: UI.font, fontSize: "26px", color: UI.text.accent, fontStyle: "bold" },
       )
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setShadow(1, 2, UI.text.shadow, 3);
 
     this.add
       .text(
         VIEWPORT.width / 2,
-        240,
+        208,
         isRecord
           ? "Neuer Rekord!"
           : recordLine(best),
         {
-          fontFamily: "system-ui, sans-serif",
+          fontFamily: UI.font,
           fontSize: "18px",
-          color: isRecord ? PALETTE.success : "#8ea6c4",
+          color: isRecord ? PALETTE.success : UI.text.body,
         },
       )
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setShadow(1, 2, UI.text.shadow, 3);
 
     /*
      * Der Hinweis, dass die naechste Welt eine andere ist.
@@ -182,7 +194,7 @@ export class GameOverScene extends Phaser.Scene {
     this.add
       .text(
         VIEWPORT.width / 2,
-        272,
+        242,
         loot.lost > 0
           ? // Das Team ist raus, man selbst lag aber am Boden ausserhalb der
             // Zone. Ohne diesen Zusatz stuende "Extrahiert" ueber "verloren".
@@ -193,24 +205,27 @@ export class GameOverScene extends Phaser.Scene {
             ? `${loot.kept} Gegenstände gesichert`
             : "Keine Beute gemacht",
         {
-          fontFamily: "system-ui, sans-serif",
+          fontFamily: UI.font,
           fontSize: "17px",
-          color: loot.lost > 0 ? PALETTE.danger : loot.kept > 0 ? PALETTE.success : "#8ea6c4",
+          // Auf Holz heller als die Palettenfarben, sonst kaum lesbar.
+          color: loot.lost > 0 ? "#ff8a65" : loot.kept > 0 ? "#b5e08c" : UI.text.body,
           fontStyle: "bold",
         },
       )
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setShadow(1, 2, UI.text.shadow, 3);
 
     this.add
       .text(
         VIEWPORT.width / 2,
-        300,
+        284,
         this.result.coop
           ? "Gleicher Raum, neue Welt - der Host startet, sobald alle gepackt haben."
           : "Ein neuer Run bekommt eine neue Welt.",
-        { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#8ea6c4" },
+        { fontFamily: UI.font, fontSize: "14px", color: UI.text.muted },
       )
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setShadow(1, 2, UI.text.shadow, 3);
 
     this.restartButton = new Button(
       this,

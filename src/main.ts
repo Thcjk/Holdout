@@ -251,6 +251,36 @@ async function startWhenLandscape(): Promise<void> {
     game.scale.refresh();
   };
 
+  /*
+   * Die HTML-Ebene (Raumcode-Feld) deckungsgleich aufs Canvas legen.
+   *
+   * DER FEHLER, DEN DAS BEHEBT: Das Raumcode-Feld in der Lobby sass eine
+   * Spalte zu weit links und rund 150 Einheiten zu hoch. Phaser legt die
+   * HTML-Ebene in voller Entwurfsgroesse (z. B. 1184 x 540) an und
+   * verkleinert sie von der linken oberen Ecke aus - in der Annahme, sie
+   * beginne dort, wo das Canvas beginnt. `#game-root` zentriert seine Kinder
+   * aber (`place-items: center`); die grosse Ebene begann deshalb weit
+   * links oberhalb des Bildschirms, und nach dem Verkleinern fehlte genau
+   * dieser Versatz. Gemessen: Ebene bei -217,-99 statt 0,0.
+   *
+   * Jetzt wird sie nach jeder Groessenaenderung an die linke obere Ecke des
+   * Canvas gesetzt. Phaser meldet `RESIZE`, nachdem es selbst fertig ist.
+   */
+  const alignDomLayer = (): void => {
+    const layer = game.domContainer;
+    const parent = layer?.parentElement;
+    if (!layer || !parent) {
+      return;
+    }
+    const canvas = game.canvas.getBoundingClientRect();
+    const frame = parent.getBoundingClientRect();
+    layer.style.margin = "0";
+    layer.style.left = `${canvas.left - frame.left}px`;
+    layer.style.top = `${canvas.top - frame.top}px`;
+  };
+  game.scale.on(Phaser.Scale.Events.RESIZE, alignDomLayer);
+  game.events.once(Phaser.Core.Events.READY, alignDomLayer);
+
   // Nach dem Start noch zweimal nachmessen - fuer den Fall, dass die
   // Abstaende beim Start noch vom Hochformat stammten.
   window.setTimeout(refit, 500);

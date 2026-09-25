@@ -49,7 +49,9 @@
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import { INVENTORY } from "../config/balance";
-import { COLORS, SAFE, VIEWPORT } from "../config/constants";
+import { SAFE, VIEWPORT } from "../config/constants";
+import { UI } from "../config/ui";
+import { menuBackground } from "../ui/menuStyle";
 import { itemIndex } from "../config/items";
 import {
   backpackForNextRun,
@@ -140,7 +142,7 @@ export class LoadoutScene extends Phaser.Scene {
     // Hier laeuft keine Runde - ein Neustart wegen einer neuen Version kostet
     // hoechstens ein paar Sekunden Packen.
     setReloadSafe(true);
-    this.cameras.main.setBackgroundColor(COLORS.background);
+    menuBackground(this);
 
     this.nextId = 1;
     // Jeder Run beginnt mit dem KLEINEN Rucksack - er waechst unterwegs
@@ -155,10 +157,10 @@ export class LoadoutScene extends Phaser.Scene {
       .text(VIEWPORT.width / 2, SAFE.top + 18, "Rucksack packen", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "24px",
-        color: "#ffffff",
+        color: UI.text.title,
         fontStyle: "bold",
       })
-      .setShadow(1, 2, "#00000066", 2)
+      .setShadow(1, 2, UI.text.shadow, 3)
       .setOrigin(0.5);
 
     this.add
@@ -166,8 +168,9 @@ export class LoadoutScene extends Phaser.Scene {
         VIEWPORT.width / 2,
         SAFE.top + 44,
         "Ziehen verschiebt · Waffe antippen = ausrüsten ✓ · Rucksack wächst im Run durch Taschen",
-        { fontFamily: "system-ui, sans-serif", fontSize: "13px", color: "#8ea6c4" },
+        { fontFamily: "system-ui, sans-serif", fontSize: "13px", color: UI.text.muted },
       )
+      .setShadow(1, 1, UI.text.shadow, 2)
       .setOrigin(0.5);
 
     const top = SAFE.top + 82;
@@ -219,7 +222,7 @@ export class LoadoutScene extends Phaser.Scene {
     });
     this.stashView.link(this.view);
 
-    const labelStyle = { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#ffffff" };
+    const labelStyle = { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: UI.text.body };
     this.add.text(stashLeft, top - 28, "Lager", labelStyle).setShadow(1, 1, "#00000066", 2);
     this.summary = this.add
       .text(fullLeft, top - 28, "", labelStyle)

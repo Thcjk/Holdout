@@ -15,7 +15,8 @@ import Phaser from "phaser";
 import { CHARACTER_TILES, SHEET_KEY, WORLD_SCALE } from "../config/assets";
 import { audio } from "../audio/AudioEngine";
 import { ABILITIES, CHARACTERS, CHARACTER_ORDER } from "../config/balance";
-import { COLORS, SAFE, VIEWPORT } from "../config/constants";
+import { SAFE, VIEWPORT } from "../config/constants";
+import { UI } from "../config/ui";
 import { isInstalledApp } from "../platform/device";
 import {
   canPromptInstall,
@@ -27,9 +28,10 @@ import { loadHighscore } from "../storage/highscore";
 import type { CharacterId } from "../systems/types";
 import { Button } from "../ui/Button";
 import { setReloadSafe } from "../platform/update";
+import { insetPanel, menuBackground, woodPanel } from "../ui/menuStyle";
 
 const CARD_WIDTH = 268;
-const CARD_HEIGHT = 236;
+const CARD_HEIGHT = 248;
 const CARD_GAP = 24;
 const CARD_Y = 268;
 
@@ -42,7 +44,8 @@ interface UtilityButton {
 
 export class MenuScene extends Phaser.Scene {
   private selected: CharacterId = "scout";
-  private cards = new Map<CharacterId, Phaser.GameObjects.Rectangle>();
+  /** Je Karte der Auswahlrahmen - gold, wenn gewaehlt. */
+  private cards = new Map<CharacterId, Phaser.GameObjects.Graphics>();
 
   constructor() {
     super("Menu");
@@ -51,7 +54,8 @@ export class MenuScene extends Phaser.Scene {
   create(): void {
     // Im Menue darf eine wartende neue Version sofort greifen.
     setReloadSafe(true);
-    this.cameras.main.setBackgroundColor(COLORS.background);
+    this.cards.clear();
+    menuBackground(this);
 
     /*
      * Im Menue laeuft Menuemusik.
@@ -93,14 +97,14 @@ export class MenuScene extends Phaser.Scene {
         {
           fontFamily: "system-ui, sans-serif",
           fontSize: "11px",
-          color: "#4a5a70",
+          color: "#a8977a",
         },
       )
       .setOrigin(1, 1);
   }
 
   private createHeader(): void {
-    this.centeredText(40, "Holdout", 42, "#dce8f7", "bold");
+    this.centeredText(40, "Holdout", 42, UI.text.title, "bold");
 
     const best = loadHighscore();
     this.centeredText(
@@ -109,21 +113,16 @@ export class MenuScene extends Phaser.Scene {
         ? `Dein Rekord: ${best.score} Punkte${best.zone === undefined ? "" : `, Zone ${best.zone}`}`
         : "Halte durch, solange du kannst.",
       15,
-      "#8ea6c4",
+      UI.text.muted,
     );
 
-    this.centeredText(104, "Wähle deinen Charakter", 16, "#ffd166");
+    this.centeredText(104, "Wähle deinen Charakter", 16, UI.text.accent, "bold");
   }
 
   private createCards(): void {
-    // Aus der Gesamtbreite heraus zentrieren: Dann sitzt die Reihe exakt in der
-    // Mitte, egal wie breit die Karten sind.
-    const rowWidth = CHARACTER_ORDER.length * CARD_WIDTH + (CHARACTER_ORDER.length - 1) * CARD_GAP;
-    const firstCenter = (VIEWPORT.width - rowWidth) / 2 + CARD_WIDTH / 2;
-
-    CHARACTER_ORDER.forEach((id, index) => {
-      this.createCard(id, firstCenter + index * (CARD_WIDTH + CARD_GAP));
-    });
+    for (const id of CHARACTER_ORDER) {
+      this.createCard(id, this.cardCenterX(id));
+    }
   }
 
   private createActions(): void {
@@ -243,19 +242,19 @@ export class MenuScene extends Phaser.Scene {
           VIEWPORT.height / 2,
           VIEWPORT.width,
           VIEWPORT.height,
-          0x11161f,
-          0.94,
+          0x1f1b14,
+          0.95,
         )
         .setDepth(200)
         .setInteractive(),
     );
-    parts.push(this.centeredText(150, "Als App installieren", 28, "#dce8f7", "bold").setDepth(201));
+    parts.push(this.centeredText(150, "Als App installieren", 28, UI.text.title, "bold").setDepth(201));
     parts.push(
       this.add
         .text(VIEWPORT.width / 2, 250, manualInstructions().join("\n"), {
           fontFamily: "system-ui, sans-serif",
           fontSize: "18px",
-          color: "#dce8f7",
+          color: UI.text.body,
           align: "center",
           lineSpacing: 12,
         })
@@ -271,7 +270,7 @@ export class MenuScene extends Phaser.Scene {
           {
             fontFamily: "system-ui, sans-serif",
             fontSize: "14px",
-            color: "#8ea6c4",
+            color: UI.text.muted,
             align: "center",
             wordWrap: { width: VIEWPORT.width - 160 },
           },
@@ -299,16 +298,22 @@ export class MenuScene extends Phaser.Scene {
   private createCard(id: CharacterId, centerX: number): void {
     const definition = CHARACTERS[id];
 
-    const card = this.add.rectangle(centerX, CARD_Y, CARD_WIDTH, CARD_HEIGHT, 0x1e2734, 1);
-    card.setStrokeStyle(3, COLORS.hudDim);
-    card.setInteractive({ useHandCursor: true });
-    card.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
+    // Die Karte ist eine Holztafel aus dem UI-Paket - dieselbe wie das
+    // Rucksackfenster im Spiel. Angetippt wird eine unsichtbare Flaeche
+    // darueber (die Tafel selbst besteht aus neun Einzelbildern).
+    woodPanel(this, centerX, CARD_Y, CARD_WIDTH, CARD_HEIGHT);
+    insetPanel(this, centerX, CARD_Y - 86, 80, 58);
+    const frame = this.add.graphics();
+    this.cards.set(id, frame);
+
+    const hit = this.add.zone(centerX, CARD_Y, CARD_WIDTH, CARD_HEIGHT);
+    hit.setInteractive({ useHandCursor: true });
+    hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
       this.selected = id;
       audio.unlock();
       audio.play("superReady");
       this.highlightSelection();
     });
-    this.cards.set(id, card);
 
     /*
      * Das Bild auf der Karte kommt aus demselben Sheet wie die Figur im Spiel.
@@ -318,23 +323,24 @@ export class MenuScene extends Phaser.Scene {
      * der Welt) - auf der Karte ist Platz, und bei Pixel-Art muss der Faktor
      * ganzzahlig bleiben, sonst franst das Bild aus.
      */
-    const portrait = this.add.image(centerX, CARD_Y - 78, SHEET_KEY, CHARACTER_TILES[id]);
+    const portrait = this.add.image(centerX, CARD_Y - 86, SHEET_KEY, CHARACTER_TILES[id]);
     portrait.setScale(WORLD_SCALE + 1);
 
     this.add
       .text(centerX, CARD_Y - 34, definition.name, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "23px",
-        color: "#dce8f7",
+        color: UI.text.title,
         fontStyle: "bold",
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setShadow(1, 2, UI.text.shadow, 3);
 
     this.add
       .text(centerX, CARD_Y - 12, definition.role, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "13px",
-        color: "#8ea6c4",
+        color: UI.text.muted,
       })
       .setOrigin(0.5);
 
@@ -352,7 +358,7 @@ export class MenuScene extends Phaser.Scene {
         {
           fontFamily: "system-ui, sans-serif",
           fontSize: "13px",
-          color: "#dce8f7",
+          color: UI.text.body,
           align: "center",
           lineSpacing: 4,
         },
@@ -363,7 +369,7 @@ export class MenuScene extends Phaser.Scene {
       .text(centerX, CARD_Y + 88, `Super: ${definition.super.name}`, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "14px",
-        color: "#ffd166",
+        color: UI.text.accent,
         fontStyle: "bold",
         align: "center",
         wordWrap: { width: CARD_WIDTH - 28 },
@@ -380,19 +386,39 @@ export class MenuScene extends Phaser.Scene {
   ): Phaser.GameObjects.Text {
     return this.add
       .text(VIEWPORT.width / 2, y, text, {
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: UI.font,
         fontSize: `${size}px`,
         color,
         fontStyle: style,
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setShadow(1, 2, UI.text.shadow, 3);
   }
 
+  /**
+   * Gewaehlte Karte: goldener Rahmen um die Tafel (die Farbe der Beute-
+   * kisten im Spiel). Die anderen bleiben ohne Rahmen - nur EINE Karte
+   * soll herausstechen.
+   */
   private highlightSelection(): void {
-    for (const [id, card] of this.cards) {
-      const active = id === this.selected;
-      card.setStrokeStyle(active ? 4 : 3, active ? COLORS.player : COLORS.hudDim);
-      card.setFillStyle(active ? 0x24344a : 0x1e2734, 1);
+    for (const [id, frame] of this.cards) {
+      frame.clear();
+      if (id !== this.selected) {
+        continue;
+      }
+      const x = this.cardCenterX(id) - CARD_WIDTH / 2 - 4;
+      frame.lineStyle(4, 0xffd166, 1);
+      frame.strokeRoundedRect(x, CARD_Y - CARD_HEIGHT / 2 - 4, CARD_WIDTH + 8, CARD_HEIGHT + 8, 8);
     }
+  }
+
+  /**
+   * Aus der Gesamtbreite heraus zentriert: Dann sitzt die Reihe exakt in der
+   * Mitte, egal wie breit die Karten sind.
+   */
+  private cardCenterX(id: CharacterId): number {
+    const count = CHARACTER_ORDER.length;
+    const rowWidth = count * CARD_WIDTH + (count - 1) * CARD_GAP;
+    return (VIEWPORT.width - rowWidth) / 2 + CARD_WIDTH / 2 + CHARACTER_ORDER.indexOf(id) * (CARD_WIDTH + CARD_GAP);
   }
 }
