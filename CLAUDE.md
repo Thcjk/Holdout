@@ -21,10 +21,14 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
+> **Stand 2026-09-25: Version 2.1.0 – Waffen wirken, UI-Paket eingebunden.**
+> Siehe **„Waffen-Ausrüstung und UI-Paket“** direkt unten. Auf Wunsch
+> „mache weiter und pushe“ auf dem Branch und auf `main`.
+>
 > **Stand 2026-09-24 spätabends: alles auf `main` und Pages** (`1a7cf2a`,
 > auf Wunsch „merge mal“): 3D mit echten Modellen, Knoten-Gebiete mit
-> Umgebung, Beute in 3D. Siehe **„3D-Assets und Knoten-Gebiete“** direkt
-> unten, davor **„3D-Umbau“** (Grundlage).
+> Umgebung, Beute in 3D. Siehe **„3D-Assets und Knoten-Gebiete“**, davor
+> **„3D-Umbau“** (Grundlage).
 >
 > **Zuletzt behoben – „das Game kann nicht starten“:** Auf dem iPhone lagen
 > „Run starten“ und „Zurück“ im Packbildschirm verdeckt unter den Gittern.
@@ -37,6 +41,112 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 >
 > **BRIEFING.md ist seit 2026-09-24 die neue Fassung** (Abschnitte 2, 4, 5:
 > Three.js, Knoten-Karte, Vorbild „Deadly Days: Roadtrip“).
+
+## Waffen-Ausrüstung und UI-Paket (2026-09-25)
+
+Auftrag: „Waffen-Ausrüstung wirkt sich nicht aufs Kampfsystem aus, und ein
+separat hochgeladenes UI-Asset-Paket wird nicht genutzt.“
+
+### Bestandsaufnahme (vorher)
+
+- Der Basisangriff kam fest aus `CHARACTERS[].shot` – der Rucksack war dem
+  Kampf völlig egal. Die Pistole im Starter-Set war Ballast.
+- Einen Zustand „keine Waffe“ gab es nicht.
+- Das UI-Paket (Kenney „UI Pack RPG“: `public/PNG`, `public/Spritesheet`,
+  `public/Vector`) lag ungenutzt im Repo, sogar vom Offline-Speicher
+  ausgeschlossen. **Keine Schrift** darin.
+
+### 1. Waffen wirken
+
+| | Was | Wo |
+| --- | --- | --- |
+| Werte | `WEAPONS` (Schlüssel = Katalog-ID) und `FIST` | `config/balance.ts` |
+| Regeln | welche ausgerüstet ist, Automatik, Reichweite für Zielsuche | `systems/weapons.ts` (neu) |
+| Kampf | `tryShoot` liest die Waffe; ohne Waffe `punch` | `systems/combat.ts` |
+| Merkmal | `ItemInstance.equipped`, Codec-Bit 4 (reist im Koop mit) | `systems/types.ts`, `backpackCodec.ts` |
+| Befehl | `InventoryCommand { op: "equip" }` | `systems/loot.ts` |
+| Bedienung | Tippen auf Waffe = ausrüsten (Packen + Rucksack im Run); weisser Rahmen + Häkchen | `ui/InventoryGrid.ts` |
+| HUD | FEUER-Knopf heisst wie die Waffe („PISTOLE“, „MP“ …) oder „FAUST“ | `TouchControls`, `HudModel` |
+
+| Waffe | Kugeln × Schaden | Reichweite | Nachladen | Takt | |
+| --- | --- | --- | --- | --- | --- |
+| Pistole (Starter) | 1 × 300 | 450 | 1,4 s | 0,25 s | |
+| Maschinenpistole | 3 × 180 | 400 | 1,1 s | 0,18 s | Fächer 8° |
+| Gewehr | 1 × 750 | 800 | 2,0 s | 0,30 s | durchschlagend |
+| Railgun | 1 × 1200 | 1000 | 2,4 s | 0,35 s | durchschlagend |
+| **Faust** (ohne Waffe) | 1 Treffer × 120 | 60 ab Körperrand | – | 0,45 s | keine Munition, ±60°, nicht durch Wände |
+
+- **Die Charaktere haben keinen eigenen Schuss mehr** (`shot`,
+  `reloadTime` entfernt). Sie unterscheiden sich über Leben, Tempo,
+  Fähigkeit und Super. Die Menükarten nennen deshalb die Fähigkeit statt
+  Schusswerten. `PLAYER.shootCooldown` ist in `WEAPONS[].cooldown` gewandert.
+- **Genau eine Waffe aktiv, die Waffe steht im Rucksack** – kein zweites
+  Feld am Spieler, das auf sie zeigt. `settleEquipped` räumt nach jeder
+  Änderung auf: höchstens eine; keine, aber eine Waffe dabei → die erste.
+  Folge: Einpacken oder Aufheben der ersten Waffe rüstet sie aus, die aktive
+  wegwerfen → die nächste springt ein, eine aufgehobene ersetzt nie die, die
+  man in der Hand hat. Im Lager ist nichts ausgerüstet.
+- **Waffen dreht man mit DREHEN** (erscheint beim Halten) – der Tipp heisst
+  bei Waffen „ausrüsten“, bei allem anderen weiter „drehen“.
+- **Faust:** kein Geschoss, sondern sofortiger Treffer am nächsten Gegner
+  im Bogen; eigenes Ereignis `punch` (Schlag-Animation der Figur, kurzer
+  „Wusch“-Ton `swing`). Zielsuche und Ziellinie benutzen dieselbe Funktion
+  `autoAimReach` – die Linie zeigt nie auf einen Gegner, den der Angriff
+  nicht sucht.
+- **`?tune=weapons.pistol.damage=400,fist.reach=80`** geht auch.
+- **Geprüft:** 16 neue Tests (`tests/systems/weapons.test.ts`: Werte aus
+  der Waffe, Nachladezeit, Befehl, Nicht-Waffe ignoriert, Faust trifft /
+  zu weit / hinten / ohne Zielangabe, Automatik in allen Fällen), Codec mit
+  neuem Bit und altem Format, Koop-Test (Client rüstet aus → Host → zurück).
+  Im Emulator: Pistole ins Gepäck (Häkchen, „Waffe: Pistole“), Run mit
+  PISTOLE, leerer Rucksack → FAUST.
+- **Bot-Messung (Zonen von zehn):** mit Pistole Scout 3,6 · Tank 4,0 ·
+  Sniper 3,6; Scout mit MP 5,0 · Gewehr 7,7 · Railgun 5,7 (je drei Läufe,
+  ±1). Mit der Pistole sind alle etwas schwächer als mit ihrem alten
+  Charakterschuss – gewollt, Fundwaffen lohnen sich jetzt.
+  **Nebenwirkung:** Tank und Sniper verlieren ihr Profil (Schrot, Reichweite),
+  bis sie eine passende Waffe finden. Falls unerwünscht: Startwaffe je
+  Charakter über das Starter-Set.
+
+### 2. UI-Paket eingebunden
+
+- **Eine zentrale Datei:** `config/ui.ts` – Atlas-Pfade, Knopf-Varianten
+  (`primary` hell/beige mit dunkler Schrift, `secondary` braun mit heller
+  Schrift), Panel, Balken, Randbreiten, Schrift. Im Spielcode steht nie ein
+  Dateiname.
+- **Geladen als Atlas** (`load.atlasXML`, eine Datei statt 87) in
+  `BootScene`. `Spritesheet/` ist aus den `globIgnores` herausgenommen und
+  wird offline gespeichert (48 Dateien / 4,3 MB).
+- **Neunerteilung selbst gebaut** (`ui/UiNineSlice.ts`): Phasers
+  `NineSlice` zeichnet nur mit WebGL, die Oberfläche läuft in 3D aber auf
+  dem Canvas-Renderer. Neun Bilder je Rahmen, Teilstücke einmal als Frames
+  angelegt. Dazu `UiBar` (Dreierteilung für Balken).
+- **Ersetzt:** alle Knöpfe (`ui/Button.ts`, mit gedrückter Fassung),
+  Lebens-, Super- und Wiederbelebungsbalken (grün → rot unter 30 %, Super
+  blau → gelb wenn bereit), Rahmen von Lager- und Rucksack-Gitter (auch im
+  Rucksackfenster), der DREHEN-Knopf. Zellen in dunklem Holzton passend zum
+  Rahmen.
+- **Bleibt gezeichnet:** FEUER/Fähigkeit/SUPER (Abklingringe gibt es im
+  Paket nicht), Joystick, Minimap, Kompass, Menükarten. **Schrift:**
+  weiter `system-ui` – das Paket hat keine.
+- **Fehler, den erst das Bild gezeigt hat:** Im Atlas liegen die Teile ohne
+  Abstand; beim Strecken blutete der grüne Nachbarbalken als Punkt an den
+  hellen Knopfrand. `ui/padAtlas.ts` legt den Atlas beim Start einmal mit
+  2 px Abstand neu an – Namen bleiben, der Punkt ist weg.
+- **Zwei Kleinigkeiten mit korrigiert:** Beschriftungen über den Gittern
+  lagen auf dem breiteren Rahmen (6 px höher gesetzt); der Hinweis im
+  Rucksackfenster lief in den Rucksack-Knopf (gekürzt).
+- **Geprüft:** Emulator (iPhone 13 quer) in 3D und `?view=2d`: Menü,
+  Packen, Run, Rucksackfenster, Pause – keine Seitenfehler. Typecheck,
+  Lint, alle Tests, Build.
+
+### Offen
+
+- Minimap, Kompass und die drei runden Knöpfe haben kein Paket-Gegenstück.
+- Menükarten (Charakterwahl) sind weiter gezeichnete Rahmen – sie wären
+  der nächste Kandidat für `panel_*`.
+- Bot-Werte für die Balance sind mit der Pistole gemessen; wie sich Tank und
+  Sniper ohne eigenen Schuss anfühlen, zeigt nur das Spielen.
 
 ## 3D-Assets und Knoten-Gebiete
 
@@ -2141,6 +2251,7 @@ src/
     models.ts             ALLE 3D-Modelle: Dateien, Haeute, Zuordnung
     constants.ts          Arena, Bildschirm, Tickrate, Kamera, Touch, Farben
     tuning.ts             ?tune= aus der Adresszeile
+    ui.ts                 ALLE Grafiken der Oberflaeche (UI-Paket), Schrift
   systems/                PHASER-FREI - die Simulation
     types.ts              Datentypen und Ereignisse
     world.ts              Weltzustand, ein Tick
@@ -2159,6 +2270,7 @@ src/
     boss.ts               Angriffsmuster des Bosses
     zones.ts              Distanzzonen und Skalierung
     loot.ts               Drops, Fundorte, Aufsammeln, Rucksack-Befehle
+    weapons.ts            ausgeruestete Waffe, Automatik, Faust-Reichweite
     InventoryGridSystem.ts Gitter-Rucksack: passt/platzieren/verschieben
     backpackCodec.ts      Rucksack als Zahlenreihe (Netz, Lobby)
     spawning.ts           Distanzformel, Zielbevölkerung, Rundenablauf
@@ -2199,7 +2311,8 @@ src/
   input/viewMapping.ts    Bildschirm- <-> Bodenrichtung fuer die 3D-Kamera
   ui/                     VirtualJoystick, TouchControls, Button, HudModel,
                           Minimap, InventoryGrid, BackpackWindow,
-                          compassPlacement, stickResponse
+                          compassPlacement, stickResponse,
+                          UiNineSlice (9-/3-Teilung), padAtlas
   audio/                  synthetisierte Klänge und Musik
   storage/highscore.ts    lokaler Rekord
   storage/carried.ts      Rucksack/Lager zwischen Runs (nur Arbeitsspeicher)
@@ -2241,6 +2354,16 @@ mittelmässig, muss aber zwei Dinge können, sonst misst er Unsinn:
 2. **Merken, wann er zuletzt getroffen hat.** Trifft er drei Sekunden nichts,
    obwohl Gegner leben, steht eine Wand dazwischen – dann geht er stur nach
    vorne, statt Abstand zu halten.
+
+### Stand nach der Messung vom 2026-09-25 (Waffen-Ausrüstung)
+
+Seit die Waffe schiesst, misst der Bot jeden Charakter mit der
+Starter-Pistole und jede Fundwaffe einmal am Scout (drei Läufe):
+
+| Aufbau | Zonen (Bot) |
+| --- | --- |
+| Scout / Tank / Sniper mit Pistole | 3,6 / 4,0 / 3,6 |
+| Scout mit MP / Gewehr / Railgun | 5,0 / 7,7 / 5,7 |
 
 ### Stand nach der Messung vom 2026-09-24 (nach Etappe 10)
 
@@ -2440,8 +2563,9 @@ Zwei Konsequenzen, beide im Code:
   dieselbe, eine Tilemap könnte sie später füllen.
 - **Das Lager ist nur im Arbeitsspeicher.** Nach dem Schliessen der App ist
   gesicherte Beute weg. Dauerhaft speichern ist laut Briefing Phase 13.
-- **Gefundene Waffen wirken noch nicht.** Sie liegen im Rucksack, ersetzen
-  aber nicht die Basiswaffe (Briefing: Phase 12).
+- ~~**Gefundene Waffen wirken noch nicht.**~~ – seit 2026-09-25 bestimmt
+  die ausgerüstete Waffe den Angriff (siehe „Waffen-Ausrüstung und
+  UI-Paket“).
 
 ## Was bewusst NICHT gebaut wird (V1)
 
@@ -2492,10 +2616,9 @@ Stand am Ende: 253 Tests grün, Typecheck, Lint und Build sauber.
 
 ### Teilweise – was fehlt
 
-- **HUD, Knöpfe, Balken, Minimap, Inventar-Zellen sind weiter gezeichnet.**
-  Im Repo gibt es kein Kenney-UI-Paket und keine Pixelschrift; das Dokument
-  sagt „nicht improvisieren“. Liefere das Paket nach, dann ist es ein
-  Tausch in `ui/Button.ts` und `HudScene`.
+- ~~**HUD, Knöpfe, Balken … sind weiter gezeichnet.**~~ – seit 2026-09-25
+  kommen Knöpfe, Balken und Gitter-Rahmen aus dem UI-Paket (`config/ui.ts`).
+  Eine Pixelschrift fehlt weiterhin.
 - **Waffen haben kein eigenes Symbol** – das Paket hat keine einzelnen
   Waffen. Sie liegen als Kiste da.
 - **Koop über zwei echte Geräte** ist für die neuen Teile (Raum bleibt
@@ -2508,7 +2631,7 @@ Stand am Ende: 253 Tests grün, Typecheck, Lint und Build sauber.
 
 - Dauerhaftes Lager (Phase 13) – gesicherte Beute lebt nur bis zum
   Schliessen der App.
-- Gefundene Waffen ersetzen die Basiswaffe (Phase 12).
+- ~~Gefundene Waffen ersetzen die Basiswaffe (Phase 12).~~ – erledigt 2026-09-25.
 - Speichern/Fortsetzen eines Runs (Phase 15).
 
 ### BRIEFING §1, Punkt für Punkt
@@ -2521,7 +2644,7 @@ Stand am Ende: 253 Tests grün, Typecheck, Lint und Build sauber.
 | Gitter-Rucksack mit verschieden geformten Items | ⚠️ nur Rechtecke (1 × 1 bis 4 × 2), keine L-Formen |
 | Loadout vor dem Run, Verlust bei Wipe, Sicherung bei Erfolg | ✅ |
 | Dauerhaftes, lokal gespeichertes Lager mit geschütztem Starter-Set | ⚠️ Starter-Set geschützt; Lager nur im Arbeitsspeicher (Phase 13) |
-| Gefundene Waffen ersetzen die Basiswaffe | ❌ Phase 12 |
+| Gefundene Waffen ersetzen die Basiswaffe | ✅ seit 2026-09-25 (ausgerüstete Waffe, ohne Waffe Faust) |
 | Pausieren und Fortsetzen (Speicherstand) | ⚠️ Pause solo in der laufenden Sitzung ja; Speicherstand nein (Phase 15) |
 | Nicht geplant: PvP, Accounts, Server, Ranglisten, Skins, weitere Modi, Story | ✅ nichts davon gebaut |
 

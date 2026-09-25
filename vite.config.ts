@@ -58,7 +58,7 @@ export default defineConfig({
         // Phaser ist gross - die Voreinstellung von 2 MB wuerde es vom
         // Offline-Zwischenspeicher ausschliessen.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
-        globPatterns: ["**/*.{js,css,html,svg,png,ogg,m4a,json,glb}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,ogg,m4a,json,glb,xml}"],
         /*
          * Das hochgeladene Kenney-Paket liegt komplett unter `public/` -
          * Vorschaubilder, 51 SVG-Haeute, UI-Paket, Sci-Fi-RTS-Grafiken. Das
@@ -66,11 +66,14 @@ export default defineConfig({
          * PNGs unter `models/skins/` umgewandelt. Ohne diese Liste luede jedes
          * Handy bei der Installation 6,9 MB statt rund 2, fuer nichts.
          * Wer spaeter etwas davon im Spiel benutzt, nimmt es hier heraus.
+         *
+         * Seit dem UI-Paket gebraucht und deshalb NICHT mehr auf der Liste:
+         * `Spritesheet/` (ein Bild plus Koordinatendatei, `config/ui.ts`). Die
+         * Einzelbilder derselben Grafiken unter `PNG/` bleiben draussen.
          */
         globIgnores: [
           "Skins/**",
           "PNG/**",
-          "Spritesheet/**",
           "Vector/**",
           "Source/**",
           "Animals/**",

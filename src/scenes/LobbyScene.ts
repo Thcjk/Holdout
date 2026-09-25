@@ -143,7 +143,7 @@ export class LobbyScene extends Phaser.Scene {
         width: 140,
         height: 40,
         fontSize: 16,
-        color: COLORS.hudDim,
+        variant: "secondary",
       },
     );
 
@@ -207,7 +207,7 @@ export class LobbyScene extends Phaser.Scene {
       450,
       "Lokaler Test: Raum",
       () => this.startLocal(true),
-      { width: 300, height: 44, fontSize: 16, color: COLORS.hudDim },
+      { width: 300, height: 44, fontSize: 16, variant: "secondary" },
     );
 
     const localJoin = new Button(
@@ -216,7 +216,7 @@ export class LobbyScene extends Phaser.Scene {
       450,
       "Lokaler Test: beitreten",
       () => this.startLocal(false),
-      { width: 300, height: 44, fontSize: 16, color: COLORS.hudDim },
+      { width: 300, height: 44, fontSize: 16, variant: "secondary" },
     );
 
     const hint = this.add
@@ -363,6 +363,7 @@ export class LobbyScene extends Phaser.Scene {
     this.statusText.setText(`${message}\n\nDer Solo-Modus geht immer.`);
     new Button(this, VIEWPORT.width / 2, 400, "Zurück zum Menü", () => this.leave(), {
       width: 280,
+      variant: "secondary",
     });
   }
 

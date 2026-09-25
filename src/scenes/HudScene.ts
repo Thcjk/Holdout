@@ -15,6 +15,8 @@ import { COLORS, DEPTH, PALETTE, SAFE, TOUCH, VIEWPORT } from "../config/constan
 import { audio } from "../audio/AudioEngine";
 import { InputManager } from "../input/InputManager";
 import { Button } from "../ui/Button";
+import { UiBar } from "../ui/UiNineSlice";
+import { UI } from "../config/ui";
 import { placeOnEdge } from "../ui/compassPlacement";
 import type { Rect } from "../ui/compassPlacement";
 import { Minimap } from "../ui/Minimap";
@@ -58,7 +60,10 @@ export class HudScene extends Phaser.Scene {
 
   private model!: HudModel;
 
-  private bars!: Phaser.GameObjects.Graphics;
+  /** Leben, Super und Wiederbelebung - Balken aus dem UI-Paket. */
+  private healthBar!: UiBar;
+  private superBar!: UiBar;
+  private reviveBar!: UiBar;
   private scoreText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
   private announceText!: Phaser.GameObjects.Text;
@@ -134,7 +139,11 @@ export class HudScene extends Phaser.Scene {
     // der alten Kante.
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
 
-    this.bars = this.add.graphics().setDepth(DEPTH.hud);
+    // Masse wie vorher (220 x 16, 140 x 12), jetzt aus dem UI-Paket statt
+    // gezeichnet. Lage setzt `drawPlayerBars` - sie haengt am Sicherheitsrand.
+    this.healthBar = new UiBar(this, 0, 0, 220, 16, UI.bar.green).setDepth(DEPTH.hud);
+    this.superBar = new UiBar(this, 0, 0, 140, 12, UI.bar.blue).setDepth(DEPTH.hud);
+    this.reviveBar = new UiBar(this, 0, 0, 184, 16, UI.bar.green).setDepth(DEPTH.hud);
 
     // Der Ausstiegs-Kompass. Eigenes Graphics-Objekt, weil er jedes Bild neu
     // gezeichnet wird und die Balken daneben nicht mitloeschen soll.
@@ -206,7 +215,7 @@ export class HudScene extends Phaser.Scene {
         const muted = audio.toggleMuted();
         this.muteButton.setText(muted ? "Ton aus" : "Ton an");
       },
-      { width: 96, height: 30, fontSize: 13, color: COLORS.hudDim },
+      { width: 96, height: 30, fontSize: 13, variant: "secondary" },
     );
     this.muteButton.setDepth(DEPTH.hud);
 
@@ -232,7 +241,7 @@ export class HudScene extends Phaser.Scene {
       topEdge + BUTTON_ROW_Y,
       this.canPause ? "Pause" : "Menü",
       () => this.onPause(),
-      { width: 80, height: 30, fontSize: 13, color: COLORS.hudDim },
+      { width: 80, height: 30, fontSize: 13, variant: "secondary" },
     );
     this.menuButton.setDepth(DEPTH.hud);
 
@@ -247,7 +256,7 @@ export class HudScene extends Phaser.Scene {
       topEdge + BUTTON_ROW_Y,
       "Rucksack",
       () => this.setBackpackOpen(!this.backpackWindow.isOpen),
-      { width: 100, height: 30, fontSize: 13, color: COLORS.hudDim },
+      { width: 100, height: 30, fontSize: 13, variant: "secondary" },
     );
     this.backpackButton.setDepth(DEPTH.hud);
     this.backpackWindow = new BackpackWindow(this, () => this.setBackpackOpen(false));
@@ -425,7 +434,7 @@ export class HudScene extends Phaser.Scene {
         this.scene.stop("Game");
         this.onQuit();
       },
-      { width: 240, height: 42, fontSize: 16, color: COLORS.hudDim },
+      { width: 240, height: 42, fontSize: 16, variant: "secondary" },
     );
     this.quitButton.setDepth(DEPTH.hud + 11);
 
@@ -668,32 +677,27 @@ export class HudScene extends Phaser.Scene {
     const left = SAFE.left + 16;
     const bottom = VIEWPORT.height - SAFE.bottom - 18;
 
-    this.bars.clear();
-
-    // Lebensbalken
-    const healthWidth = 220;
+    // Lebensbalken: gruen, unter 30 % rot.
     const healthFraction = Math.max(0, this.model.health / this.model.maxHealth);
-    this.bars.fillStyle(0x000000, 0.5);
-    this.bars.fillRect(left - 2, bottom - 20, healthWidth + 4, 16);
-    this.bars.fillStyle(healthFraction > 0.3 ? COLORS.mate : COLORS.danger, 1);
-    this.bars.fillRect(left, bottom - 18, healthWidth * healthFraction, 12);
+    this.healthBar
+      .setPosition(left - 2, bottom - 20)
+      .setLook(healthFraction > 0.3 ? UI.bar.green : UI.bar.red)
+      .setFraction(healthFraction);
 
-    // Super-Aufladung, direkt ueber dem Lebensbalken.
-    const superY = bottom - 40;
-    const superWidth = 140;
+    // Super-Aufladung, direkt ueber dem Lebensbalken: blau beim Laden, gelb,
+    // sobald er bereit ist (wie der Ring am SUPER-Knopf).
     const ready = this.model.superCharge >= 100;
-    this.bars.fillStyle(0x000000, 0.5);
-    this.bars.fillRect(left - 2, superY - 2, superWidth + 4, 12);
-    this.bars.fillStyle(ready ? COLORS.superReady : COLORS.hudDim, 1);
-    this.bars.fillRect(left, superY, (superWidth * Math.min(100, this.model.superCharge)) / 100, 8);
+    this.superBar
+      .setPosition(left - 2, bottom - 42)
+      .setLook(ready ? UI.bar.yellow : UI.bar.blue)
+      .setFraction(Math.min(100, this.model.superCharge) / 100);
 
+    // Fortschritt der eigenen Wiederbelebung, nur solange man am Boden liegt.
+    this.reviveBar.setVisible(this.model.down);
     if (this.model.down) {
-      // Fortschrittsring der eigenen Wiederbelebung.
-      const fraction = Math.min(1, this.model.reviveProgress / 3);
-      this.bars.fillStyle(0x000000, 0.5);
-      this.bars.fillRect(VIEWPORT.width / 2 - 92, VIEWPORT.height / 2 + 30, 184, 14);
-      this.bars.fillStyle(COLORS.mate, 1);
-      this.bars.fillRect(VIEWPORT.width / 2 - 90, VIEWPORT.height / 2 + 32, 180 * fraction, 10);
+      this.reviveBar
+        .setPosition(VIEWPORT.width / 2 - 92, VIEWPORT.height / 2 + 30)
+        .setFraction(Math.min(1, this.model.reviveProgress / 3));
     }
   }
 

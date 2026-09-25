@@ -77,7 +77,7 @@ export class BackpackWindow {
       .text(
         0,
         0,
-        "Die Runde läuft weiter · Waffe antippen = ausrüsten · aus dem Gitter ziehen wirft weg",
+        "Runde läuft weiter · Waffe antippen = ausrüsten · hinausziehen = wegwerfen",
         { fontFamily: "system-ui, sans-serif", fontSize: "13px", color: "#ffd166" },
       )
       .setDepth(DEPTH.hud + 15);
@@ -86,6 +86,7 @@ export class BackpackWindow {
       width: 140,
       height: 40,
       fontSize: 16,
+      variant: "secondary",
     });
     this.closeButton.setDepth(DEPTH.hud + 15);
 

@@ -224,7 +224,7 @@ export class GameOverScene extends Phaser.Scene {
         this.result.transport?.close();
         this.scene.start("Menu");
       },
-      { width: 230, fontSize: 18, color: COLORS.hudDim },
+      { width: 230, fontSize: 18, variant: "secondary" },
     );
   }
 

@@ -51,6 +51,8 @@ import {
 } from "../systems/InventoryGridSystem";
 import type { InventoryGrid as GridData, ItemInstance } from "../systems/types";
 import { equipAt, isWeapon } from "../systems/weapons";
+import { UI } from "../config/ui";
+import { UiNineSlice } from "./UiNineSlice";
 
 /**
  * Ab dieser Zugstrecke gilt eine Beruehrung als Ziehen und nicht als Tipp.
@@ -60,6 +62,9 @@ import { equipAt, isWeapon } from "../systems/weapons";
  * Wackeln beim Antippen nicht schon als Zug zaehlt.
  */
 const TAP_THRESHOLD = 14;
+
+/** Abstand des Paket-Rahmens um das Gitter (= Randbreite des Panels). */
+const FRAME_MARGIN = 10;
 
 /** Wie weit der gezogene Gegenstand ueber dem Finger schwebt. */
 const DRAG_LIFT = INVENTORY.cellSize;
@@ -134,6 +139,8 @@ interface DragState {
 }
 
 export class InventoryGrid {
+  /** Rahmen aus dem UI-Paket (Neunerteilung), hinter den Zellen. */
+  private readonly frame: UiNineSlice;
   private readonly cells: Phaser.GameObjects.Graphics;
   private readonly contents: Phaser.GameObjects.Graphics;
   /** Nur der gerade gezogene Gegenstand - ueber allen Beschriftungen. */
@@ -167,6 +174,23 @@ export class InventoryGrid {
     this.cellSize = options.cellSize ?? INVENTORY.cellSize;
     this.baseDepth = options.depth ?? DEPTH.hud;
 
+    /*
+     * Der Rahmen kommt aus dem UI-Paket (`UI.panel`), 10 Einheiten um das
+     * Gitter herum - genau die Randbreite des Paket-Panels, damit die Zellen
+     * innerhalb des Rahmens beginnen und nicht auf seinen Zierkerben liegen.
+     * Gleiche Ebene wie die Zellen, aber vorher angelegt: liegt also darunter.
+     */
+    const frameWidth = grid.width * this.cellSize + 2 * FRAME_MARGIN;
+    const frameHeight = grid.height * this.cellSize + 2 * FRAME_MARGIN;
+    this.frame = new UiNineSlice(
+      scene,
+      UI.panel.frame,
+      UI.panel.slice,
+      options.x - FRAME_MARGIN + frameWidth / 2,
+      options.y - FRAME_MARGIN + frameHeight / 2,
+      frameWidth,
+      frameHeight,
+    ).setDepth(this.baseDepth);
     this.cells = scene.add.graphics().setDepth(this.baseDepth);
     this.contents = scene.add.graphics().setDepth(this.baseDepth + 1);
     /*
@@ -284,6 +308,7 @@ export class InventoryGrid {
 
   /** Blendet das ganze Gitter ein oder aus (samt Beruehrungsfeld). */
   setVisible(visible: boolean): void {
+    this.frame.setVisible(visible);
     this.cells.setVisible(visible);
     this.contents.setVisible(visible);
     this.heldLayer.setVisible(visible);
@@ -314,6 +339,7 @@ export class InventoryGrid {
   destroy(): void {
     this.scene.input.off(Phaser.Input.Events.POINTER_MOVE, this.onMove, this);
     this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.onUp, this);
+    this.frame.destroy();
     this.cells.destroy();
     this.contents.destroy();
     this.heldLayer.destroy();
@@ -561,15 +587,12 @@ export class InventoryGrid {
     g.clear();
 
     const { x: left, y: top } = this.options;
-    const width = this.grid.width * this.cellSize;
-    const height = this.grid.height * this.cellSize;
 
-    g.fillStyle(0x0d1420, 0.85);
-    g.fillRoundedRect(left - 6, top - 6, width + 12, height + 12, 8);
-
+    // Der Rahmen ist das Paket-Panel (`this.frame`); hier nur die Zellen,
+    // vertieft in einem dunkleren Ton desselben Holzes.
     for (let y = 0; y < this.grid.height; y += 1) {
       for (let x = 0; x < this.grid.width; x += 1) {
-        g.fillStyle(0x1b2430, 0.9);
+        g.fillStyle(UI.panel.cellColor, UI.panel.cellAlpha);
         g.fillRect(
           left + x * this.cellSize + 2,
           top + y * this.cellSize + 2,
@@ -578,9 +601,6 @@ export class InventoryGrid {
         );
       }
     }
-
-    g.lineStyle(2, COLORS.hudDim, 0.7);
-    g.strokeRoundedRect(left - 6, top - 6, width + 12, height + 12, 8);
 
     if (this.foreign) {
       this.drawTarget(this.foreign.def, this.foreign.rotated, this.foreign.x, this.foreign.y, this.foreign.valid);
@@ -831,15 +851,18 @@ export class InventoryGrid {
     const y = this.options.rotateButtonAt?.y ?? this.options.y + height + 34;
     const buttonWidth = this.options.rotateButtonWidth ?? 150;
 
+    // Bild aus dem UI-Paket wie jeder andere Hauptknopf (`ui/Button.ts`),
+    // darueber eine unsichtbare Flaeche, die die Beruehrung abfaengt.
+    const look = UI.button.primary;
+    const image = new UiNineSlice(this.scene, look.frame, look.slice, 0, 0, buttonWidth, 48);
     const background = this.scene.add
-      .rectangle(0, 0, buttonWidth, 48, COLORS.player, 0.92)
-      .setStrokeStyle(2, COLORS.playerOutline)
+      .rectangle(0, 0, buttonWidth, 48, 0x000000, 0)
       .setInteractive();
     const text = this.scene.add
       .text(0, 0, "DREHEN", {
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: UI.font,
         fontSize: buttonWidth < 100 ? "13px" : "16px",
-        color: "#11161f",
+        color: look.textColor,
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -855,7 +878,7 @@ export class InventoryGrid {
       this.draw();
     });
 
-    const container = this.scene.add.container(x, y, [background, text]);
+    const container = this.scene.add.container(x, y, [image.container, background, text]);
     container.setDepth(this.baseDepth + 6);
     container.setVisible(false);
     return container;

@@ -211,9 +211,9 @@ export class LoadoutScene extends Phaser.Scene {
     this.stashView.link(this.view);
 
     const labelStyle = { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#ffffff" };
-    this.add.text(stashLeft, top - 22, "Lager", labelStyle).setShadow(1, 1, "#00000066", 2);
+    this.add.text(stashLeft, top - 28, "Lager", labelStyle).setShadow(1, 1, "#00000066", 2);
     this.summary = this.add
-      .text(backpackLeft, top - 22, "", labelStyle)
+      .text(backpackLeft, top - 28, "", labelStyle)
       .setShadow(1, 1, "#00000066", 2);
     this.updateSummary();
 
@@ -238,7 +238,7 @@ export class LoadoutScene extends Phaser.Scene {
         this.setup.transport?.close();
         this.scene.start("Menu");
       },
-      { width: 140, height: 46, fontSize: 16, color: COLORS.hudDim },
+      { width: 140, height: 46, fontSize: 16, variant: "secondary" },
     ).setDepth(BUTTON_DEPTH);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {

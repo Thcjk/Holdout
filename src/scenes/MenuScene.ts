@@ -155,7 +155,7 @@ export class MenuScene extends Phaser.Scene {
         audio.unlock();
         this.scene.start("Loadout", { character: this.selected, coop: true });
       },
-      { width, color: COLORS.mate },
+      { width },
     );
   }
 
@@ -226,7 +226,7 @@ export class MenuScene extends Phaser.Scene {
         500,
         entry.label,
         () => entry.onClick(button),
-        { width: entry.width, height: 38, fontSize: 15, color: COLORS.hudDim },
+        { width: entry.width, height: 38, fontSize: 15, variant: "secondary" },
       );
       x += entry.width + gap;
     }
@@ -345,9 +345,9 @@ export class MenuScene extends Phaser.Scene {
         [
           `Leben ${definition.health}   Tempo ${definition.speed}`,
           // Seit der Waffen-Ausruestung schiesst die Waffe, nicht der
-          // Charakter - die Karte nennt deshalb Faehigkeit und Super.
+          // Charakter - die Karte nennt deshalb die Faehigkeit (der Super
+          // steht darunter ohnehin schon, gelb).
           `Fähigkeit: ${ABILITIES[definition.id].name}`,
-          `Super: ${definition.super.name}`,
         ].join("\n"),
         {
           fontFamily: "system-ui, sans-serif",
