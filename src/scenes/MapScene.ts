@@ -51,6 +51,9 @@ import type { PlayerSetup } from "../systems/world";
 import { Button } from "../ui/Button";
 import { UiBar, UiNineSlice } from "../ui/UiNineSlice";
 import { menuBackground } from "../ui/menuStyle";
+import { WorkbenchWindow } from "../ui/WorkbenchWindow";
+import { flattenPacked, unflattenPacked } from "../systems/backpackCodec";
+import { startSize } from "../systems/InventoryGridSystem";
 
 export interface MapSceneData {
   run: RunState;
@@ -134,8 +137,46 @@ export class MapScene extends Phaser.Scene {
     this.drawNodes();
     this.drawHeader();
     this.buildInfoPanel();
+    this.buildWorkbench();
     this.listen();
     this.updateStatus();
+  }
+
+  /**
+   * Am Rastplatz: die Werkbank. Jeder baut in SEINEM Rucksack; im Koop
+   * schickt ein Client den neuen Stand mit `ready` an den Host.
+   */
+  private buildWorkbench(): void {
+    if (currentNode(this.run).type !== "rest") return;
+    const selfId = this.transport?.selfId ?? this.run.players[0]?.id;
+    const self = (): PlayerSetup | undefined => this.run.players.find((player) => player.id === selfId);
+    const window = new WorkbenchWindow(
+      this,
+      () => ({
+        items: (self()?.backpack ?? []).map((entry) => ({ ...entry })),
+        size: self()?.backpackSize ?? startSize(),
+      }),
+      (items) => {
+        const player = self();
+        if (!player) return;
+        player.backpack = items;
+        if (!this.transport) {
+          saveActive(this.run);
+        } else if (!this.transport.isHost) {
+          this.transport.broadcast({ t: "ready", backpack: flattenPacked(items) });
+        }
+      },
+    );
+    const right = VIEWPORT.width - SAFE.right - 14;
+    const top = VIEWPORT.height - SAFE.bottom - FOOTER;
+    new Button(this, right - 290, top + FOOTER - 40, "Werkbank", () => window.open(), {
+      width: 160,
+      height: 44,
+      fontSize: 18,
+      variant: "secondary",
+    });
+    // Beim Ankommen gleich offen - dafuer ist man hier.
+    window.open();
   }
 
   // ----------------------------------------------------------------
@@ -501,6 +542,11 @@ export class MapScene extends Phaser.Scene {
     transport.onMessage((from, message) => {
       if (transport.isHost && message.t === "ready") {
         this.readyPeers.add(from);
+        // Nach der Werkbank: den neuen Rucksack des Clients uebernehmen.
+        const player = this.run.players.find((entry) => entry.id === from);
+        if (player && message.backpack) {
+          player.backpack = unflattenPacked(message.backpack);
+        }
         this.updateStatus();
       } else if (!transport.isHost && message.t === "move" && !this.leaving) {
         // Der Host hat gewaehlt: seinen Stand der Spieler uebernehmen.

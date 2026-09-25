@@ -44,7 +44,7 @@ import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
 import { finishRun } from "../storage/carried";
 import { saveActive } from "../storage/saveSlots";
-import { packCarried, packGrid } from "../systems/backpackCodec";
+import { packCarried } from "../systems/backpackCodec";
 import { completeNode, currentNode } from "../systems/run";
 import { placeName, regionOfLayer } from "../config/story";
 import type { RunState } from "../systems/run";
@@ -292,6 +292,8 @@ export class GameScene extends Phaser.Scene {
     }
     // Rucksack-Befehle kommen aus dem Fenster der HUD-Szene, nicht vom Daumen.
     input.inventory = this.hud.peekInventoryCommand();
+    // Rucksack offen = geschuetzt (2026-09-26): in Ruhe umraeumen.
+    input.shielded = this.backpackOpen;
 
     // Beim Super laeuft die Zeit kurz langsamer. Die Simulation merkt davon
     // nichts - sie bekommt einfach weniger Zeit zugeteilt.
@@ -806,7 +808,8 @@ export class GameScene extends Phaser.Scene {
         : null;
     this.fillMinimap(state, player);
     this.hudModel.carriedItems = player.backpack.items.length;
-    this.hudModel.backpack = packGrid(player.backpack);
+    // Rucksack und Guertel (markiert) - das Fenster und die Guertel-Knoepfe lesen beides.
+    this.hudModel.backpack = packCarried(player.backpack, player.belt);
     this.hudModel.backpackSize = { width: player.backpack.width, height: player.backpack.height };
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;

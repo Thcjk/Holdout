@@ -40,7 +40,9 @@
 import Phaser from "phaser";
 import { INVENTORY } from "../config/balance";
 import { COLORS, DEPTH } from "../config/constants";
-import { RARITY_COLORS, itemAt } from "../config/items";
+import { ATTACHMENT_KINDS, RARITY_COLORS, itemAt } from "../config/items";
+import type { AttachmentKind } from "../config/items";
+import { attachInGrid, canAttach, detachInGrid, hasMod, weaponSlots } from "../systems/gear";
 import {
   fits,
   footprint,
@@ -68,6 +70,15 @@ const FRAME_MARGIN = 10;
 
 /** Wie weit der gezogene Gegenstand ueber dem Finger schwebt. */
 const DRAG_LIFT = INVENTORY.cellSize;
+
+/** Farbe und Buchstabe je Aufsatzart - auf der Waffe und im Guertel gleich. */
+const MOD_COLORS: Record<AttachmentKind, number> = {
+  scope: 0x7fd1ff,
+  barrel: 0xff9f5a,
+  mag: 0xffd166,
+  grip: 0x9be07a,
+};
+const MOD_LETTERS: Record<AttachmentKind, string> = { scope: "V", barrel: "L", mag: "M", grip: "G" };
 
 export interface InventoryGridOptions {
   /** Linke obere Ecke in Entwurfseinheiten. */
@@ -103,6 +114,19 @@ export interface InventoryGridOptions {
   equipOnTap?: boolean;
   /** Nach einem Ausruesten per Tipp: welche Zelle. Im Run ein Befehl. */
   onEquipped?: (at: { x: number; y: number }) => void;
+  /** Aufsatz auf eine Waffe gezogen (beide Zellen). Im Run ein Befehl. */
+  onAttached?: (from: { x: number; y: number }, to: { x: number; y: number }) => void;
+  /** Aufsatz per Tipp auf sein Symbol abgenommen. Im Run ein Befehl. */
+  onDetached?: (at: { x: number; y: number }, kindIndex: number) => void;
+  /**
+   * Ein Gegenstand wird ausserhalb dieses Gitters losgelassen (und nicht im
+   * verbundenen zweiten). Gibt `true` zurueck, wenn er dort angenommen wurde
+   * - etwa vom Guertel. Dann verschwindet er hier; sonst geht es weiter wie
+   * bisher (wegwerfen oder zurueckspringen).
+   */
+  dropOutside?: (item: ItemInstance, from: { x: number; y: number }, screenX: number, screenY: number) => boolean;
+  /** Waehrend des Ziehens: wo der Griffpunkt gerade ist (fuer Zielmarken aussen). */
+  onDragHover?: (item: ItemInstance | null, screenX: number, screenY: number) => void;
   /**
    * Unterste Zeichenebene. Im Run liegt das Gitter in einem Fenster UEBER
    * einem abdunkelnden Hintergrund - mit der festen HUD-Ebene lag es darunter,
@@ -147,6 +171,10 @@ export class InventoryGrid {
   private readonly heldLayer: Phaser.GameObjects.Graphics;
   private heldLabel: Phaser.GameObjects.Text | null = null;
   private readonly labels: Phaser.GameObjects.Text[] = [];
+  /** Buchstaben auf den Aufsatzplaetzen der Waffen (gepoolt wie `labels`). */
+  private readonly modLetters: Phaser.GameObjects.Text[] = [];
+  /** Waffe, auf die der gezogene Aufsatz gerade passen wuerde (Index), oder -1. */
+  private attachHover = -1;
   private readonly hitArea: Phaser.GameObjects.Rectangle;
   private readonly rotateHint: Phaser.GameObjects.Container;
 
@@ -263,13 +291,15 @@ export class InventoryGrid {
     screenY: number,
   ): void {
     const cell = this.cellAt(screenX, screenY, true);
+    const hit = cell ? this.grid.items[itemIndexAt(this.grid, cell.x, cell.y)] : undefined;
+    const attaches = hit !== undefined && canAttach(hit.item, def);
     this.foreign = cell
       ? {
           def,
           rotated,
           x: cell.x - grabX,
           y: cell.y - grabY,
-          valid: fits(this.grid, def, rotated, cell.x - grabX, cell.y - grabY),
+          valid: attaches || fits(this.grid, def, rotated, cell.x - grabX, cell.y - grabY),
         }
       : null;
     this.draw();
@@ -293,6 +323,15 @@ export class InventoryGrid {
   ): boolean {
     this.foreign = null;
     const cell = this.cellAt(screenX, screenY, true);
+    // Aufsatz aus dem anderen Gitter direkt auf eine Waffe hier (Lager -> Waffe im Rucksack).
+    const hit = cell ? this.grid.items[itemIndexAt(this.grid, cell.x, cell.y)] : undefined;
+    if (hit && itemAt(item.def)?.type === "attachment" && canAttach(hit.item, item.def)) {
+      const kind = itemAt(item.def)?.attachment as AttachmentKind;
+      hit.item.mods = (hit.item.mods ?? 0) | (1 << ATTACHMENT_KINDS.indexOf(kind));
+      this.options.onChange?.();
+      this.draw();
+      return true;
+    }
     const ok = cell !== null && place(this.grid, item, cell.x - grabX, cell.y - grabY, rotated);
     if (ok) {
       this.options.onChange?.();
@@ -323,6 +362,9 @@ export class InventoryGrid {
     for (const label of this.labels) {
       label.setVisible(visible && label.visible);
     }
+    for (const letter of this.modLetters) {
+      letter.setVisible(visible && letter.visible);
+    }
     this.heldLabel?.setVisible(false);
     if (visible) {
       this.draw();
@@ -348,6 +390,9 @@ export class InventoryGrid {
     this.rotateHint.destroy();
     for (const label of this.labels) {
       label.destroy();
+    }
+    for (const letter of this.modLetters) {
+      letter.destroy();
     }
   }
 
@@ -406,6 +451,13 @@ export class InventoryGrid {
       this.drag.moved = true;
     }
 
+    // Ein Aufsatz ueber einer passenden Waffe? Die leuchtet dann gruen auf.
+    this.attachHover = this.drag.moved ? this.attachTargetIndex(this.drag) : -1;
+    if (this.drag.moved) {
+      const dragged = this.grid.items[this.drag.index];
+      this.options.onDragHover?.(dragged?.item ?? null, pointer.x, pointer.y - DRAG_LIFT);
+    }
+
     // Ueber dem anderen Gitter? Dann zeigt DAS die Zielmarkierung.
     if (this.drag.moved && this.peer) {
       const liftedY = pointer.y - DRAG_LIFT;
@@ -444,9 +496,21 @@ export class InventoryGrid {
 
     this.drag = null;
     this.rotateHint.setVisible(false);
+    this.attachHover = -1;
+    this.options.onDragHover?.(null, 0, 0);
 
     if (!drag.moved) {
       const entry = this.grid.items[drag.index];
+      // Tipp auf ein belegtes Aufsatzsymbol: abnehmen.
+      const kindIndex = entry ? this.modIconAt(entry, drag.startX, drag.startY) : -1;
+      if (entry && kindIndex >= 0) {
+        if (detachInGrid(this.grid, { x: entry.x, y: entry.y }, kindIndex)) {
+          this.options.onDetached?.({ x: entry.x, y: entry.y }, kindIndex);
+          this.options.onChange?.();
+        }
+        this.draw();
+        return;
+      }
       if (this.options.equipOnTap && entry && isWeapon(entry.item.def)) {
         // Ein Tipp auf eine Waffe: ausruesten (siehe Kopfkommentar, Punkt 2).
         if (equipAt(this.grid, entry.x, entry.y)) {
@@ -458,6 +522,23 @@ export class InventoryGrid {
       }
       // Ein Tipp: an Ort und Stelle drehen, wenn es so passt.
       this.rotateInPlace(drag.index);
+      this.draw();
+      return;
+    }
+
+    // Aufsatz auf eine Waffe fallen lassen: aufsetzen.
+    const weaponIndex = this.attachTargetIndex(drag);
+    if (weaponIndex >= 0) {
+      const attachment = this.grid.items[drag.index];
+      const weapon = this.grid.items[weaponIndex];
+      if (attachment && weapon) {
+        const from = { x: attachment.x, y: attachment.y };
+        const to = { x: weapon.x, y: weapon.y };
+        if (attachInGrid(this.grid, from, to)) {
+          this.options.onAttached?.(from, to);
+          this.options.onChange?.();
+        }
+      }
       this.draw();
       return;
     }
@@ -485,6 +566,17 @@ export class InventoryGrid {
       return;
     }
     this.peer?.clearForeign();
+
+    // Ausserhalb losgelassen - vielleicht nimmt ihn jemand an (Guertel).
+    if (this.options.dropOutside && !this.contains(drag.pointerX, liftedY)) {
+      const entry = this.grid.items[drag.index];
+      if (entry && this.options.dropOutside(entry.item, { x: entry.x, y: entry.y }, drag.pointerX, liftedY)) {
+        removeAt(this.grid, drag.index);
+        this.options.onChange?.();
+        this.draw();
+        return;
+      }
+    }
 
     // Aus dem Gitter hinaus: wegwerfen, wenn das hier erlaubt ist.
     if (this.options.onDiscard && !this.contains(drag.pointerX, liftedY)) {
@@ -534,6 +626,70 @@ export class InventoryGrid {
       this.options.onMoved?.({ x: entry.x, y: entry.y }, { x: entry.x, y: entry.y, rotated });
       this.options.onChange?.();
     }
+  }
+
+  /**
+   * Liegt der angehobene Griffpunkt eines gezogenen Aufsatzes ueber einer
+   * Waffe, die ihn nehmen kann? Dann deren Index, sonst -1.
+   */
+  private attachTargetIndex(drag: DragState): number {
+    const dragged = this.grid.items[drag.index];
+    if (!dragged || itemAt(dragged.item.def)?.type !== "attachment") {
+      return -1;
+    }
+    const cell = this.cellAt(drag.pointerX, drag.pointerY - DRAG_LIFT);
+    if (!cell) {
+      return -1;
+    }
+    const index = itemIndexAt(this.grid, cell.x, cell.y);
+    const target = this.grid.items[index];
+    return target && index !== drag.index && canAttach(target.item, dragged.item.def) ? index : -1;
+  }
+
+  /**
+   * Die Aufsatzplaetze einer liegenden Waffe als Rechtecke: unten links im
+   * Gegenstand, nebeneinander. Dieselbe Rechnung fuer Zeichnen und Antippen.
+   */
+  private modIcons(
+    entry: { item: ItemInstance; x: number; y: number; rotated: boolean },
+    px: number,
+    py: number,
+    h: number,
+  ): Array<{ kind: AttachmentKind; x: number; y: number; size: number }> {
+    const size = Math.max(14, Math.min(20, Math.round(this.cellSize * 0.3)));
+    return weaponSlots(entry.item.def).map((kind, index) => ({
+      kind,
+      x: px + 7 + index * (size + 3),
+      y: py + 3 + h - size - 4,
+      size,
+    }));
+  }
+
+  /** Nummer der Aufsatzart unter dem Finger (nur belegte Plaetze), sonst -1. */
+  private modIconAt(
+    entry: { item: ItemInstance; x: number; y: number; rotated: boolean },
+    screenX: number,
+    screenY: number,
+  ): number {
+    const size = footprint(entry.item.def, entry.rotated);
+    if (!size) return -1;
+    const px = this.options.x + entry.x * this.cellSize;
+    const py = this.options.y + entry.y * this.cellSize;
+    const h = size.height * this.cellSize - 6;
+    // Etwas grosszuegiger als gezeichnet: Die Symbole sind klein, der Daumen nicht.
+    const slack = 6;
+    for (const icon of this.modIcons(entry, px, py, h)) {
+      if (
+        hasMod(entry.item, icon.kind) &&
+        screenX >= icon.x - slack &&
+        screenX <= icon.x + icon.size + slack &&
+        screenY >= icon.y - slack &&
+        screenY <= icon.y + icon.size + slack
+      ) {
+        return ATTACHMENT_KINDS.indexOf(icon.kind);
+      }
+    }
+    return -1;
   }
 
   /** In welche Zelle wuerde der gezogene Gegenstand abgelegt? */
@@ -674,6 +830,7 @@ export class InventoryGrid {
     this.heldLayer.clear();
 
     let labelIndex = 0;
+    let letterIndex = 0;
 
     /*
      * DER GETRAGENE GEGENSTAND WIRD ZULETZT GEZEICHNET.
@@ -775,6 +932,31 @@ export class InventoryGrid {
         g.strokePath();
       }
 
+      // Waffe, auf die der gezogene Aufsatz passt: gruener Rahmen.
+      if (i === this.attachHover) {
+        g.lineStyle(4, COLORS.mate, 1);
+        g.strokeRoundedRect(px, py, w + 6, h + 6, 8);
+      }
+
+      // Aufsatzplaetze: belegte farbig mit Buchstabe, freie durchsichtig -
+      // man sieht schon am Rucksack, was auf die Waffe passt.
+      if (!held) {
+        for (const icon of this.modIcons(entry, px, py, h)) {
+          const filled = hasMod(entry.item, icon.kind);
+          g.fillStyle(MOD_COLORS[icon.kind], filled ? 1 : 0.18);
+          g.fillRoundedRect(icon.x, icon.y, icon.size, icon.size, 4);
+          g.lineStyle(filled ? 2 : 1.5, filled ? 0x0d1420 : 0xffffff, filled ? 0.9 : 0.7);
+          g.strokeRoundedRect(icon.x, icon.y, icon.size, icon.size, 4);
+          const letter = this.modLetterFor(letterIndex);
+          letterIndex += 1;
+          letter.setText(MOD_LETTERS[icon.kind]);
+          letter.setAlpha(filled ? 1 : 0.55);
+          letter.setColor(filled ? "#11161f" : "#ffffff");
+          letter.setPosition(icon.x + icon.size / 2, icon.y + icon.size / 2 + 0.5);
+          letter.setVisible(true);
+        }
+      }
+
       const label = held ? this.heldLabelObject() : this.labelFor(labelIndex);
       if (!held) {
         labelIndex += 1;
@@ -789,13 +971,18 @@ export class InventoryGrid {
       if (label.width > w - 4) {
         label.setScale((w - 4) / label.width);
       }
-      label.setPosition(px + 3 + w / 2, py + 3 + h / 2);
+      // Einreihige Waffen: Name nach oben, unten sitzen die Aufsatzplaetze.
+      const lift = !held && size.height === 1 && weaponSlots(entry.item.def).length > 0 ? 9 : 0;
+      label.setPosition(px + 3 + w / 2, py + 3 + h / 2 - lift);
       label.setVisible(true);
     }
 
     // Uebrige Beschriftungen aus frueheren Bildern ausblenden.
     for (let i = labelIndex; i < this.labels.length; i += 1) {
       this.labels[i]?.setVisible(false);
+    }
+    for (let i = letterIndex; i < this.modLetters.length; i += 1) {
+      this.modLetters[i]?.setVisible(false);
     }
     if (heldIndex < 0) {
       this.heldLabel?.setVisible(false);
@@ -816,6 +1003,20 @@ export class InventoryGrid {
         .setDepth(this.baseDepth + 5);
     }
     return this.heldLabel;
+  }
+
+  /** Buchstabe auf einem Aufsatzplatz (gepoolt). */
+  private modLetterFor(index: number): Phaser.GameObjects.Text {
+    const existing = this.modLetters[index];
+    if (existing) {
+      return existing;
+    }
+    const letter = this.scene.add
+      .text(0, 0, "", { fontFamily: UI.font, fontSize: "11px", color: "#11161f", fontStyle: "bold" })
+      .setOrigin(0.5)
+      .setDepth(this.baseDepth + 3);
+    this.modLetters.push(letter);
+    return letter;
   }
 
   /** Beschriftungen werden gepoolt - Textobjekte sind teuer. */

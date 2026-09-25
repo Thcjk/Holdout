@@ -22,6 +22,10 @@ import type { Rect } from "../ui/compassPlacement";
 import { Minimap } from "../ui/Minimap";
 import { BackpackWindow } from "../ui/BackpackWindow";
 import type { InventoryCommand } from "../systems/types";
+import { itemAt } from "../config/items";
+
+/** Groesse eines Guertel-Knopfs. */
+const BELT_BUTTON = { width: 86, height: 40 } as const;
 import type { HudModel } from "../ui/HudModel";
 
 /** Dauer des Extraktions-Countdowns, fuer die Restzeit in der Anzeige. */
@@ -101,14 +105,24 @@ export class HudScene extends Phaser.Scene {
   private onBackpack: (open: boolean) => void = () => {};
   private backpackButton!: Button;
   private backpackWindow!: BackpackWindow;
+  /**
+   * Die drei Guertel-Knoepfe (2026-09-26): unten, links vom Knopfbogen.
+   * Antippen benutzt, was im Platz steckt.
+   */
+  private beltButtons: Button[] = [];
+  private readonly useQueue: InventoryCommand[] = [];
 
   /** Fuer die Spielszene: der naechste Rucksack-Befehl an die Simulation. */
   peekInventoryCommand(): InventoryCommand | null {
-    return this.backpackWindow?.peekCommand() ?? null;
+    return this.backpackWindow?.peekCommand() ?? this.useQueue[0] ?? null;
   }
 
   shiftInventoryCommand(): void {
-    this.backpackWindow?.shiftCommand();
+    if (this.backpackWindow?.peekCommand()) {
+      this.backpackWindow.shiftCommand();
+    } else {
+      this.useQueue.shift();
+    }
   }
 
   private setBackpackOpen(open: boolean): void {
@@ -261,6 +275,17 @@ export class HudScene extends Phaser.Scene {
     this.backpackButton.setDepth(DEPTH.hud);
     this.backpackWindow = new BackpackWindow(this, () => this.setBackpackOpen(false));
 
+    this.beltButtons = [0, 1, 2].map((slot) => {
+      const button = new Button(this, 0, 0, "–", () => this.useQueue.push({ op: "use", slot }), {
+        width: BELT_BUTTON.width,
+        height: BELT_BUTTON.height,
+        fontSize: 12,
+        variant: "secondary",
+      });
+      button.setDepth(DEPTH.hud);
+      return button;
+    });
+
     /*
      * Die Karte - klein und immer sichtbar rechts oben (Arbeitsdokument,
      * Etappe 6). Antippen oeffnet die grosse Ansicht, OHNE anzuhalten. Der
@@ -290,6 +315,9 @@ export class HudScene extends Phaser.Scene {
     this.createPauseScreen();
 
     this.ready = true;
+    // Einmal alles setzen: Die Guertel-Knoepfe entstehen erst hier und haben
+    // sonst bis zur naechsten Groessenaenderung keinen Platz (lagen bei 0,0).
+    this.layout();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
@@ -320,6 +348,7 @@ export class HudScene extends Phaser.Scene {
     this.drawCompass();
     this.minimap.update(this.model.minimap);
     this.backpackWindow.sync(this.model.backpack, this.model.backpackSize);
+    this.updateBeltButtons();
     /*
      * Die Beute steht bei der Punktzahl und nicht unten.
      *
@@ -632,7 +661,19 @@ export class HudScene extends Phaser.Scene {
       // Leben und Super unten links, wie in `drawPlayerBars`.
       { x: SAFE.left, y: bottom - 64, width: 250, height: 64 },
       { x: arcLeft, y: arcTop, width: right - arcLeft, height: bottom - arcTop },
+      ...this.beltButtons.map((button) => button.getBounds()),
     ];
+  }
+
+  /** Beschriftung der Guertel-Knoepfe: was im Platz steckt, sonst grau. */
+  private updateBeltButtons(): void {
+    this.beltButtons.forEach((button, slot) => {
+      const entry = this.model.backpack.find((item) => item.belt && item.x === slot);
+      const def = entry ? itemAt(entry.def) : null;
+      const name = def ? (def.short ?? def.name) : "";
+      button.setText(name || "leer");
+      button.setEnabled(name !== "");
+    });
   }
 
   private layout(): void {
@@ -650,6 +691,13 @@ export class HudScene extends Phaser.Scene {
     this.muteButton.setPosition(rightEdge - 44, topEdge + BUTTON_ROW_Y);
     this.menuButton.setPosition(rightEdge - 146, topEdge + BUTTON_ROW_Y);
     this.backpackButton.setPosition(rightEdge - 246, topEdge + BUTTON_ROW_Y);
+    // Guertel: unten, links vom Faehigkeitsknopf (dessen linke Kante samt Ring).
+    const beltRight =
+      VIEWPORT.width - SAFE.right - TOUCH.abilityButton.marginX - TOUCH.abilityButton.radius - 22;
+    this.beltButtons.forEach((button, slot) => {
+      const x = beltRight - BELT_BUTTON.width / 2 - (2 - slot) * (BELT_BUTTON.width + 8);
+      button.setPosition(x, VIEWPORT.height - SAFE.bottom - BELT_BUTTON.height / 2 - 10);
+    });
     this.backpackWindow.layout();
     this.minimap.layout(topEdge + MINIMAP_Y);
 

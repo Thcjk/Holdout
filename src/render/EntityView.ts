@@ -105,6 +105,8 @@ interface FigureSlot {
   pending: number;
   /** Restzeit der Schlag-Animation (Faust ohne Waffe), Sekunden. */
   punch: number;
+  /** Schutzblase, solange der Rucksack offen ist (nur Spieler, bei Bedarf angelegt). */
+  shield?: Mesh;
 }
 
 /** So lange steht der Schlag-Clip, bevor die Bewegung wieder uebernimmt. */
@@ -149,6 +151,12 @@ export class EntityView {
     depthWrite: false,
   });
   private readonly shadows = new InstancedMesh(this.shadowGeometry, this.shadowMaterial, 64);
+  private readonly shieldMaterial = new MeshBasicMaterial({
+    color: 0x7fd1ff,
+    transparent: true,
+    opacity: 0.22,
+    depthWrite: false,
+  });
   private readonly shadowMatrix = new Matrix4();
 
   private readonly enemyMaterials: Record<EnemyType, MeshToonMaterial>;
@@ -223,6 +231,25 @@ export class EntityView {
     }
   }
 
+  /**
+   * Die Schutzblase: halbdurchsichtige Kugel um die Figur, solange ihr
+   * Rucksack offen ist. Alle sehen sie - so weiss man im Koop, warum der
+   * Mitspieler gerade nicht getroffen wird (und nicht schiesst).
+   */
+  private syncShield(slot: FigureSlot, shielded: boolean, seconds: number): void {
+    if (!shielded && !slot.shield) return;
+    if (!slot.shield) {
+      slot.shield = new Mesh(this.sphere, this.shieldMaterial);
+      slot.shield.scale.setScalar(slot.height * 0.62);
+      slot.shield.position.y = slot.height * 0.5;
+      slot.group.add(slot.shield);
+    }
+    slot.shield.visible = shielded;
+    if (shielded) {
+      slot.shield.rotation.y += seconds * 0.8;
+    }
+  }
+
   /** Ein Schatten je Figur, etwa so breit wie die Schultern. */
   private syncShadows(): void {
     let index = 0;
@@ -274,7 +301,9 @@ export class EntityView {
           this.playMovement(slot);
         }
         slot.figure.update(seconds);
-      } else {
+      }
+      this.syncShield(slot, player.shielded, seconds);
+      if (!slot.figure) {
         // Platzhalter: flach gelegt und grau, wenn am Boden.
         const capsule = slot.placeholder as Group;
         capsule.rotation.x = player.down ? -Math.PI / 2 : 0;

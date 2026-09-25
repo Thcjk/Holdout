@@ -59,7 +59,9 @@ import {
   saveStash,
   stashItems,
 } from "../storage/carried";
-import { packGrid } from "../systems/backpackCodec";
+import { packCarried, packGrid } from "../systems/backpackCodec";
+import { createBelt, isConsumable, putInBelt } from "../systems/gear";
+import { BeltBar } from "../ui/BeltBar";
 import { createRun } from "../systems/run";
 import { startSize } from "../systems/InventoryGridSystem";
 import { FORCED_SEED, PLACE_FROM_URL } from "../platform/debugFlags";
@@ -129,6 +131,9 @@ export class LoadoutScene extends Phaser.Scene {
   private stash!: GridData;
   private view!: InventoryGrid;
   private stashView!: InventoryGrid;
+  /** Der Guertel (3 Plaetze): Verbrauchsgueter, die im Kampf per Knopf wirken. */
+  private belt!: GridData;
+  private beltBar!: BeltBar;
   private summary!: Phaser.GameObjects.Text;
   private nextId = 1;
 
@@ -152,6 +157,7 @@ export class LoadoutScene extends Phaser.Scene {
     const start = startSize();
     this.backpack = createGrid(start.width, start.height);
     this.stash = createGrid(INVENTORY.stashWidth, INVENTORY.stashHeight);
+    this.belt = createBelt();
     this.fillFromStorage();
     settleEquipped(this.backpack);
 
@@ -212,6 +218,8 @@ export class LoadoutScene extends Phaser.Scene {
       onChange: () => this.updateSummary(),
       rotateButtonAt,
       rotateButtonWidth,
+      dropOutside: (item, _from, x, y) => this.dropOnBelt(item, x, y),
+      onDragHover: (item, x, y) => this.hoverBelt(item, x, y),
     });
     this.view = new InventoryGrid(this, this.backpack, {
       x: backpackLeft,
@@ -221,8 +229,19 @@ export class LoadoutScene extends Phaser.Scene {
       equipOnTap: true,
       rotateButtonAt,
       rotateButtonWidth,
+      dropOutside: (item, _from, x, y) => this.dropOnBelt(item, x, y),
+      onDragHover: (item, x, y) => this.hoverBelt(item, x, y),
     });
     this.stashView.link(this.view);
+
+    // Der Guertel unter dem Rucksack. Antippen gibt ein Stueck zurueck.
+    this.beltBar = new BeltBar(this, this.belt, {
+      x: backpackLeft,
+      y: top + this.backpack.height * cell + 46,
+      cellSize: cell,
+      depth: 10,
+      onTap: (slot) => this.takeFromBelt(slot),
+    });
 
     const labelStyle = { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: UI.text.body };
     this.add.text(stashLeft, top - 28, "Lager", labelStyle).setShadow(1, 1, "#00000066", 2);
@@ -274,7 +293,17 @@ export class LoadoutScene extends Phaser.Scene {
    */
   private fillFromStorage(): void {
     for (const entry of backpackForNextRun()) {
-      const item = { id: this.nextId++, def: entry.def, starter: entry.starter, equipped: entry.equipped };
+      const item = {
+        id: this.nextId++,
+        def: entry.def,
+        starter: entry.starter,
+        equipped: entry.equipped,
+        ...(entry.mods ? { mods: entry.mods } : {}),
+      };
+      // Guertelstuecke zurueck in den Guertel.
+      if (entry.belt && putInBelt(this.belt, item, entry.x)) {
+        continue;
+      }
       // Nach einem Erfolg war der Rucksack evtl. groesser als der kleine
       // Start-Rucksack - was nicht passt, wandert ins Lager statt zu verschwinden.
       if (!this.put(this.backpack, item, entry)) {
@@ -285,12 +314,22 @@ export class LoadoutScene extends Phaser.Scene {
       this.put(this.stash, { id: this.nextId++, def: entry.def }, entry);
     }
 
+    // Nur Starter-Stuecke, die schon VOR dem Auffuellen im Guertel steckten
+    // (aus dem letzten Run), zaehlen als "da" - nicht die gerade eingehaengten.
+    const carriedBeltStarters = this.belt.items.filter((entry) => entry.item.starter).map((entry) => entry.item);
+    const takenFromBelt = new Set<ItemInstance>();
     const alreadyPacked = this.backpack.items
       .filter((entry) => entry.item.starter)
       .map((entry) => entry.item.def);
     for (const item of starterItems(this.nextId)) {
       this.nextId += 1;
       const packedIndex = alreadyPacked.indexOf(item.def);
+      // Starter-Verbrauchsgueter, die schon im Guertel stecken, zaehlen als da.
+      const fromBelt = carriedBeltStarters.find((entry) => entry.def === item.def && !takenFromBelt.has(entry));
+      if (packedIndex < 0 && fromBelt) {
+        takenFromBelt.add(fromBelt);
+        continue;
+      }
       if (packedIndex >= 0) {
         alreadyPacked.splice(packedIndex, 1);
         continue;
@@ -302,6 +341,12 @@ export class LoadoutScene extends Phaser.Scene {
        */
       const hasWeapon = this.backpack.items.some((entry) => isWeapon(entry.item.def));
       if (isWeapon(item.def) && !hasWeapon && this.put(this.backpack, item, null)) {
+        continue;
+      }
+      // Verband und Munitionskiste des Starter-Sets gleich in den Guertel -
+      // dort wirken sie im Kampf, aus dem Rucksack heraus nicht.
+      const freeSlot = [0, 1, 2].find((slot) => !this.belt.items.some((entry) => entry.x === slot));
+      if (isConsumable(item.def) && freeSlot !== undefined && putInBelt(this.belt, item, freeSlot)) {
         continue;
       }
       this.put(this.stash, item, null);
@@ -347,7 +392,39 @@ export class LoadoutScene extends Phaser.Scene {
    * von Hand eingeraeumt hat, soll seinen Rucksack im Run genauso vorfinden.
    */
   private packed(): PackedItem[] {
-    return packGrid(this.backpack);
+    // Guertelstuecke in derselben Liste, markiert (`packCarried`).
+    return packCarried(this.backpack, this.belt);
+  }
+
+  /** Ein gezogenes Stueck ueber dem Guertel losgelassen: dort einhaengen. */
+  private dropOnBelt(item: ItemInstance, x: number, y: number): boolean {
+    const slot = this.beltBar.slotAt(x, y);
+    this.beltBar.setHover(-1, false);
+    if (slot < 0 || !putInBelt(this.belt, item, slot)) {
+      return false;
+    }
+    item.equipped = false;
+    this.beltBar.draw();
+    return true;
+  }
+
+  private hoverBelt(item: ItemInstance | null, x: number, y: number): void {
+    const slot = item ? this.beltBar.slotAt(x, y) : -1;
+    this.beltBar.setHover(slot, slot >= 0 && item !== null && isConsumable(item.def) && this.beltBar.isFree(slot));
+  }
+
+  /** Guertelplatz angetippt: zurueck in den Rucksack, sonst ins Lager. */
+  private takeFromBelt(slot: number): void {
+    const index = this.belt.items.findIndex((entry) => entry.x === slot);
+    const entry = this.belt.items[index];
+    if (!entry) return;
+    if (this.put(this.backpack, entry.item, null) || this.put(this.stash, entry.item, null)) {
+      this.belt.items.splice(index, 1);
+      this.view.setGrid(this.backpack);
+      this.stashView.setGrid(this.stash);
+      this.beltBar.draw();
+      this.updateSummary();
+    }
   }
 
   private startRun(): void {

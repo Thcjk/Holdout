@@ -297,6 +297,11 @@ export class TouchControls {
     if (!pointer.wasTouch) {
       return;
     }
+    // Ueber einem HUD-Knopf (z. B. Guertel)? Der bekommt die Beruehrung,
+    // nicht Joystick oder Feuer - sonst liefe die Figur beim Antippen los.
+    if (this.scene.input.hitTestPointer(pointer).length > 0) {
+      return;
+    }
 
     // Reihenfolge zaehlt: Die festen Knoepfe liegen in der rechten Haelfte und
     // muessen zuerst geprueft werden, sonst schluckt der Joystick sie. Die

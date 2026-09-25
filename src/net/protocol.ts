@@ -243,6 +243,11 @@ export interface StartMessage {
 /** Bestaetigung des Clients, damit der Host aufhoert, `start` zu wiederholen. */
 export interface ReadyMessage {
   t: "ready";
+  /**
+   * Auf der Karte nach der Werkbank: der neue Rucksack des Clients (flach,
+   * `backpackCodec`). Der Host uebernimmt ihn in den Run, bevor es losgeht.
+   */
+  backpack?: number[];
 }
 
 export interface ByeMessage {

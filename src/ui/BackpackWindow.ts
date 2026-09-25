@@ -31,8 +31,10 @@
 import Phaser from "phaser";
 import { INVENTORY } from "../config/balance";
 import { DEPTH, VIEWPORT } from "../config/constants";
+import { createBelt, isConsumable, putInBelt } from "../systems/gear";
 import { createGrid, findFreeSpot, place } from "../systems/InventoryGridSystem";
-import type { InventoryCommand, PackedItem } from "../systems/types";
+import type { InventoryCommand, InventoryGrid as GridData, ItemInstance, PackedItem } from "../systems/types";
+import { BeltBar } from "./BeltBar";
 import { Button } from "./Button";
 import { InventoryGrid } from "./InventoryGrid";
 
@@ -51,6 +53,10 @@ export class BackpackWindow {
   private readonly hint: Phaser.GameObjects.Text;
   private readonly closeButton: Button;
   private grid: InventoryGrid | null = null;
+  /** Der Guertel links neben dem Gitter - Vorschau wie das Gitter. */
+  private beltBar: BeltBar | null = null;
+  private beltData: GridData = createBelt();
+  private readonly protectedNote: Phaser.GameObjects.Text;
 
   private readonly queue: InventoryCommand[] = [];
   private open = false;
@@ -85,9 +91,20 @@ export class BackpackWindow {
       .text(
         0,
         0,
-        "Runde läuft weiter · Waffe antippen = ausrüsten · hinausziehen = wegwerfen",
+        "Waffe antippen = ausrüsten · Aufsatz auf Waffe ziehen · Aufsatz-Symbol antippen = abnehmen · hinausziehen = wegwerfen",
         { fontFamily: "system-ui, sans-serif", fontSize: "13px", color: "#ffd166" },
       )
+      .setDepth(DEPTH.hud + 15);
+
+    // Rucksack offen = geschuetzt (2026-09-26): in Ruhe umraeumen.
+    this.protectedNote = scene.add
+      .text(0, 0, "Geschützt – solange der Rucksack offen ist, trifft dich nichts", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "13px",
+        color: "#b5e08c",
+        fontStyle: "bold",
+      })
+      .setShadow(1, 1, "#00000088", 2)
       .setDepth(DEPTH.hud + 15);
 
     this.closeButton = new Button(scene, 0, 0, "Schliessen", onClose, {
@@ -148,8 +165,9 @@ export class BackpackWindow {
   layout(): void {
     const width = this.size.width * INVENTORY.cellSize;
     const left = (VIEWPORT.width - width) / 2;
-    this.title.setPosition(left, GRID_TOP - 62);
-    this.hint.setPosition(left, GRID_TOP - 30);
+    this.title.setPosition(left, GRID_TOP - 70);
+    this.hint.setPosition(left, GRID_TOP - 44);
+    this.protectedNote.setPosition(left, GRID_TOP - 26);
     // Rechts neben dem Gitter, oben - ueber dem Hinweis lag er auf dem Text.
     this.closeButton.setPosition(Math.min(VIEWPORT.width - 76, left + width + 76), GRID_TOP + 24);
     this.backdrop.setSize(VIEWPORT.width * 2, VIEWPORT.height * 2);
@@ -161,6 +179,8 @@ export class BackpackWindow {
 
   destroy(): void {
     this.grid?.destroy();
+    this.beltBar?.destroy();
+    this.protectedNote.destroy();
     this.backdrop.destroy();
     this.title.destroy();
     this.hint.destroy();
@@ -176,15 +196,30 @@ export class BackpackWindow {
     }
     this.title.setVisible(visible);
     this.hint.setVisible(visible);
+    this.protectedNote.setVisible(visible);
     this.closeButton.setVisible(visible);
     this.grid?.setVisible(visible);
+    this.beltBar?.setVisible(visible);
   }
 
-  private rebuild(backpack: readonly PackedItem[]): void {
-    this.lastSignature = signature(backpack);
+  private rebuild(carried: readonly PackedItem[]): void {
+    this.lastSignature = signature(carried);
     const data = createGrid(this.size.width, this.size.height);
+    // Guertelstuecke stehen in derselben Liste (markiert) - sie kommen in den Guertel.
+    this.beltData = createBelt();
+    const backpack = carried.filter((entry) => {
+      if (!entry.belt) return true;
+      putInBelt(this.beltData, { id: 500 + entry.x, def: entry.def, starter: entry.starter }, entry.x);
+      return false;
+    });
     backpack.forEach((entry, index) => {
-      const item = { id: index + 1, def: entry.def, starter: entry.starter, equipped: entry.equipped };
+      const item = {
+        id: index + 1,
+        def: entry.def,
+        starter: entry.starter,
+        equipped: entry.equipped,
+        ...(entry.mods ? { mods: entry.mods } : {}),
+      };
       if (!place(data, item, entry.x, entry.y, entry.rotated)) {
         const spot = findFreeSpot(data, entry.def);
         if (spot) {
@@ -214,8 +249,51 @@ export class BackpackWindow {
       onEquipped: (at) => {
         this.queue.push({ op: "equip", fromX: at.x, fromY: at.y });
       },
+      onAttached: (from, to) => {
+        this.queue.push({ op: "attach", fromX: from.x, fromY: from.y, toX: to.x, toY: to.y });
+      },
+      onDetached: (at, kind) => {
+        this.queue.push({ op: "detach", fromX: at.x, fromY: at.y, kind });
+      },
+      dropOutside: (item, from, x, y) => this.dropOnBelt(item, from, x, y),
+      onDragHover: (item, x, y) => {
+        const slot = item ? (this.beltBar?.slotAt(x, y) ?? -1) : -1;
+        this.beltBar?.setHover(slot, slot >= 0 && item !== null && isConsumable(item.def) && this.beltBar!.isFree(slot));
+      },
     });
     this.grid.setVisible(this.open);
+
+    // Guertel links neben dem Gitter.
+    this.beltBar?.destroy();
+    const cell = INVENTORY.cellSize - 4;
+    this.beltBar = new BeltBar(this.scene, this.beltData, {
+      x: Math.max(16, left - 3 * cell - 40),
+      y: GRID_TOP + 30,
+      cellSize: cell,
+      depth: DEPTH.hud + 8,
+      onTap: (slot) => {
+        // Zurueck in den Rucksack, an die erste freie Stelle (die Simulation
+        // prueft es ohnehin noch einmal).
+        const entry = this.beltData.items.find((item) => item.x === slot);
+        const spot = entry && this.grid ? findFreeSpot(this.grid.data, entry.item.def) : null;
+        if (spot) {
+          this.queue.push({ op: "fromBelt", slot, ...spot });
+        }
+      },
+    });
+    this.beltBar.setVisible(this.open);
+  }
+
+  /** Verbrauchsgut ueber dem Guertel losgelassen: dorthin (als Befehl). */
+  private dropOnBelt(item: ItemInstance, from: { x: number; y: number }, x: number, y: number): boolean {
+    const slot = this.beltBar?.slotAt(x, y) ?? -1;
+    this.beltBar?.setHover(-1, false);
+    if (slot < 0 || !putInBelt(this.beltData, item, slot)) {
+      return false;
+    }
+    this.beltBar?.draw();
+    this.queue.push({ op: "toBelt", fromX: from.x, fromY: from.y, slot });
+    return true;
   }
 
   private rebuildFromGrid(): void {
@@ -224,14 +302,24 @@ export class BackpackWindow {
       return;
     }
     this.rebuild(
-      data.items.map((entry) => ({
+      data.items.map((entry): PackedItem => ({
         def: entry.item.def,
         x: entry.x,
         y: entry.y,
         rotated: entry.rotated,
         starter: entry.item.starter,
         equipped: entry.item.equipped,
-      })),
+        ...(entry.item.mods ? { mods: entry.item.mods } : {}),
+      })).concat(
+        this.beltData.items.map((entry): PackedItem => ({
+          def: entry.item.def,
+          x: entry.x,
+          y: 0,
+          rotated: false,
+          starter: entry.item.starter,
+          belt: true,
+        })),
+      ),
     );
   }
 }
@@ -239,6 +327,9 @@ export class BackpackWindow {
 /** Ein kurzer Vergleichswert fuer "hat sich der Rucksack geaendert?". */
 function signature(items: readonly PackedItem[]): string {
   return items
-    .map((entry) => `${entry.def},${entry.x},${entry.y},${entry.rotated ? 1 : 0}${entry.equipped ? "e" : ""}`)
+    .map(
+      (entry) =>
+        `${entry.def},${entry.x},${entry.y},${entry.rotated ? 1 : 0}${entry.equipped ? "e" : ""}${entry.belt ? "b" : ""}m${entry.mods ?? 0}`,
+    )
     .join(";");
 }

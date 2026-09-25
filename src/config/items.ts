@@ -69,6 +69,8 @@ export interface ItemDef {
    * muss. Die Farbe in der Darstellung leitet sich daraus ab.
    */
   rarity: 1 | 2 | 3 | 4;
+  /** Kurzname fuer enge Stellen (Guertel, Knoepfe) - nur wo der Name zu lang ist. */
+  short?: string;
   /** Nur bei Aufsaetzen: welche Art (passt in den gleichnamigen Waffenplatz). */
   attachment?: AttachmentKind;
 }
@@ -92,7 +94,7 @@ export const ITEMS: readonly ItemDef[] = [
   // --- Verbrauchsgueter: wirken nur aus dem Guertel (Knopf im Kampf) ---
   { id: "bandage", name: "Verband", type: "consumable", size: { width: 1, height: 1 }, rarity: 1 },
   { id: "medkit", name: "Medipack", type: "consumable", size: { width: 2, height: 2 }, rarity: 3 },
-  { id: "ammoBox", name: "Munitionskiste", type: "consumable", size: { width: 2, height: 1 }, rarity: 2 },
+  { id: "ammoBox", name: "Munitionskiste", short: "Munition", type: "consumable", size: { width: 2, height: 1 }, rarity: 2 },
 
   // --- Waffen: gross, selten, und ab Phase 12 das eigentliche Ziel ---
   { id: "pistol", name: "Pistole", type: "weapon", size: { width: 2, height: 1 }, rarity: 1 },
