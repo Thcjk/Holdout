@@ -21,6 +21,10 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
+> **Stand 2026-09-26 abends: Version 2.4.0 – Spielstände, Items neu,
+> leichter.** Auf Wunsch „balancen … und dann alles mergen“ auf dem Branch
+> und auf `main`. Siehe **„Spielstände, Items, Balance“** direkt unten.
+>
 > **Stand 2026-09-26: Version 2.3.0 – Waffen in der Hand**, dazu Menüs im
 > Spiel-Look (2.2.1). Auf Wunsch „anpassen und dann alles mergen“ auf dem
 > Branch und auf `main`. Siehe **„Waffen sichtbar in der Hand“** und
@@ -50,6 +54,109 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 >
 > **BRIEFING.md ist seit 2026-09-24 die neue Fassung** (Abschnitte 2, 4, 5:
 > Three.js, Knoten-Karte, Vorbild „Deadly Days: Roadtrip“).
+
+## Spielstände, Items, Balance (2026-09-26 abends, v2.4.0)
+
+Rückmeldung: „Items müssen noch überdacht werden – Aufsätze für Waffen mit
+festen, durchsichtigen Plätzen; Verbände kann man nicht benutzen; ein
+Inventar am Körper mit Taste; im Rucksack nicht angegriffen werden“, dazu
+„zuerst ein Speichersystem: Neu, Laden, Einstellungen, dann Solo oder
+Koop“ und „zurzeit zu schwer“. Entscheidungen des Nutzers: Spielstand =
+**Lager + laufender Run**, **3 Plätze**, im Koop **bringt jeder seinen
+Stand mit**, Material für eine **Werkbank am Rastplatz**.
+
+### 1. Balance (`DIFFICULTY.node`, `tests/systems/nodeBalance.test.ts`)
+
+Neue Messung: Bot mit Pistole, 150 s je Gebiet, fünf verschiedene Gebiete
+je Gefahrenstufe. **Vorher** hielt er ab g 2 nur rund 40 s (3.500–4.000
+Schaden/min bei 2.400 Leben).
+
+| | g 1 | g 2 | g 3 | g 5 | g 7 |
+| --- | --- | --- | --- | --- | --- |
+| vorher (s) | 130 | 48 | 38 | 38 | 37 |
+| nachher (s) | 146 | 134 | 120 | 109 | 66 |
+
+- Eigene Werte für Knoten-Gebiete: 3 + 1,2·g Gegner (offene Welt 4 +
+  2,5·Zone), Schützen ab g 3, Brocken ab g 5, Nachschub alle 2,2 s.
+- Schütze 170 Schaden alle 2,6 s (vorher 250 / 2,0), Läufer-Berührung 240
+  (300), Schadenswachstum 3 %/Stufe (4 %), Horde ×1,6 (×2).
+- **Starter-Pistole liegt gleich ausgerüstet im Rucksack**, Verbände und
+  Munitionskiste im Gürtel – vorher lag nach jedem Wipe alles im Lager, und
+  wer nichts hinüberzog, ging mit der Faust los.
+
+### 2. Titelbildschirm und Spielstände
+
+- **Ablauf:** Titel (Neu / Laden / Einstellungen) → Platz → Solo/Koop →
+  Charakter → Packen → (Koop: Lobby) → Karte. `TitleScene`, `SlotScene`,
+  `ModeScene`, `SettingsScene`; die alte `MenuScene` ist nur noch die
+  Charakterwahl. Ton, Vollbild, Installieren und „Spielstand löschen“
+  (zwei Tipps) stehen in den Einstellungen.
+- **`storage/saveSlots.ts`** (phaserfrei, Speicher übergebbar, 6 Tests):
+  drei Plätze in `localStorage` (`holdout.save.0..2`, Format-Version 1),
+  je Charakter, Lager, Rucksack nach Erfolg und der **laufende Solo-Run**
+  (Seed, Knoten, Weg, Tag, Spieler). Die Karte wird nicht gespeichert,
+  sondern beim Laden aus dem Seed gebaut.
+- **Gespeichert wird** auf der Karte (nach jedem Gebiet, jeder Rast, der
+  Werkbank), beim Packen und am Run-Ende. App mitten im Gebiet zu → „Laden“
+  beginnt dieses Gebiet neu. „Runde beenden“ führt zum Titel und lässt den
+  Stand ebenso.
+- **Koop:** Jeder bringt seinen Platz mit (Charakter, Lager); Koop-Runs
+  werden nicht gespeichert. Der gepackte Rucksack verlässt beim Losgehen
+  den Spielstand (`backpackTakenIntoRun`) – sonst bekäme ihn zurück, wer
+  im Koop die App mitten im Run schliesst.
+- **Falle:** Eine Methode `load` in einer Szene überschreibt Phasers
+  `this.load` (Lader) – TypeScript meldet es zum Glück.
+
+### 3. Items neu (`systems/gear.ts`, 12 Tests)
+
+| | Was | Wirkung |
+| --- | --- | --- |
+| Aufsätze | Visier, Lauf, Magazin, Griff (je 1×1) | +25 % Reichweite · +20 % Schaden · +2 Ladungen · −40 % Streuung und 25 % schneller nachladen |
+| Plätze | Pistole: Lauf · MP: Magazin, Griff · Gewehr: Visier, Lauf, Magazin · Railgun: Visier, Magazin | fest (`WEAPON_SLOTS`) |
+| Gürtel | 3 Plätze am Körper, nur Verbrauchsgüter, je ein Knopf im Kampf | jedes Stück 1 Platz, egal wie gross |
+| Verband | aus dem Gürtel | 30 % Leben über 3 s (fällt man, bricht es ab) |
+| Medipack | aus dem Gürtel | 60 % sofort; bei vollem Leben nicht verbraucht |
+| Munitionskiste | aus dem Gürtel | 30 s doppelt so schnell nachladen |
+| Werkbank | am Rastplatz, öffnet sich von selbst | 8 Rezepte (`RECIPES`), z. B. Verband = 2 Schrott, Visier = Platine + Kabel, Railgun = Reaktorkern + Platine |
+| Rucksack offen | – | **geschützt**: kein Schaden, Hinweis im Fenster, blaue Schutzblase für alle sichtbar |
+
+- **Aufsätze als Bits an der Waffe** (`ItemInstance.mods`), nicht als
+  Gegenstand im Gitter: Sie wandern mit, wenn die Waffe umgeräumt,
+  gesichert oder gespeichert wird. Wegwerfen der Waffe lässt die Aufsätze
+  daneben fallen. Abnehmen legt sie an die erste freie Stelle (kein Platz
+  → bleibt auf der Waffe).
+- **Bedienung:** Freie Plätze durchsichtig mit Buchstabe (V/L/M/G) unten
+  links auf der Waffe, belegte farbig. Aufsatz auf die Waffe ziehen (auch
+  vom Lager auf die Waffe im Rucksack), belegtes Symbol antippen =
+  abnehmen. Gürtel: Verbrauchsgut darauf ziehen, antippen = zurück.
+- **Übers Netz und im Spielstand:** Gürtel und Aufsätze stecken im
+  vorhandenen Rucksack-Code (Bit 8 = Gürtel, Bits 16–128 = Aufsätze;
+  `packCarried`). Neue Rucksack-Befehle `attach/detach/toBelt/fromBelt/
+  dropBelt/use`; Schutz als gehaltenes Eingabefeld `sh`. Die Werkbank im
+  Koop: Der Client schickt seinen neuen Rucksack mit `ready`.
+- **Neue Aufsätze auch als Beute** (Seltenheit 2–3) – sie laufen durch
+  dieselbe Beute-Würfelung wie alles andere.
+- **Joystick:** nimmt keine Berührung mehr an, die auf einem HUD-Knopf
+  landet (`hitTestPointer`) – sonst liefe die Figur beim Antippen eines
+  Gürtel-Knopfs los. Im Emulator nachgeprüft: Laufen geht weiter.
+
+### Geprüft
+
+350 Tests, typecheck, lint, Build. Im Emulator (iPhone 13 quer): Neu →
+Platz → Solo → Charakter → Packen → Karte, Seite neu geladen → Laden
+setzt auf der Karte fort; Packen mit Gürtel; Run mit Gürtel-Knöpfen;
+Rucksackfenster mit Gürtel und „Geschützt“; Werkbank auf einem Rastplatz
+(Verband gebaut, Material zählt herunter); Lauf aus dem Lager auf die
+Pistole gezogen. Keine Seitenfehler.
+
+### Offen
+
+- **Koop mit Spielständen, Gürtel und Werkbank** nur per Test und
+  Netzlogik geprüft, nicht mit zwei Tabs durchgespielt.
+- Aufsätze haben keine eigenen 3D-Modelle an der Waffe; am Boden liegen
+  sie als Pixel-Symbol.
+- Der Bot benutzt weder Gürtel noch Aufsätze – die Balance-Zahlen sind
+  weiter Untergrenzen.
 
 ## Waffen sichtbar in der Hand (2026-09-26, v2.3.0)
 
@@ -2444,6 +2551,7 @@ src/
     run.ts                Run auf der Knoten-Karte: Knoten, Weg, Mitgenommenes
     arenaPlaces.ts        Orte an der Strasse (Tankstelle, Lagerhalle ...)
     weapons.ts            ausgeruestete Waffe, Automatik, Faust-Reichweite
+    gear.ts               Aufsaetze, Guertel, Verbrauchsgueter, Werkbank
     InventoryGridSystem.ts Gitter-Rucksack: passt/platzieren/verschieben
     backpackCodec.ts      Rucksack als Zahlenreihe (Netz, Lobby)
     spawning.ts           Distanzformel, Zielbevölkerung, Rundenablauf
@@ -2479,16 +2587,19 @@ src/
     space3d.ts            Sim-Pixel -> Three-Meter, EINZIGE Umrechnung
     ArenaRenderer, EntityRenderer, CameraController, Juice   (2D, ?view=2d)
     wallPieces.ts         Wand -> Stuecke aus dem Sheet (Ecken, Kappen)
-  scenes/                 Boot, Menu, Loadout, Lobby, Map, Game, Hud, GameOver
+  scenes/                 Boot, Title, Slots, Mode, Settings, Menu (Charakter),
+                          Loadout, Lobby, Map, Game, Hud, GameOver
   input/InputManager.ts   Touch -> InputState
   input/viewMapping.ts    Bildschirm- <-> Bodenrichtung fuer die 3D-Kamera
   ui/                     VirtualJoystick, TouchControls, Button, HudModel,
                           Minimap, InventoryGrid, BackpackWindow,
                           compassPlacement, stickResponse,
-                          UiNineSlice (9-/3-Teilung), padAtlas
+                          UiNineSlice (9-/3-Teilung), padAtlas, menuStyle,
+                          BeltBar, WorkbenchWindow
   audio/                  synthetisierte Klänge und Musik
   storage/highscore.ts    lokaler Rekord
-  storage/carried.ts      Rucksack/Lager zwischen Runs (nur Arbeitsspeicher)
+  storage/carried.ts      Rucksack/Lager zwischen Runs (Arbeitsspeicher)
+  storage/saveSlots.ts    drei Spielstaende in localStorage (Lager + Run)
   config/items.ts         der Gegenstandskatalog
   platform/               Geräte-Erkennung, Desktop-Sperre, Absturzanzeige,
                           Selbst-Aktualisierung, Installation
@@ -2734,8 +2845,8 @@ Zwei Konsequenzen, beide im Code:
 - **Die Welt ist keine Tilemap**, sondern eine Liste von Rechtecken aus
   `systems/WorldGenerator.ts`. Die Schnittstelle zur Simulation bleibt
   dieselbe, eine Tilemap könnte sie später füllen.
-- **Das Lager ist nur im Arbeitsspeicher.** Nach dem Schliessen der App ist
-  gesicherte Beute weg. Dauerhaft speichern ist laut Briefing Phase 13.
+- ~~**Das Lager ist nur im Arbeitsspeicher.**~~ – seit 2026-09-26 in drei
+  Spielständen (`storage/saveSlots.ts`), samt laufendem Solo-Run.
 - ~~**Gefundene Waffen wirken noch nicht.**~~ – seit 2026-09-25 bestimmt
   die ausgerüstete Waffe den Angriff (siehe „Waffen-Ausrüstung und
   UI-Paket“).
