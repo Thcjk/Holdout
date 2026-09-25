@@ -35,9 +35,9 @@
  * aus.
  */
 
-import { ITEMS } from "../config/items";
+import { ITEMS, itemAt } from "../config/items";
 import { LOOT } from "../config/balance";
-import { findFreeSpot, move, place, removeAt } from "./InventoryGridSystem";
+import { findFreeSpot, growGrid, move, place, removeAt } from "./InventoryGridSystem";
 import { nextRandom } from "./rng";
 import { equipAt, settleEquipped } from "./weapons";
 import { zoneOf } from "./zones";
@@ -279,6 +279,23 @@ function pickUp(state: WorldState): void {
     }
 
     if (!best) {
+      continue;
+    }
+
+    // Eine Tasche kommt nicht in den Rucksack - sie VERGROESSERT ihn. Ist er
+    // schon voll ausgebaut, bleibt sie liegen (ein Mitspieler kann sie holen).
+    if (itemAt(item.def)?.type === "upgrade") {
+      if (growGrid(best.backpack)) {
+        state.groundItems.splice(i, 1);
+        state.events.push({
+          type: "backpackGrown",
+          playerId: best.id,
+          width: best.backpack.width,
+          height: best.backpack.height,
+          x: item.position.x,
+          y: item.position.y,
+        });
+      }
       continue;
     }
 

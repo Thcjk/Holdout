@@ -39,6 +39,12 @@ import { InventoryGrid } from "./InventoryGrid";
 /** Oberkante des Gitters im Fenster. */
 const GRID_TOP = 96;
 
+interface GridSize {
+  width: number;
+  height: number;
+}
+const FULL: GridSize = { width: INVENTORY.width, height: INVENTORY.height };
+
 export class BackpackWindow {
   private readonly backdrop: Phaser.GameObjects.Rectangle;
   private readonly title: Phaser.GameObjects.Text;
@@ -48,6 +54,8 @@ export class BackpackWindow {
 
   private readonly queue: InventoryCommand[] = [];
   private open = false;
+  /** Aktuelle Groesse des Rucksacks - waechst im Run. */
+  private size: GridSize = FULL;
   /** Der zuletzt von der Simulation gesehene Stand, als Vergleichswert. */
   private lastSignature = "";
 
@@ -99,8 +107,9 @@ export class BackpackWindow {
   }
 
   /** Oeffnet mit dem aktuellen Stand aus der Simulation. */
-  show(backpack: readonly PackedItem[]): void {
+  show(backpack: readonly PackedItem[], size: GridSize = FULL): void {
     this.open = true;
+    this.size = size;
     this.setVisible(true);
     this.rebuild(backpack);
   }
@@ -115,11 +124,13 @@ export class BackpackWindow {
    * Neu aufgebaut wird nur, wenn sich dort etwas geaendert hat und gerade
    * nichts am Finger haengt.
    */
-  sync(backpack: readonly PackedItem[]): void {
+  sync(backpack: readonly PackedItem[], size: GridSize = FULL): void {
     if (!this.open || this.grid?.busy) {
       return;
     }
-    if (signature(backpack) !== this.lastSignature) {
+    const grown = size.width !== this.size.width || size.height !== this.size.height;
+    this.size = size;
+    if (grown || signature(backpack) !== this.lastSignature) {
       this.rebuild(backpack);
     }
   }
@@ -135,7 +146,7 @@ export class BackpackWindow {
   }
 
   layout(): void {
-    const width = INVENTORY.width * INVENTORY.cellSize;
+    const width = this.size.width * INVENTORY.cellSize;
     const left = (VIEWPORT.width - width) / 2;
     this.title.setPosition(left, GRID_TOP - 62);
     this.hint.setPosition(left, GRID_TOP - 30);
@@ -171,7 +182,7 @@ export class BackpackWindow {
 
   private rebuild(backpack: readonly PackedItem[]): void {
     this.lastSignature = signature(backpack);
-    const data = createGrid(INVENTORY.width, INVENTORY.height);
+    const data = createGrid(this.size.width, this.size.height);
     backpack.forEach((entry, index) => {
       const item = { id: index + 1, def: entry.def, starter: entry.starter, equipped: entry.equipped };
       if (!place(data, item, entry.x, entry.y, entry.rotated)) {
@@ -183,9 +194,9 @@ export class BackpackWindow {
     });
 
     this.grid?.destroy();
-    const width = INVENTORY.width * INVENTORY.cellSize;
+    const width = this.size.width * INVENTORY.cellSize;
     const left = (VIEWPORT.width - width) / 2;
-    const height = INVENTORY.height * INVENTORY.cellSize;
+    const height = this.size.height * INVENTORY.cellSize;
     this.grid = new InventoryGrid(this.scene, data, {
       x: left,
       y: GRID_TOP,

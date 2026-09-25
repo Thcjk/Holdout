@@ -59,6 +59,41 @@ export function createGrid(
   return { width, height, items: [] };
 }
 
+/** Die Groesse, mit der ein Run beginnt (erste Stufe von `INVENTORY.growth`). */
+export function startSize(): { width: number; height: number } {
+  const [width, height] = INVENTORY.growth[0] ?? [INVENTORY.width, INVENTORY.height];
+  return { width, height };
+}
+
+/**
+ * Die naechste Stufe nach dieser Groesse - oder `null`, wenn der Rucksack
+ * schon voll ausgebaut ist.
+ */
+export function nextSize(size: { width: number; height: number }): { width: number; height: number } | null {
+  const area = size.width * size.height;
+  for (const [width, height] of INVENTORY.growth) {
+    if (width * height > area && width >= size.width && height >= size.height) {
+      return { width, height };
+    }
+  }
+  return null;
+}
+
+/**
+ * Den Rucksack eine Stufe vergroessern. Die Gegenstaende bleiben, wo sie
+ * sind - es kommen nur Zellen rechts bzw. unten dazu. Gibt zurueck, ob er
+ * gewachsen ist.
+ */
+export function growGrid(grid: InventoryGrid): boolean {
+  const next = nextSize(grid);
+  if (!next) {
+    return false;
+  }
+  grid.width = next.width;
+  grid.height = next.height;
+  return true;
+}
+
 /** Platzbedarf eines Gegenstands, Drehung eingerechnet. */
 export function footprint(
   def: number,

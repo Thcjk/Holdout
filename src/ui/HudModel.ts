@@ -116,6 +116,11 @@ export interface HudModel {
   carriedItems: number;
   /** Der eigene Rucksack, wie ihn die Simulation gerade hat (Etappe 9). */
   backpack: PackedItem[];
+  /** Seine Groesse - waechst im Run durch Taschen. */
+  backpackSize: { width: number; height: number };
+  /** Kurze Meldung oben (z. B. "Rucksack erweitert"), bis zu diesem Zeitpunkt (ms). */
+  flash: string;
+  flashUntil: number;
   enemiesLeft: number;
   down: boolean;
   reviveProgress: number;
@@ -146,6 +151,9 @@ export function createHudModel(): HudModel {
     minimap: emptyMinimap(),
     carriedItems: 0,
     backpack: [],
+    backpackSize: { width: 8, height: 6 },
+    flash: "",
+    flashUntil: 0,
     phase: "running",
     runTime: 0,
     inSafeZone: true,

@@ -5,6 +5,7 @@
  * nochmal", und alles, was dazwischen steht, kostet genau diesen Impuls.
  */
 
+import { STORY } from "../config/story";
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import { COLORS, PALETTE, VIEWPORT } from "../config/constants";
@@ -64,12 +65,13 @@ const OUTCOMES: Record<RunOutcome, { title: string; color: string; note: string 
   extracted: {
     title: "Extrahiert",
     color: PALETTE.success,
-    note: "Rechtzeitig rausgekommen.",
+    note: "Rechtzeitig rausgekommen – die Beute ist in Sicherheit.",
   },
   bossDefeated: {
     title: "Wächter besiegt",
     color: "#ffd166",
-    note: "Der Ende-Boss ist gefallen - mehr geht nicht.",
+    // Das Ende der Geschichte (`config/story.ts`).
+    note: STORY.victory,
   },
   // Normalerweise fuehrt ein Ausgang zur Karte, nicht hierher (`MapScene`).
   // Nur fuer den Fall, dass ein Run ohne Karte ueber einen Ausgang endet.

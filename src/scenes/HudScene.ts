@@ -116,7 +116,7 @@ export class HudScene extends Phaser.Scene {
       return;
     }
     if (open) {
-      this.backpackWindow.show(this.model.backpack);
+      this.backpackWindow.show(this.model.backpack, this.model.backpackSize);
     } else {
       this.backpackWindow.hide();
     }
@@ -319,7 +319,7 @@ export class HudScene extends Phaser.Scene {
     this.waveText.setText(this.zoneLine());
     this.drawCompass();
     this.minimap.update(this.model.minimap);
-    this.backpackWindow.sync(this.model.backpack);
+    this.backpackWindow.sync(this.model.backpack, this.model.backpackSize);
     /*
      * Die Beute steht bei der Punktzahl und nicht unten.
      *
@@ -717,6 +717,13 @@ export class HudScene extends Phaser.Scene {
   }
 
   private updateAnnouncement(): void {
+    // Kurze Meldungen (Tasche, Horde) gehen allem vor - sie sind selten und
+    // verschwinden nach ein paar Sekunden von selbst.
+    if (this.model.flash && this.time.now < this.model.flashUntil) {
+      this.announceText.setText(this.model.flash);
+      this.announceText.setColor(PALETTE.hudText);
+      return;
+    }
     if (this.model.connectionMessage) {
       this.announceText.setText(this.model.connectionMessage);
       this.announceText.setColor(PALETTE.danger);

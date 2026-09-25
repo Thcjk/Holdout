@@ -55,6 +55,8 @@ export interface PlayerSetup {
   backpack?: readonly PackedItem[];
   /** Leben beim Betreten - fehlt es, volles Leben (erstes Gebiet eines Runs). */
   health?: number;
+  /** Rucksackgroesse (waechst im Run). Fehlt sie, der volle Rucksack. */
+  backpackSize?: { width: number; height: number };
 }
 
 /**
@@ -88,8 +90,13 @@ function spawnPosition(index: number, total: number, origin: Vec2): Vec2 {
  * auch das scheitert, faellt er weg. Lieber ein Gegenstand weniger als ein
  * Rucksack, der nicht aufgebaut werden kann.
  */
-function buildBackpack(packed: readonly PackedItem[] | undefined): InventoryGrid {
-  const grid = createGrid();
+function buildBackpack(
+  packed: readonly PackedItem[] | undefined,
+  size: { width: number; height: number } | undefined,
+): InventoryGrid {
+  // Ohne Groesse (offene Welt, Tests) der volle Rucksack; ein Run auf der
+  // Karte gibt die aktuelle Stufe mit (`systems/run.ts`).
+  const grid = size ? createGrid(size.width, size.height) : createGrid();
   if (!packed) {
     return grid;
   }
@@ -151,7 +158,7 @@ export function createPlayer(
     abilityCooldown: 0,
     healField: 0,
     healFieldPending: {},
-    backpack: buildBackpack(setup.backpack),
+    backpack: buildBackpack(setup.backpack, setup.backpackSize),
   };
 }
 

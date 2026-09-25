@@ -55,6 +55,9 @@ export interface NetPlayerInfo {
    * volles Leben.
    */
   health?: number;
+  /** Rucksackgroesse (waechst im Run). Fehlt sie, der volle Rucksack. */
+  bw?: number;
+  bh?: number;
 }
 
 export interface InputMessage {
@@ -124,6 +127,9 @@ export interface NetPlayer {
    * Ring sehen alle, nicht nur der Tank - sonst wuesste niemand, wohin.
    */
   hf?: number;
+  /** Rucksackgroesse (waechst im Run durch Taschen). Optional: aeltere Pakete. */
+  bw?: number;
+  bh?: number;
 }
 
 export interface NetEnemy {
@@ -364,6 +370,8 @@ function encodePlayer(player: PlayerState): NetPlayer {
     revive: round1(player.reviveProgress),
     inv: round1(player.invulnerable),
     hf: round1(player.healField),
+    bw: player.backpack.width,
+    bh: player.backpack.height,
     // Vierter Wert je Gegenstand: Merkmale als Bits (gedreht, Starter,
     // ausgeruestet) -
     // siehe `systems/backpackCodec.ts`.

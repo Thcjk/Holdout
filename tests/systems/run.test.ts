@@ -3,7 +3,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { DIFFICULTY, ENCOUNTERS } from "../../src/config/balance";
+import { DIFFICULTY, ENCOUNTERS, INVENTORY } from "../../src/config/balance";
+import { itemIndex } from "../../src/config/items";
+import { nextSize, startSize } from "../../src/systems/InventoryGridSystem";
+import { dropItem } from "../../src/systems/loot";
 import { TICK_SECONDS } from "../../src/config/constants";
 import { REGIONS, placeName, regionOfLayer } from "../../src/config/story";
 import type { MapNode } from "../../src/systems/NodeMapGenerator";
@@ -147,5 +150,67 @@ describe("Story", () => {
       expect(name.length).toBeGreaterThan(0);
       expect(placeName(node, run.map.depth, run.seed)).toBe(name);
     }
+  });
+});
+
+describe("Rucksack waechst im Run", () => {
+  it("beginnt klein und waechst Stufe fuer Stufe bis zum vollen Rucksack", () => {
+    const start = startSize();
+    expect(start.width * start.height).toBeLessThan(INVENTORY.width * INVENTORY.height);
+    let size: { width: number; height: number } | null = start;
+    let steps = 0;
+    while (size) {
+      const next = nextSize(size);
+      if (!next) break;
+      expect(next.width * next.height).toBeGreaterThan(size.width * size.height);
+      size = next;
+      steps += 1;
+    }
+    expect(size).toEqual({ width: INVENTORY.width, height: INVENTORY.height });
+    expect(steps).toBe(INVENTORY.growth.length - 1);
+  });
+
+  it("gibt jedem Spieler im Run den kleinen Rucksack", () => {
+    const run = createRun(4242, SETUP);
+    expect(run.players[0]?.backpackSize).toEqual(startSize());
+    const state = createWorld(run.players, run.seed, { nodeId: null });
+    expect(state.players[0]?.backpack.width).toBe(startSize().width);
+  });
+
+  it("vergroessert ihn mit einer aufgehobenen Tasche, statt sie einzupacken", () => {
+    const state = createWorld([{ ...SETUP[0]!, backpackSize: startSize() }], 4242, { nodeId: null });
+    state.groundItems.length = 0;
+    const player = state.players[0]!;
+    const before = player.backpack.items.length;
+    dropItem(state, itemIndex("pouch"), player.position);
+    stepWorld(state, new Map([["p1", makeInput({ x: 0, y: 0 })]]), TICK_SECONDS);
+    expect(player.backpack.width * player.backpack.height).toBeGreaterThan(
+      startSize().width * startSize().height,
+    );
+    expect(player.backpack.items.length).toBe(before);
+    expect(state.groundItems).toHaveLength(0);
+    expect(state.events.some((event) => event.type === "backpackGrown")).toBe(true);
+  });
+
+  it("laesst die Tasche liegen, wenn der Rucksack voll ausgebaut ist", () => {
+    const state = createWorld(SETUP, 4242, { nodeId: null });
+    state.groundItems.length = 0;
+    dropItem(state, itemIndex("pouch"), state.players[0]!.position);
+    stepWorld(state, new Map([["p1", makeInput({ x: 0, y: 0 })]]), TICK_SECONDS);
+    expect(state.groundItems).toHaveLength(1);
+  });
+
+  it("waechst am Rastplatz und reist ins naechste Gebiet mit", () => {
+    const run = createRun(4242, SETUP);
+    const rest = run.map.nodes.find((node) => node.type === "rest") as MapNode;
+    run.current = (run.map.nodes.find((node) => node.next.includes(rest.id)) as MapNode).id;
+    enterNode(run, rest.id);
+    expect(run.players[0]?.backpackSize).toEqual(nextSize(startSize()));
+    completeNode(
+      run,
+      [{ id: "p1", health: 100, down: false, backpack: [], size: { width: 7, height: 5 } }],
+      () => 2400,
+    );
+    expect(run.players[0]?.backpackSize).toEqual({ width: 7, height: 5 });
   });
 });

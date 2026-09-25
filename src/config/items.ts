@@ -40,7 +40,7 @@
  * Bewusst nur drei. Feiner zu unterteilen waere jetzt geraten: Was ein Item
  * wirklich TUT, entscheidet erst Phase 12 (Waffen) und Phase 13 (Lager).
  */
-export type ItemType = "weapon" | "consumable" | "material";
+export type ItemType = "weapon" | "consumable" | "material" | "upgrade";
 
 export interface ItemDef {
   /** Stabiler Schluessel. Steht im Code, nie der Anzeigename. */
@@ -88,6 +88,9 @@ export const ITEMS: readonly ItemDef[] = [
   { id: "smg", name: "Maschinenpistole", type: "weapon", size: { width: 3, height: 1 }, rarity: 2 },
   { id: "rifle", name: "Gewehr", type: "weapon", size: { width: 4, height: 2 }, rarity: 3 },
   { id: "railgun", name: "Railgun", type: "weapon", size: { width: 4, height: 2 }, rarity: 4 },
+
+  // --- Erweiterung: kommt nicht in den Rucksack, sondern VERGROESSERT ihn ---
+  { id: "pouch", name: "Tasche", type: "upgrade", size: { width: 1, height: 1 }, rarity: 2 },
 ] as const;
 
 /** Nachschlagen nach Index - so, wie es aus dem Netz kommt. */

@@ -349,6 +349,11 @@ export class ClientView implements WorldView {
        * wird hier nichts: Ob etwas hineinpasst, entscheidet der Host.
        */
       player.backpack.items.length = 0;
+      // Die Groesse kommt mit - Taschen vergroessern ihn beim Host.
+      if (netPlayer.bw !== undefined && netPlayer.bh !== undefined) {
+        player.backpack.width = netPlayer.bw;
+        player.backpack.height = netPlayer.bh;
+      }
       unflattenPacked(netPlayer.bp).forEach((entry, index) => {
         player.backpack.items.push({
           item: { id: index + 1, def: entry.def, starter: entry.starter, equipped: entry.equipped },

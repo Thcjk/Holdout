@@ -412,7 +412,9 @@ export type GameEvent =
   | { type: "bossWindup"; x: number; y: number; radius: number; seconds: number }
   | { type: "runEnded"; outcome: RunOutcome; score: number; zone: number }
   /** Der Timer eines Gebiets ist abgelaufen - jetzt kommt die Horde. */
-  | { type: "hordeStarted" };
+  | { type: "hordeStarted" }
+  /** Eine Tasche aufgehoben: Der Rucksack hat jetzt diese Groesse. */
+  | { type: "backpackGrown"; playerId: string; width: number; height: number; x: number; y: number };
 
 export interface SpawnOrder {
   type: EnemyType;

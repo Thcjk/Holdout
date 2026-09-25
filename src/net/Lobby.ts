@@ -246,6 +246,10 @@ export function toSetups(players: readonly NetPlayerInfo[]): PlayerSetup[] {
     character: player.character,
     backpack: unpack(player.backpack),
     health: player.health,
+    backpackSize:
+      player.bw !== undefined && player.bh !== undefined
+        ? { width: player.bw, height: player.bh }
+        : undefined,
   }));
 }
 
@@ -258,6 +262,8 @@ export function toNetPlayers(setups: readonly PlayerSetup[], hostId: string): Ne
     isHost: setup.id === hostId,
     backpack: setup.backpack ? flattenPacked(setup.backpack) : undefined,
     health: setup.health,
+    bw: setup.backpackSize?.width,
+    bh: setup.backpackSize?.height,
   }));
 }
 

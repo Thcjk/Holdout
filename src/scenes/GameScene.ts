@@ -45,7 +45,7 @@ import { HudScene } from "./HudScene";
 import { finishRun } from "../storage/carried";
 import { packGrid } from "../systems/backpackCodec";
 import { completeNode, currentNode } from "../systems/run";
-import { placeName } from "../config/story";
+import { placeName, regionOfLayer } from "../config/story";
 import type { RunState } from "../systems/run";
 
 /**
@@ -468,6 +468,14 @@ export class GameScene extends Phaser.Scene {
       if (event.type === "hit") {
         this.entities?.flashEnemy(event.enemyId);
       }
+      if (event.type === "backpackGrown" && event.playerId === this.session.selfId) {
+        this.hudModel.flash = `Tasche gefunden – Rucksack jetzt ${event.width} × ${event.height}`;
+        this.hudModel.flashUntil = this.time.now + 2500;
+      }
+      if (event.type === "hordeStarted") {
+        this.hudModel.flash = "Die Horde kommt – schnell zum Ausgang!";
+        this.hudModel.flashUntil = this.time.now + 3500;
+      }
       if (event.type === "runEnded" && !this.finished && event.outcome === "exited" && this.run) {
         this.finished = true;
         this.time.delayedCall(700, () => this.backToMap());
@@ -535,6 +543,7 @@ export class GameScene extends Phaser.Scene {
         health: player.health,
         down: player.down,
         backpack: packGrid(player.backpack),
+        size: { width: player.backpack.width, height: player.backpack.height },
       })),
       (id) => state.players.find((player) => player.id === id)?.maxHealth ?? 1,
     );
@@ -766,6 +775,10 @@ export class GameScene extends Phaser.Scene {
     if (this.run && !this.hudModel.placeName) {
       const node = currentNode(this.run);
       this.hudModel.placeName = placeName(node, this.run.map.depth, this.run.seed);
+      // Beim Betreten: wo man ist und was hier gilt - ein Satz, dann weg.
+      const region = regionOfLayer(node.layer, this.run.map.depth);
+      this.hudModel.flash = `${this.hudModel.placeName} · ${region.name}\nFinde den Ausgang am Ende der Strasse`;
+      this.hudModel.flashUntil = this.time.now + 4000;
     }
     this.hudModel.deepestZone = state.deepestZone;
     this.hudModel.inSafeZone =
@@ -786,6 +799,7 @@ export class GameScene extends Phaser.Scene {
     this.fillMinimap(state, player);
     this.hudModel.carriedItems = player.backpack.items.length;
     this.hudModel.backpack = packGrid(player.backpack);
+    this.hudModel.backpackSize = { width: player.backpack.width, height: player.backpack.height };
     this.hudModel.score = state.score;
     this.hudModel.phase = state.phase;
     this.hudModel.runTime = state.runTime;

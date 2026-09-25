@@ -23,6 +23,7 @@
 
 import { itemAt } from "../config/items";
 import { generateNodeMap } from "./NodeMapGenerator";
+import { nextSize, startSize } from "./InventoryGridSystem";
 import type { MapNode, NodeMap } from "./NodeMapGenerator";
 import type { PackedItem } from "./types";
 import type { PlayerSetup } from "./world";
@@ -49,7 +50,8 @@ export function createRun(seed: number, players: readonly PlayerSetup[]): RunSta
     current: map.startId,
     visited: [map.startId],
     day: 0,
-    players: players.map((player) => ({ ...player })),
+    // Jeder Run beginnt mit dem kleinen Rucksack (`INVENTORY.growth`).
+    players: players.map((player) => ({ ...player, backpackSize: player.backpackSize ?? startSize() })),
   };
 }
 
@@ -94,6 +96,8 @@ export interface PlayerResult {
   health: number;
   down: boolean;
   backpack: PackedItem[];
+  /** Rucksackgroesse am Ende - Taschen koennen ihn vergroessert haben. */
+  size?: { width: number; height: number };
 }
 
 /**
@@ -113,6 +117,9 @@ export function completeNode(
       continue; // Hat die Runde verlassen - nimmt nichts mit.
     }
     player.backpack = result.backpack.map((entry) => ({ ...entry }));
+    if (result.size) {
+      player.backpackSize = { ...result.size };
+    }
     player.health = result.down
       ? Math.round(maxHealth(player.id) * DOWNED_CARRY)
       : Math.max(1, Math.round(result.health));
@@ -124,10 +131,17 @@ export function completeNode(
 /** Anteil Leben, mit dem ein am Boden Liegender ins naechste Gebiet kommt. */
 const DOWNED_CARRY = 0.25;
 
-/** Rast: alle wieder voll. `health` weglassen heisst "volles Leben". */
+/**
+ * Rast: alle wieder voll (`health` weglassen heisst "volles Leben"), und
+ * jeder findet eine Tasche - der Rucksack waechst eine Stufe.
+ */
 function rest(run: RunState): void {
   for (const player of run.players) {
     delete player.health;
+    const next = nextSize(player.backpackSize ?? startSize());
+    if (next) {
+      player.backpackSize = next;
+    }
   }
 }
 

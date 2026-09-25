@@ -642,8 +642,28 @@ export const LOOT = {
  * erst im Spiel zeigen, ob sich der Rucksack noch voll anfuehlt.
  */
 export const INVENTORY = {
+  /** Groesster Rucksack (voll ausgebaut). */
   width: 8,
   height: 6,
+
+  /**
+   * Der Rucksack WAECHST im Run (Rueckmeldung 2026-09-25): Er beginnt klein
+   * und wird mit jeder gefundenen Tasche (und an jedem Rastplatz) eine Stufe
+   * groesser - nach dem Run wieder klein. So wird Platz selbst zur Beute,
+   * und im ersten Gebiet muss man sich entscheiden, was mitkommt.
+   *
+   * Die Stufen als Liste statt einer Formel: abwechselnd eine Reihe und eine
+   * Spalte, und man kann jede einzelne Stufe verschieben, ohne zu rechnen.
+   */
+  growth: [
+    [5, 3],
+    [5, 4],
+    [6, 4],
+    [6, 5],
+    [7, 5],
+    [8, 5],
+    [8, 6],
+  ] as readonly (readonly [number, number])[],
 
   /**
    * Das Lager links im Packbildschirm: Starter-Set plus alles, was man aus

@@ -58,6 +58,7 @@ import {
 } from "../storage/carried";
 import { packGrid } from "../systems/backpackCodec";
 import { createRun } from "../systems/run";
+import { startSize } from "../systems/InventoryGridSystem";
 import { FORCED_SEED, PLACE_FROM_URL } from "../platform/debugFlags";
 import { clearEquipped, settleEquipped, weaponLabel } from "../systems/weapons";
 import {
@@ -142,7 +143,10 @@ export class LoadoutScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(COLORS.background);
 
     this.nextId = 1;
-    this.backpack = createGrid(INVENTORY.width, INVENTORY.height);
+    // Jeder Run beginnt mit dem KLEINEN Rucksack - er waechst unterwegs
+    // durch Taschen und Rastplaetze (`INVENTORY.growth`).
+    const start = startSize();
+    this.backpack = createGrid(start.width, start.height);
     this.stash = createGrid(INVENTORY.stashWidth, INVENTORY.stashHeight);
     this.fillFromStorage();
     settleEquipped(this.backpack);
@@ -161,7 +165,7 @@ export class LoadoutScene extends Phaser.Scene {
       .text(
         VIEWPORT.width / 2,
         SAFE.top + 44,
-        "Ziehen verschiebt · Tippen dreht, bei Waffen: ausrüsten ✓ · Goldene Ecke = Starter-Set",
+        "Ziehen verschiebt · Waffe antippen = ausrüsten ✓ · Rucksack wächst im Run durch Taschen",
         { fontFamily: "system-ui, sans-serif", fontSize: "13px", color: "#8ea6c4" },
       )
       .setOrigin(0.5);
@@ -182,9 +186,12 @@ export class LoadoutScene extends Phaser.Scene {
     );
     const cell = Math.max(MIN_CELL, Math.min(LOADOUT_CELL, byHeight, byWidth));
     const stashLeft = SAFE.left + 20;
-    const backpackLeft = VIEWPORT.width - SAFE.right - 20 - INVENTORY.width * cell;
+    // Platz fuer den VOLL ausgebauten Rucksack freihalten, damit das Bild
+    // nicht springt; der kleine Start-Rucksack sitzt rechtsbuendig darin.
+    const fullLeft = VIEWPORT.width - SAFE.right - 20 - INVENTORY.width * cell;
+    const backpackLeft = VIEWPORT.width - SAFE.right - 20 - this.backpack.width * cell;
     const stashRight = stashLeft + INVENTORY.stashWidth * cell;
-    const gap = backpackLeft - stashRight;
+    const gap = fullLeft - stashRight;
     // Der Drehknopf sitzt zwischen den Gittern - unter ihnen waere er der
     // Knopfzeile im Weg.
     const rotateButtonAt = {
@@ -215,7 +222,7 @@ export class LoadoutScene extends Phaser.Scene {
     const labelStyle = { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#ffffff" };
     this.add.text(stashLeft, top - 28, "Lager", labelStyle).setShadow(1, 1, "#00000066", 2);
     this.summary = this.add
-      .text(backpackLeft, top - 28, "", labelStyle)
+      .text(fullLeft, top - 28, "", labelStyle)
       .setShadow(1, 1, "#00000066", 2);
     this.updateSummary();
 
@@ -262,11 +269,12 @@ export class LoadoutScene extends Phaser.Scene {
    */
   private fillFromStorage(): void {
     for (const entry of backpackForNextRun()) {
-      this.put(
-        this.backpack,
-        { id: this.nextId++, def: entry.def, starter: entry.starter, equipped: entry.equipped },
-        entry,
-      );
+      const item = { id: this.nextId++, def: entry.def, starter: entry.starter, equipped: entry.equipped };
+      // Nach einem Erfolg war der Rucksack evtl. groesser als der kleine
+      // Start-Rucksack - was nicht passt, wandert ins Lager statt zu verschwinden.
+      if (!this.put(this.backpack, item, entry)) {
+        this.put(this.stash, { ...item, equipped: false }, null);
+      }
     }
     for (const entry of stashItems()) {
       this.put(this.stash, { id: this.nextId++, def: entry.def }, entry);
@@ -291,14 +299,15 @@ export class LoadoutScene extends Phaser.Scene {
     grid: GridData,
     item: ItemInstance,
     at: { x: number; y: number; rotated: boolean } | null,
-  ): void {
+  ): boolean {
     if (at && place(grid, item, at.x, at.y, at.rotated)) {
-      return;
+      return true;
     }
     const spot = findFreeSpot(grid, item.def);
     if (spot) {
-      place(grid, item, spot.x, spot.y, spot.rotated);
+      return place(grid, item, spot.x, spot.y, spot.rotated);
     }
+    return false;
   }
 
   private updateSummary(): void {
