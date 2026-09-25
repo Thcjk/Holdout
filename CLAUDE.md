@@ -21,6 +21,10 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
+> **Stand 2026-09-25 abends: Version 2.2.0 – Karte, Gebiete an der Strasse,
+> wachsender Rucksack, Story-Rahmen.** Siehe **„Karte, Gebiete, Rucksack,
+> Story“** direkt unten. Nur auf dem Branch (nach `main` erst auf Wunsch).
+>
 > **Stand 2026-09-25: Version 2.1.0 – Waffen wirken, UI-Paket eingebunden.**
 > Siehe **„Waffen-Ausrüstung und UI-Paket“** direkt unten. Auf Wunsch
 > „mache weiter und pushe“ auf dem Branch und auf `main`.
@@ -41,6 +45,97 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 >
 > **BRIEFING.md ist seit 2026-09-24 die neue Fassung** (Abschnitte 2, 4, 5:
 > Three.js, Knoten-Karte, Vorbild „Deadly Days: Roadtrip“).
+
+## Karte, Gebiete, Rucksack, Story (2026-09-25 abends)
+
+Rückmeldung mit Bildern aus „Deadly Days: Roadtrip“: Die Karte zum Auswählen
+fehlte, Gebiete sollen schwerer oder leichter sein (mit passender Beute),
+es soll eine Art Story geben, die Welt grösser und ohne „Mauer und danach
+Wald“, der Rucksack soll im Run wachsen, und die Orte sollen Sinn ergeben
+(Tankstelle an der Strasse). Entscheidungen des Nutzers: Gebiet endet am
+**Ausgang**, Rucksack wächst **pro Run**, Story als **Rahmen + Ortstexte**,
+Grafik **selbst gebaut**.
+
+### 1. Die Karte (`scenes/MapScene.ts`, `systems/run.ts`)
+
+- **Ablauf:** Packen → Karte → Gebiet → (Ausgang) → Karte → … Erreichbar
+  sind nur die Nachfolger des aktuellen Knotens; man geht nur vorwärts.
+- **Anzeige:** vier Regionen als Streifen (Stadtrand, Industriegebiet,
+  Wälder am Pass, Küste), gepunktete Wege, gegangene golden. Knoten nach
+  Typ gefärbt, Gefahr als rote Punkte, erreichbare pulsieren. Tafel unten
+  mit Ortsname, Region, Beschreibung und drei Balken (Kartengrösse, Gefahr,
+  Beute) wie im Vorbild, „Losziehen“.
+- **Leicht oder schwer:** Kampfknoten liegen zufällig eine Stufe unter
+  oder über ihrer Schicht (`NODE_MAP.dangerSpread`), Beute = Gefahr.
+- **Knotenarten:** Kampf; Elite (Boss-Punkt, bessere Beute); Rast (sofort,
+  ohne Kampf: volles Leben, Rucksack +1 Stufe); Extraktion (Gebiet, dessen
+  Ausgang den Run mit Beute beendet); Ende-Boss. Rast und Extraktion sind
+  seltener als zuerst (Gewicht 0,7): über 300 Seeds 72 % Kampf, je ~10 %
+  Extraktion und Elite, 6 % Rast.
+- **Zwischen den Gebieten reisen** Rucksack (samt ausgerüsteter Waffe),
+  Leben (am Boden Liegende mit 25 %) und Rucksackgrösse mit.
+- **Simulation:** neuer Ausgang `exited` (weiter zur Karte), `exitOutcome`
+  im Weltzustand. **Timer** je Gebiet (120 s + 6 s je Gefahrenstufe),
+  danach **Horde** (doppelte Zielbevölkerung) – man verliert nicht, es wird
+  nur eng. Anzeige oben links: Ortsname und „Horde in 1:45“.
+- **Koop:** Der Host wählt. Clients melden sich auf der Karte mit `ready`;
+  „Losziehen“ geht erst, wenn alle da sind. Neues Paket `move` (Knoten +
+  Stand aller Spieler), Sitzungen bekommen den Knoten (`place`). Über zwei
+  Tabs **nicht** durchgespielt; Rundreise des Spielerstands per Test.
+- `?knoten=` / `?welt=offen` überspringen solo die Karte (Nachstellen).
+
+### 2. Gebiete an der Strasse (`NodeArenaGenerator`, `systems/arenaPlaces.ts`)
+
+- **Form:** 72×40, 88×48, 104×56 m (rund doppelt so gross), Strasse der
+  Länge nach, Start im Westen, Ausgang im Osten auf der Strasse.
+- **Orte je Region** (13 Stück), Tür immer zur Strasse, Beute am Ort:
+  Stadtrand – Tankstelle (Zapfsäulen, Shop, Auto, Schild), Wohnhaus mit
+  Gartenzaun, Bushaltestelle, Supermarkt mit Parkplatz; Industrie –
+  Lagerhalle, Containerlager, Fernfahrerplatz; Wald – Zeltlager mit
+  Feuerstelle, Holzhütte, Rastplatz; Küste – Fischerhütte mit Booten,
+  Leuchtturm, Strand.
+- **Autowracks auf der Strasse** als Deckung (2 + 0,3 je g, höchstens 6).
+- **Keine sichtbare Mauer:** Die Aussenmauer bleibt als Kollision, der Rand
+  ist dichter Wald bzw. Fels, der Boden läuft draussen weiter, an beiden
+  Strassenenden Sperren. Boden je Region (Wiese, Schotter, Wald, Sand),
+  Asphalt mit Rand- und Mittellinien, Betonflächen.
+- **Neue Low-Poly-Formen** (`render/decorModels.ts`): Auto, Zapfsäule,
+  Wartehäuschen, Container, Zelt, Holzstapel, Boot, Leuchtturm, Sperre,
+  Schild, Bank, Feuerstelle; Farben je Spielart (`KIND_TINTS`).
+- **Geprüft:** Flutfüllung jetzt in allen vier Regionen (8 Seeds), Orte je
+  Region, Start und Ausgang auf der Strasse. **Zwei Fehler, die erst der
+  Test fand:** Beute in der Containergasse lag zu nah am Container, Beute in
+  Häusern 24 px an der Wand – beide unerreichbar für einen 18-px-Spieler.
+
+### 3. Rucksack wächst (`INVENTORY.growth`)
+
+- Start **5 × 3**, Stufen 5×4 → 6×4 → 6×5 → 7×5 → 8×5 → 8×6.
+- **Tasche** (neuer Fund, Seltenheit 2): kommt nicht in den Rucksack,
+  sondern vergrössert ihn um eine Stufe; voll ausgebaut bleibt sie liegen.
+  Meldung „Tasche gefunden – Rucksack jetzt 6 × 4“.
+- **Rastplatz:** +1 Stufe für alle.
+- Nach dem Run wieder klein. Was nach einem Erfolg nicht in den kleinen
+  Start-Rucksack passt, landet beim Packen im Lager.
+- Grösse reist im Zustandspaket (`bw`/`bh`) und im `move`-Paket.
+
+### 4. Story (`config/story.ts`)
+
+- Rahmen „Der letzte Hafen“: Die Stadt ist gefallen, ein Schiff holt
+  Überlebende an der Küste ab – durchschlagen oder vorher aussteigen.
+- Je Region ein Satz, je Knoten ein fester Ortsname aus Seed und Nummer
+  (gleich auf allen Geräten). Beim Betreten oben: Ort · Region · „Finde den
+  Ausgang am Ende der Strasse“. Sieg-Text nach dem Ende-Boss.
+
+### Offen
+
+- **Leistung der grösseren Gebiete** nicht auf dem Gerät gemessen (mehr
+  Kulisse, bis 1500 Teile). Auf dem Handy mit `?debug=werte` prüfen.
+- **Balance** der Knoten (Timer, Horde, leicht/schwer) ist ungeprüft; der
+  Bot misst weiter die offene Welt.
+- **Koop über zwei Geräte/Tabs** mit der Karte nicht durchgespielt.
+- Die Karte wird nicht gespeichert (App zu = Run weg; Briefing Phase 15).
+- Häuser sind weiter Quader mit Putz – Tankstellen-Shop und Wohnhaus
+  unterscheiden sich nur durch ihre Umgebung.
 
 ## Waffen-Ausrüstung und UI-Paket (2026-09-25)
 
@@ -376,9 +471,9 @@ Hochgerechnet mit 40 Gegnern (je ~1.600 Dreiecke, je ein Aufruf): rund
   zur Entscheidung vorgelegt.
 - **Kamera folgt nur der eigenen Figur**, nicht der Gruppe (Briefing
   Abschnitt 5). Im Koop fehlt das Herauszoomen noch.
-- **Knoten-Ablauf fehlt:** Timer (45–90 s), Knoten geschafft → zurück zur
-  Karte, Kartenansicht, Rast-Knoten (Werkbank). Deshalb der Ausstieg in
-  jedem Gebiet.
+- ~~**Knoten-Ablauf fehlt**~~ – seit 2026-09-25 abends: Kartenansicht,
+  Timer mit Horde, Ausgang führt zurück zur Karte, Rast heilt (Werkbank
+  fehlt weiterhin).
 - **Gegner ohne Sterbeanimation**, keine Treffer-Effekte in 3D.
 - **Häuser sind orange Quader** – im Paket gibt es keine 3D-Gebäude.
   Mit einem Umgebungspaket (z. B. Kenney City/Survival/Nature Kit) wäre das
@@ -2252,6 +2347,7 @@ src/
     constants.ts          Arena, Bildschirm, Tickrate, Kamera, Touch, Farben
     tuning.ts             ?tune= aus der Adresszeile
     ui.ts                 ALLE Grafiken der Oberflaeche (UI-Paket), Schrift
+    story.ts              Rahmen, Regionen, Ortsnamen
   systems/                PHASER-FREI - die Simulation
     types.ts              Datentypen und Ereignisse
     world.ts              Weltzustand, ein Tick
@@ -2270,6 +2366,8 @@ src/
     boss.ts               Angriffsmuster des Bosses
     zones.ts              Distanzzonen und Skalierung
     loot.ts               Drops, Fundorte, Aufsammeln, Rucksack-Befehle
+    run.ts                Run auf der Knoten-Karte: Knoten, Weg, Mitgenommenes
+    arenaPlaces.ts        Orte an der Strasse (Tankstelle, Lagerhalle ...)
     weapons.ts            ausgeruestete Waffe, Automatik, Faust-Reichweite
     InventoryGridSystem.ts Gitter-Rucksack: passt/platzieren/verschieben
     backpackCodec.ts      Rucksack als Zahlenreihe (Netz, Lobby)
@@ -2306,7 +2404,7 @@ src/
     space3d.ts            Sim-Pixel -> Three-Meter, EINZIGE Umrechnung
     ArenaRenderer, EntityRenderer, CameraController, Juice   (2D, ?view=2d)
     wallPieces.ts         Wand -> Stuecke aus dem Sheet (Ecken, Kappen)
-  scenes/                 Boot, Menu, Loadout, Lobby, Game, Hud, GameOver
+  scenes/                 Boot, Menu, Loadout, Lobby, Map, Game, Hud, GameOver
   input/InputManager.ts   Touch -> InputState
   input/viewMapping.ts    Bildschirm- <-> Bodenrichtung fuer die 3D-Kamera
   ui/                     VirtualJoystick, TouchControls, Button, HudModel,
