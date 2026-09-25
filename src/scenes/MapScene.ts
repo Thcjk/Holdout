@@ -42,6 +42,7 @@ import { toNetPlayers, toSetups } from "../net/Lobby";
 import { SoloSession } from "../net/SoloSession";
 import type { Transport } from "../net/Transport";
 import { setReloadSafe } from "../platform/update";
+import { saveActive } from "../storage/saveSlots";
 import type { MapNode } from "../systems/NodeMapGenerator";
 import { canEnter, carriedCount, currentNode, enterNode, nodeTypeLabel } from "../systems/run";
 import type { RunState } from "../systems/run";
@@ -119,6 +120,12 @@ export class MapScene extends Phaser.Scene {
   create(): void {
     menuBackground(this);
     audio.setMusic("menu");
+    // Solo wird der Run hier gespeichert - also zwischen zwei Gebieten, nach
+    // jedem Ausgang und jeder Rast. Koop-Runs haelt der Host und speichert
+    // sie nicht (Entscheidung 2026-09-26).
+    if (!this.transport) {
+      saveActive(this.run);
+    }
     // Auf der Karte darf eine neue Version noch nicht greifen - der Run laeuft.
     setReloadSafe(false);
 

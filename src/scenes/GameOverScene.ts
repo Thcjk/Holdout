@@ -246,7 +246,7 @@ export class GameOverScene extends Phaser.Scene {
         // keine offene Verbindung, und eine vergessene hielte den Raum fuer
         // die anderen offen, obwohl niemand mehr kommt.
         this.result.transport?.close();
-        this.scene.start("Menu");
+        this.scene.start("Menu", { coop: this.result.coop });
       },
       { width: 230, fontSize: 18, variant: "secondary" },
     );

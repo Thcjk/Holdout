@@ -48,6 +48,6 @@ export class BootScene extends Phaser.Scene {
     // Bis Etappe 5 wurde hier ein zweiter, selbst GEZEICHNETER Atlas gebaut
     // (Projektile, Funken, Punkte). Seitdem kommt alles aus dem Sheet - auch
     // Geschosse und Partikel (`BULLET_TILE`, `PARTICLE_TILES`).
-    this.scene.start("Menu");
+    this.scene.start("Title");
   }
 }

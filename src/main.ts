@@ -37,6 +37,10 @@ import { LoadoutScene } from "./scenes/LoadoutScene";
 import { LobbyScene } from "./scenes/LobbyScene";
 import { MenuScene } from "./scenes/MenuScene";
 import { MapScene } from "./scenes/MapScene";
+import { ModeScene } from "./scenes/ModeScene";
+import { SettingsScene } from "./scenes/SettingsScene";
+import { SlotScene } from "./scenes/SlotScene";
+import { TitleScene } from "./scenes/TitleScene";
 
 /**
  * Die Phaser-Konfiguration.
@@ -124,6 +128,10 @@ function buildConfig(): Phaser.Types.Core.GameConfig {
     // keine eigene Physik-Engine (siehe CLAUDE.md, Architektur-Grundregel).
     scene: [
       BootScene,
+      TitleScene,
+      SlotScene,
+      ModeScene,
+      SettingsScene,
       MenuScene,
       LoadoutScene,
       LobbyScene,

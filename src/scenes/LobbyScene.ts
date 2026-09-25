@@ -437,7 +437,7 @@ export class LobbyScene extends Phaser.Scene {
   private leave(): void {
     this.lobby?.destroy();
     this.transport?.close();
-    this.scene.start("Menu");
+    this.scene.start("Mode");
   }
 
   /**

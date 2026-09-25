@@ -1,5 +1,9 @@
 /**
- * Hauptmenue mit Charakterauswahl.
+ * Charakterwahl (Szene "Menu").
+ *
+ * Seit 2026-09-26 nicht mehr der erste Bildschirm: Davor kommen Titel,
+ * Speicherplatz und Solo/Koop (`TitleScene`, `SlotScene`, `ModeScene`). Ton,
+ * Vollbild und Installieren sind in die Einstellungen gewandert.
  *
  * Die drei Charaktere unterscheiden sich grundlegend (Briefing, Abschnitt 4),
  * deshalb zeigt die Karte nicht nur den Namen, sondern die Werte, an denen man
@@ -17,33 +21,25 @@ import { audio } from "../audio/AudioEngine";
 import { ABILITIES, CHARACTERS, CHARACTER_ORDER } from "../config/balance";
 import { SAFE, VIEWPORT } from "../config/constants";
 import { UI } from "../config/ui";
-import { isInstalledApp } from "../platform/device";
-import {
-  canPromptInstall,
-  manualInstructions,
-  needsManualInstructions,
-  promptInstall,
-} from "../platform/install";
-import { loadHighscore } from "../storage/highscore";
+import { activeCharacterOr, saveActive, setActiveCharacter } from "../storage/saveSlots";
 import type { CharacterId } from "../systems/types";
 import { Button } from "../ui/Button";
 import { setReloadSafe } from "../platform/update";
-import { insetPanel, menuBackground, woodPanel } from "../ui/menuStyle";
+import { insetPanel, menuBackground, menuText, woodPanel } from "../ui/menuStyle";
 
 const CARD_WIDTH = 268;
 const CARD_HEIGHT = 248;
 const CARD_GAP = 24;
 const CARD_Y = 268;
 
-/** Ein kleiner Knopf der unteren Reihe, bevor er erzeugt wird. */
-interface UtilityButton {
-  label: string;
-  width: number;
-  onClick: (button: Button) => void;
+export interface MenuSceneData {
+  /** Nach der Wahl allein los oder in die Lobby. */
+  coop?: boolean;
 }
 
 export class MenuScene extends Phaser.Scene {
   private selected: CharacterId = "scout";
+  private coop = false;
   /** Je Karte der Auswahlrahmen - gold, wenn gewaehlt. */
   private cards = new Map<CharacterId, Phaser.GameObjects.Graphics>();
 
@@ -51,9 +47,14 @@ export class MenuScene extends Phaser.Scene {
     super("Menu");
   }
 
+  init(data: MenuSceneData): void {
+    this.coop = data?.coop === true;
+    // Der Charakter des Spielstands ist vorgewaehlt.
+    this.selected = activeCharacterOr(this.selected);
+  }
+
   create(): void {
-    // Im Menue darf eine wartende neue Version sofort greifen.
-    setReloadSafe(true);
+    setReloadSafe(false);
     this.cards.clear();
     menuBackground(this);
 
@@ -76,47 +77,19 @@ export class MenuScene extends Phaser.Scene {
     this.createHeader();
     this.createCards();
     this.createActions();
-    this.createUtilityRow();
-    this.createVersionLabel();
     this.highlightSelection();
   }
 
-  /**
-   * Versionsnummer klein in der Ecke.
-   *
-   * Klingt nach Kosmetik, ist aber Diagnose: Wenn jemand meldet „geht nicht",
-   * ist die erste Frage, welcher Stand auf dem Geraet ueberhaupt laeuft - ein
-   * Service Worker kann noch eine aeltere Fassung ausliefern.
-   */
-  private createVersionLabel(): void {
-    this.add
-      .text(
-        VIEWPORT.width - SAFE.right - 10,
-        VIEWPORT.height - SAFE.bottom - 8,
-        `v${__APP_VERSION__}`,
-        {
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "11px",
-          color: "#a8977a",
-        },
-      )
-      .setOrigin(1, 1);
-  }
-
   private createHeader(): void {
-    this.centeredText(40, "Holdout", 42, UI.text.title, "bold");
-
-    const best = loadHighscore();
-    this.centeredText(
-      76,
-      best
-        ? `Dein Rekord: ${best.score} Punkte${best.zone === undefined ? "" : `, Zone ${best.zone}`}`
-        : "Halte durch, solange du kannst.",
+    menuText(this, VIEWPORT.width / 2, 52, "Wähle deinen Charakter", 30, UI.text.title, true);
+    menuText(
+      this,
+      VIEWPORT.width / 2,
+      90,
+      this.coop ? "Koop – danach packen, dann die Lobby" : "Solo – danach packen, dann die Karte",
       15,
       UI.text.muted,
     );
-
-    this.centeredText(104, "Wähle deinen Charakter", 16, UI.text.accent, "bold");
   }
 
   private createCards(): void {
@@ -126,173 +99,28 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private createActions(): void {
-    const gap = 24;
-    const width = 276;
-    const offset = (width + gap) / 2;
-
     new Button(
       this,
-      VIEWPORT.width / 2 - offset,
-      430,
-      "Solo starten",
+      VIEWPORT.width / 2,
+      440,
+      "Weiter",
       () => {
         audio.unlock();
         audio.setMusic("menu");
-        // Ueber den Rucksack statt direkt ins Spiel: Was man mitnimmt, ist
-        // seit Phase 11 eine Entscheidung vor dem Run.
-        this.scene.start("Loadout", { character: this.selected });
+        // Den Charakter im Spielstand merken - beim naechsten Mal vorgewaehlt.
+        setActiveCharacter(this.selected);
+        saveActive(null);
+        this.scene.start("Loadout", { character: this.selected, coop: this.coop });
       },
-      { width },
+      { width: 300 },
     );
 
-    new Button(
-      this,
-      VIEWPORT.width / 2 + offset,
-      430,
-      "Zusammen spielen",
-      () => {
-        audio.unlock();
-        this.scene.start("Loadout", { character: this.selected, coop: true });
-      },
-      { width },
-    );
-  }
-
-  /**
-   * Die kleinen Knoepfe unten, als eine Reihe um die Mitte verteilt.
-   * Welche es gibt, haengt vom Geraet ab - deshalb wird erst gesammelt und
-   * dann gerechnet.
-   */
-  private createUtilityRow(): void {
-    const entries: UtilityButton[] = [];
-
-    if (!isInstalledApp() && (canPromptInstall() || needsManualInstructions())) {
-      entries.push({
-        label: "App installieren",
-        width: 186,
-        onClick: (button) => {
-          if (canPromptInstall()) {
-            void promptInstall().then((accepted) => {
-              if (accepted) {
-                button.setVisible(false);
-              }
-            });
-            return;
-          }
-          this.showInstallInstructions();
-        },
-      });
-    }
-
-    entries.push({
-      label: audio.isMuted ? "Ton aus" : "Ton an",
-      width: 118,
-      onClick: (button) => {
-        audio.unlock();
-        const muted = audio.toggleMuted();
-        button.setText(muted ? "Ton aus" : "Ton an");
-        if (!muted) {
-          audio.setMusic("menu");
-        }
-      },
+    new Button(this, SAFE.left + 92, VIEWPORT.height - SAFE.bottom - 34, "Zurück", () => this.scene.start("Mode"), {
+      width: 140,
+      height: 40,
+      fontSize: 16,
+      variant: "secondary",
     });
-
-    if (this.sys.game.device.fullscreen.available) {
-      entries.push({
-        label: this.scale.isFullscreen ? "Fenster" : "Vollbild",
-        width: 118,
-        onClick: (button) => {
-          if (this.scale.isFullscreen) {
-            this.scale.stopFullscreen();
-            button.setText("Vollbild");
-          } else {
-            this.scale.startFullscreen();
-            button.setText("Fenster");
-          }
-        },
-      });
-    }
-
-    const gap = 16;
-    const totalWidth =
-      entries.reduce((sum, entry) => sum + entry.width, 0) + gap * (entries.length - 1);
-
-    let x = (VIEWPORT.width - totalWidth) / 2;
-    for (const entry of entries) {
-      const button: Button = new Button(
-        this,
-        x + entry.width / 2,
-        500,
-        entry.label,
-        () => entry.onClick(button),
-        { width: entry.width, height: 38, fontSize: 15, variant: "secondary" },
-      );
-      x += entry.width + gap;
-    }
-  }
-
-  /** Overlay mit der Schritt-fuer-Schritt-Anleitung fuer das iPhone. */
-  private showInstallInstructions(): void {
-    const parts: { destroy(): void }[] = [];
-
-    parts.push(
-      this.add
-        .rectangle(
-          VIEWPORT.width / 2,
-          VIEWPORT.height / 2,
-          VIEWPORT.width,
-          VIEWPORT.height,
-          0x1f1b14,
-          0.95,
-        )
-        .setDepth(200)
-        .setInteractive(),
-    );
-    parts.push(this.centeredText(150, "Als App installieren", 28, UI.text.title, "bold").setDepth(201));
-    parts.push(
-      this.add
-        .text(VIEWPORT.width / 2, 250, manualInstructions().join("\n"), {
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "18px",
-          color: UI.text.body,
-          align: "center",
-          lineSpacing: 12,
-        })
-        .setOrigin(0.5)
-        .setDepth(201),
-    );
-    parts.push(
-      this.add
-        .text(
-          VIEWPORT.width / 2,
-          348,
-          "Danach startet das Spiel ohne Browserleisten und auch ohne Internet.",
-          {
-            fontFamily: "system-ui, sans-serif",
-            fontSize: "14px",
-            color: UI.text.muted,
-            align: "center",
-            wordWrap: { width: VIEWPORT.width - 160 },
-          },
-        )
-        .setOrigin(0.5)
-        .setDepth(201),
-    );
-
-    const close = new Button(
-      this,
-      VIEWPORT.width / 2,
-      430,
-      "Verstanden",
-      () => {
-        for (const part of parts) {
-          part.destroy();
-        }
-        close.setVisible(false);
-      },
-      { width: 220 },
-    );
-    close.setDepth(202);
   }
 
   private createCard(id: CharacterId, centerX: number): void {
@@ -375,24 +203,6 @@ export class MenuScene extends Phaser.Scene {
         wordWrap: { width: CARD_WIDTH - 28 },
       })
       .setOrigin(0.5);
-  }
-
-  private centeredText(
-    y: number,
-    text: string,
-    size: number,
-    color: string,
-    style = "normal",
-  ): Phaser.GameObjects.Text {
-    return this.add
-      .text(VIEWPORT.width / 2, y, text, {
-        fontFamily: UI.font,
-        fontSize: `${size}px`,
-        color,
-        fontStyle: style,
-      })
-      .setOrigin(0.5)
-      .setShadow(1, 2, UI.text.shadow, 3);
   }
 
   /**

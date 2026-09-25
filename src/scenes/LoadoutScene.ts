@@ -55,6 +55,7 @@ import { menuBackground } from "../ui/menuStyle";
 import { itemIndex } from "../config/items";
 import {
   backpackForNextRun,
+  backpackTakenIntoRun,
   saveStash,
   stashItems,
 } from "../storage/carried";
@@ -73,6 +74,7 @@ import type { InventoryGrid as GridData } from "../systems/types";
 import { Button } from "../ui/Button";
 import { InventoryGrid } from "../ui/InventoryGrid";
 import { setReloadSafe } from "../platform/update";
+import { saveActive } from "../storage/saveSlots";
 import type { Transport } from "../net/Transport";
 import type { CharacterId, ItemInstance, PackedItem } from "../systems/types";
 
@@ -248,7 +250,7 @@ export class LoadoutScene extends Phaser.Scene {
       () => {
         // Zurueck ins Menue heisst: raus aus dem Raum.
         this.setup.transport?.close();
-        this.scene.start("Menu");
+        this.scene.start("Menu", { coop: this.setup.coop === true });
       },
       { width: 140, height: 46, fontSize: 16, variant: "secondary" },
     ).setDepth(BUTTON_DEPTH);
@@ -354,6 +356,10 @@ export class LoadoutScene extends Phaser.Scene {
     // Das Lager bleibt, wie es beim Loslaufen aussah - ein Wipe fasst es
     // nicht an.
     saveStash(packGrid(this.stash));
+    // Jetzt gehoert der Rucksack dem Run; der Spielstand haelt das Lager
+    // (und solo gleich danach auf der Karte den Run samt Rucksack).
+    backpackTakenIntoRun();
+    saveActive(null);
 
     if (this.setup.coop) {
       // Im Koop geht der Rucksack ueber die Lobby: Der Client meldet ihn im

@@ -111,6 +111,21 @@ export function finishRun(
 }
 
 /** Setzt alles zurueck. Nur fuer Tests. */
+/**
+ * Der Rucksack ist gepackt und unterwegs: Ab jetzt steckt er im Run, nicht
+ * mehr hier. Ohne das laege er zusaetzlich im Spielstand - wer im Koop die
+ * App mitten im Run schliesst, bekaeme ihn beim Laden geschenkt zurueck.
+ */
+export function backpackTakenIntoRun(): void {
+  backpack = [];
+}
+
+/** Einen gespeicherten Stand in den Arbeitsspeicher holen (`saveSlots.ts`). */
+export function restoreCarried(nextBackpack: readonly PackedItem[], nextStash: readonly PackedItem[]): void {
+  backpack = nextBackpack.map((entry) => ({ ...entry }));
+  stash = nextStash.filter((entry) => !entry.starter).map((entry) => ({ ...entry }));
+}
+
 export function resetCarried(): void {
   backpack = [];
   stash = [];

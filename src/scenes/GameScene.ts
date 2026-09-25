@@ -43,6 +43,7 @@ import { createHudModel } from "../ui/HudModel";
 import type { HudModel } from "../ui/HudModel";
 import { HudScene } from "./HudScene";
 import { finishRun } from "../storage/carried";
+import { saveActive } from "../storage/saveSlots";
 import { packGrid } from "../systems/backpackCodec";
 import { completeNode, currentNode } from "../systems/run";
 import { placeName, regionOfLayer } from "../config/story";
@@ -196,7 +197,9 @@ export class GameScene extends Phaser.Scene {
       onResume: () => this.setPaused(false),
       onQuit: () => {
         this.scene.stop("Hud");
-        this.scene.start("Menu");
+        // Der Spielstand bleibt, wie er auf der Karte gespeichert wurde:
+        // "Laden" beginnt dieses Gebiet neu.
+        this.scene.start("Title");
       },
       onBackpack: (open: boolean) => {
         // Kein Anhalten, auch solo nicht - siehe `ui/BackpackWindow.ts`.
@@ -493,6 +496,9 @@ export class GameScene extends Phaser.Scene {
             this.selfPlayer()?.backpack.items ?? [],
             leftBehind(this.session.view.state, this.session.selfId),
           );
+          // Run vorbei: Lager und (nach Erfolg) Rucksack in den Spielstand,
+          // kein laufender Run mehr.
+          saveActive(null);
           const coop = !this.session.canPause;
           const transport = this.session.release();
           this.released = true;
@@ -571,7 +577,7 @@ export class GameScene extends Phaser.Scene {
     this.hudModel.connectionMessage = this.session.connectionLost;
     this.time.delayedCall(2600, () => {
       this.scene.stop("Hud");
-      this.scene.start("Menu");
+      this.scene.start("Title");
     });
   }
 
