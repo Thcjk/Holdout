@@ -6,7 +6,7 @@
  * Zustand lokal gerechnet oder ueber das Netz empfangen wurde, ist ihre Sache nicht.
  */
 
-import type { GameEvent, InputState, Vec2, WorldState } from "../systems/types";
+import type { GameEvent, InputState, InventoryCommand, Vec2, WorldState } from "../systems/types";
 import type { Transport } from "./Transport";
 
 /** Alles, was die Darstellung braucht. `Simulation` und `ClientView` erfuellen das. */
@@ -49,6 +49,13 @@ export interface GameSession {
    *          (Schuss, Super) geloescht werden duerfen.
    */
   update(deltaMs: number, input: InputState): boolean;
+
+  /**
+   * Einen Rucksack-Befehl ausfuehren, waehrend die Runde angehalten ist.
+   * Nur solo vorhanden (dort haelt der offene Rucksack an); im Koop laeuft
+   * die Runde weiter und der Befehl reist mit der naechsten Eingabe.
+   */
+  applyWhilePaused?(command: InventoryCommand): void;
 
   /**
    * Beendet die Sitzung, OHNE die Verbindung zu schliessen, und gibt sie

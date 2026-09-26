@@ -95,6 +95,31 @@ function materialForSkin(skin: string): MeshToonMaterial | null {
   return material;
 }
 
+/** Das Treffer-Material je Haut: dieselbe Haut, rot aufgehellt. */
+const hitMaterials = new Map<string, MeshToonMaterial>();
+
+/**
+ * Treffer-Blitz (2026-09-26, Rueckmeldung "kein Hit-Feedback"): Fuer einen
+ * Augenblick bekommt die Figur ein zweites Material mit derselben Haut und
+ * rotem Leuchten. Getauscht wird das Material, nicht umgefaerbt - die Haut
+ * ist mit allen Figuren derselben Art geteilt, eine Umfaerbung liesse alle
+ * gleichzeitig aufblitzen.
+ */
+function hitMaterialFor(base: MeshToonMaterial): MeshToonMaterial {
+  const key = base.uuid;
+  let material = hitMaterials.get(key);
+  if (!material) {
+    material = base.clone();
+    material.emissive.setHex(0xff3b2f);
+    material.emissiveIntensity = 0.75;
+    hitMaterials.set(key, material);
+  }
+  return material;
+}
+
+/** So lange leuchtet eine getroffene Figur (Sekunden). */
+const HIT_FLASH_SECONDS = 0.12;
+
 /*
  * ================================================================
  * DIE WAFFE IN DER HAND
@@ -173,6 +198,11 @@ export class FigureModel {
   private muzzle = 0;
   private readonly flash = new Mesh(flashGeometry, flashMaterial);
   private flashTime = 0;
+  /** Alle Teile der Figur, die die Haut tragen - fuer den Treffer-Blitz. */
+  private readonly skinned: Mesh[] = [];
+  private readonly baseMaterial: MeshToonMaterial;
+  private readonly hitMaterial: MeshToonMaterial;
+  private hitTime = 0;
 
   /**
    * Eine neue Figur - oder `null`, solange Koerper, Haut oder Clips noch
@@ -198,8 +228,11 @@ export class FigureModel {
       const mesh = node as SkinnedMesh;
       if (mesh.isMesh) {
         mesh.material = material;
+        this.skinned.push(mesh);
       }
     });
+    this.baseMaterial = material;
+    this.hitMaterial = hitMaterialFor(material);
 
     // Auf die gewuenschte Hoehe bringen. Gemessen wird einmal je Koerper an
     // der Vorlage (Ruhepose), nicht je Figur.
@@ -301,8 +334,22 @@ export class FigureModel {
   }
 
   /** Zeit weiterlaufen lassen (Sekunden) - und die Waffe zur Hand bringen. */
+  /** Getroffen: kurz rot aufleuchten. */
+  hit(): void {
+    if (this.hitTime <= 0) {
+      for (const mesh of this.skinned) mesh.material = this.hitMaterial;
+    }
+    this.hitTime = HIT_FLASH_SECONDS;
+  }
+
   update(seconds: number): void {
     this.mixer.update(seconds);
+    if (this.hitTime > 0) {
+      this.hitTime -= seconds;
+      if (this.hitTime <= 0) {
+        for (const mesh of this.skinned) mesh.material = this.baseMaterial;
+      }
+    }
     const held = this.held;
     if (!held || !this.hand) {
       this.flash.visible = false;

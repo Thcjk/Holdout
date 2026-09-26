@@ -8,8 +8,9 @@ import { itemIndex } from "../../src/config/items";
 import { TICK_SECONDS } from "../../src/config/constants";
 import { flattenPacked, packCarried, unflattenPacked } from "../../src/systems/backpackCodec";
 import { damagePlayer } from "../../src/systems/combat";
-import { attachInGrid, craft, detachInGrid, hasIngredients } from "../../src/systems/gear";
+import { attachInGrid, craft, craftAcross, detachInGrid, hasIngredients } from "../../src/systems/gear";
 import { createWorld, stepWorld } from "../../src/systems/world";
+import { Simulation } from "../../src/systems/Simulation";
 import type { PackedItem, WorldState } from "../../src/systems/types";
 import { activeWeapon, ammoCapacity } from "../../src/systems/weapons";
 import { makeInput } from "../helpers";
@@ -139,12 +140,39 @@ describe("Schutz im Rucksack", () => {
   });
 });
 
+describe("Rucksack in der Pause (solo)", () => {
+  it("fuehrt Befehle sofort aus, ohne dass Zeit vergeht", () => {
+    const simulation = new Simulation([{ id: "p", name: "T", character: "scout", backpack: [at("bandage", 0, 0)] }], 4242, {
+      nodeId: null,
+    });
+    const before = simulation.state.tick;
+    simulation.applyInventoryNow("p", { op: "toBelt", fromX: 0, fromY: 0, slot: 1 });
+    expect(simulation.state.players[0]!.belt.items).toHaveLength(1);
+    expect(simulation.state.tick).toBe(before);
+  });
+});
+
 describe("Werkbank", () => {
   it("baut aus Material einen Verband und verbraucht die Zutaten", () => {
     const recipe = RECIPES.find((entry) => entry.result === "bandage")!;
     const items = [at("scrap", 0, 0), at("scrap", 1, 0), at("wire", 2, 0)];
     const result = craft(items, { width: 5, height: 3 }, recipe);
     expect(result?.map((entry) => entry.def).sort()).toEqual([itemIndex("wire"), itemIndex("bandage")].sort());
+  });
+
+  it("baut zuhause aus Lager und Rucksack zusammen, Ergebnis ins Lager", () => {
+    const recipe = RECIPES.find((entry) => entry.result === "bandage")!;
+    const stash = [at("scrap", 0, 0)];
+    const backpack = [at("pistol", 0, 0, { equipped: true, starter: true }), at("scrap", 3, 0)];
+    const result = craftAcross(
+      [
+        { items: stash, size: { width: 5, height: 6 } },
+        { items: backpack, size: { width: 5, height: 3 } },
+      ],
+      recipe,
+    );
+    expect(result?.[0]?.map((entry) => entry.def)).toEqual([itemIndex("bandage")]);
+    expect(result?.[1]?.map((entry) => entry.def)).toEqual([itemIndex("pistol")]);
   });
 
   it("baut nichts ohne Zutaten, und Starter-Stuecke zaehlen nicht", () => {

@@ -152,11 +152,13 @@ export class MapScene extends Phaser.Scene {
     const self = (): PlayerSetup | undefined => this.run.players.find((player) => player.id === selfId);
     const window = new WorkbenchWindow(
       this,
-      () => ({
-        items: (self()?.backpack ?? []).map((entry) => ({ ...entry })),
-        size: self()?.backpackSize ?? startSize(),
-      }),
-      (items) => {
+      () => [
+        {
+          items: (self()?.backpack ?? []).map((entry) => ({ ...entry })),
+          size: self()?.backpackSize ?? startSize(),
+        },
+      ],
+      ([items = []]) => {
         const player = self();
         if (!player) return;
         player.backpack = items;
@@ -434,7 +436,7 @@ export class MapScene extends Phaser.Scene {
       start: "",
       combat: "Durchqueren und den Ausgang erreichen. Unterwegs liegt Beute.",
       elite: "Ein Anführer wartet hier. Hart – aber was er fallen lässt, lohnt sich.",
-      rest: "Kein Kampf. Alle heilen sich vollständig.",
+      rest: "Kein Kampf. Alle heilen sich vollständig, der Rucksack wächst, und es gibt eine Werkbank.",
       extraction: "Hier kommt ihr raus: Ausgang erreichen, und die Beute ist gesichert.",
       boss: "Der Wächter des Hafens. Besiegt ihn, und der Run ist gewonnen.",
     };

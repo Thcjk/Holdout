@@ -18,14 +18,14 @@
  * ein Gegenstand am Finger haengt.
  *
  * ================================================================
- * DIE RUNDE LAEUFT WEITER
+ * SOLO STEHT DIE RUNDE, IM KOOP IST MAN GESCHUETZT
  * ================================================================
  *
- * Auch solo. Das Arbeitsdokument verlangt fuer den Koop ausdruecklich kein
- * Anhalten, und ein Rucksack, der solo anhaelt und im Koop nicht, waere eine
- * Regel mehr, die man lernen muss. Die Figur bleibt stehen, solange das
- * Fenster offen ist (die Spielszene schickt eine leere Bewegung) - Umraeumen
- * mitten im Gefecht kostet also etwas. Das ist Absicht.
+ * Seit 2026-09-26 (Rueckmeldung "Rucksack mit Pause"): Solo haelt der offene
+ * Rucksack die Runde an wie der Pausenknopf - Gegner, Geschosse und die
+ * Horde-Uhr stehen. Im Koop rechnet der Host fuer alle weiter; dort steht
+ * nur die eigene Figur still und nimmt keinen Schaden (`shielded`).
+ * Der Hinweis im Fenster sagt, was gerade gilt.
  */
 
 import Phaser from "phaser";
@@ -68,6 +68,8 @@ export class BackpackWindow {
   constructor(
     private readonly scene: Phaser.Scene,
     onClose: () => void,
+    /** Solo: Die Runde steht, solange das Fenster offen ist. */
+    pausesRound = false,
   ) {
     // Faengt Beruehrungen ab: Ein Daumen neben dem Gitter soll nicht den
     // Joystick darunter ziehen.
@@ -94,16 +96,24 @@ export class BackpackWindow {
         "Waffe antippen = ausrüsten · Aufsatz auf Waffe ziehen · Aufsatz-Symbol antippen = abnehmen · hinausziehen = wegwerfen",
         { fontFamily: "system-ui, sans-serif", fontSize: "13px", color: "#ffd166" },
       )
+      .setShadow(1, 1, "#00000088", 2)
       .setDepth(DEPTH.hud + 15);
 
     // Rucksack offen = geschuetzt (2026-09-26): in Ruhe umraeumen.
     this.protectedNote = scene.add
-      .text(0, 0, "Geschützt – solange der Rucksack offen ist, trifft dich nichts", {
+      .text(
+        0,
+        0,
+        pausesRound
+          ? "Pause – solange der Rucksack offen ist, steht die Runde"
+          : "Geschützt – die Runde läuft weiter, aber dich trifft nichts",
+        {
         fontFamily: "system-ui, sans-serif",
         fontSize: "13px",
         color: "#b5e08c",
         fontStyle: "bold",
-      })
+        },
+      )
       .setShadow(1, 1, "#00000088", 2)
       .setDepth(DEPTH.hud + 15);
 
@@ -165,9 +175,13 @@ export class BackpackWindow {
   layout(): void {
     const width = this.size.width * INVENTORY.cellSize;
     const left = (VIEWPORT.width - width) / 2;
-    this.title.setPosition(left, GRID_TOP - 70);
-    this.hint.setPosition(left, GRID_TOP - 44);
-    this.protectedNote.setPosition(left, GRID_TOP - 26);
+    const height = this.size.height * INVENTORY.cellSize;
+    this.title.setPosition(left, GRID_TOP - 62);
+    this.protectedNote.setPosition(left, GRID_TOP - 28);
+    // Die Bedienhilfe unter dem Gitter: Oben lief sie in die Knoepfe
+    // Rucksack/Pause/Ton hinein.
+    this.hint.setPosition(VIEWPORT.width / 2, GRID_TOP + height + 22).setOrigin(0.5, 0);
+    this.hint.setWordWrapWidth(Math.min(VIEWPORT.width - 40, 900));
     // Rechts neben dem Gitter, oben - ueber dem Hinweis lag er auf dem Text.
     this.closeButton.setPosition(Math.min(VIEWPORT.width - 76, left + width + 76), GRID_TOP + 24);
     this.backdrop.setSize(VIEWPORT.width * 2, VIEWPORT.height * 2);
@@ -229,6 +243,7 @@ export class BackpackWindow {
     });
 
     this.grid?.destroy();
+    this.hint.setY(GRID_TOP + this.size.height * INVENTORY.cellSize + 22);
     const width = this.size.width * INVENTORY.cellSize;
     const left = (VIEWPORT.width - width) / 2;
     const height = this.size.height * INVENTORY.cellSize;

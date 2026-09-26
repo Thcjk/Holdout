@@ -7,7 +7,7 @@
 
 import { Simulation } from "../systems/Simulation";
 import type { PlayerSetup, WorldPlace } from "../systems/world";
-import type { InputState } from "../systems/types";
+import type { InputState, InventoryCommand } from "../systems/types";
 import type { GameSession, WorldView } from "./GameSession";
 import { FORCED_PLACE, FORCED_SEED } from "../platform/debugFlags";
 
@@ -36,6 +36,11 @@ export class SoloSession implements GameSession {
   update(deltaMs: number, input: InputState): boolean {
     this.inputs.set(this.selfId, input);
     return this.simulation.advance(deltaMs, this.inputs) > 0;
+  }
+
+  /** Rucksack-Befehl waehrend der Pause - siehe `Simulation.applyInventoryNow`. */
+  applyWhilePaused(command: InventoryCommand): void {
+    this.simulation.applyInventoryNow(this.selfId, command);
   }
 
   release(): null {

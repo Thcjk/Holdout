@@ -11,7 +11,7 @@ import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import { playEventSounds } from "../audio/eventSounds";
 import { ABILITIES, CHARACTERS, PLAYER, SUPERS } from "../config/balance";
-import { COLORS, DEPTH, VIEW3D } from "../config/constants";
+import { COLORS, DEPTH, VIEW3D, VIEWPORT } from "../config/constants";
 import type { GameSession } from "../net/GameSession";
 import { SoloSession } from "../net/SoloSession";
 import { ArenaRenderer } from "../render/ArenaRenderer";
@@ -33,6 +33,7 @@ import { attackLabel, attackRange, autoAimReach, reloadTimeOf } from "../systems
 import { emptyInput } from "../systems/types";
 import type {
   CharacterId,
+  GameEvent,
   InputState,
   PackedItem,
   PlayerState,
@@ -97,6 +98,9 @@ export interface GameSceneData {
   run?: RunState;
 }
 
+/** Schadenszahlen erscheinen etwa ueber dem Kopf (Meter ueber dem Boden). */
+const NUMBER_HEIGHT = 2.2;
+
 export class GameScene extends Phaser.Scene {
   private session!: GameSession;
 
@@ -141,7 +145,7 @@ export class GameScene extends Phaser.Scene {
   private paused = false;
   /** Ist die Sitzung schon an den naechsten Run weitergegeben? */
   private released = false;
-  /** Ist das Rucksack-Fenster offen? Dann ruht die Eingabe, die Runde nicht. */
+  /** Ist das Rucksack-Fenster offen? Solo steht dann die Runde, im Koop ruht nur die Eingabe. */
   private backpackOpen = false;
 
   constructor() {
@@ -202,9 +206,8 @@ export class GameScene extends Phaser.Scene {
         this.scene.start("Title");
       },
       onBackpack: (open: boolean) => {
-        // Kein Anhalten, auch solo nicht - siehe `ui/BackpackWindow.ts`.
-        // Nur die Eingabe ruht, damit Finger im Fenster nicht die Figur
-        // steuern.
+        // Solo haelt der offene Rucksack die Runde an, im Koop ruht nur die
+        // Eingabe und die Figur ist geschuetzt - siehe `ui/BackpackWindow.ts`.
         this.backpackOpen = open;
       },
     });
@@ -261,6 +264,22 @@ export class GameScene extends Phaser.Scene {
     // Der Daumen liefert Bildschirmrichtungen; wie die in Bodenrichtungen
     // umzurechnen sind, haengt an der Kamera. In 2D ist es die Identitaet.
     this.hud.inputManager.view = this.world3d?.orientation ?? TOP_DOWN;
+
+    // Solo haelt auch der offene Rucksack an (2026-09-26): in Ruhe umraeumen,
+    // ohne dass Gegner naeherkommen oder die Horde-Uhr weiterlaeuft.
+    if (this.backpackOpen && this.session.canPause && !this.paused) {
+      this.drawWorld3d(0);
+      this.hud.inputManager.clearOneShots();
+      const command = this.hud.peekInventoryCommand();
+      if (command && this.session.applyWhilePaused) {
+        this.session.applyWhilePaused(command);
+        this.hud.shiftInventoryCommand();
+        this.handleEvents();
+      }
+      this.entities?.update();
+      this.updateHudModel(player);
+      return;
+    }
 
     if (this.paused) {
       // Weiterzeichnen, damit die Welt auch nach einer Drehung des Handys
@@ -466,9 +485,46 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  /**
+   * Treffer-Feedback in der 3D-Ansicht (2026-09-26, Rueckmeldung "kein Hit-
+   * Feedback beim Gegner oder mir selber"). Die 2D-Ansicht hat dafuer
+   * `Juice`; in 3D fehlte es ganz. Das Aufleuchten der Figuren macht die
+   * `EntityView`, hier kommen die Zahlen und der rote Rand dazu.
+   *
+   *   - Schaden am Gegner: helle Zahl ueber ihm
+   *   - Schaden an einem Spieler: rote Zahl; am eigenen zusaetzlich roter
+   *     Bildrand (und auf Android ein kurzes Vibrieren)
+   *   - Heilung: gruene Zahl
+   */
+  private showHitFeedback3d(events: readonly GameEvent[]): void {
+    const world = this.world3d;
+    if (!world || !this.hud) return;
+    const at = (x: number, y: number): { x: number; y: number } | null => {
+      const fraction = world.screenFraction({ x, y }, NUMBER_HEIGHT);
+      return fraction ? { x: fraction.x * VIEWPORT.width, y: fraction.y * VIEWPORT.height } : null;
+    };
+    for (const event of events) {
+      if (event.type === "hit") {
+        const spot = at(event.x, event.y);
+        if (spot) this.hud.floatNumber(spot.x, spot.y, `${Math.round(event.damage)}`, "#fff1c9", 17);
+      } else if (event.type === "playerHit") {
+        const spot = at(event.x, event.y);
+        if (spot) this.hud.floatNumber(spot.x, spot.y, `-${Math.round(event.damage)}`, "#ff6b57", 19);
+        if (event.playerId === this.session.selfId) {
+          const self = this.session.view.state.players.find((entry) => entry.id === event.playerId);
+          this.hud.hurtFlash(self ? (event.damage / self.maxHealth) * 5 : 1);
+        }
+      } else if (event.type === "healed" && event.amount >= 1) {
+        const spot = at(event.x, event.y);
+        if (spot) this.hud.floatNumber(spot.x, spot.y, `+${Math.round(event.amount)}`, "#9be07a", 17);
+      }
+    }
+  }
+
   private handleEvents(): void {
     const events = this.session.view.events;
 
+    this.showHitFeedback3d(events);
     for (const event of events) {
       if (event.type === "hit") {
         this.entities?.flashEnemy(event.enemyId);

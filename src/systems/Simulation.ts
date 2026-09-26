@@ -15,7 +15,8 @@ import { MAX_TICKS_PER_FRAME, TICK_MS, TICK_SECONDS } from "../config/constants"
 import { createWorld, stepWorld } from "./world";
 import type { PlayerSetup, WorldPlace } from "./world";
 import type { WorldView } from "../net/GameSession";
-import type { GameEvent, InputState, Vec2, WorldState } from "./types";
+import { applyInventoryCommand } from "./loot";
+import type { GameEvent, InputState, InventoryCommand, Vec2, WorldState } from "./types";
 
 /** Ein Schluessel je Objekt, damit Spieler und Gegner sich nicht in die Quere kommen. */
 function playerKey(id: string): string {
@@ -82,6 +83,25 @@ export class Simulation implements WorldView {
 
   get pendingCount(): number {
     return this.state.pendingSpawns.length;
+  }
+
+  /**
+   * Einen Rucksack-Befehl sofort ausfuehren, ohne dass Zeit vergeht.
+   *
+   * Solo haelt der offene Rucksack die Runde an (2026-09-26). Dann gibt es
+   * keinen Tick, der den Befehl mitnehmen koennte - also wird er hier mit
+   * denselben Regeln wie im Tick angewendet. Ereignisse (etwa "Verband
+   * benutzt") landen wie gewohnt in `events`.
+   */
+  applyInventoryNow(playerId: string, command: InventoryCommand): void {
+    const player = this.state.players.find((entry) => entry.id === playerId);
+    if (!player) return;
+    this.frameEvents.length = 0;
+    this.state.events.length = 0;
+    applyInventoryCommand(this.state, player, command);
+    for (const event of this.state.events) {
+      this.frameEvents.push(event);
+    }
   }
 
   /** Alle Ereignisse, die seit dem letzten Bild passiert sind. */

@@ -55,7 +55,7 @@ import {
   MeshToonMaterial,
   SphereGeometry,
 } from "three";
-import type { Scene } from "three";
+import type { Camera, Scene } from "three";
 import { COLORS } from "../config/constants";
 import { CHARACTER_LOOKS, ENEMY_LOOKS, FIGURE_HEIGHT_PER_DIAMETER } from "../config/models";
 import type { FigureLook } from "../config/models";
@@ -64,6 +64,8 @@ import type { EnemyType, GameEvent, PlayerState, Vec2 } from "../systems/types";
 import { itemAt } from "../config/items";
 import { equippedEntry } from "../systems/weapons";
 import { FigureModel } from "./FigureModel";
+import { HealthBars } from "./HealthBars";
+import type { BarRequest } from "./HealthBars";
 import {
   CHARACTER_COLORS,
   DOWN_COLOR,
@@ -108,6 +110,9 @@ interface FigureSlot {
   /** Schutzblase, solange der Rucksack offen ist (nur Spieler, bei Bedarf angelegt). */
   shield?: Mesh;
 }
+
+/** Gegner-Balken sind rot - rot heisst Feind. */
+const ENEMY_BAR_COLOR = 0xe4572e;
 
 /** So lange steht der Schlag-Clip, bevor die Bewegung wieder uebernimmt. */
 const PUNCH_SECONDS = 0.4;
@@ -169,6 +174,10 @@ export class EntityView {
   private readonly enemies = new Map<number, FigureSlot>();
   private readonly projectiles: Mesh[] = [];
 
+  /** Lebensbalken ueber Gegnern und Mitspielern - zwei Zeichenaufrufe fuer alle. */
+  private readonly healthBars: HealthBars;
+  private readonly bars: BarRequest[] = [];
+
   /** Wiederverwendete Menge fuer "wer ist noch da?" - kein Muell je Bild. */
   private readonly seen = new Set<string | number>();
   private frame = 0;
@@ -184,6 +193,7 @@ export class EntityView {
     this.shadows.frustumCulled = false;
     this.shadows.renderOrder = 1;
     scene.add(this.root, this.shadows);
+    this.healthBars = new HealthBars(scene);
   }
 
   /** Wie viele animierte Figuren gerade stehen - fuer die Leistungsanzeige. */
@@ -196,8 +206,9 @@ export class EntityView {
    *
    * @param seconds Zeit seit dem letzten Bild - fuer Animation und Drehung.
    */
-  sync(view: WorldView, seconds: number): void {
+  sync(view: WorldView, seconds: number, camera: Camera, selfId: string): void {
     this.frame += 1;
+    this.bars.length = 0;
     // Faustschlaege dieses Bildes: Die Figur holt aus (Clip "punch").
     for (const event of view.events) {
       if (event.type === "punch") {
@@ -205,11 +216,40 @@ export class EntityView {
         if (slot) slot.punch = PUNCH_SECONDS;
       }
     }
-    this.syncPlayers(view, seconds);
+    this.syncPlayers(view, seconds, selfId);
     this.syncEnemies(view, seconds);
+    this.flashHits(view.events);
+    this.healthBars.update(this.bars, camera);
     this.flashMuzzles(view.events);
     this.syncProjectiles(view);
     this.syncShadows();
+  }
+
+  /**
+   * Treffer-Blitz (2026-09-26): Wer in diesem Bild Schaden genommen hat,
+   * leuchtet kurz rot auf - Gegner wie Spieler. Die Ereignisse kommen im
+   * Koop mit dem Zustandspaket, also sieht jeder dasselbe.
+   */
+  private flashHits(events: readonly GameEvent[]): void {
+    for (const event of events) {
+      if (event.type === "hit") {
+        this.enemies.get(event.enemyId)?.figure?.hit();
+      } else if (event.type === "playerHit") {
+        this.players.get(event.playerId)?.figure?.hit();
+      }
+    }
+  }
+
+  /** Ein Balken ueber dem Kopf dieser Figur. */
+  private addBar(slot: FigureSlot, fraction: number, width: number, color?: number): void {
+    this.bars.push({
+      x: slot.group.position.x,
+      y: slot.height + 0.35,
+      z: slot.group.position.z,
+      fraction,
+      width,
+      ...(color !== undefined ? { color } : {}),
+    });
   }
 
   /** Muendungsfeuer an der Figur, von der ein Schuss ausgeht. */
@@ -267,7 +307,7 @@ export class EntityView {
     this.shadows.instanceMatrix.needsUpdate = true;
   }
 
-  private syncPlayers(view: WorldView, seconds: number): void {
+  private syncPlayers(view: WorldView, seconds: number, selfId: string): void {
     this.seen.clear();
     for (const player of view.state.players) {
       this.seen.add(player.id);
@@ -303,6 +343,10 @@ export class EntityView {
         slot.figure.update(seconds);
       }
       this.syncShield(slot, player.shielded, seconds);
+      // Mitspieler bekommen einen Balken; das eigene Leben steht unten links.
+      if (player.id !== selfId && !player.down) {
+        this.addBar(slot, player.health / player.maxHealth, 1);
+      }
       if (!slot.figure) {
         // Platzhalter: flach gelegt und grau, wenn am Boden.
         const capsule = slot.placeholder as Group;
@@ -341,6 +385,13 @@ export class EntityView {
       if (step) {
         this.turn(slot, step, seconds);
       }
+
+      this.addBar(
+        slot,
+        enemy.health / enemy.maxHealth,
+        enemy.isBoss ? 2.2 : Math.min(1.6, Math.max(0.9, slot.height * 0.55)),
+        ENEMY_BAR_COLOR,
+      );
 
       if (slot.figure) {
         slot.figure.holdWeapon(slot.look.weapon ?? null);
@@ -514,6 +565,7 @@ export class EntityView {
     this.nose.dispose();
     this.box.dispose();
     this.sphere.dispose();
+    this.healthBars.dispose();
     this.shadows.removeFromParent();
     this.shadows.dispose();
     this.shadowGeometry.dispose();

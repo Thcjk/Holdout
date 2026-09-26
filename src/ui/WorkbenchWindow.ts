@@ -2,10 +2,12 @@
  * Die Werkbank am Rastplatz (2026-09-26): aus Material Verbrauchsgueter und
  * Aufsaetze bauen.
  *
- * Arbeitet auf dem gepackten Rucksack, wie er zwischen zwei Gebieten im Run
- * liegt (`RunState.players[].backpack`). Die Regeln stehen in
- * `systems/gear.ts` (`craft`), die Rezepte in `balance.ts` (`RECIPES`) -
- * hier wird nur angezeigt und angetippt.
+ * Zwei Orte (2026-09-26): am Rastplatz auf der Karte mit dem Rucksack, wie
+ * er zwischen zwei Gebieten liegt, und im Packbildschirm mit Lager UND
+ * Rucksack zusammen. Die Werkbank bekommt deshalb eine Liste von Orten
+ * (`CraftStore`) und gibt die neuen Listen zurueck. Die Regeln stehen in
+ * `systems/gear.ts` (`craftAcross`), die Rezepte in `balance.ts` (`RECIPES`)
+ * - hier wird nur angezeigt und angetippt.
  */
 
 import Phaser from "phaser";
@@ -13,22 +15,26 @@ import { RECIPES } from "../config/balance";
 import { VIEWPORT } from "../config/constants";
 import { itemAt, itemIndex } from "../config/items";
 import { UI } from "../config/ui";
-import { craft, hasIngredients } from "../systems/gear";
+import { craftAcross, hasIngredients } from "../systems/gear";
+import type { CraftStore } from "../systems/gear";
 import type { PackedItem } from "../systems/types";
 import { Button } from "./Button";
 import { menuText, woodPanel } from "./menuStyle";
 
-const DEPTH = 500;
+/** Ueber allem, auch ueber den Knoepfen des Packbildschirms (1000). */
+const DEPTH = 2000;
 
 export class WorkbenchWindow {
   private parts: Array<{ destroy(): void }> = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
-    /** Der aktuelle Rucksack und seine Groesse. */
-    private readonly read: () => { items: PackedItem[]; size: { width: number; height: number } },
-    /** Neuer Rucksack nach dem Bauen. */
-    private readonly write: (items: PackedItem[]) => void,
+    /** Die Orte mit Material, in fester Reihenfolge. */
+    private readonly read: () => CraftStore[],
+    /** Neue Listen nach dem Bauen, in derselben Reihenfolge. */
+    private readonly write: (lists: PackedItem[][]) => void,
+    /** Zeile unter dem Titel: woher das Material kommt. */
+    private readonly source = "Material dabei",
   ) {}
 
   get isOpen(): boolean {
@@ -37,7 +43,8 @@ export class WorkbenchWindow {
 
   open(): void {
     this.close();
-    const { items, size } = this.read();
+    const stores = this.read();
+    const items = stores.flatMap((store) => store.items);
     const centerX = VIEWPORT.width / 2;
     const width = Math.min(760, VIEWPORT.width - 60);
     const height = 430;
@@ -54,7 +61,7 @@ export class WorkbenchWindow {
     this.parts.push(panel);
     this.parts.push(menuText(this.scene, centerX, top + 28, "Werkbank", 26, UI.text.title, true).setDepth(DEPTH + 2));
     this.parts.push(
-      menuText(this.scene, centerX, top + 58, `Material dabei: ${materialLine(items)}`, 13, UI.text.muted).setDepth(DEPTH + 2),
+      menuText(this.scene, centerX, top + 58, `${this.source}: ${materialLine(items)}`, 13, UI.text.muted).setDepth(DEPTH + 2),
     );
 
     // Zwei Spalten mit Rezepten.
@@ -76,7 +83,7 @@ export class WorkbenchWindow {
           .setShadow(1, 1, UI.text.shadow, 2)
           .setDepth(DEPTH + 2),
       );
-      const possible = craft(items, size, recipe) !== null;
+      const possible = craftAcross(stores, recipe) !== null;
       const reason = hasIngredients(items, recipe) ? "kein Platz" : "fehlt";
       const button = new Button(
         this.scene,
@@ -84,8 +91,7 @@ export class WorkbenchWindow {
         y + 18,
         possible ? "Bauen" : reason,
         () => {
-          const current = this.read();
-          const next = craft(current.items, current.size, recipe);
+          const next = craftAcross(this.read(), recipe);
           if (next) {
             this.write(next);
             this.open(); // neu aufbauen: Material und Knoepfe stimmen wieder

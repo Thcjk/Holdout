@@ -104,6 +104,11 @@ export interface NodeMapOptions {
   sizeWeights: readonly number[];
   /** Kampfknoten weichen bis zu so viele Stufen von ihrer Schicht ab. */
   dangerSpread?: number;
+  /**
+   * Bis zu dieser Schicht gibt es sicher einen Rastplatz (mit Werkbank).
+   * Ohne Angabe keine Zusicherung.
+   */
+  earlyRestBy?: number;
 }
 
 /**
@@ -311,6 +316,49 @@ function assignTypes(
       }
       node.type = weightedPick(rng, choices);
     }
+  }
+
+  /*
+   * Zusicherungen (2026-09-26). Beides ohne weiteren Zufallszug, damit die
+   * Karte aus demselben Seed dieselbe bleibt:
+   *   - Jede Karte hat einen Ausstieg - sonst gaebe es nur Sieg oder Wipe.
+   *   - Frueh liegt ein Rastplatz: Dort steht die Werkbank, und im Spieltest
+   *     kam man nie an eine heran (die erste Rast lag im Mittel in Schicht 5).
+   */
+  const blockedByRest = (node: MapNode): boolean =>
+    (parents.get(node.id) ?? []).some((parent) => parent.type === "rest") ||
+    node.next.some((id) => nodes[id]?.type === "rest");
+  if (!nodes.some((node) => node.type === "extraction")) {
+    const middle = Math.max(options.extractionFromLayer, Math.floor(layers.depth / 2));
+    convertOne(nodes, middle, layers.last - 1, "extraction", () => false, (options.columns - 1) / 2);
+  }
+  if (options.earlyRestBy !== undefined) {
+    const hasEarly = nodes.some((node) => node.type === "rest" && node.layer <= options.earlyRestBy!);
+    if (!hasEarly) {
+      convertOne(nodes, options.restFromLayer, options.earlyRestBy, "rest", blockedByRest, (options.columns - 1) / 2);
+    }
+  }
+}
+
+/**
+ * Macht aus einem Kampfknoten in den Schichten `from`..`to` einen anderen
+ * Typ: der erste passende, von der spaeteren Schicht her gesucht und in
+ * der Schicht von der Mitte aus - so liegt er nicht immer am Rand.
+ */
+function convertOne(
+  nodes: MapNode[],
+  from: number,
+  to: number,
+  type: NodeType,
+  blocked: (node: MapNode) => boolean,
+  center: number,
+): void {
+  for (let layer = to; layer >= from; layer -= 1) {
+    const candidates = nodes.filter((node) => node.layer === layer && node.type === "combat" && !blocked(node));
+    if (candidates.length === 0) continue;
+    candidates.sort((a, b) => Math.abs(a.column - center) - Math.abs(b.column - center) || a.column - b.column);
+    candidates[0]!.type = type;
+    return;
   }
 }
 

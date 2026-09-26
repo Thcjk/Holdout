@@ -1104,8 +1104,13 @@ export const NODE_MAP = {
   },
   /** Ab welcher Schicht Elite-Knoten vorkommen duerfen (0 = Start). */
   eliteFromLayer: 4,
-  /** Ab welcher Schicht Rastplaetze vorkommen duerfen. */
-  restFromLayer: 3,
+  /** Ab welcher Schicht Rastplaetze vorkommen duerfen (seit 2026-09-26: 2 statt 3). */
+  restFromLayer: 2,
+  /**
+   * Bis Schicht 3 liegt sicher ein Rastplatz (2026-09-26): Dort steht die
+   * Werkbank, und im Spieltest kam man nie an eine heran.
+   */
+  earlyRestBy: 3,
   /**
    * Ab welcher Schicht Extraktionen vorkommen duerfen. Nicht gleich am
    * Anfang: Wer nach einem Knoten schon aussteigen kann, hat nichts riskiert.

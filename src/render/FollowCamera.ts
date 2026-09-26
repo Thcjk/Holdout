@@ -96,6 +96,17 @@ export class FollowCamera {
   }
 
   /**
+   * Wo liegt ein Punkt (Simulationspixel, `height` Meter ueber dem Boden) auf
+   * dem Bildschirm? In Anteilen von 0 bis 1 (links oben 0/0), oder `null`,
+   * wenn er hinter der Kamera liegt. Fuer Schadenszahlen im HUD.
+   */
+  screenFraction(position: Vec2, height: number): { x: number; y: number } | null {
+    toThree(position, height, this.scratch).project(this.camera);
+    if (this.scratch.z >= 1) return null;
+    return { x: (this.scratch.x + 1) / 2, y: (1 - this.scratch.y) / 2 };
+  }
+
+  /**
    * Liegt ein Bodenpunkt im Bild? `margin` ist der Rand als Anteil der halben
    * Bildbreite, der noch als "draussen" gilt.
    */

@@ -21,6 +21,10 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 
 ## Aktueller Stand
 
+> **Stand 2026-09-26 spätabends: Version 2.5.0 – Rucksack hält an,
+> Werkbank zuhause, Lebensbalken, Treffer-Feedback.** Auf dem Branch; siehe
+> **„Rückmeldung zu 2.4“** direkt unten.
+>
 > **Stand 2026-09-26 abends: Version 2.4.0 – Spielstände, Items neu,
 > leichter.** Auf Wunsch „balancen … und dann alles mergen“ auf dem Branch
 > und auf `main`. Siehe **„Spielstände, Items, Balance“** direkt unten.
@@ -54,6 +58,37 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 >
 > **BRIEFING.md ist seit 2026-09-24 die neue Fassung** (Abschnitte 2, 4, 5:
 > Three.js, Knoten-Karte, Vorbild „Deadly Days: Roadtrip“).
+
+## Rückmeldung zu 2.4 (2026-09-26 spätabends, v2.5.0)
+
+Rückmeldung: „Rucksack-Menü mit Pause geht nicht, Werkbank gibt es auch
+keine, Balance ist oke. Gegner brauchen über dem Kopf eine kleine Anzeige
+für Leben. Kein Hit-Feedback beim Gegner oder mir selber.“
+
+| | Was | Wo |
+| --- | --- | --- |
+| Rucksack = Pause (solo) | Offenes Fenster hält die Runde an wie „Pause“: Gegner, Geschosse, Horde-Uhr stehen. Befehle wirken trotzdem sofort (`Simulation.applyInventoryNow`, `GameSession.applyWhilePaused`). Koop: weiter „Geschützt“, die Runde läuft. | `GameScene.update`, `SoloSession` |
+| Kopfzeile des Fensters | Die Bedienhilfe lag über den Knöpfen Rucksack/Pause/Ton – jetzt unter dem Gitter. Hinweis sagt solo „Pause“, im Koop „Geschützt“. | `ui/BackpackWindow.ts` |
+| Werkbank zuhause | Knopf „Werkbank“ im Packbildschirm; baut aus Lager UND Rucksack, Ergebnis zuerst ins Lager (`craftAcross`). | `LoadoutScene`, `systems/gear.ts` |
+| Rast früher | Rast ab Schicht 2 (vorher 3), bis Schicht 3 sicher eine (`earlyRestBy`), jede Karte sicher mit Ausstieg. Beides ohne Zufallszug. Erste Rast im Mittel Schicht 2,7 statt 4,8 (300 Seeds). | `NodeMapGenerator`, `NODE_MAP` |
+| Lebensbalken | Über jedem Gegner (rot) und jedem Mitspieler (grün→rot), immer zur Kamera gedreht, ohne Tiefentest. Alle Balken zusammen zwei Zeichenaufrufe (Instanzlisten). | `render/HealthBars.ts` |
+| Treffer-Blitz | Getroffene Figur leuchtet 0,12 s rot (zweites Material mit derselben Haut – umfärben liesse alle Gegner gleicher Haut aufblitzen). | `FigureModel.hit` |
+| Schadenszahlen | Hell über Gegnern, rot „−N“ über Spielern, grün „+N“ bei Heilung – im HUD, aus der 3D-Kamera umgerechnet (`screenFraction`). | `GameScene.showHitFeedback3d`, `HudScene.floatNumber` |
+| Eigener Treffer | Roter Bildrand (Stärke nach Schaden), auf Android kurzes Vibrieren. | `HudScene.hurtFlash` |
+
+- **Falle, im Bild gefunden:** Die Balken waren zuerst schwarz. Three.js
+  zeichnet erst Undurchsichtiges, dann Durchsichtiges; `renderOrder` gilt
+  nur innerhalb eines Durchgangs. Der halbdurchsichtige Hintergrund lag
+  deshalb über der Füllung – jetzt sind beide „durchsichtig“.
+- **Geprüft:** 353 Tests (neu: Werkbank über Lager+Rucksack, Rucksack-Befehl
+  ohne Tick, frühe Rast/Ausstieg über 200 Seeds), typecheck, lint, Build.
+  Emulator (iPhone 13 quer, echte Touch-Ereignisse): Feuern → Zahlen über
+  dem Gegner, Gegner stirbt; getroffen → rote Zahl, roter Rand; Balken rot
+  über allen Gegnern; Rucksack offen → „Pause“, Horde-Uhr steht; Werkbank
+  im Packbildschirm. Keine Seitenfehler.
+- **Offen:** Die 2D-Ansicht (`?view=2d`) hat ihr altes Feedback (`Juice`),
+  keine neuen Balken. Mehrere Schrotkugeln ergeben mehrere Zahlen
+  (leicht versetzt).
 
 ## Spielstände, Items, Balance (2026-09-26 abends, v2.4.0)
 
@@ -2577,6 +2612,7 @@ src/
     decorModels.ts        selbst gebaute Low-Poly-Formen (kein Paket)
     LootView.ts           Beute am Boden in 3D, mit Objekt-Vorrat
     ZoneView.ts           Ausstieg und Boss-Punkt als Ringe
+    HealthBars.ts         Lebensbalken ueber Gegnern/Mitspielern (Instanzen)
     World3D.ts            die 3D-Welt eines Runs, von GameScene gehalten
     FollowCamera.ts       feste, angewinkelte Kamera (3D)
     EntityView.ts         Figuren/Gegner/Geschosse als Meshes (3D)

@@ -274,38 +274,64 @@ export function hasIngredients(items: readonly PackedItem[], recipe: Recipe): bo
   return true;
 }
 
+/** Ein Ort, aus dem die Werkbank nimmt und in den sie legt. */
+export interface CraftStore {
+  items: readonly PackedItem[];
+  size: { width: number; height: number };
+}
+
 /**
- * Baut ein Rezept: Zutaten raus, Ergebnis an die erste freie Stelle.
- * Gibt den neuen Rucksack zurueck, oder `null`, wenn Zutaten oder Platz
- * fehlen. Arbeitet auf der gepackten Form, wie sie zwischen zwei Gebieten
- * im Run liegt (`RunState.players[].backpack`).
+ * Baut ein Rezept ueber mehrere Orte hinweg (2026-09-26): im Packbildschirm
+ * Lager und Rucksack zusammen. Zutaten werden in der Reihenfolge der Orte
+ * entnommen, das Ergebnis kommt an die erste freie Stelle des ersten Ortes,
+ * der Platz hat. Gibt die neuen Listen zurueck (gleiche Reihenfolge), oder
+ * `null`, wenn Zutaten oder Platz fehlen.
+ */
+export function craftAcross(stores: readonly CraftStore[], recipe: Recipe): PackedItem[][] | null {
+  if (!hasIngredients(stores.flatMap((store) => store.items), recipe)) {
+    return null;
+  }
+  const lists = stores.map((store) => store.items.map((entry) => ({ ...entry })));
+  for (const need of recipe.needs) {
+    const def = itemIndex(need);
+    for (const list of lists) {
+      const at = list.findIndex((entry) => entry.def === def && !entry.starter && !entry.belt);
+      if (at >= 0) {
+        list.splice(at, 1);
+        break;
+      }
+    }
+  }
+
+  // Platz suchen im Gitter, wie es nach dem Entnehmen aussieht.
+  const def = itemIndex(recipe.result);
+  for (let index = 0; index < lists.length; index += 1) {
+    const list = lists[index]!;
+    const size = stores[index]!.size;
+    const grid = createGrid(size.width, size.height);
+    let id = 1;
+    for (const entry of list) {
+      if (!entry.belt) place(grid, { id: id++, def: entry.def }, entry.x, entry.y, entry.rotated);
+    }
+    const spot = findFreeSpot(grid, def);
+    if (spot) {
+      list.push({ def, x: spot.x, y: spot.y, rotated: spot.rotated });
+      return lists;
+    }
+  }
+  return null;
+}
+
+/**
+ * Baut ein Rezept in EINEM Rucksack: Zutaten raus, Ergebnis an die erste
+ * freie Stelle. Gibt den neuen Rucksack zurueck, oder `null`, wenn Zutaten
+ * oder Platz fehlen. Arbeitet auf der gepackten Form, wie sie zwischen zwei
+ * Gebieten im Run liegt (`RunState.players[].backpack`).
  */
 export function craft(
   items: readonly PackedItem[],
   size: { width: number; height: number },
   recipe: Recipe,
 ): PackedItem[] | null {
-  if (!hasIngredients(items, recipe)) {
-    return null;
-  }
-  const remaining = items.map((entry) => ({ ...entry }));
-  for (const need of recipe.needs) {
-    const def = itemIndex(need);
-    const at = remaining.findIndex((entry) => entry.def === def && !entry.starter && !entry.belt);
-    remaining.splice(at, 1);
-  }
-
-  // Platz suchen im Gitter, wie es nach dem Entnehmen aussieht.
-  const grid = createGrid(size.width, size.height);
-  let id = 1;
-  for (const entry of remaining) {
-    if (!entry.belt) place(grid, { id: id++, def: entry.def }, entry.x, entry.y, entry.rotated);
-  }
-  const def = itemIndex(recipe.result);
-  const spot = findFreeSpot(grid, def);
-  if (!spot) {
-    return null;
-  }
-  remaining.push({ def, x: spot.x, y: spot.y, rotated: spot.rotated });
-  return remaining;
+  return craftAcross([{ items, size }], recipe)?.[0] ?? null;
 }

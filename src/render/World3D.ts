@@ -75,9 +75,16 @@ export class World3D {
     this.props.update(view.state, seconds);
     this.zones.update(view.state, seconds);
     this.loot.sync(view.state, seconds);
-    this.entities.sync(view, seconds);
+    // Erst die Kamera, dann die Figuren: Die Lebensbalken drehen sich in die
+    // Kamera und sollen deren Stand DIESES Bildes haben.
     this.followCamera.follow(view.renderPlayerPosition(selfId), deltaMs, aspect);
+    this.entities.sync(view, seconds, this.followCamera.camera, selfId);
     this.setup.render(this.followCamera.camera);
+  }
+
+  /** Bildschirmlage eines Punkts als Anteil 0..1 - siehe `FollowCamera.screenFraction`. */
+  screenFraction(position: Vec2, height: number): { x: number; y: number } | null {
+    return this.followCamera.screenFraction(position, height);
   }
 
   /** Liegt ein Bodenpunkt (Simulationspixel) sichtbar im Bild? */

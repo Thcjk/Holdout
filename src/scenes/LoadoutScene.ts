@@ -62,6 +62,7 @@ import {
 import { packCarried, packGrid } from "../systems/backpackCodec";
 import { createBelt, isConsumable, putInBelt } from "../systems/gear";
 import { BeltBar } from "../ui/BeltBar";
+import { WorkbenchWindow } from "../ui/WorkbenchWindow";
 import { createRun } from "../systems/run";
 import { startSize } from "../systems/InventoryGridSystem";
 import { FORCED_SEED, PLACE_FROM_URL } from "../platform/debugFlags";
@@ -274,7 +275,38 @@ export class LoadoutScene extends Phaser.Scene {
       { width: 140, height: 46, fontSize: 16, variant: "secondary" },
     ).setDepth(BUTTON_DEPTH);
 
+    /*
+     * Die Werkbank auch zuhause (2026-09-26, Rueckmeldung "Werkbank gibt es
+     * keine"): Rastplaetze sind selten und kommen spaet, und das Material
+     * liegt nach dem Run ohnehin hier. Gebaut wird aus Lager UND Rucksack,
+     * das Ergebnis kommt zuerst ins Lager.
+     */
+    const workbench = new WorkbenchWindow(
+      this,
+      () => [
+        { items: packGrid(this.stash), size: { width: this.stash.width, height: this.stash.height } },
+        { items: packGrid(this.backpack), size: { width: this.backpack.width, height: this.backpack.height } },
+      ],
+      ([stash = [], backpack = []]) => {
+        this.stash = this.gridFrom(stash, this.stash.width, this.stash.height);
+        this.backpack = this.gridFrom(backpack, this.backpack.width, this.backpack.height);
+        this.stashView.setGrid(this.stash);
+        this.view.setGrid(this.backpack);
+        this.updateSummary();
+      },
+      "Material in Lager und Rucksack",
+    );
+    new Button(
+      this,
+      VIEWPORT.width / 2,
+      VIEWPORT.height - SAFE.bottom - 34,
+      "Werkbank",
+      () => workbench.open(),
+      { width: 160, height: 46, fontSize: 17, variant: "secondary" },
+    ).setDepth(BUTTON_DEPTH);
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      workbench.close();
       this.view.destroy();
       this.stashView.destroy();
     });
@@ -354,6 +386,22 @@ export class LoadoutScene extends Phaser.Scene {
   }
 
   /** Legt an die gewuenschte Stelle, sonst an die erste freie. */
+  /** Ein Gitter aus einer gepackten Liste - nach dem Bauen an der Werkbank. */
+  private gridFrom(items: readonly PackedItem[], width: number, height: number): GridData {
+    const grid = createGrid(width, height);
+    for (const entry of items) {
+      const item: ItemInstance = {
+        id: this.nextId++,
+        def: entry.def,
+        ...(entry.starter ? { starter: true } : {}),
+        ...(entry.equipped ? { equipped: true } : {}),
+        ...(entry.mods ? { mods: entry.mods } : {}),
+      };
+      this.put(grid, item, { x: entry.x, y: entry.y, rotated: entry.rotated });
+    }
+    return grid;
+  }
+
   private put(
     grid: GridData,
     item: ItemInstance,

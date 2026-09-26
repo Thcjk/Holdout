@@ -191,6 +191,19 @@ describe("Knoten-Karte", () => {
     }
   });
 
+  it("hat frueh einen Rastplatz mit Werkbank, nie zwei Rasten hintereinander", () => {
+    for (let seed = 1; seed <= 200; seed += 1) {
+      const map = generateNodeMap(seed);
+      const early = map.nodes.filter((node) => node.type === "rest" && node.layer <= NODE_MAP.earlyRestBy!);
+      expect(early.length).toBeGreaterThan(0);
+      for (const node of map.nodes) {
+        if (node.type !== "rest") continue;
+        for (const id of node.next) expect(map.nodes[id]?.type).not.toBe("rest");
+      }
+      expect(map.nodes.some((node) => node.type === "extraction")).toBe(true);
+    }
+  });
+
   it("zeigt Eckdaten: Groesse 1-3, Beute nur bei Kampfknoten", () => {
     for (const seed of SEEDS) {
       const map = generateNodeMap(seed);

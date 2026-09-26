@@ -137,6 +137,77 @@ export class HudScene extends Phaser.Scene {
     this.onBackpack(open);
   }
 
+  /**
+   * Roter Rand, wenn man selbst getroffen wird (2026-09-26). Ein Bild fuer
+   * den ganzen Schirm, innen durchsichtig - einmal als Textur gemalt.
+   */
+  private hurtVignette?: Phaser.GameObjects.Image;
+
+  /**
+   * Getroffen: der Rand leuchtet kurz rot auf. Auf Android zusaetzlich ein
+   * kurzes Vibrieren (iOS kennt `navigator.vibrate` nicht - dort nur das Bild).
+   */
+  hurtFlash(strength = 1): void {
+    const vignette = this.hurtVignette;
+    if (!vignette) return;
+    this.tweens.killTweensOf(vignette);
+    vignette.setAlpha(Math.min(0.9, 0.45 + 0.35 * strength));
+    this.tweens.add({ targets: vignette, alpha: 0, duration: 380, ease: "Quad.easeOut" });
+    try {
+      navigator.vibrate?.(25);
+    } catch {
+      // Manche Browser werfen statt zu schweigen - Vibrieren ist Beiwerk.
+    }
+  }
+
+  /**
+   * Eine Zahl, die kurz aufsteigt und verblasst: Schaden am Gegner, eigener
+   * Schaden, Heilung. Lage in Entwurfseinheiten (die Spielszene rechnet sie
+   * aus der 3D-Kamera um).
+   */
+  floatNumber(x: number, y: number, text: string, color: string, size = 18): void {
+    const label = this.add
+      .text(x + Phaser.Math.Between(-16, 16), y + Phaser.Math.Between(-10, 6), text, {
+        fontFamily: UI.font,
+        fontSize: `${size}px`,
+        color,
+        fontStyle: "bold",
+        stroke: "#1a0f08",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.hud - 1)
+      .setScale(0.7);
+    this.tweens.add({ targets: label, scale: 1, duration: 90, ease: "Back.easeOut" });
+    this.tweens.add({
+      targets: label,
+      y: y - 34,
+      alpha: 0,
+      delay: 180,
+      duration: 520,
+      ease: "Quad.easeIn",
+      onComplete: () => label.destroy(),
+    });
+  }
+
+  private createHurtVignette(): void {
+    const key = "hud-hurt-vignette";
+    if (!this.textures.exists(key)) {
+      const size = 256;
+      const texture = this.textures.createCanvas(key, size, size);
+      const context = texture?.getContext();
+      if (texture && context) {
+        const gradient = context.createRadialGradient(size / 2, size / 2, size * 0.28, size / 2, size / 2, size * 0.72);
+        gradient.addColorStop(0, "rgba(228, 40, 30, 0)");
+        gradient.addColorStop(1, "rgba(228, 40, 30, 0.95)");
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, size, size);
+        texture.refresh();
+      }
+    }
+    this.hurtVignette = this.add.image(0, 0, key).setOrigin(0).setAlpha(0).setDepth(DEPTH.hud - 2);
+  }
+
   private minimap!: Minimap;
   private compass!: Phaser.GameObjects.Graphics;
   private compassText!: Phaser.GameObjects.Text;
@@ -273,7 +344,7 @@ export class HudScene extends Phaser.Scene {
       { width: 100, height: 30, fontSize: 13, variant: "secondary" },
     );
     this.backpackButton.setDepth(DEPTH.hud);
-    this.backpackWindow = new BackpackWindow(this, () => this.setBackpackOpen(false));
+    this.backpackWindow = new BackpackWindow(this, () => this.setBackpackOpen(false), this.canPause);
 
     this.beltButtons = [0, 1, 2].map((slot) => {
       const button = new Button(this, 0, 0, "–", () => this.useQueue.push({ op: "use", slot }), {
@@ -307,6 +378,7 @@ export class HudScene extends Phaser.Scene {
     });
 
     this.inputManager = new InputManager(this);
+    this.createHurtVignette();
 
     // GANZ ZUM SCHLUSS: `createPauseScreen` blendet am Ende alles aus, was in
     // der Pause nicht sichtbar sein darf. Frueher aufgerufen, gaebe es das
@@ -677,6 +749,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   private layout(): void {
+    this.hurtVignette?.setDisplaySize(VIEWPORT.width, VIEWPORT.height);
     if (!this.ready) {
       return;
     }
