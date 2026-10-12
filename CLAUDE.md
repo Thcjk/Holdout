@@ -16,7 +16,7 @@ und Texte im Spiel auf Deutsch**, Code lesbar statt clever.
 
 ## Stand 2026-10-12
 
-Umbau auf Branch `brotato-umbau` fertig und lauffähig, **noch nicht auf `main`**.
+Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
 
 - Spielkern, Shop, 6 Charaktere (Söldner, Raufbold, Jäger, Panzer, Glückspilz, Schatten), 7 Waffen (je 4 Stufen), 24 Gegenstände, 14 Level-Ups,
   7 Gegnertypen, 20 Wellen: fertig, 20 Tests + Bot-Balancemessung.
