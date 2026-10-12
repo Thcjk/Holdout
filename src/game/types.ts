@@ -34,7 +34,7 @@ export type StatMods = Partial<Record<StatKey, number>>;
 
 export type WeaponId = "pistol" | "smg" | "shotgun" | "sniper" | "fist" | "knife" | "spear";
 
-export type CharacterId = "kartoffel" | "raufbold" | "jaeger" | "panzer" | "glueckspilz" | "schatten";
+export type CharacterId = "soeldner" | "raufbold" | "jaeger" | "panzer" | "glueckspilz" | "schatten";
 
 export type EnemyType = "grunt" | "swarmer" | "charger" | "spitter" | "bruiser" | "elite" | "boss";
 

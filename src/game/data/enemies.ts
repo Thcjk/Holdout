@@ -110,7 +110,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     drop: 40,
     dropChance: 1,
     cost: 0,
-    minWave: 10,
+    minWave: 8,
     knockback: 0,
     color: 0x3f7d3a,
   },
@@ -141,15 +141,15 @@ export function waveLength(wave: number): number {
 /** Lebenspunkte-Faktor der Gegner in dieser Welle. */
 export function hpScale(wave: number): number {
   const w = wave - 1;
-  return 1 + 0.15 * w + 0.025 * w * w;
+  return 1 + 0.2 * w + 0.04 * w * w;
 }
 
 export function damageScale(wave: number): number {
-  return 1 + 0.09 * (wave - 1);
+  return 1 + 0.12 * (wave - 1);
 }
 
 export function speedScale(wave: number): number {
-  return Math.min(1.3, 1 + 0.012 * (wave - 1));
+  return Math.min(1.4, 1 + 0.016 * (wave - 1));
 }
 
 /** Zusaetzliche Gegner je weiterem Spieler: Der Koop wird enger, nicht beliebig leicht. */
@@ -214,7 +214,7 @@ function groupSize(type: EnemyType, rng: () => number): number {
  */
 export function planWave(wave: number, players: number, rng: () => number): SpawnPlan[] {
   const length = waveLength(wave);
-  let budget = (6 + 3.6 * wave) * (length / 30) * playerCountScale(players);
+  let budget = (6 + 4.6 * wave) * (length / 30) * playerCountScale(players);
   const types = (Object.keys(ENEMIES) as EnemyType[]).filter((type) => weightOf(type, wave) > 0);
   const total = types.reduce((sum, type) => sum + weightOf(type, wave), 0);
 
@@ -238,11 +238,12 @@ export function planWave(wave: number, players: number, rng: () => number): Spaw
   }
 
   // Zwischengegner stehen fest am Anfang der Welle.
-  if (wave === 10) {
-    plan.push({ at: 2, type: "elite", count: 1 });
+  if (wave === 8 || wave === 12 || wave === 16) {
+    plan.push({ at: 2, type: "elite", count: wave === 16 ? 2 : 1 });
   }
   if (wave === FINAL_WAVE) {
     plan.push({ at: 2, type: "boss", count: 1 });
+    plan.push({ at: 12, type: "elite", count: 2 });
   }
 
   return plan.sort((a, b) => a.at - b.at);

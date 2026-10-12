@@ -24,21 +24,21 @@ const ALL_WEAPONS = Object.keys(WEAPONS) as WeaponId[];
 const RANGED_WEAPONS = ALL_WEAPONS.filter((id) => WEAPONS[id].kind === "ranged");
 
 export const CHARACTERS: Record<CharacterId, CharacterDef> = {
-  kartoffel: {
-    id: "kartoffel",
-    name: "Kartoffel",
-    description: "Ausgewogen. Darf alles tragen und kann alles werden.",
-    mods: {},
-    slots: 6,
+  soeldner: {
+    id: "soeldner",
+    name: "Söldner",
+    description: "Kampferprobt: viel Schaden und Tempo, aber nur drei Waffenplätze.",
+    mods: { damage: 20, attackSpeed: 15, armor: 1, maxHp: -5 },
+    slots: 3,
     allowed: ALL_WEAPONS,
-    starts: ["pistol", "smg", "fist", "knife"],
-    color: 0xd9a35c,
+    starts: ["smg", "pistol", "shotgun", "knife"],
+    color: 0xc9a227,
   },
   raufbold: {
     id: "raufbold",
     name: "Raufbold",
     description: "Nur Fäuste, dafür schnell und hart.",
-    mods: { melee: 4, speed: 12, maxHp: 20, armor: 2, range: -20 },
+    mods: { melee: 6, damage: 15, speed: 12, maxHp: 25, armor: 2, range: -20 },
     slots: 6,
     allowed: ["fist"],
     starts: ["fist"],
@@ -58,7 +58,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: "panzer",
     name: "Panzer",
     description: "Zäh, aber langsam und nur vier Waffenplätze.",
-    mods: { maxHp: 30, armor: 3, speed: -12 },
+    mods: { maxHp: 45, armor: 4, regen: 1, speed: -12 },
     slots: 4,
     allowed: ALL_WEAPONS,
     starts: ["shotgun", "fist", "smg"],
@@ -87,7 +87,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
 };
 
 export const CHARACTER_IDS: readonly CharacterId[] = [
-  "kartoffel",
+  "soeldner",
   "raufbold",
   "jaeger",
   "panzer",

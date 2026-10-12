@@ -26,7 +26,7 @@ const GAP = 12;
 
 export class SelectScene extends Phaser.Scene {
   private mode: PlayMode = "solo";
-  private character: CharacterId = "kartoffel";
+  private character: CharacterId = "soeldner";
   private weapon: WeaponId = "pistol";
   private dynamic: Phaser.GameObjects.GameObject[] = [];
   private buttons: Button[] = [];
@@ -38,8 +38,8 @@ export class SelectScene extends Phaser.Scene {
 
   init(data: { mode?: PlayMode }): void {
     this.mode = data.mode ?? "solo";
-    this.character = "kartoffel";
-    this.weapon = CHARACTERS.kartoffel.starts[0] ?? "pistol";
+    this.character = "soeldner";
+    this.weapon = CHARACTERS.soeldner.starts[0] ?? "pistol";
     this.dynamic = [];
     this.buttons = [];
     this.frames = new Map();

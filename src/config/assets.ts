@@ -3,7 +3,7 @@
  *
  * Grundlage ist "Topdown Shooter Pixel" von Kenney (CC0, siehe
  * `public/assets/License.txt`): ein Sheet mit 16x16-Kacheln und 1 Pixel
- * Abstand, 34 Spalten. Im Spielcode steht nur `CHARACTER_TILES.kartoffel` -
+ * Abstand, 34 Spalten. Im Spielcode steht nur `CHARACTER_TILES.soeldner` -
  * nie eine Nummer. Wer das Paket wechselt, aendert diese Datei und sonst nichts.
  *
  * Die Figuren auf dem Sheet schauen nach RECHTS. Spalte 28 ist die Figur ohne
@@ -30,7 +30,7 @@ export const SPRITE_BODY = 12;
 
 /** Spielfiguren: Spalte 28 (ohne Waffe), die Reihe ist die Farbe. */
 export const CHARACTER_TILES: Record<CharacterId, number> = {
-  kartoffel: tile(28, 0),
+  soeldner: tile(28, 5),
   raufbold: tile(28, 2),
   jaeger: tile(28, 3),
   panzer: tile(28, 10),

@@ -18,7 +18,7 @@ und Texte im Spiel auf Deutsch**, Code lesbar statt clever.
 
 Umbau auf Branch `brotato-umbau` fertig und lauffähig, **noch nicht auf `main`**.
 
-- Spielkern, Shop, 6 Charaktere, 7 Waffen (je 4 Stufen), 24 Gegenstände, 14 Level-Ups,
+- Spielkern, Shop, 6 Charaktere (Söldner, Raufbold, Jäger, Panzer, Glückspilz, Schatten), 7 Waffen (je 4 Stufen), 24 Gegenstände, 14 Level-Ups,
   7 Gegnertypen, 20 Wellen: fertig, 20 Tests + Bot-Balancemessung.
 - Solo, Koop (Host/Client, Lobby, Raumcode) und die ganze Oberfläche: fertig. Im Test-Browser
   durchgespielt: Titel → Charakterwahl → Gefecht → Level-Up → Shop → nächste Welle, und Koop mit
@@ -73,6 +73,10 @@ per Init-Skript auf `setTimeout` umbiegen – sonst pausiert der Hintergrund-Tab
 Adress-Zusätze: `?desktop`, `?debug=lokal|werte|netz|all`, `?seed=N` (nur solo).
 
 ## Offene Punkte / Ideen
+
+- Schwierigkeit 2026-10-12 angezogen (erster Testspieler hat beim ersten Versuch gewonnen): steilere Gegnerskalierung,
+  größeres Wellenbudget, Königslarven in Welle 8/12/16 (2×) und 2 beim Boss. Bot-Mittel jetzt ~5–13. Echte Spieltests nötig.
+- Kartoffel ist durch den Söldner (3 Waffenplätze, +Schaden/+Tempo) ersetzt.
 
 - Echte Spieltests: Balance (Panzer/Raufbold waren im Bot schwach), Dropmenge, Shop-Preise.
 - Nach einem Koop-Run gibt es keine Rückkehr in dieselbe Lobby – zurück ins Menü, neuer Raum.

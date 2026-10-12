@@ -5,7 +5,7 @@ import { createRng } from "../../src/game/rng";
 import { Simulation } from "../../src/game/Simulation";
 import type { PlayerInput, PlayerSetup } from "../../src/game/types";
 
-const SOLO: PlayerSetup[] = [{ id: "a", name: "A", character: "kartoffel", startWeapon: "pistol" }];
+const SOLO: PlayerSetup[] = [{ id: "a", name: "A", character: "soeldner", startWeapon: "pistol" }];
 const IDLE = new Map<string, PlayerInput>();
 
 function run(sim: Simulation, seconds: number, inputs: ReadonlyMap<string, PlayerInput> = IDLE): void {
@@ -36,10 +36,10 @@ describe("Wellenplan", () => {
     expect(waveLength(20)).toBe(60);
   });
 
-  it("enthaelt in Welle 1 nur Larven, in Welle 10 den Zwischengegner, in Welle 20 den Boss", () => {
+  it("enthaelt in Welle 1 nur Larven, in Welle 8 den Zwischengegner, in Welle 20 den Boss", () => {
     const first = planWave(1, 1, createRng(1));
     expect(first.every((group) => group.type === "grunt")).toBe(true);
-    expect(planWave(10, 1, createRng(1)).some((group) => group.type === "elite")).toBe(true);
+    expect(planWave(8, 1, createRng(1)).some((group) => group.type === "elite")).toBe(true);
     expect(planWave(FINAL_WAVE, 1, createRng(1)).some((group) => group.type === "boss")).toBe(true);
   });
 
@@ -122,7 +122,7 @@ describe("Simulation", () => {
 
   it("geht erst weiter, wenn alle bereit sind", () => {
     const setups: PlayerSetup[] = [
-      { id: "a", name: "A", character: "kartoffel", startWeapon: "pistol" },
+      { id: "a", name: "A", character: "soeldner", startWeapon: "pistol" },
       { id: "b", name: "B", character: "jaeger", startWeapon: "sniper" },
     ];
     const sim = new Simulation(setups, 6);
