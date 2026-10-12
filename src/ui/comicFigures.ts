@@ -22,7 +22,7 @@ type Ctx = CanvasRenderingContext2D;
 // --- Zeichenhilfen -----------------------------------------------------------------
 
 /** Fuellt eine Form und zieht die dicke Kontur darum (Kontur zuerst, Flaeche darueber). */
-function shape(ctx: Ctx, build: () => void, fill: string, lineWidth = 6): void {
+export function shape(ctx: Ctx, build: () => void, fill: string, lineWidth = 6): void {
   ctx.beginPath();
   build();
   ctx.lineJoin = "round";
@@ -34,11 +34,11 @@ function shape(ctx: Ctx, build: () => void, fill: string, lineWidth = 6): void {
   ctx.fill();
 }
 
-function ellipse(ctx: Ctx, x: number, y: number, rx: number, ry: number, fill: string, lineWidth = 6): void {
+export function ellipse(ctx: Ctx, x: number, y: number, rx: number, ry: number, fill: string, lineWidth = 6): void {
   shape(ctx, () => ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2), fill, lineWidth);
 }
 
-function polygon(ctx: Ctx, points: readonly (readonly [number, number])[], fill: string, lineWidth = 6): void {
+export function polygon(ctx: Ctx, points: readonly (readonly [number, number])[], fill: string, lineWidth = 6): void {
   shape(
     ctx,
     () => {
@@ -65,7 +65,7 @@ function shade(ctx: Ctx, x: number, y: number, rx: number, ry: number, color: st
 }
 
 /** Heller Glanzfleck oben links. */
-function shine(ctx: Ctx, x: number, y: number, rx: number, ry: number): void {
+export function shine(ctx: Ctx, x: number, y: number, rx: number, ry: number): void {
   ctx.beginPath();
   ctx.ellipse(x - rx * 0.4, y - ry * 0.55, rx * 0.32, ry * 0.2, -0.5, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(255,255,255,0.55)";
@@ -93,7 +93,7 @@ function eye(ctx: Ctx, x: number, y: number, r: number, look = 0.38): void {
 }
 
 /** Dicke schwarze Linie - Augenbraue, Mund, Riss. */
-function stroke(ctx: Ctx, points: readonly (readonly [number, number])[], width = 4, color = INK): void {
+export function stroke(ctx: Ctx, points: readonly (readonly [number, number])[], width = 4, color = INK): void {
   ctx.beginPath();
   points.forEach(([x, y], index) => (index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
   ctx.lineWidth = width;
@@ -103,7 +103,7 @@ function stroke(ctx: Ctx, points: readonly (readonly [number, number])[], width 
   ctx.stroke();
 }
 
-function star(ctx: Ctx, cx: number, cy: number, outer: number, inner: number, points: number, fill: string, lineWidth = 4): void {
+export function star(ctx: Ctx, cx: number, cy: number, outer: number, inner: number, points: number, fill: string, lineWidth = 4): void {
   shape(
     ctx,
     () => {
