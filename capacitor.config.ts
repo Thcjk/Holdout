@@ -17,7 +17,7 @@ const config: CapacitorConfig = {
   android: {
     // Der Hintergrund, der waehrend des Ladens zu sehen ist. Ohne ihn blitzt
     // kurz Weiss auf - das faellt bei einem dunklen Spiel sofort auf.
-    backgroundColor: "#11161f",
+    backgroundColor: "#1b1233",
   },
   server: {
     androidScheme: "https",

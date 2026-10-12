@@ -21,8 +21,10 @@ export class BootScene extends Phaser.Scene {
       .text(VIEWPORT.width / 2, VIEWPORT.height / 2, "Lädt …", {
         fontFamily: UI.font,
         fontSize: "24px",
-        color: "#f6ead2",
+        color: "#fff4dc",
+        fontStyle: "bold",
       })
+      .setStroke("#14101c", 5)
       .setOrigin(0.5);
     this.load.on("progress", (value: number) => text.setText(`Lädt … ${Math.round(value * 100)} %`));
 

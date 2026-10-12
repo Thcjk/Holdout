@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout** (v3.2.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
+**Holdout** (v3.3.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
 Online-Koop (1–4). Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android-APK über
 Capacitor. Der frühere Koop-Arena-Shooter (v2.5.0, Brawl-Stars-artig, mit 3D) wurde auf dem
 Branch `brotato-umbau` komplett ersetzt; sein Stand liegt auf `main` bis zum Merge, seine
@@ -84,7 +84,8 @@ Adress-Zusätze: `?desktop`, `?debug=lokal|werte|netz|all`, `?seed=N` (nur solo)
 - Arena ist ein einfarbiger Sandboden ohne Hindernisse; Dekoration, Bildschirm-Treffer-Feedback,
   Musik-Lautstärke-Regeln feinschleifen.
 - Kein Speichern von Fortschritt; kein Charakter-Freischalten.
-- App-Icons/Favicon (`public/icons`, `favicon.svg`) sind noch im alten Stil – an den Comic-Look anpassen.
+- App-Icon, Favicon und Android-Splash kommen aus `node tools/generate-brand.mjs` (zeichnet mit denselben Funktionen wie
+  das Spiel; Playwright aus `/opt/npm-tools`). Danach `npm run build` und für Android neu bauen. Farben: Violett `#2a1a55`/`#1b1233`.
 - Bundle ~1,6 MB (Phaser komplett).
 
 ## Deployment

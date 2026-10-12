@@ -114,7 +114,7 @@ export const PALETTE = {
 
 /** Farben der Spielwelt. Lesbarkeit auf kleinem Bildschirm geht vor Schoenheit. */
 export const COLORS = {
-  background: 0x11161f,
+  background: 0x1b1233,
   floor: 0xc9a46a,
   wall: 0x46536b,
   wallEdge: 0x2a1f14,
