@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout** (v3.1.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
+**Holdout** (v3.2.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
 Online-Koop (1–4). Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android-APK über
 Capacitor. Der frühere Koop-Arena-Shooter (v2.5.0, Brawl-Stars-artig, mit 3D) wurde auf dem
 Branch `brotato-umbau` komplett ersetzt; sein Stand liegt auf `main` bis zum Merge, seine
@@ -52,12 +52,13 @@ Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
   sondern `ui/ShopPanel` als undurchsichtige Ebene in `GameScene` (baut nur bei geändertem Zustand neu).
 - Steuerung: nur `ui/FloatingStick` (linke ~60 % des Bildschirms). Berührungen, die auf einem
   Knopf landen, starten den Stick nicht.
-- Grafik: Kenney Topdown Shooter Pixel (Figuren: Spalten 28–33, Reihen 0–15), UI Pack RPG
-  (Atlas, `ui/UiNineSlice`), Blaster-Vorschaubilder als Waffensymbole. Symbole für Gegenstände,
+- Grafik: Figuren, Gegner und Oberfläche sind selbst gezeichnet (Kenney-Pixelfiguren und UI-Pack-Holztafeln
+  werden nicht mehr angezeigt; `UiNineSlice` und `CHARACTER_TILES` sind Altlast). Blaster-Vorschaubilder als Waffensymbole. Symbole für Gegenstände,
   Nahkampfwaffen, Spawn-Kreuz und Schatten werden in `ui/icons.ts` gezeichnet –
   **nach dem Zeichnen `refresh()` auf der Canvas-Textur**, sonst bleibt sie leer.
-- **Comic-Look:** `ui/comic.ts` malt beim Start (BootScene) alle Texturen: `ch-<id>`/`en-<typ>` (Figuren mit
-  dicker schwarzer Kontur), `arena` (Steinwand, Sandboden, Rasterpunkte, Risse), `bg-game`, `bullet`, `gem`, `logo`.
+- **Comic-Look:** `ui/comicFigures.ts` zeichnet alle 6 Helden und 7 Gegner als Comic-Vektorfiguren (78×78,
+  schauen nach rechts, `ch-<id>`/`en-<typ>`). `ui/ComicBox.ts` sind Tafeln, Einlagen und Knöpfe (Kontur, Schattenstreifen,
+  Glanz, harter Schatten; `BOX.panel|inset|primary|secondary`). `ui/comic.ts` malt beim Start (BootScene) den Rest: `arena` (Steinwand, Sandboden, Rasterpunkte, Risse), `bg-game`, `bullet`, `gem`, `logo`.
   Schlüssel über `config/assets.ts` (`characterKey`, `enemyKey`, `arenaKey`). Gegner wackeln/quetschen sich,
   Comic-Wörter („BAM!“, „KRIT!“) in `GameScene.comic()`. Menühintergrund: `menuStyle.paintBackground`.
 - `setReloadSafe(true)` nur im Titel und im Ergebnis (Selbst-Update der PWA nur dort).

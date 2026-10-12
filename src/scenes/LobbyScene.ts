@@ -87,6 +87,7 @@ export class LobbyScene extends Phaser.Scene {
     woodPanel(this, cx, 290, panelW, 450);
     menuText(this, cx, 62, this.mode === "host" ? "Koop-Raum" : "Raum beitreten", 34, UI.text.title, true);
 
+    insetPanel(this, cx, 128, 280, 66);
     this.codeText = menuText(this, cx, 128, "", 44, UI.text.dark, true);
     this.status = menuText(this, cx, 174, "", 18, UI.text.body).setWordWrapWidth(panelW - 60);
     this.pathText = menuText(this, cx, 470, "", 14, UI.text.muted);

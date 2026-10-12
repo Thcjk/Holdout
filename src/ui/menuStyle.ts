@@ -14,7 +14,7 @@
 
 import type Phaser from "phaser";
 import { UI } from "../config/ui";
-import { UiNineSlice } from "./UiNineSlice";
+import { BOX, ComicBox } from "./ComicBox";
 
 const BACKGROUND_KEY = "menu-background";
 /** Breiter als jede Entwurfsflaeche (max. 1600) - dann reicht EINE Textur. */
@@ -117,14 +117,14 @@ function paintBackground(context: CanvasRenderingContext2D): void {
   context.fillRect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
 }
 
-/** Eine Holztafel (Mittelpunkt, Groesse). */
-export function woodPanel(scene: Phaser.Scene, x: number, y: number, width: number, height: number): UiNineSlice {
-  return new UiNineSlice(scene, UI.panel.frame, UI.panel.slice, x, y, width, height);
+/** Eine Comic-Tafel (Mittelpunkt, Groesse). */
+export function woodPanel(scene: Phaser.Scene, x: number, y: number, width: number, height: number): ComicBox {
+  return new ComicBox(scene, BOX.panel, x, y, width, height);
 }
 
 /** Eine beige Einlage - fuer Dinge, die man lesen soll (Code, Namen). */
-export function insetPanel(scene: Phaser.Scene, x: number, y: number, width: number, height: number): UiNineSlice {
-  return new UiNineSlice(scene, UI.inset.frame, UI.inset.slice, x, y, width, height);
+export function insetPanel(scene: Phaser.Scene, x: number, y: number, width: number, height: number): ComicBox {
+  return new ComicBox(scene, BOX.inset, x, y, width, height);
 }
 
 /** Text im Menue-Look, zentriert, mit leichtem Schatten. */
@@ -137,7 +137,8 @@ export function menuText(
   color: string = UI.text.body,
   bold = false,
 ): Phaser.GameObjects.Text {
-  return scene.add
+  const onLight = color === UI.text.dark;
+  const label = scene.add
     .text(x, y, text, {
       fontFamily: UI.font,
       fontSize: `${size}px`,
@@ -145,6 +146,10 @@ export function menuText(
       fontStyle: bold ? "bold" : "normal",
       align: "center",
     })
-    .setOrigin(0.5)
-    .setShadow(1, 2, UI.text.shadow, 3);
+    .setOrigin(0.5);
+  if (!onLight) {
+    // Helle Schrift bekommt den dicken Comic-Rand; dunkle Schrift steht auf hellen Einlagen.
+    label.setStroke("#14101c", Math.max(3, Math.round(size / 5)));
+  }
+  return label;
 }

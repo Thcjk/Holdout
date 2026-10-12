@@ -9,14 +9,9 @@
  */
 
 import type Phaser from "phaser";
-import { CHARACTER_TILES, ENEMY_TILES, SHEET_KEY, TILE, arenaKey, characterKey, enemyKey } from "../config/assets";
+import { arenaKey } from "../config/assets";
+import { createFigureTextures } from "./comicFigures";
 import { ARENA } from "../game/constants";
-import type { CharacterId, EnemyType } from "../game/types";
-
-/** Wie stark die 16-Pixel-Figuren beim Umzeichnen vergroessert werden. */
-export const OUTLINE_UPSCALE = 4;
-const OUTLINE_PAD = 7;
-const OUTLINE_WIDTH = 5;
 
 /** Breite des Mauerrands um die Arena in Entwurfseinheiten. */
 export const ARENA_WALL = 18;
@@ -50,59 +45,6 @@ function addTexture(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement,
     // Das Spiel stellt Pixel-Art auf harte Kanten; gemalte Flaechen sollen weich skalieren.
     texture.setFilter(1);
   }
-}
-
-// --- Figuren mit Umriss --------------------------------------------------------
-
-function outlinedFigure(scene: Phaser.Scene, key: string, frameIndex: number, overlay?: string): void {
-  if (scene.textures.exists(key)) {
-    return;
-  }
-  const frame = scene.textures.getFrame(SHEET_KEY, frameIndex);
-  if (!frame) {
-    return;
-  }
-  const image = frame.source.image as CanvasImageSource;
-  const size = TILE * OUTLINE_UPSCALE + OUTLINE_PAD * 2;
-
-  const sprite = canvasOf(size, size);
-  const silhouette = canvasOf(size, size);
-  const main = canvasOf(size, size);
-  if (!sprite || !silhouette || !main) {
-    return;
-  }
-  const draw = (context: CanvasRenderingContext2D): void => {
-    context.imageSmoothingEnabled = false;
-    context.drawImage(
-      image,
-      frame.cutX,
-      frame.cutY,
-      frame.cutWidth,
-      frame.cutHeight,
-      OUTLINE_PAD,
-      OUTLINE_PAD,
-      TILE * OUTLINE_UPSCALE,
-      TILE * OUTLINE_UPSCALE,
-    );
-  };
-  draw(sprite.context);
-  if (overlay) {
-    sprite.context.globalCompositeOperation = "source-atop";
-    sprite.context.fillStyle = overlay;
-    sprite.context.fillRect(0, 0, size, size);
-  }
-
-  draw(silhouette.context);
-  silhouette.context.globalCompositeOperation = "source-in";
-  silhouette.context.fillStyle = "#14101c";
-  silhouette.context.fillRect(0, 0, size, size);
-
-  for (let step = 0; step < 16; step += 1) {
-    const angle = (step / 16) * Math.PI * 2;
-    main.context.drawImage(silhouette.canvas, Math.cos(angle) * OUTLINE_WIDTH, Math.sin(angle) * OUTLINE_WIDTH);
-  }
-  main.context.drawImage(sprite.canvas, 0, 0);
-  addTexture(scene, key, main.canvas, false);
 }
 
 // --- Arena ---------------------------------------------------------------------
@@ -509,13 +451,7 @@ function createLogo(scene: Phaser.Scene): void {
 
 /** Malt alle Comic-Texturen. Mehrfach aufrufen ist harmlos. */
 export function createComicTextures(scene: Phaser.Scene): void {
-  for (const id of Object.keys(CHARACTER_TILES) as CharacterId[]) {
-    outlinedFigure(scene, characterKey(id), CHARACTER_TILES[id]);
-  }
-  for (const type of Object.keys(ENEMY_TILES) as EnemyType[]) {
-    // Der Elite teilt sich das Bild mit dem Sturmlaeufer - ein roter Schimmer trennt sie.
-    outlinedFigure(scene, enemyKey(type), ENEMY_TILES[type], type === "elite" ? "rgba(255,40,70,0.5)" : undefined);
-  }
+  createFigureTextures(scene);
   createArena(scene);
   createGameBackground(scene);
   createBullet(scene);

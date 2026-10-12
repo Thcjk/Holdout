@@ -17,8 +17,7 @@
 
 import Phaser from "phaser";
 import { UI } from "../config/ui";
-import type { ButtonLook } from "../config/ui";
-import { UiNineSlice } from "./UiNineSlice";
+import { BOX, ComicBox } from "./ComicBox";
 
 export interface ButtonOptions {
   width?: number;
@@ -29,14 +28,14 @@ export interface ButtonOptions {
    * soll; "secondary" (dunkel) fuer Zurueck, Abbrechen und die kleinen
    * HUD-Knoepfe.
    */
-  variant?: keyof typeof UI.button;
+  variant?: "primary" | "secondary";
 }
 
 export class Button {
   private readonly hitArea: Phaser.GameObjects.Rectangle;
-  private readonly image: UiNineSlice;
+  private readonly image: ComicBox;
   private readonly label: Phaser.GameObjects.Text;
-  private readonly look: ButtonLook;
+  private readonly pressOffset = 3;
   private pressed = false;
 
   constructor(
@@ -49,16 +48,16 @@ export class Button {
   ) {
     const width = options.width ?? 240;
     const height = options.height ?? 56;
-    this.look = UI.button[options.variant ?? "primary"];
-
-    this.image = new UiNineSlice(scene, this.look.frame, this.look.slice, x, y, width, height);
+    this.image = new ComicBox(scene, BOX[options.variant ?? "primary"], x, y, width, height);
 
     this.label = scene.add.text(x, y, text, {
       fontFamily: UI.font,
       fontSize: `${options.fontSize ?? 22}px`,
-      color: this.look.textColor,
+      color: "#ffffff",
       fontStyle: "bold",
     });
+    this.label.setStroke("#14101c", Math.max(4, Math.round((options.fontSize ?? 22) / 4)));
+    this.label.setShadow(0, 2, "#14101c", 0, true, true);
     this.label.setOrigin(0.5);
 
     // Unsichtbar, aber beruehrbar (Deckkraft 0 blockt die Eingabe nicht).
@@ -79,11 +78,8 @@ export class Button {
       return;
     }
     this.pressed = pressed;
-    this.image.setFrame(
-      pressed ? this.look.pressed : this.look.frame,
-      pressed ? this.look.pressedSlice : this.look.slice,
-    );
-    this.label.y += pressed ? this.look.pressOffset : -this.look.pressOffset;
+    this.image.setPressed(pressed);
+    this.label.y += pressed ? this.pressOffset : -this.pressOffset;
   }
 
   /**
@@ -95,7 +91,7 @@ export class Button {
   setPosition(x: number, y: number): this {
     this.hitArea.setPosition(x, y);
     this.image.setPosition(x, y);
-    this.label.setPosition(x, y + (this.pressed ? this.look.pressOffset : 0));
+    this.label.setPosition(x, y + (this.pressed ? this.pressOffset : 0));
     return this;
   }
 

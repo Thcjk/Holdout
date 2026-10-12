@@ -452,7 +452,7 @@ export class GameScene extends Phaser.Scene {
 
   private makeEnemy(enemy: Enemy): EnemyView {
     const def = ENEMIES[enemy.type];
-    const base = def.radius / 24;
+    const base = def.radius / 19;
     const sprite = this.add.sprite(0, 0, enemyKey(enemy.type)).setScale(0);
     const view: EnemyView = {
       sprite,
@@ -505,7 +505,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private makePlayer(player: PlayerState): PlayerView {
-    const sprite = this.add.sprite(0, 0, characterKey(player.character)).setScale(0.5);
+    const sprite = this.add.sprite(0, 0, characterKey(player.character)).setScale(0.6);
     const shadow = this.add.image(0, 0, "shadow").setDisplaySize(34, 16).setAlpha(0.9);
     const name = this.add
       .text(0, 0, this.session.isMultiplayer ? player.name : "", {
