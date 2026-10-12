@@ -5,7 +5,7 @@
 
 import { createComicTextures } from "../../src/ui/comic";
 
-const INK = "#14101c";
+const INK = "#0a0910";
 const captured = new Map<string, HTMLCanvasElement>();
 const scene = {
   textures: {
@@ -27,13 +27,13 @@ function make(width: number, height: number): [HTMLCanvasElement, CanvasRenderin
 
 function background(ctx: CanvasRenderingContext2D, width: number, height: number, cy: number): void {
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, "#4a2f95");
-  gradient.addColorStop(1, "#1b1233");
+  gradient.addColorStop(0, "#222838");
+  gradient.addColorStop(1, "#0a0910");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
   const reach = Math.hypot(width, height);
   const rays = 24;
-  ctx.fillStyle = "rgba(255,255,255,0.07)";
+  ctx.fillStyle = "rgba(233,228,212,0.05)";
   for (let i = 0; i < rays; i += 2) {
     const a0 = (i / rays) * Math.PI * 2;
     const a1 = ((i + 1) / rays) * Math.PI * 2;
@@ -45,7 +45,7 @@ function background(ctx: CanvasRenderingContext2D, width: number, height: number
     ctx.fill();
   }
   const step = Math.max(14, Math.min(width, height) / 22);
-  ctx.fillStyle = "rgba(255,120,200,0.14)";
+  ctx.fillStyle = "rgba(196,38,46,0.2)";
   for (let y = step / 2; y < height; y += step) {
     for (let x = step / 2 + (Math.floor(y / step) % 2) * (step / 2); x < width; x += step) {
       const radius = (y / height) * step * 0.24;
@@ -56,22 +56,6 @@ function background(ctx: CanvasRenderingContext2D, width: number, height: number
       }
     }
   }
-}
-
-function burst(ctx: CanvasRenderingContext2D, cx: number, cy: number, outer: number, inner: number, spikes: number): void {
-  ctx.beginPath();
-  for (let i = 0; i < spikes * 2; i += 1) {
-    const radius = i % 2 === 0 ? outer : inner;
-    const angle = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2 + 0.1;
-    const x = cx + Math.cos(angle) * radius;
-    const y = cy + Math.sin(angle) * radius;
-    if (i === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
-  }
-  ctx.closePath();
 }
 
 const H_POINTS: [number, number][] = [
@@ -93,38 +77,60 @@ function hPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number)
   ctx.closePath();
 }
 
-/** Knall-Stern mit grossem gelbem H. `size` = Kantenlaenge, `scale` = Anteil davon. */
+/** Rote Wunde mit grossem knochenweissem H. `size` = Kantenlaenge, `scale` = Anteil davon. */
 function motif(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, scale: number): void {
   const R = size * 0.5 * scale;
   ctx.lineJoin = "round";
-  // Stern
-  burst(ctx, cx, cy, R, R * 0.7, 14);
-  ctx.lineWidth = size * 0.035 * scale * 2;
+  // Schraeger Riss quer durchs Bild
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-0.2);
+  ctx.beginPath();
+  ctx.moveTo(-R * 1.05, -R * 0.2);
+  ctx.lineTo(-R * 0.5, -R * 0.42);
+  ctx.lineTo(R * 0.1, -R * 0.3);
+  ctx.lineTo(R * 0.7, -R * 0.46);
+  ctx.lineTo(R * 1.05, -R * 0.24);
+  ctx.lineTo(R * 0.9, R * 0.1);
+  ctx.lineTo(R * 1.05, R * 0.34);
+  ctx.lineTo(R * 0.4, R * 0.46);
+  ctx.lineTo(-R * 0.2, R * 0.34);
+  ctx.lineTo(-R * 0.8, R * 0.48);
+  ctx.lineTo(-R * 1.0, R * 0.2);
+  ctx.closePath();
+  ctx.lineWidth = size * 0.05 * scale;
   ctx.strokeStyle = INK;
   ctx.stroke();
-  ctx.fillStyle = "#e4572e";
+  ctx.fillStyle = "#c4262e";
   ctx.fill();
-  burst(ctx, cx, cy, R * 0.82, R * 0.58, 14);
-  ctx.fillStyle = "#ff9f1c";
+  ctx.fillStyle = "#7c1219";
+  ctx.beginPath();
+  ctx.moveTo(-R * 1.0, R * 0.2);
+  ctx.lineTo(-R * 0.8, R * 0.48);
+  ctx.lineTo(-R * 0.2, R * 0.34);
+  ctx.lineTo(R * 0.4, R * 0.46);
+  ctx.lineTo(R * 1.05, R * 0.34);
+  ctx.lineTo(R * 0.9, R * 0.1);
+  ctx.lineTo(R * 0.1, R * 0.16);
+  ctx.closePath();
   ctx.fill();
+  ctx.restore();
   // H
   const s = size * 0.92 * scale;
-  hPath(ctx, cx + s * 0.035, cy + s * 0.045, s);
-  ctx.lineWidth = s * 0.1;
+  hPath(ctx, cx + s * 0.03, cy + s * 0.04, s);
+  ctx.lineWidth = s * 0.09;
   ctx.strokeStyle = INK;
   ctx.stroke();
   ctx.fillStyle = INK;
   ctx.fill();
   hPath(ctx, cx, cy, s);
-  ctx.lineWidth = s * 0.1;
-  ctx.stroke();
-  ctx.strokeStyle = "#fffaf0";
-  ctx.lineWidth = s * 0.05;
+  ctx.lineWidth = s * 0.09;
   ctx.stroke();
   const fill = ctx.createLinearGradient(0, cy - s * 0.36, 0, cy + s * 0.36);
-  fill.addColorStop(0, "#fff27a");
-  fill.addColorStop(0.5, "#ffc21f");
-  fill.addColorStop(1, "#ff7a1a");
+  fill.addColorStop(0, "#e9e4d4");
+  fill.addColorStop(0.55, "#e9e4d4");
+  fill.addColorStop(0.56, "#b9b19b");
+  fill.addColorStop(1, "#8d866f");
   ctx.fillStyle = fill;
   ctx.fill();
 }

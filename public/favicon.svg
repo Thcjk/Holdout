@@ -1,13 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a2f95"/><stop offset="1" stop-color="#1b1233"/></linearGradient>
-    <linearGradient id="h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff27a"/><stop offset="0.5" stop-color="#ffc21f"/><stop offset="1" stop-color="#ff7a1a"/></linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#222838"/><stop offset="1" stop-color="#0a0910"/></linearGradient>
+    <linearGradient id="h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9e4d4"/><stop offset="0.55" stop-color="#e9e4d4"/><stop offset="0.56" stop-color="#b9b19b"/><stop offset="1" stop-color="#8d866f"/></linearGradient>
   </defs>
   <rect width="64" height="64" rx="12" fill="url(#bg)"/>
-  <polygon points="35.0,2.1 38.7,12.1 47.6,6.4 46.7,17.0 57.2,15.7 51.7,24.8 61.8,28.3 52.9,34.1 60.4,41.6 49.9,43.0 53.5,53.0 43.4,49.6 42.3,60.2 34.6,52.8 29.0,61.9 25.3,51.9 16.4,57.6 17.3,47.0 6.8,48.3 12.3,39.2 2.2,35.7 11.1,29.9 3.6,22.4 14.1,21.0 10.5,11.0 20.6,14.4 21.7,3.8 29.4,11.2" fill="#e4572e" stroke="#14101c" stroke-width="2.4" stroke-linejoin="round"/>
-  <polygon points="34.4,7.6 37.6,15.4 44.8,11.1 44.2,19.5 52.6,18.7 48.4,26.0 56.3,29.0 49.4,33.7 55.2,39.8 46.9,41.1 49.5,49.1 41.5,46.7 40.4,55.0 34.2,49.4 29.6,56.4 26.4,48.6 19.2,52.9 19.8,44.5 11.4,45.3 15.6,38.0 7.7,35.0 14.6,30.3 8.8,24.2 17.1,22.9 14.5,14.9 22.5,17.3 23.6,9.0 29.8,14.6" fill="#ff9f1c"/>
-  <polygon points="19.8,14.1 30.0,14.1 27.9,29.5 41.6,29.5 43.7,14.1 54.0,14.1 48.2,55.1 38.0,55.1 40.1,39.7 26.4,39.7 24.3,55.1 14.0,55.1" fill="#14101c" stroke="#14101c" stroke-width="5.6" stroke-linejoin="round"/>
-  <polygon points="17.8,11.5 28.0,11.5 25.9,26.9 39.6,26.9 41.7,11.5 52.0,11.5 46.2,52.5 36.0,52.5 38.1,37.1 24.4,37.1 22.3,52.5 12.0,52.5" fill="url(#h)" stroke="#14101c" stroke-width="5.6" stroke-linejoin="round"/>
-  <polygon points="17.8,11.5 28.0,11.5 25.9,26.9 39.6,26.9 41.7,11.5 52.0,11.5 46.2,52.5 36.0,52.5 38.1,37.1 24.4,37.1 22.3,52.5 12.0,52.5" fill="none" stroke="#fffaf0" stroke-width="2.8" stroke-linejoin="round"/>
-  <polygon points="17.8,11.5 28.0,11.5 25.9,26.9 39.6,26.9 41.7,11.5 52.0,11.5 46.2,52.5 36.0,52.5 38.1,37.1 24.4,37.1 22.3,52.5 12.0,52.5" fill="url(#h)"/>
+  <polygon points="2,26 16,20 32,24 48,18 62,24 58,34 62,42 40,46 24,42 6,46" fill="#c4262e" stroke="#0a0910" stroke-width="2.4" stroke-linejoin="round"/>
+  <polygon points="6,46 2,38 24,42 40,46 62,42 58,34 34,36 14,36" fill="#7c1219"/>
+  <polygon points="20.3,15.0 30.0,15.0 28.0,29.5 41.0,29.5 43.0,15.0 52.7,15.0 47.3,53.8 37.6,53.8 39.6,39.3 26.6,39.3 24.6,53.8 14.9,53.8" fill="#0a0910" stroke="#0a0910" stroke-width="5" stroke-linejoin="round"/>
+  <polygon points="18.5,12.6 28.2,12.6 26.2,27.1 39.2,27.1 41.2,12.6 50.9,12.6 45.5,51.4 35.8,51.4 37.8,36.9 24.8,36.9 22.8,51.4 13.1,51.4" fill="url(#h)" stroke="#0a0910" stroke-width="5" stroke-linejoin="round"/>
+  <polygon points="18.5,12.6 28.2,12.6 26.2,27.1 39.2,27.1 41.2,12.6 50.9,12.6 45.5,51.4 35.8,51.4 37.8,36.9 24.8,36.9 22.8,51.4 13.1,51.4" fill="url(#h)"/>
 </svg>

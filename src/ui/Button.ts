@@ -53,11 +53,11 @@ export class Button {
     this.label = scene.add.text(x, y, text, {
       fontFamily: UI.font,
       fontSize: `${options.fontSize ?? 22}px`,
-      color: "#ffffff",
+      color: "#e9e4d4",
       fontStyle: "bold",
     });
-    this.label.setStroke("#14101c", Math.max(4, Math.round((options.fontSize ?? 22) / 4)));
-    this.label.setShadow(0, 2, "#14101c", 0, true, true);
+    this.label.setStroke("#0a0910", Math.max(4, Math.round((options.fontSize ?? 22) / 4)));
+    this.label.setShadow(0, 2, "#0a0910", 0, true, true);
     this.label.setOrigin(0.5);
 
     // Unsichtbar, aber beruehrbar (Deckkraft 0 blockt die Eingabe nicht).

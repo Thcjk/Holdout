@@ -58,18 +58,6 @@ export const BULLET_TILE = tile(30, 16);
 /** Material, das Gegner fallen lassen: zwei graue Metallstuecke. */
 export const MATERIAL_TILE = tile(18, 9);
 
-/**
- * Waffen-Symbole im Shop: Vorschaubilder des Blaster Kits (64x64) fuer die
- * Schusswaffen. Fuer Faust, Messer und Speer gibt es kein Bild im Paket - sie
- * werden beim Start gezeichnet (`scenes/BootScene.ts`).
- */
-export const WEAPON_ICON_FILES: Partial<Record<WeaponId, string>> = {
-  pistol: "blaster-a.png",
-  smg: "blaster-j.png",
-  shotgun: "blaster-b.png",
-  sniper: "blaster-e.png",
-};
-
 export function weaponIconKey(id: WeaponId): string {
   return `weapon-${id}`;
 }

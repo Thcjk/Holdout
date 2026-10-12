@@ -129,7 +129,7 @@ export class GameScene extends Phaser.Scene {
 
     this.buildArena();
     this.bars = this.add.graphics().setDepth(8000);
-    this.selfRing = this.add.ellipse(0, 0, 34, 16).setStrokeStyle(2, 0xffd166, 0.9).setDepth(2);
+    this.selfRing = this.add.ellipse(0, 0, 34, 16).setStrokeStyle(2, 0xe8a317, 0.9).setDepth(2);
     this.hud = new Hud(this);
     this.shop = new ShopPanel(this, (command) => this.session.send(command));
 
@@ -573,13 +573,13 @@ export class GameScene extends Phaser.Scene {
       for (const image of view.weapons) {
         image.destroy();
       }
-      view.weapons = player.weapons.map((weapon) => this.add.image(0, 0, weaponIconKey(weapon.id)).setDisplaySize(22, 22));
+      view.weapons = player.weapons.map((weapon) => this.add.image(0, 0, weaponIconKey(weapon.id)).setDisplaySize(30, 30));
     }
     const count = view.weapons.length;
     view.weapons.forEach((image, index) => {
       const angle = -Math.PI / 2 + (index / Math.max(1, count)) * Math.PI * 2;
       image
-        .setPosition(view.x + Math.cos(angle) * 21, view.y + Math.sin(angle) * 17)
+        .setPosition(view.x + Math.cos(angle) * 25, view.y + Math.sin(angle) * 20)
         .setDepth(depth + 1)
         .setVisible(player.alive);
     });
@@ -664,9 +664,9 @@ export class GameScene extends Phaser.Scene {
         }
         break;
       case "kill":
-        this.burst(event.x, event.y, event.big ? 12 : 5, event.big ? 0xffd166 : 0xcfe8a0);
+        this.burst(event.x, event.y, event.big ? 12 : 5, event.big ? 0xe8a317 : 0xb9b19b);
         if (event.big) {
-          this.comic(event.x, event.y, ["BAM!", "POW!", "ZACK!", "WUMM!"][Math.floor(Math.random() * 4)] ?? "BAM!", "#ff7a5c");
+          this.comic(event.x, event.y, ["BAM!", "POW!", "ZACK!", "WUMM!"][Math.floor(Math.random() * 4)] ?? "BAM!", "#ff4a3a");
         }
         this.playSound("enemyDied", 45);
         break;

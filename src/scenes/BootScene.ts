@@ -3,13 +3,12 @@
  */
 
 import Phaser from "phaser";
-import { SHEET_KEY, SHEET_PATH, SPACING, TILE, WEAPON_ICON_FILES, weaponIconKey } from "../config/assets";
+import { SHEET_KEY, SHEET_PATH, SPACING, TILE } from "../config/assets";
 import { UI, UI_ATLAS, UI_ATLAS_IMAGE, UI_ATLAS_XML } from "../config/ui";
 import { VIEWPORT } from "../config/constants";
 import { createComicTextures } from "../ui/comic";
 import { createIcons } from "../ui/icons";
 import { padAtlas } from "../ui/padAtlas";
-import type { WeaponId } from "../game/types";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -34,9 +33,6 @@ export class BootScene extends Phaser.Scene {
       spacing: SPACING,
     });
     this.load.atlasXML(UI_ATLAS, UI_ATLAS_IMAGE, UI_ATLAS_XML);
-    for (const [id, file] of Object.entries(WEAPON_ICON_FILES)) {
-      this.load.image(weaponIconKey(id as WeaponId), `${import.meta.env.BASE_URL}${file}`);
-    }
   }
 
   create(): void {

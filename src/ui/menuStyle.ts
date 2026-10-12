@@ -43,16 +43,16 @@ export function menuBackground(scene: Phaser.Scene): Phaser.GameObjects.Image {
 
 function paintBackground(context: CanvasRenderingContext2D): void {
   const gradient = context.createLinearGradient(0, 0, 0, BACKGROUND_HEIGHT);
-  gradient.addColorStop(0, "#3a2670");
-  gradient.addColorStop(1, "#1b1233");
+  gradient.addColorStop(0, "#222838");
+  gradient.addColorStop(1, "#0a0910");
   context.fillStyle = gradient;
   context.fillRect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
 
-  // Strahlen wie auf einem Comic-Titelbild: hell und dunkel im Wechsel.
+  // Strahlen wie auf einem Heftchen-Titelbild: hell und dunkel im Wechsel.
   const cx = BACKGROUND_WIDTH / 2;
-  const cy = BACKGROUND_HEIGHT * 0.38;
+  const cy = BACKGROUND_HEIGHT * 0.4;
   const rays = 28;
-  context.fillStyle = "rgba(255,255,255,0.055)";
+  context.fillStyle = "rgba(233,228,212,0.04)";
   for (let i = 0; i < rays; i += 2) {
     const a0 = (i / rays) * Math.PI * 2;
     const a1 = ((i + 1) / rays) * Math.PI * 2;
@@ -64,8 +64,8 @@ function paintBackground(context: CanvasRenderingContext2D): void {
     context.fill();
   }
 
-  // Rasterpunkte, zum unteren Rand hin groesser.
-  context.fillStyle = "rgba(255,120,200,0.10)";
+  // Rote Rasterpunkte, zum unteren Rand hin groesser.
+  context.fillStyle = "rgba(196,38,46,0.14)";
   for (let y = 10; y < BACKGROUND_HEIGHT; y += 18) {
     for (let x = 10 + (Math.floor(y / 18) % 2) * 9; x < BACKGROUND_WIDTH; x += 18) {
       const radius = (y / BACKGROUND_HEIGHT) * 4.2;
@@ -77,30 +77,44 @@ function paintBackground(context: CanvasRenderingContext2D): void {
     }
   }
 
-  // Zwei Reihen Zacken-Silhouetten am unteren Rand (Stadt/Wald in Violett).
+  // Zwei Reihen zerstoerter Haeuser als Silhouette, einzelne Fenster leuchten.
   let state = 1234;
   const random = (): number => {
     state = (state * 1664525 + 1013904223) >>> 0;
     return state / 4294967296;
   };
-  const row = (baseY: number, color: string, minHeight: number, spread: number): void => {
-    context.fillStyle = color;
+  const row = (baseY: number, color: string, minHeight: number, spread: number, windows: boolean): void => {
     let x = -20;
     while (x < BACKGROUND_WIDTH + 40) {
       const height = minHeight + random() * spread;
-      const width = height * (0.42 + random() * 0.12);
+      const width = 34 + random() * 46;
+      context.fillStyle = color;
       context.beginPath();
       context.moveTo(x, baseY);
-      context.lineTo(x + width / 2, baseY - height);
+      context.lineTo(x, baseY - height);
+      // abgebrochene, schraege Dachkante
+      context.lineTo(x + width * (0.4 + random() * 0.3), baseY - height - random() * 16);
+      context.lineTo(x + width, baseY - height + random() * 10);
       context.lineTo(x + width, baseY);
       context.closePath();
       context.fill();
-      x += width * (0.45 + random() * 0.35);
+      if (windows) {
+        for (let wy = baseY - height + 12; wy < baseY - 12; wy += 16) {
+          for (let wx = x + 6; wx < x + width - 8; wx += 12) {
+            if (random() < 0.12) {
+              context.fillStyle = "rgba(232,163,23,0.7)";
+              context.fillRect(wx, wy, 5, 7);
+            }
+          }
+        }
+      }
+      x += width + random() * 6;
     }
+    context.fillStyle = color;
     context.fillRect(0, baseY, BACKGROUND_WIDTH, BACKGROUND_HEIGHT - baseY);
   };
-  row(BACKGROUND_HEIGHT - 26, "#2b1d52", 40, 46);
-  row(BACKGROUND_HEIGHT - 4, "#150e29", 28, 34);
+  row(BACKGROUND_HEIGHT - 26, "#161a26", 60, 70, true);
+  row(BACKGROUND_HEIGHT - 4, "#07060b", 30, 40, false);
 
   // Weicher Schatten an den Raendern lenkt den Blick in die Mitte.
   const vignette = context.createRadialGradient(
@@ -112,7 +126,7 @@ function paintBackground(context: CanvasRenderingContext2D): void {
     BACKGROUND_WIDTH * 0.62,
   );
   vignette.addColorStop(0, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.5)");
+  vignette.addColorStop(1, "rgba(0,0,0,0.55)");
   context.fillStyle = vignette;
   context.fillRect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
 }
@@ -149,7 +163,7 @@ export function menuText(
     .setOrigin(0.5);
   if (!onLight) {
     // Helle Schrift bekommt den dicken Comic-Rand; dunkle Schrift steht auf hellen Einlagen.
-    label.setStroke("#14101c", Math.max(3, Math.round(size / 5)));
+    label.setStroke("#0a0910", Math.max(3, Math.round(size / 5)));
   }
   return label;
 }

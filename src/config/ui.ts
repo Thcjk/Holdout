@@ -114,13 +114,13 @@ export const UI = {
    * nicht zum In-Game").
    */
   text: {
-    title: "#fff4dc",
-    body: "#f6ead2",
-    muted: "#d9c7a3",
-    accent: "#ffd166",
-    /** Auf hellen Flaechen (beige Einlage). */
-    dark: "#3b2a1a",
-    shadow: "#00000088",
+    title: "#e9e4d4",
+    body: "#e9e4d4",
+    muted: "#9aa1b2",
+    accent: "#e8a317",
+    /** Auf hellen Flaechen (Papier-Einlage). */
+    dark: "#12131c",
+    shadow: "#0a0910",
   },
 
   /** Einlage auf einer Tafel: Raumcode, Spielerliste, Portraet. */

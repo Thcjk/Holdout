@@ -22,17 +22,17 @@ export interface BoxStyle {
   shadow: number;
 }
 
-const INK = 0x14101c;
+const INK = 0x0a0910;
 
 export const BOX = {
-  /** Grosse Tafel: dunkles Violett. */
-  panel: { fill: 0x3a2670, shade: 0x2a1a55, light: 0x5d41a8, radius: 16, border: 4, shadow: 6 } satisfies BoxStyle,
-  /** Beige Einlage fuer alles, was man lesen soll. */
-  inset: { fill: 0xfff1cf, shade: 0xecd29c, light: 0xffffff, radius: 11, border: 3, shadow: 0 } satisfies BoxStyle,
-  /** Hauptknopf: leuchtendes Gelb-Orange. */
-  primary: { fill: 0xffc21f, shade: 0xe8860a, light: 0xfff0a0, radius: 14, border: 4, shadow: 5 } satisfies BoxStyle,
-  /** Nebenknopf: Violett. */
-  secondary: { fill: 0x8a5cff, shade: 0x5b34c9, light: 0xc3a8ff, radius: 14, border: 4, shadow: 5 } satisfies BoxStyle,
+  /** Grosse Tafel: dunkler Stahl. */
+  panel: { fill: 0x2a3040, shade: 0x1b1f2b, light: 0x5b667c, radius: 6, border: 3, shadow: 5 } satisfies BoxStyle,
+  /** Helles Papier fuer alles, was man lesen soll. */
+  inset: { fill: 0xe9e4d4, shade: 0xb9b19b, light: 0xffffff, radius: 4, border: 3, shadow: 0 } satisfies BoxStyle,
+  /** Hauptknopf: Blutrot. */
+  primary: { fill: 0xc4262e, shade: 0x7c1219, light: 0xff7a80, radius: 5, border: 3, shadow: 4 } satisfies BoxStyle,
+  /** Nebenknopf: Stahlgrau. */
+  secondary: { fill: 0x3d4658, shade: 0x2a3040, light: 0x8d98ae, radius: 5, border: 3, shadow: 4 } satisfies BoxStyle,
 } as const;
 
 export class ComicBox {
@@ -120,6 +120,6 @@ export class ComicBox {
     g.fillStyle(style.shade, 1).fillRoundedRect(left + b, top + b + dy + ih - shadeH, iw, shadeH, { tl: 0, tr: 0, bl: ir, br: ir });
     // Glanzstreifen oben.
     const lightH = Math.min(ih * 0.22, 9);
-    g.fillStyle(style.light, 0.55).fillRoundedRect(left + b + 4, top + b + dy + 3, iw - 8, lightH, Math.min(ir, lightH / 2));
+    g.fillStyle(style.light, 0.3).fillRoundedRect(left + b + 4, top + b + dy + 3, iw - 8, lightH, Math.min(ir, lightH / 2));
   }
 }

@@ -1,9 +1,9 @@
 /**
  * Die Comic-Figuren: alle Spieler und Gegner werden hier von Hand gezeichnet.
  *
- * Statt der kleinen Pixelfiguren aus dem Kenney-Paket gibt es jetzt runde
- * Comic-Figuren mit dicker schwarzer Kontur, flachen Farben, einem Schattenrand
- * und einem Glanzpunkt - dieselbe Handschrift wie Logo, Arena und Oberflaeche.
+ * Duester und kantig: fast schwarze Tinte, harte Zweiton-Schatten, schmale leuchtende Augen.
+ * Dicke Tinten-Kontur, wenig Farbe, Blutrot und Bernstein als Akzent - dieselbe
+ * Handschrift wie Waffen, Arena, Logo und Oberflaeche.
  *
  * Jede Figur steht auf einer Leinwand von 78 x 78 Pixeln und schaut nach RECHTS
  * (das Spiel spiegelt sie, wenn sie nach links laeuft).
@@ -13,9 +13,10 @@ import type Phaser from "phaser";
 import { characterKey, enemyKey } from "../config/assets";
 import { CHARACTER_IDS } from "../game/data/characters";
 import type { CharacterId, EnemyType } from "../game/types";
+import { NOIR } from "./noir";
 
 const SIZE = 78;
-const INK = "#14101c";
+const INK: string = NOIR.ink;
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -50,45 +51,11 @@ export function polygon(ctx: Ctx, points: readonly (readonly [number, number])[]
   );
 }
 
-/** Dunkler Schatten unten rechts, innerhalb der Ellipse - macht die Form rund. */
-function shade(ctx: Ctx, x: number, y: number, rx: number, ry: number, color: string): void {
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-  ctx.clip();
-  ctx.beginPath();
-  ctx.rect(x - rx - 4, y - ry - 4, rx * 2 + 8, ry * 2 + 8);
-  ctx.ellipse(x - rx * 0.22, y - ry * 0.28, rx * 0.95, ry * 0.95, 0, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill("evenodd");
-  ctx.restore();
-}
-
 /** Heller Glanzfleck oben links. */
 export function shine(ctx: Ctx, x: number, y: number, rx: number, ry: number): void {
   ctx.beginPath();
   ctx.ellipse(x - rx * 0.4, y - ry * 0.55, rx * 0.32, ry * 0.2, -0.5, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(255,255,255,0.55)";
-  ctx.fill();
-}
-
-/** Eine runde Koerperform mit Schatten und Glanz. */
-function blob(ctx: Ctx, x: number, y: number, rx: number, ry: number, fill: string, dark: string): void {
-  ellipse(ctx, x, y, rx, ry, fill);
-  shade(ctx, x, y, rx, ry, dark);
-  shine(ctx, x, y, rx, ry);
-}
-
-/** Ein Auge: weiss, schwarze Pupille mit Lichtpunkt, schaut nach rechts. */
-function eye(ctx: Ctx, x: number, y: number, r: number, look = 0.38): void {
-  ellipse(ctx, x, y, r, r * 1.08, "#ffffff", 4);
-  ctx.beginPath();
-  ctx.arc(x + r * look, y + r * 0.05, r * 0.55, 0, Math.PI * 2);
-  ctx.fillStyle = INK;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(x + r * look + r * 0.18, y - r * 0.2, r * 0.17, 0, Math.PI * 2);
-  ctx.fillStyle = "#ffffff";
   ctx.fill();
 }
 
@@ -125,168 +92,233 @@ export function star(ctx: Ctx, cx: number, cy: number, outer: number, inner: num
   );
 }
 
-function dome(ctx: Ctx, x: number, y: number, r: number, from: number, to: number, fill: string, lineWidth = 6): void {
-  shape(
+// --- Duestere Bausteine ---------------------------------------------------------------
+
+type Pts = readonly (readonly [number, number])[];
+
+/** Flaeche mit harter Zweitonschattung: unten rechts liegt eine dunklere Haelfte. */
+function cel(ctx: Ctx, build: () => void, fill: string, shadow: string, box: [number, number, number, number], lineWidth = 5): void {
+  shape(ctx, build, fill, lineWidth);
+  const [x, y, w, h] = box;
+  ctx.save();
+  ctx.beginPath();
+  build();
+  ctx.clip();
+  ctx.beginPath();
+  ctx.moveTo(x + w * 0.58, y - 2);
+  ctx.lineTo(x + w + 2, y - 2);
+  ctx.lineTo(x + w + 2, y + h + 2);
+  ctx.lineTo(x - 2, y + h + 2);
+  ctx.lineTo(x - 2, y + h * 0.72);
+  ctx.closePath();
+  ctx.fillStyle = shadow;
+  ctx.fill();
+  ctx.restore();
+  // Kontur noch einmal ueber den Rand, damit der Schatten sie nicht anknabbert.
+  ctx.beginPath();
+  build();
+  ctx.lineWidth = lineWidth;
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+}
+
+function boundsOf(points: Pts): [number, number, number, number] {
+  const xs = points.map((point) => point[0]);
+  const ys = points.map((point) => point[1]);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return [x, y, Math.max(...xs) - x, Math.max(...ys) - y];
+}
+
+function poly(ctx: Ctx, points: Pts, fill: string, shadow: string, lineWidth = 5): void {
+  cel(
     ctx,
     () => {
-      ctx.arc(x, y, r, Math.PI * from, Math.PI * to);
+      points.forEach(([x, y], index) => (index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
       ctx.closePath();
     },
     fill,
+    shadow,
+    boundsOf(points),
     lineWidth,
   );
+}
+
+/** Ein leuchtendes, schmales Auge - schraeg, hart, ohne Niedlichkeit. */
+function slit(ctx: Ctx, x: number, y: number, w: number, color: string, tilt = 0.35): void {
+  const h = w * 0.34;
+  ctx.beginPath();
+  ctx.moveTo(x - w / 2, y - h * tilt * 2);
+  ctx.lineTo(x + w / 2, y + h * tilt * 2 - h * 0.2);
+  ctx.lineTo(x + w / 2 - 1, y + h * 0.9);
+  ctx.lineTo(x - w / 2 + 1, y + h * 0.7 - h * tilt);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+}
+
+/** Weicher Leuchtschein um ein Auge. */
+function glow(ctx: Ctx, x: number, y: number, r: number, color: string): void {
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
+  gradient.addColorStop(0, color);
+  gradient.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = gradient;
+  ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  ctx.globalAlpha = 1;
+}
+
+/** Zornfalte ueber dem Auge. */
+function scowl(ctx: Ctx, x1: number, y1: number, x2: number, y2: number): void {
+  stroke(ctx, [[x1, y1], [x2, y2]], 4.5);
 }
 
 // --- Spieler -------------------------------------------------------------------------
 
 interface Hero {
-  body: string;
-  bodyDark: string;
-  skin: string;
-  skinDark: string;
-  wide?: boolean;
+  coat: string;
+  coatDark: string;
+  skin?: string;
+  skinDark?: string;
+  broad?: boolean;
 }
 
-/** Koerper, Haende, Fuesse, Kopf und Gesicht - alles, was jeder Held gemeinsam hat. */
-function heroBase(ctx: Ctx, hero: Hero, face = true): void {
-  const bodyRx = hero.wide ? 22 : 19;
-  // Fuesse
-  ellipse(ctx, 32, 69, 8, 5, "#3b2a1a", 5);
-  ellipse(ctx, 48, 69, 8, 5, "#3b2a1a", 5);
-  // Koerper
-  blob(ctx, 40, 54, bodyRx, 16, hero.body, hero.bodyDark);
-  // Haende
-  ellipse(ctx, 40 - bodyRx - 1, 55, 6, 6, hero.skin, 5);
-  ellipse(ctx, 40 + bodyRx + 1, 55, 6, 6, hero.skin, 5);
-  // Kopf
-  if (face) {
-    blob(ctx, 40, 32, 19, 18, hero.skin, hero.skinDark);
-    eye(ctx, 34, 33, 6.2);
-    eye(ctx, 48, 33, 6.2);
-    // kleiner Mund
-    stroke(ctx, [[42, 44], [47, 45.5], [51, 43]], 3);
-  }
+const SKIN = "#d9b48f";
+const SKIN_DARK = "#a47c5a";
+
+/** Stiefel, Rumpf, Arme und Haende - die Grundform jedes Helden. */
+function heroBody(ctx: Ctx, hero: Hero): void {
+  const w = hero.broad ? 5 : 0;
+  // Stiefel
+  poly(ctx, [[28 - w, 62], [38, 62], [38, 72], [25 - w, 72]], "#23262f", "#14161c", 4);
+  poly(ctx, [[42, 62], [52 + w, 62], [55 + w, 72], [42, 72]], "#23262f", "#14161c", 4);
+  // Arme
+  poly(ctx, [[14 - w, 42], [24, 41], [25, 58], [14 - w, 59]], hero.coat, hero.coatDark, 4);
+  poly(ctx, [[56, 41], [66 + w, 42], [66 + w, 59], [55, 58]], hero.coat, hero.coatDark, 4);
+  poly(ctx, [[14 - w, 58], [25, 58], [24, 65], [15 - w, 65]], hero.skin ?? SKIN, hero.skinDark ?? SKIN_DARK, 3.5);
+  poly(ctx, [[55, 58], [66 + w, 58], [65 + w, 65], [56, 65]], hero.skin ?? SKIN, hero.skinDark ?? SKIN_DARK, 3.5);
+  // Rumpf
+  poly(ctx, [[22 - w, 40], [58 + w, 40], [55 + w, 64], [25 - w, 64]], hero.coat, hero.coatDark, 5);
+}
+
+/** Kantiger Kopf mit hartem Kinn. */
+function heroHead(ctx: Ctx, skin = SKIN, skinDark = SKIN_DARK): void {
+  poly(ctx, [[29, 17], [51, 17], [53, 31], [47, 41], [33, 41], [27, 31]], skin, skinDark, 5);
 }
 
 function drawHero(ctx: Ctx, id: CharacterId): void {
   switch (id) {
     case "soeldner": {
-      heroBase(ctx, { body: "#8a8f4a", bodyDark: "#5f6431", skin: "#f2c9a0", skinDark: "#d49e72" });
-      // Brustgurt
-      stroke(ctx, [[27, 47], [53, 62]], 4, "#3b2a1a");
+      heroBody(ctx, { coat: "#58613f", coatDark: "#3b4229" });
+      // Munitionsgurt und Schulterstreifen
+      stroke(ctx, [[26, 42], [54, 62]], 5, "#2a2218");
+      stroke(ctx, [[26, 42], [54, 62]], 2, NOIR.amber);
+      heroHead(ctx);
+      // Stoppeln und Narbe
+      stroke(ctx, [[34, 38], [46, 38]], 3, "#6b5238");
+      stroke(ctx, [[44, 22], [49, 32]], 2, "#7a2a22");
+      slit(ctx, 36, 29, 9, NOIR.bone);
+      slit(ctx, 46, 29, 9, NOIR.bone);
       // Helm
-      dome(ctx, 40, 31, 21.5, 1.0, 2.0, "#5b7a3a");
-      ellipse(ctx, 40, 27, 24, 4.5, "#46602d", 5);
-      star(ctx, 40, 17, 5.5, 2.4, 5, "#ffd23f", 3);
-      // grimmige Brauen
-      stroke(ctx, [[28, 27], [38, 30]], 4);
-      stroke(ctx, [[52, 27], [44, 30]], 4);
+      poly(ctx, [[25, 28], [26, 14], [40, 8], [54, 14], [55, 28], [51, 22], [29, 22]], "#3d4730", "#262d1d", 5);
+      stroke(ctx, [[40, 9], [40, 21]], 3, "#262d1d");
+      scowl(ctx, 31, 23, 39, 27);
+      scowl(ctx, 50, 23, 43, 27);
       break;
     }
     case "raufbold": {
-      heroBase(ctx, { body: "#ff8c42", bodyDark: "#d2601a", skin: "#f2c9a0", skinDark: "#d49e72" });
-      // Knoten und Zipfel
-      polygon(ctx, [[22, 24], [8, 16], [10, 30], [20, 32]], "#e4572e", 5);
-      dome(ctx, 40, 30, 21, 1.02, 1.98, "#e4572e");
-      stroke(ctx, [[20, 28], [60, 28]], 3, "#a83a1c");
-      // wuetende Brauen
-      stroke(ctx, [[27, 24], [39, 31]], 5);
-      stroke(ctx, [[53, 24], [43, 31]], 5);
-      // dicke Boxhandschuhe
-      ellipse(ctx, 63, 54, 9, 9, "#e63946", 5);
-      shine(ctx, 63, 54, 9, 9);
-      ellipse(ctx, 17, 56, 9, 9, "#e63946", 5);
-      shine(ctx, 17, 56, 9, 9);
+      heroBody(ctx, { coat: "#c9a98a", coatDark: "#8d7258", broad: true });
+      // Brust mit Narben
+      stroke(ctx, [[34, 48], [40, 56]], 2.5, "#7a2a22");
+      stroke(ctx, [[46, 50], [42, 58]], 2.5, "#7a2a22");
+      heroHead(ctx);
+      slit(ctx, 36, 29, 9, NOIR.bone);
+      slit(ctx, 46, 29, 9, NOIR.bone);
+      // Stirnband
+      poly(ctx, [[27, 22], [53, 22], [53, 27], [27, 27]], NOIR.blood, NOIR.bloodDark, 4);
+      poly(ctx, [[27, 23], [14, 18], [18, 26], [13, 31], [27, 27]], NOIR.blood, NOIR.bloodDark, 3.5);
+      scowl(ctx, 30, 28, 38, 31);
+      scowl(ctx, 51, 28, 44, 31);
+      stroke(ctx, [[38, 37], [46, 36]], 3);
+      // bandagierte Faeuste
+      poly(ctx, [[8, 56], [24, 56], [25, 68], [9, 68]], NOIR.bone, NOIR.boneDark, 4);
+      poly(ctx, [[56, 56], [72, 56], [71, 68], [55, 68]], NOIR.bone, NOIR.boneDark, 4);
+      stroke(ctx, [[10, 62], [23, 62]], 2, NOIR.blood);
+      stroke(ctx, [[57, 62], [70, 62]], 2, NOIR.blood);
       break;
     }
     case "jaeger": {
-      heroBase(ctx, { body: "#4f9d4b", bodyDark: "#33692f", skin: "#f2c9a0", skinDark: "#d49e72" });
-      // Feder (hinter dem Hut)
-      polygon(ctx, [[50, 17], [66, 4], [62, 17], [56, 22]], "#e63946", 4);
-      // Hut
-      shape(
-        ctx,
-        () => {
-          ctx.roundRect(28, 7, 24, 19, 6);
-        },
-        "#9a6a3a",
-      );
-      stroke(ctx, [[29, 20], [51, 20]], 5, "#3a7d36");
-      ellipse(ctx, 40, 26, 26, 5.5, "#7a4e2d", 5);
+      heroBody(ctx, { coat: "#2f4a3a", coatDark: "#1d3026" });
+      // Koecherriemen
+      stroke(ctx, [[54, 41], [28, 63]], 4, "#3a2a1c");
+      // Kapuze, Gesicht liegt im Schatten
+      poly(ctx, [[24, 38], [24, 18], [34, 8], [46, 8], [56, 18], [56, 38], [48, 42], [32, 42]], "#2f4a3a", "#1d3026", 5);
+      poly(ctx, [[31, 20], [49, 20], [51, 33], [45, 40], [35, 40], [29, 33]], "#16181f", "#0d0e13", 3);
+      glow(ctx, 36, 29, 9, NOIR.amber);
+      glow(ctx, 45, 29, 9, NOIR.amber);
+      slit(ctx, 36, 29, 7, NOIR.amber);
+      slit(ctx, 45, 29, 7, NOIR.amber);
+      // Pfeilspitzen ueber der Schulter
+      polygon(ctx, [[58, 28], [62, 18], [66, 28]], NOIR.steel3, 3);
+      polygon(ctx, [[64, 30], [68, 20], [72, 30]], NOIR.steel3, 3);
       break;
     }
     case "panzer": {
-      heroBase(ctx, { body: "#8c97a8", bodyDark: "#5d687a", skin: "#f2c9a0", skinDark: "#d49e72", wide: true }, false);
-      // Helm ueber dem ganzen Kopf
-      blob(ctx, 40, 31, 22, 20, "#a9b4c4", "#6e7a8c");
-      // Sehschlitz
-      shape(
-        ctx,
-        () => {
-          ctx.roundRect(22, 26, 36, 12, 5);
-        },
-        "#1e1a2e",
-        5,
-      );
-      ellipse(ctx, 33, 32, 3.5, 3, "#ffd23f", 2);
-      ellipse(ctx, 47, 32, 3.5, 3, "#ffd23f", 2);
-      // Kamm und Nieten
-      stroke(ctx, [[40, 11], [40, 24]], 5, "#e63946");
-      for (const x of [26, 54]) {
-        ellipse(ctx, x, 20, 2.2, 2.2, "#ffffff", 2);
+      heroBody(ctx, { coat: "#4d596d", coatDark: "#2f3848", broad: true });
+      // Schulterplatten
+      poly(ctx, [[8, 38], [26, 36], [27, 48], [10, 50]], NOIR.steel3, NOIR.steel1, 4);
+      poly(ctx, [[54, 36], [72, 38], [70, 50], [53, 48]], NOIR.steel3, NOIR.steel1, 4);
+      ellipse(ctx, 40, 52, 5, 5, NOIR.blood, 3);
+      // Helm mit T-Visier
+      poly(ctx, [[25, 36], [25, 16], [35, 8], [45, 8], [55, 16], [55, 36], [49, 42], [31, 42]], "#6a7589", "#3d4658", 5);
+      poly(ctx, [[28, 22], [52, 22], [52, 29], [44, 29], [44, 40], [36, 40], [36, 29], [28, 29]], "#0e0f15", "#0e0f15", 3);
+      glow(ctx, 40, 25.5, 14, NOIR.blood);
+      stroke(ctx, [[31, 25.5], [49, 25.5]], 3.5, "#ff4a4a");
+      for (const x of [29, 51]) {
+        ellipse(ctx, x, 14, 1.8, 1.8, NOIR.bone, 1.5);
       }
-      stroke(ctx, [[30, 46], [50, 46]], 3);
       break;
     }
     case "glueckspilz": {
-      heroBase(ctx, { body: "#3a86ff", bodyDark: "#2559b5", skin: "#f2c9a0", skinDark: "#d49e72" });
-      // Kleeblatt auf der Brust
-      for (const [x, y] of [[36, 52], [44, 52], [36, 59], [44, 59]] as const) {
-        ellipse(ctx, x, y, 4, 4, "#58cc4a", 3);
-      }
-      // Pilzhut
-      shape(
-        ctx,
-        () => {
-          ctx.ellipse(40, 22, 29, 17, 0, Math.PI, 0);
-          ctx.quadraticCurveTo(40, 29, 11, 22);
-          ctx.closePath();
-        },
-        "#e63946",
-      );
-      for (const [x, y, r] of [[27, 15, 4.5], [41, 9, 5], [53, 16, 4], [34, 22, 3]] as const) {
-        ellipse(ctx, x, y, r, r, "#ffffff", 3);
-      }
+      heroBody(ctx, { coat: "#1f2230", coatDark: "#11131c" });
+      // Weste, Krawatte
+      poly(ctx, [[34, 40], [46, 40], [43, 58], [37, 58]], NOIR.bone, NOIR.boneDark, 3);
+      poly(ctx, [[38, 41], [42, 41], [43, 56], [40, 60], [37, 56]], NOIR.teal, "#27807a", 3);
+      // Gluecksmuenze an der Brust
+      ellipse(ctx, 29, 52, 3.5, 3.5, NOIR.amber, 2.5);
+      heroHead(ctx);
+      slit(ctx, 36, 30, 8, NOIR.bone);
+      slit(ctx, 46, 30, 8, NOIR.bone);
+      scowl(ctx, 31, 25, 39, 28);
+      scowl(ctx, 50, 25, 43, 28);
+      // schiefes Grinsen mit Goldzahn
+      stroke(ctx, [[37, 37], [43, 38], [48, 35]], 3);
+      ellipse(ctx, 45, 37.5, 1.5, 1.5, NOIR.amber, 1);
+      // Schlapphut
+      poly(ctx, [[12, 22], [28, 20], [52, 20], [68, 22], [66, 26], [14, 26]], "#2a2f40", "#171a26", 4.5);
+      poly(ctx, [[28, 22], [29, 8], [51, 8], [52, 22]], "#2a2f40", "#171a26", 4.5);
+      poly(ctx, [[28, 17], [52, 17], [52, 21], [28, 21]], NOIR.amber, NOIR.amberDark, 3);
       break;
     }
     case "schatten": {
-      heroBase(ctx, { body: "#3b2a66", bodyDark: "#25194a", skin: "#f2c9a0", skinDark: "#d49e72" }, false);
-      // Kopftuch-Zipfel
-      polygon(ctx, [[21, 28], [4, 20], [8, 33], [4, 40], [22, 36]], "#e63946", 4);
+      heroBody(ctx, { coat: "#1a1526", coatDark: "#0d0a15", skin: "#1a1526", skinDark: "#0d0a15" });
+      // Guertel und Klingenschaft
+      stroke(ctx, [[24, 54], [56, 54]], 4, "#2d2640");
+      poly(ctx, [[54, 30], [58, 28], [60, 50], [56, 52]], NOIR.steel3, NOIR.steel1, 3);
       // Kapuze
-      blob(ctx, 40, 32, 20.5, 19, "#5b3f8f", "#3a2766");
-      // Gesichtsstreifen
-      shape(
-        ctx,
-        () => {
-          ctx.roundRect(25, 26, 32, 13, 6);
-        },
-        "#f2c9a0",
-        4,
-      );
-      eye(ctx, 34, 32, 4.8);
-      eye(ctx, 48, 32, 4.8);
-      stroke(ctx, [[27, 24], [37, 28]], 4);
-      stroke(ctx, [[55, 24], [45, 28]], 4);
-      // Schal
-      shape(
-        ctx,
-        () => {
-          ctx.roundRect(24, 44, 32, 8, 4);
-        },
-        "#e63946",
-        4,
-      );
+      poly(ctx, [[24, 40], [23, 18], [33, 8], [47, 8], [57, 18], [56, 40], [48, 44], [32, 44]], "#241c38", "#120d1e", 5);
+      poly(ctx, [[29, 21], [51, 21], [52, 31], [28, 31]], "#0b0912", "#0b0912", 3);
+      glow(ctx, 36, 26, 9, NOIR.violet);
+      glow(ctx, 45, 26, 9, NOIR.violet);
+      slit(ctx, 36, 26, 8, "#c9a8ff", 0.45);
+      slit(ctx, 45, 26, 8, "#c9a8ff", 0.45);
+      // roter Schal mit wehendem Ende
+      poly(ctx, [[26, 38], [54, 38], [52, 46], [28, 46]], NOIR.blood, NOIR.bloodDark, 4);
+      poly(ctx, [[27, 40], [8, 36], [4, 44], [12, 46], [10, 54], [28, 46]], NOIR.blood, NOIR.bloodDark, 3.5);
       break;
     }
   }
@@ -294,152 +326,139 @@ function drawHero(ctx: Ctx, id: CharacterId): void {
 
 // --- Gegner --------------------------------------------------------------------------
 
-function larva(ctx: Ctx, body: string, dark: string, head: string): void {
-  blob(ctx, 34, 48, 27, 17, body, dark);
-  stroke(ctx, [[24, 36], [26, 60]], 4, dark);
-  stroke(ctx, [[36, 33], [38, 63]], 4, dark);
-  blob(ctx, 52, 38, 16, 15, head, dark);
-  // Fuehler
-  stroke(ctx, [[46, 25], [42, 12]], 4);
-  stroke(ctx, [[58, 25], [64, 12]], 4);
-  ellipse(ctx, 42, 11, 4, 4, "#ffd23f", 3);
-  ellipse(ctx, 64, 11, 4, 4, "#ffd23f", 3);
-  eye(ctx, 49, 36, 5.5);
-  eye(ctx, 60, 36, 5.5);
-  stroke(ctx, [[44, 30], [52, 34]], 3.5);
-  stroke(ctx, [[65, 30], [58, 34]], 3.5);
-  stroke(ctx, [[50, 46], [54, 48], [58, 46], [62, 48]], 3);
+function mandibles(ctx: Ctx, x: number, y: number, flip = 1): void {
+  polygon(ctx, [[x, y], [x + 8 * flip, y + 3], [x + 4 * flip, y + 11]], NOIR.bone, 2.5);
+}
+
+function larvaBody(ctx: Ctx, skin: string, dark: string, band: string, eye: string): void {
+  // Segmente von hinten nach vorn
+  poly(ctx, [[6, 56], [14, 42], [30, 40], [32, 62], [14, 64]], skin, dark, 5);
+  poly(ctx, [[22, 52], [28, 36], [46, 34], [48, 62], [30, 66]], skin, dark, 5);
+  stroke(ctx, [[30, 36], [32, 64]], 3.5, band);
+  stroke(ctx, [[17, 42], [20, 62]], 3.5, band);
+  // Kopf
+  poly(ctx, [[42, 40], [48, 24], [64, 22], [72, 34], [66, 54], [48, 56]], skin, dark, 5);
+  glow(ctx, 59, 34, 14, eye);
+  slit(ctx, 55, 32, 11, eye, 0.5);
+  slit(ctx, 67, 35, 9, eye, 0.5);
+  scowl(ctx, 51, 27, 60, 33);
+  mandibles(ctx, 62, 48, 1);
+  mandibles(ctx, 50, 50, -1);
+  // Stacheln auf dem Ruecken
+  for (const [x, y] of [[18, 40], [34, 34], [46, 24]] as const) {
+    polygon(ctx, [[x - 3, y + 2], [x, y - 5], [x + 3, y + 2]], band, 2.5);
+  }
 }
 
 function drawEnemy(ctx: Ctx, type: EnemyType): void {
   switch (type) {
     case "grunt": {
-      larva(ctx, "#7fcf5a", "#4d9a37", "#a0e070");
+      larvaBody(ctx, "#7d8a6a", "#4d5842", "#2f3628", NOIR.amber);
       break;
     }
     case "swarmer": {
-      star(ctx, 39, 42, 31, 21, 11, "#d7ec4a", 5);
-      ellipse(ctx, 41, 42, 15, 15, "#eef7a0", 4);
-      eye(ctx, 43, 42, 10, 0.35);
-      stroke(ctx, [[28, 28], [44, 35]], 4);
+      // Beine
+      for (const [x1, y1, x2, y2] of [
+        [24, 46, 8, 36], [24, 52, 6, 56], [28, 58, 14, 70],
+        [56, 46, 72, 36], [56, 52, 74, 56], [52, 58, 66, 70],
+      ] as const) {
+        stroke(ctx, [[x1, y1], [x2, y2]], 3.5);
+      }
+      poly(ctx, [[22, 40], [40, 28], [58, 40], [58, 58], [40, 66], [22, 58]], "#7c2d2a", "#4a1614", 5);
+      // Stacheln
+      for (const [x, y, dx, dy] of [[40, 28, 0, -10], [28, 34, -7, -8], [52, 34, 7, -8]] as const) {
+        polygon(ctx, [[x - 3, y + 2], [x + dx, y + dy], [x + 3, y + 2]], NOIR.boneDark, 2.5);
+      }
+      glow(ctx, 40, 46, 14, NOIR.blood);
+      ellipse(ctx, 40, 46, 8, 8, "#ff4a3a", 3);
+      ellipse(ctx, 41, 46, 2.5, 5, INK, 1);
       break;
     }
     case "charger": {
       // Hoerner
-      polygon(ctx, [[24, 26], [14, 4], [36, 20]], "#fff1d6", 5);
-      polygon(ctx, [[54, 24], [64, 2], [44, 18]], "#fff1d6", 5);
-      blob(ctx, 39, 46, 29, 23, "#ee5a36", "#b53317");
-      // Wut-Augen
-      ellipse(ctx, 30, 41, 7, 6, "#ffe066", 4);
-      ellipse(ctx, 50, 41, 7, 6, "#ffe066", 4);
-      ctx.beginPath();
-      ctx.arc(32, 42, 2.8, 0, Math.PI * 2);
-      ctx.arc(52, 42, 2.8, 0, Math.PI * 2);
-      ctx.fillStyle = INK;
-      ctx.fill();
-      stroke(ctx, [[20, 32], [36, 39]], 5);
-      stroke(ctx, [[60, 32], [44, 39]], 5);
-      // Hauer
-      polygon(ctx, [[28, 56], [32, 49], [36, 57]], "#ffffff", 3);
-      polygon(ctx, [[44, 57], [48, 49], [52, 56]], "#ffffff", 3);
+      poly(ctx, [[18, 30], [8, 6], [30, 22]], NOIR.bone, NOIR.boneDark, 4);
+      poly(ctx, [[62, 30], [72, 6], [50, 22]], NOIR.bone, NOIR.boneDark, 4);
+      poly(ctx, [[10, 42], [24, 26], [56, 26], [70, 42], [64, 66], [40, 72], [16, 66]], "#9c2c2a", "#5e1514", 5);
+      // Schultermuskeln
+      stroke(ctx, [[24, 54], [34, 62]], 3, "#5e1514");
+      stroke(ctx, [[56, 54], [46, 62]], 3, "#5e1514");
+      glow(ctx, 30, 42, 10, NOIR.amber);
+      glow(ctx, 50, 42, 10, NOIR.amber);
+      slit(ctx, 30, 42, 11, "#ffd45a", 0.6);
+      slit(ctx, 50, 42, 11, "#ffd45a", 0.6);
+      scowl(ctx, 20, 33, 36, 40);
+      scowl(ctx, 60, 33, 44, 40);
+      // Hauer und Maul
+      poly(ctx, [[27, 62], [32, 52], [36, 62]], NOIR.bone, NOIR.boneDark, 3);
+      poly(ctx, [[44, 62], [48, 52], [53, 62]], NOIR.bone, NOIR.boneDark, 3);
       break;
     }
     case "spitter": {
-      blob(ctx, 39, 42, 26, 25, "#a06be0", "#6c3fb0");
-      eye(ctx, 31, 29, 6);
-      eye(ctx, 46, 28, 6);
-      // Maul mit Schleim
-      ellipse(ctx, 49, 49, 14, 10, "#2a1240", 5);
-      ellipse(ctx, 52, 53, 7, 4.5, "#ff7aa8", 2);
-      shape(
-        ctx,
-        () => {
-          ctx.moveTo(42, 55);
-          ctx.lineTo(42, 70);
-          ctx.arc(45, 70, 3, Math.PI, 0, true);
-          ctx.lineTo(48, 56);
-          ctx.closePath();
-        },
-        "#8be04a",
-        3,
-      );
-      stroke(ctx, [[24, 24], [36, 29]], 4);
-      stroke(ctx, [[54, 22], [42, 28]], 4);
+      poly(ctx, [[12, 46], [20, 24], [40, 16], [60, 24], [68, 46], [58, 66], [40, 72], [22, 66]], "#5b7a34", "#364a1e", 5);
+      // Adern
+      stroke(ctx, [[22, 34], [30, 44], [26, 56]], 2.5, "#364a1e");
+      stroke(ctx, [[58, 34], [52, 44], [56, 56]], 2.5, "#364a1e");
+      // viele kleine Augen
+      for (const [x, y, w] of [[30, 30, 7], [42, 26, 8], [53, 31, 7], [36, 38, 5]] as const) {
+        glow(ctx, x, y, 8, NOIR.toxic);
+        slit(ctx, x, y, w, "#d6ff6a", 0.4);
+      }
+      // Schlund mit Gift
+      poly(ctx, [[28, 48], [52, 48], [50, 62], [30, 62]], "#14160e", "#14160e", 4);
+      glow(ctx, 40, 56, 12, NOIR.toxic);
+      for (let x = 31; x < 50; x += 6) {
+        polygon(ctx, [[x, 48], [x + 3, 55], [x + 6, 48]], NOIR.bone, 1.5);
+      }
+      poly(ctx, [[34, 62], [37, 62], [37, 74], [34, 74]], "#9be03a", "#5f9420", 2.5);
+      poly(ctx, [[44, 62], [47, 62], [47, 71], [44, 71]], "#9be03a", "#5f9420", 2.5);
       break;
     }
     case "bruiser": {
-      polygon(
-        ctx,
-        [[12, 52], [8, 34], [20, 15], [42, 8], [62, 16], [70, 38], [64, 60], [42, 70], [20, 66]],
-        "#9b7650",
-        6,
-      );
-      // Schattenflaeche
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(42, 70);
-      ctx.lineTo(64, 60);
-      ctx.lineTo(70, 38);
-      ctx.lineTo(56, 44);
-      ctx.lineTo(46, 58);
-      ctx.closePath();
-      ctx.fillStyle = "rgba(60,30,10,0.35)";
-      ctx.fill();
-      ctx.restore();
-      // Risse
-      stroke(ctx, [[20, 24], [28, 30], [24, 40]], 3.5);
-      stroke(ctx, [[60, 50], [52, 56], [56, 64]], 3.5);
-      // Augen unter schwerer Stirn
-      ellipse(ctx, 32, 38, 5.5, 4.5, "#ffe066", 3);
-      ellipse(ctx, 50, 38, 5.5, 4.5, "#ffe066", 3);
-      ctx.beginPath();
-      ctx.arc(34, 38.5, 2.2, 0, Math.PI * 2);
-      ctx.arc(52, 38.5, 2.2, 0, Math.PI * 2);
-      ctx.fillStyle = INK;
-      ctx.fill();
-      stroke(ctx, [[22, 30], [38, 35]], 6);
-      stroke(ctx, [[60, 30], [44, 35]], 6);
-      // Maul mit Zaehnen
-      stroke(ctx, [[28, 54], [35, 51], [42, 55], [49, 51], [56, 54]], 4);
+      poly(ctx, [[10, 56], [6, 34], [18, 14], [40, 8], [62, 14], [74, 34], [70, 58], [58, 70], [22, 70]], "#5d5249", "#3a322c", 6);
+      // Glutrisse
+      stroke(ctx, [[18, 24], [28, 32], [24, 44], [32, 52]], 5, INK);
+      stroke(ctx, [[18, 24], [28, 32], [24, 44], [32, 52]], 2, NOIR.amber);
+      stroke(ctx, [[62, 26], [54, 36], [60, 48], [52, 60]], 5, INK);
+      stroke(ctx, [[62, 26], [54, 36], [60, 48], [52, 60]], 2, NOIR.amber);
+      // Kopf unter der Stirn
+      glow(ctx, 40, 36, 12, NOIR.blood);
+      slit(ctx, 33, 36, 9, "#ff5a3a", 0.6);
+      slit(ctx, 47, 36, 9, "#ff5a3a", 0.6);
+      scowl(ctx, 26, 29, 37, 34);
+      scowl(ctx, 54, 29, 43, 34);
+      stroke(ctx, [[30, 54], [35, 51], [40, 55], [45, 51], [50, 54]], 4);
       break;
     }
     case "elite": {
-      larva(ctx, "#3f9a3a", "#256b22", "#58b84e");
-      // Krone
-      polygon(ctx, [[42, 28], [43, 8], [50, 18], [57, 4], [64, 18], [71, 8], [71, 28]], "#ffd23f", 5);
-      ellipse(ctx, 57, 21, 3, 3, "#e63946", 2);
-      stroke(ctx, [[44, 27], [70, 27]], 3, "#c99a10");
+      larvaBody(ctx, "#4d5a46", "#2c3527", "#161b13", NOIR.blood);
+      // Dornenkrone
+      poly(ctx, [[44, 30], [44, 10], [51, 22], [56, 4], [62, 20], [68, 6], [70, 22], [72, 12], [72, 30]], "#2a2f3a", "#14171d", 4);
+      stroke(ctx, [[46, 28], [70, 28]], 3, NOIR.blood);
       break;
     }
     case "boss": {
-      // Fangarme
-      for (const x of [16, 29, 49, 62]) {
-        ellipse(ctx, x, 64, 8, 9, "#8a38b0", 5);
+      // Panzerplatten und Beine
+      for (const x of [14, 28, 52, 66]) {
+        poly(ctx, [[x - 6, 52], [x + 6, 52], [x + 4, 74], [x - 4, 74]], "#3a2554", "#21143a", 4);
       }
-      // Fuehler
-      stroke(ctx, [[26, 14], [16, 3]], 4);
-      stroke(ctx, [[54, 14], [64, 3]], 4);
-      ellipse(ctx, 15, 3, 4, 4, "#7dff9a", 3);
-      ellipse(ctx, 65, 3, 4, 4, "#7dff9a", 3);
-      blob(ctx, 40, 36, 28, 27, "#9a45c4", "#6a2490");
-      // drei Augen
-      for (const [x, y, r] of [[27, 33, 7], [53, 33, 7], [40, 24, 8]] as const) {
-        ellipse(ctx, x, y, r, r * 1.1, "#d6ff6a", 4);
-        ellipse(ctx, x + 1.5, y + 1, r * 0.35, r * 0.75, INK, 2);
+      // Hoerner
+      poly(ctx, [[20, 24], [6, 4], [30, 16]], NOIR.bone, NOIR.boneDark, 4);
+      poly(ctx, [[60, 24], [74, 4], [50, 16]], NOIR.bone, NOIR.boneDark, 4);
+      poly(ctx, [[10, 40], [18, 18], [40, 10], [62, 18], [70, 40], [62, 62], [18, 62]], "#4a2d6e", "#2a1745", 5);
+      // Rippen
+      stroke(ctx, [[22, 52], [58, 52]], 3, "#2a1745");
+      stroke(ctx, [[26, 58], [54, 58]], 3, "#2a1745");
+      // vier Augen
+      for (const [x, y, w] of [[26, 34, 9], [54, 34, 9], [36, 24, 8], [44, 24, 8]] as const) {
+        glow(ctx, x, y, 10, NOIR.blood);
+        slit(ctx, x, y, w, "#ff5a5a", 0.5);
       }
-      stroke(ctx, [[18, 24], [32, 30]], 4.5);
-      stroke(ctx, [[62, 24], [48, 30]], 4.5);
-      // Zahnreihe
-      shape(
-        ctx,
-        () => {
-          ctx.roundRect(24, 46, 32, 11, 4);
-        },
-        "#2a1240",
-        4,
-      );
-      for (let x = 27; x < 54; x += 6) {
-        polygon(ctx, [[x, 47], [x + 3, 53], [x + 6, 47]], "#ffffff", 1.5);
+      scowl(ctx, 18, 26, 30, 31);
+      scowl(ctx, 62, 26, 50, 31);
+      // Kiefer
+      poly(ctx, [[24, 44], [56, 44], [52, 56], [28, 56]], "#0e0a16", "#0e0a16", 3.5);
+      for (let x = 27; x < 53; x += 6) {
+        polygon(ctx, [[x, 44], [x + 3, 51], [x + 6, 44]], NOIR.bone, 1.5);
       }
       break;
     }

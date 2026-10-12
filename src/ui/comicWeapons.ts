@@ -1,73 +1,41 @@
 /**
- * Comic-Waffen: alle sieben Waffen als gezeichnete Symbole (96 x 96).
- *
- * Es gibt drei Stile zur Auswahl (`WEAPON_STYLES`). Die Waffen zeigen nach
- * rechts und werden leicht schraeg gestellt, wie ein Symbol im Comic.
+ * Waffen: alle sieben als gezeichnete Symbole (96 x 96), dunkler Stahl mit
+ * Bernstein-Akzent. Sie zeigen nach rechts und stehen leicht schraeg.
  */
 
+import type Phaser from "phaser";
+import { weaponIconKey } from "../config/assets";
 import type { WeaponId } from "../game/types";
 import { ellipse, polygon, shape, shine, star, stroke } from "./comicFigures";
+import { NOIR } from "./noir";
 
 type Ctx = CanvasRenderingContext2D;
 
 export interface WeaponStyle {
-  name: string;
   body: string;
   bodyDark: string;
   accent: string;
   grip: string;
   metal: string;
-  /** Rundung der Ecken. */
   round: number;
-  /** Dicke der Kontur. */
   line: number;
-  /** Zeichnet hinter die Waffe einen Knall-Stern. */
   burst: boolean;
-  /** Nietenpunkte und Kerben. */
   rivets: boolean;
   sparkle: boolean;
 }
 
-export const WEAPON_STYLES: Record<string, WeaponStyle> = {
-  spielzeug: {
-    name: "A  Spielzeug",
-    body: "#ff6fb0",
-    bodyDark: "#d0407f",
-    accent: "#35e6c8",
-    grip: "#ffd23f",
-    metal: "#ffffff",
-    round: 8,
-    line: 5,
-    burst: false,
-    rivets: false,
-    sparkle: true,
-  },
-  stahl: {
-    name: "B  Stahl-Cartoon",
-    body: "#9aa6b8",
-    bodyDark: "#5f6b7d",
-    accent: "#ff9f1c",
-    grip: "#8a5a2b",
-    metal: "#d7dee9",
-    round: 3,
-    line: 5,
-    burst: false,
-    rivets: true,
-    sparkle: false,
-  },
-  knall: {
-    name: "C  Knall",
-    body: "#ffc21f",
-    bodyDark: "#e08a00",
-    accent: "#e63946",
-    grip: "#6a45d0",
-    metal: "#fff4c2",
-    round: 5,
-    line: 6,
-    burst: true,
-    rivets: false,
-    sparkle: false,
-  },
+/** Dunkler Stahl, Holzgriff, Bernstein als einzige Farbe. */
+export const WEAPON_STYLE: WeaponStyle = {
+  body: NOIR.steel2,
+  bodyDark: NOIR.steel0,
+  accent: NOIR.amber,
+  grip: "#4a3426",
+  metal: "#a3adbd",
+  round: 2,
+  line: 4.5,
+  burst: false,
+  rivets: true,
+  sparkle: false,
 };
 
 function box(ctx: Ctx, s: WeaponStyle, x: number, y: number, w: number, h: number, fill: string, dark?: string, r = s.round): void {
@@ -79,8 +47,8 @@ function box(ctx: Ctx, s: WeaponStyle, x: number, y: number, w: number, h: numbe
     ctx.clip();
     ctx.fillStyle = dark;
     ctx.fillRect(x - 2, y + h * 0.62, w + 4, h);
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
-    ctx.fillRect(x + 2, y + 2, w - 4, Math.max(2, h * 0.16));
+    ctx.fillStyle = "rgba(233,228,212,0.35)";
+    ctx.fillRect(x + 2, y + 2, w - 4, Math.max(1.5, h * 0.1));
     ctx.restore();
   }
 }
@@ -136,16 +104,16 @@ function drawShape(ctx: Ctx, id: WeaponId, s: WeaponStyle): void {
     }
     case "fist": {
       box(ctx, s, 8, 36, 22, 26, s.accent);
-      ellipse(ctx, 50, 48, 28, 24, s.body);
+      ellipse(ctx, 50, 48, 28, 24, "#9c2229");
       ctx.save();
       ctx.beginPath();
       ctx.ellipse(50, 48, 28, 24, 0, 0, Math.PI * 2);
       ctx.clip();
-      ctx.fillStyle = s.bodyDark;
+      ctx.fillStyle = "#5e1216";
       ctx.fillRect(20, 58, 70, 30);
       ctx.restore();
       shine(ctx, 50, 48, 28, 24);
-      ellipse(ctx, 52, 30, 12, 9, s.body, s.line);
+      ellipse(ctx, 52, 30, 12, 9, "#9c2229", s.line);
       stroke(ctx, [[52, 42], [76, 44]], 3);
       stroke(ctx, [[48, 54], [76, 54]], 3);
       break;
@@ -170,7 +138,7 @@ function drawShape(ctx: Ctx, id: WeaponId, s: WeaponStyle): void {
 }
 
 /** Malt eine Waffe in ein 96 x 96 grosses Feld, mit Stil und leichter Schraeglage. */
-export function drawWeapon(ctx: Ctx, id: WeaponId, s: WeaponStyle): void {
+export function drawWeapon(ctx: Ctx, id: WeaponId, s: WeaponStyle = WEAPON_STYLE): void {
   if (s.burst) {
     star(ctx, 48, 48, 46, 31, 12, "#ff7a3c", 4);
     star(ctx, 48, 48, 36, 25, 12, "#fff27a", 0.1);
@@ -188,3 +156,22 @@ export function drawWeapon(ctx: Ctx, id: WeaponId, s: WeaponStyle): void {
 }
 
 export const WEAPON_ORDER: readonly WeaponId[] = ["pistol", "smg", "shotgun", "sniper", "fist", "knife", "spear"];
+
+/** Malt die sieben Waffensymbole als Texturen. Mehrfach aufrufen ist harmlos. */
+export function createWeaponTextures(scene: Phaser.Scene): void {
+  for (const id of WEAPON_ORDER) {
+    const key = weaponIconKey(id);
+    if (scene.textures.exists(key)) {
+      continue;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = 96;
+    canvas.height = 96;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      continue;
+    }
+    drawWeapon(ctx, id);
+    scene.textures.addCanvas(key, canvas)?.setFilter(1);
+  }
+}

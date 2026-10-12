@@ -7,9 +7,9 @@
  */
 
 import type Phaser from "phaser";
-import { itemIconKey, weaponIconKey } from "../config/assets";
+import { itemIconKey } from "../config/assets";
 import { ITEMS } from "../game/data/items";
-import type { StatKey, WeaponId } from "../game/types";
+import type { StatKey } from "../game/types";
 
 const ICON_SIZE = 64;
 
@@ -86,71 +86,6 @@ function drawItemIcon(scene: Phaser.Scene, id: string, label: string, color: str
   refreshTexture(scene, itemIconKey(id));
 }
 
-function drawMeleeIcon(scene: Phaser.Scene, id: WeaponId): void {
-  const context = createCanvas(scene, weaponIconKey(id));
-  if (!context) {
-    return;
-  }
-  context.lineCap = "round";
-  context.lineJoin = "round";
-  if (id === "fist") {
-    context.fillStyle = "#f2c9a0";
-    context.strokeStyle = "#7a5233";
-    context.lineWidth = 3;
-    roundedRect(context, 14, 20, 38, 28, 10);
-    context.fill();
-    context.stroke();
-    // Vier Knochel.
-    for (let i = 0; i < 4; i += 1) {
-      context.beginPath();
-      context.arc(21 + i * 9, 24, 4.5, 0, Math.PI * 2);
-      context.fill();
-      context.stroke();
-    }
-    context.fillStyle = "#c97f4a";
-    roundedRect(context, 6, 28, 12, 18, 5);
-    context.fill();
-  } else if (id === "knife") {
-    context.fillStyle = "#dde6ee";
-    context.strokeStyle = "#5a6672";
-    context.lineWidth = 3;
-    context.beginPath();
-    context.moveTo(10, 50);
-    context.lineTo(44, 14);
-    context.lineTo(54, 16);
-    context.lineTo(24, 54);
-    context.closePath();
-    context.fill();
-    context.stroke();
-    context.strokeStyle = "#7a4a2a";
-    context.lineWidth = 8;
-    context.beginPath();
-    context.moveTo(12, 52);
-    context.lineTo(24, 40);
-    context.stroke();
-  } else {
-    // Speer: langer Schaft, Spitze rechts oben.
-    context.strokeStyle = "#8a5a2c";
-    context.lineWidth = 5;
-    context.beginPath();
-    context.moveTo(8, 56);
-    context.lineTo(46, 18);
-    context.stroke();
-    context.fillStyle = "#dde6ee";
-    context.strokeStyle = "#5a6672";
-    context.lineWidth = 3;
-    context.beginPath();
-    context.moveTo(40, 12);
-    context.lineTo(56, 8);
-    context.lineTo(52, 24);
-    context.lineTo(44, 22);
-    context.closePath();
-    context.fill();
-    context.stroke();
-  }
-  refreshTexture(scene, weaponIconKey(id));
-}
-
 /** Zeichnet alle fehlenden Symbole. Mehrfach aufrufen ist harmlos. */
 export function createIcons(scene: Phaser.Scene): void {
   for (const item of ITEMS) {
@@ -158,14 +93,11 @@ export function createIcons(scene: Phaser.Scene): void {
     const main = (Object.keys(item.mods) as StatKey[]).find((key) => (item.mods[key] ?? 0) > 0) ?? first;
     drawItemIcon(scene, item.id, item.icon, main ? STAT_COLORS[main] : "#888888");
   }
-  for (const id of ["fist", "knife", "spear"] as const) {
-    drawMeleeIcon(scene, id);
-  }
 
   // Das Kreuz, das vor einem Gegner am Boden erscheint.
   const marker = createCanvas(scene, "marker");
   if (marker) {
-    marker.strokeStyle = "#e4572e";
+    marker.strokeStyle = "#c4262e";
     marker.lineWidth = 9;
     marker.lineCap = "round";
     marker.beginPath();

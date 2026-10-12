@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <meta name="description" content="Holdout – Top-down-Koop-Survival fürs Handy." />
-    <meta name="theme-color" content="#2a1a55" />
+    <meta name="theme-color" content="#12131c" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
@@ -25,7 +25,7 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #1b1233;
+        background: #0a0910;
         font-family: system-ui, sans-serif;
       }
 
@@ -73,8 +73,8 @@
         gap: 18px;
         padding: 24px;
         box-sizing: border-box;
-        background: radial-gradient(circle at 50% 35%, #4a2f95, #1b1233 75%);
-        color: #fff4dc;
+        background: radial-gradient(circle at 50% 35%, #222838, #0a0910 75%);
+        color: #e9e4d4;
         text-align: center;
       }
 
@@ -88,15 +88,15 @@
         font-weight: 900;
         font-style: italic;
         letter-spacing: 1px;
-        color: #ffc21f;
-        -webkit-text-stroke: 7px #14101c;
+        color: #e9e4d4;
+        -webkit-text-stroke: 7px #0a0910;
         paint-order: stroke fill;
-        text-shadow: 3px 4px 0 #14101c;
+        text-shadow: 4px 5px 0 #c4262e;
       }
 
       #rotate-gate .gate-text {
         font-size: 15px;
-        color: #d9c7f5;
+        color: #9aa1b2;
         max-width: 420px;
         line-height: 1.5;
       }
@@ -105,9 +105,9 @@
       #rotate-gate .gate-phone {
         width: 54px;
         height: 92px;
-        border: 4px solid #ffc21f;
+        border: 4px solid #e8a317;
         border-radius: 12px;
-        box-shadow: 3px 4px 0 #14101c;
+        box-shadow: 3px 4px 0 #0a0910;
         animation: gate-turn 2.4s ease-in-out infinite;
       }
 
@@ -133,10 +133,10 @@
         display: none;
         margin-top: 4px;
         padding: 10px 18px;
-        border: 3px solid #14101c;
+        border: 3px solid #0a0910;
         border-radius: 12px;
-        background: #8a5cff;
-        box-shadow: 0 4px 0 #14101c;
+        background: #c4262e;
+        box-shadow: 0 4px 0 #0a0910;
         font-weight: 800;
         color: #ffffff;
         font: inherit;
@@ -187,7 +187,7 @@
           page.style.cssText =
             "position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;" +
             "align-items:center;justify-content:center;gap:16px;padding:24px;" +
-            "box-sizing:border-box;background:#1b1233;color:#fff4dc;text-align:center;" +
+            "box-sizing:border-box;background:#0a0910;color:#e9e4d4;text-align:center;" +
             "font-family:system-ui,sans-serif";
 
           var title = document.createElement("div");
@@ -210,8 +210,8 @@
           var button = document.createElement("button");
           button.textContent = "Zwischenspeicher leeren und neu laden";
           button.style.cssText =
-            "padding:12px 20px;border:none;border-radius:10px;background:#ffc21f;" +
-            "color:#14101c;font:800 15px system-ui,sans-serif";
+            "padding:12px 20px;border:none;border-radius:10px;background:#e8a317;" +
+            "color:#0a0910;font:800 15px system-ui,sans-serif";
           button.onclick = function () {
             var done = function () {
               location.reload();

@@ -17,7 +17,7 @@ const DEPTH = 9500;
 function label(scene: Phaser.Scene, size: number, color: string = PALETTE.hudText): Phaser.GameObjects.Text {
   return scene.add
     .text(0, 0, "", { fontFamily: UI.font, fontSize: `${size}px`, color, fontStyle: "bold" })
-    .setStroke("#14101c", 4)
+    .setStroke("#0a0910", 4)
     .setDepth(DEPTH + 1);
 }
 
@@ -64,18 +64,18 @@ export class Hud {
       // Leben: breiter Balken links oben.
       const width = 230;
       const hpFraction = Phaser.Math.Clamp(self.hp / self.stats.maxHp, 0, 1);
-      g.fillStyle(0x14101c, 1).fillRoundedRect(left - 2, 8, width + 4, 28, 8);
-      g.fillStyle(0x4a3a5e, 1).fillRoundedRect(left + 2, 12, width - 4, 20, 5);
-      g.fillStyle(hpFraction > 0.3 ? 0x7fd35a : 0xff5a3c, 1).fillRoundedRect(left + 2, 12, Math.max(0, (width - 4) * hpFraction), 20, 5);
-      g.fillStyle(0xffffff, 0.3).fillRoundedRect(left + 6, 14, Math.max(0, (width - 12) * hpFraction), 5, 2);
+      g.fillStyle(0x0a0910, 1).fillRoundedRect(left - 2, 8, width + 4, 28, 8);
+      g.fillStyle(0x2a3040, 1).fillRoundedRect(left + 2, 12, width - 4, 20, 5);
+      g.fillStyle(hpFraction > 0.3 ? 0xc4262e : 0xff6a2a, 1).fillRoundedRect(left + 2, 12, Math.max(0, (width - 4) * hpFraction), 20, 5);
+      g.fillStyle(0xe9e4d4, 0.22).fillRoundedRect(left + 6, 14, Math.max(0, (width - 12) * hpFraction), 5, 2);
       this.hpText.setText(`${Math.ceil(Math.max(0, self.hp))} / ${Math.round(self.stats.maxHp)}`);
       this.hpText.setPosition(left + width / 2 - this.hpText.width / 2, 12);
 
       // Erfahrung: dünner Balken darunter.
       const xpFraction = Phaser.Math.Clamp(self.xp / xpNeeded(self.level), 0, 1);
-      g.fillStyle(0x14101c, 1).fillRoundedRect(left - 2, 38, width + 4, 14, 5);
-      g.fillStyle(0x4a3a5e, 1).fillRoundedRect(left + 1, 41, width - 2, 8, 3);
-      g.fillStyle(0x59c8ff, 1).fillRoundedRect(left + 1, 41, Math.max(0, (width - 2) * xpFraction), 8, 3);
+      g.fillStyle(0x0a0910, 1).fillRoundedRect(left - 2, 38, width + 4, 14, 5);
+      g.fillStyle(0x2a3040, 1).fillRoundedRect(left + 1, 41, width - 2, 8, 3);
+      g.fillStyle(0x3fb7b0, 1).fillRoundedRect(left + 1, 41, Math.max(0, (width - 2) * xpFraction), 8, 3);
       this.levelText.setText(`Lv ${self.level}`);
       this.levelText.setPosition(left + width + 8, 30);
 
@@ -100,8 +100,8 @@ export class Hud {
       }
       const y = 56 + index * 20;
       const fraction = mate.alive ? Phaser.Math.Clamp(mate.hp / mate.stats.maxHp, 0, 1) : 0;
-      g.fillStyle(0x14101c, 1).fillRoundedRect(left - 1, y + 1, 82, 12, 4);
-      g.fillStyle(mate.alive ? 0x7fd35a : 0x555555, 1).fillRoundedRect(left + 1, y + 3, 78 * fraction, 8, 3);
+      g.fillStyle(0x0a0910, 1).fillRoundedRect(left - 1, y + 1, 82, 12, 4);
+      g.fillStyle(mate.alive ? 0xc4262e : 0x444444, 1).fillRoundedRect(left + 1, y + 3, 78 * fraction, 8, 3);
       text.setVisible(true);
       text.setText(mate.name);
       text.setPosition(left + 88, y - 1);
