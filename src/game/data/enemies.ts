@@ -114,10 +114,38 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     knockback: 0,
     color: 0x3f7d3a,
   },
+  exploder: {
+    type: "exploder",
+    name: "Zünder",
+    hp: 14,
+    speed: 118,
+    damage: 4,
+    radius: 10,
+    drop: 2,
+    dropChance: 1,
+    cost: 1.5,
+    minWave: 4,
+    knockback: 1.1,
+    color: 0xe8862a,
+  },
+  splitter: {
+    type: "splitter",
+    name: "Teiler",
+    hp: 42,
+    speed: 68,
+    damage: 9,
+    radius: 14,
+    drop: 3,
+    dropChance: 1,
+    cost: 3,
+    minWave: 7,
+    knockback: 0.7,
+    color: 0x5d7d43,
+  },
   boss: {
     type: "boss",
     name: "Alien-Boss",
-    hp: 900,
+    hp: 1400,
     speed: 70,
     damage: 18,
     radius: 34,
@@ -141,11 +169,11 @@ export function waveLength(wave: number): number {
 /** Lebenspunkte-Faktor der Gegner in dieser Welle. */
 export function hpScale(wave: number): number {
   const w = wave - 1;
-  return 1 + 0.2 * w + 0.04 * w * w;
+  return 1 + 0.2 * w + 0.055 * w * w;
 }
 
 export function damageScale(wave: number): number {
-  return 1 + 0.12 * (wave - 1);
+  return 1 + 0.14 * (wave - 1);
 }
 
 export function speedScale(wave: number): number {
@@ -186,6 +214,10 @@ function weightOf(type: EnemyType, wave: number): number {
       return 2 + Math.min(2, (wave - 4) * 0.2);
     case "bruiser":
       return 1.2 + Math.min(1.5, (wave - 6) * 0.15);
+    case "exploder":
+      return 1.4 + Math.min(1.6, (wave - 4) * 0.15);
+    case "splitter":
+      return 1.2 + Math.min(1.4, (wave - 7) * 0.15);
     default:
       return 0;
   }
@@ -200,6 +232,8 @@ function groupSize(type: EnemyType, rng: () => number): number {
     case "charger":
     case "spitter":
       return 1 + Math.floor(rng() * 2);
+    case "exploder":
+      return 2 + Math.floor(rng() * 2);
     default:
       return 1;
   }
@@ -214,7 +248,7 @@ function groupSize(type: EnemyType, rng: () => number): number {
  */
 export function planWave(wave: number, players: number, rng: () => number): SpawnPlan[] {
   const length = waveLength(wave);
-  let budget = (6 + 4.6 * wave) * (length / 30) * playerCountScale(players);
+  let budget = (7 + 5.2 * wave) * (length / 30) * playerCountScale(players);
   const types = (Object.keys(ENEMIES) as EnemyType[]).filter((type) => weightOf(type, wave) > 0);
   const total = types.reduce((sum, type) => sum + weightOf(type, wave), 0);
 
@@ -238,8 +272,8 @@ export function planWave(wave: number, players: number, rng: () => number): Spaw
   }
 
   // Zwischengegner stehen fest am Anfang der Welle.
-  if (wave === 8 || wave === 12 || wave === 16) {
-    plan.push({ at: 2, type: "elite", count: wave === 16 ? 2 : 1 });
+  if (wave === 8 || wave === 12 || wave === 14 || wave === 16 || wave === 18) {
+    plan.push({ at: 2, type: "elite", count: wave >= 16 ? 2 : 1 });
   }
   if (wave === FINAL_WAVE) {
     plan.push({ at: 2, type: "boss", count: 1 });

@@ -26,17 +26,40 @@ export type StatKey =
   | "dodge"
   | "speed"
   | "luck"
-  | "harvesting";
+  | "harvesting"
+  | "ability";
 
 export type Stats = Record<StatKey, number>;
 
 export type StatMods = Partial<Record<StatKey, number>>;
 
-export type WeaponId = "pistol" | "smg" | "shotgun" | "sniper" | "fist" | "knife" | "spear";
+export type WeaponId =
+  | "pistol"
+  | "smg"
+  | "shotgun"
+  | "sniper"
+  | "fist"
+  | "knife"
+  | "spear"
+  | "crossbow"
+  | "rocket"
+  | "flamer"
+  | "wand"
+  | "hammer"
+  | "frost";
 
 export type CharacterId = "soeldner" | "raufbold" | "jaeger" | "panzer" | "glueckspilz" | "schatten";
 
-export type EnemyType = "grunt" | "swarmer" | "charger" | "spitter" | "bruiser" | "elite" | "boss";
+export type EnemyType =
+  | "grunt"
+  | "swarmer"
+  | "charger"
+  | "spitter"
+  | "bruiser"
+  | "elite"
+  | "boss"
+  | "exploder"
+  | "splitter";
 
 /**
  * Wo die Runde steht.
@@ -103,6 +126,12 @@ export interface PlayerState {
   /** Zwischengespeicherte Werte, neu berechnet bei jeder Aenderung. */
   stats: Stats;
   regenCarry: number;
+  /** Restzeit, bis die Faehigkeit wieder bereit ist (Sekunden). */
+  abilityCd: number;
+  /** Restzeit einer laufenden Wirkung der Faehigkeit (Bollwerk, Gluecksstraehne, Schattenschritt). */
+  buff: number;
+  /** Zaehler der zuletzt ausgefuehrten Faehigkeit-Anfrage (gegen doppeltes Ausloesen im Netz). */
+  abilityAck: number;
 }
 
 export type EnemyMode = "move" | "windup" | "dash" | "recover";
@@ -126,6 +155,13 @@ export interface Enemy {
   ky: number;
   /** Kurz nach einem Treffer > 0, die Darstellung blitzt dann auf. */
   flash: number;
+  /** Restzeit des Brands und Schaden pro Sekunde. */
+  burn: number;
+  burnDps: number;
+  /** Restzeit der Verlangsamung (halbes Tempo). */
+  slow: number;
+  /** Restzeit der Betaeubung (steht still). */
+  stun: number;
 }
 
 export interface Projectile {
@@ -145,6 +181,10 @@ export interface Projectile {
   radius: number;
   /** Gegner, die dieses Geschoss schon getroffen hat (damit Durchschlag nicht doppelt trifft). */
   hit: number[];
+  /** Waffe, von der das Geschoss kommt - fuer Explosion, Brand, Kette, Frost. Leer bei Gegnern. */
+  weapon: WeaponId | "";
+  /** Art fuer die Darstellung: 0 Kugel, 1 Bolzen, 2 Rakete, 3 Flamme, 4 Blitz, 5 Eis, 6 Granate. */
+  look: number;
 }
 
 export interface Pickup {
@@ -184,7 +224,7 @@ export interface GameState {
 export type GameEvent =
   | { t: "hit"; x: number; y: number; dmg: number; crit: boolean; enemy: boolean }
   | { t: "kill"; x: number; y: number; big: boolean }
-  | { t: "shot"; pid: string; kind: "ranged" | "melee"; x: number; y: number; angle: number }
+  | { t: "shot"; pid: string; kind: "ranged" | "melee"; x: number; y: number; angle: number; w: WeaponId }
   | { t: "pickup"; pid: string; x: number; y: number }
   | { t: "heal"; pid: string; x: number; y: number; amount: number }
   | { t: "dodge"; pid: string; x: number; y: number }
@@ -194,12 +234,17 @@ export type GameEvent =
   | { t: "waveEnd"; wave: number }
   | { t: "levelUp"; pid: string }
   | { t: "bought"; pid: string }
-  | { t: "enemyShot"; x: number; y: number };
+  | { t: "enemyShot"; x: number; y: number }
+  | { t: "boom"; x: number; y: number; r: number; enemy: boolean }
+  | { t: "zap"; x1: number; y1: number; x2: number; y2: number }
+  | { t: "ability"; pid: string; kind: CharacterId; x: number; y: number; x2: number; y2: number };
 
 /** Bewegungswunsch eines Spielers, Betrag hoechstens 1. */
 export interface PlayerInput {
   mx: number;
   my: number;
+  /** Zaehler der Faehigkeit-Knopfdruecke. Steigt er, soll die Faehigkeit ausloesen. */
+  ability?: number;
 }
 
 /** Befehle in der Pause zwischen den Wellen. */

@@ -56,8 +56,9 @@ export interface NumberedCommand {
   c: Command;
 }
 
-export type WireEnemy = [id: number, type: number, x: number, y: number, hp: number, maxHp: number, flash: number];
-export type WireShot = [id: number, x: number, y: number, vx: number, vy: number, friendly: number, radius: number, crit: number];
+/** `status`: Bits 1 Brand, 2 Frost, 4 Betaeubt, 8 holt aus (Ansturm/Zuender). */
+export type WireEnemy = [id: number, type: number, x: number, y: number, hp: number, maxHp: number, flash: number, status: number];
+export type WireShot = [id: number, x: number, y: number, vx: number, vy: number, friendly: number, radius: number, crit: number, look: number];
 export type WirePickup = [id: number, x: number, y: number, value: number];
 export type WireMarker = [x: number, y: number, t: number, type: number];
 
@@ -84,6 +85,9 @@ export interface WirePlayer {
   rd: number;
   lc: number;
   k: number;
+  /** Abklingzeit der Faehigkeit und Restzeit ihrer Wirkung. */
+  ac: number;
+  bf: number;
 }
 
 export interface WireState {
@@ -104,12 +108,13 @@ export type NetMessage =
   | { t: "lobby"; players: NetPlayerInfo[] }
   | { t: "start"; seed: number; players: NetPlayerInfo[] }
   | { t: "ready" }
-  | { t: "input"; seq: number; mx: number; my: number; cmds: NumberedCommand[] }
+  | { t: "input"; seq: number; mx: number; my: number; ab: number; cmds: NumberedCommand[] }
   | { t: "state"; s: WireState }
   | { t: "events"; e: GameEvent[] }
   | { t: "bye"; reason: string };
 
-const ENEMY_TYPES: readonly EnemyType[] = ["grunt", "swarmer", "charger", "spitter", "bruiser", "elite", "boss"];
+/** Reihenfolge ist Protokoll: neue Gegner nur hinten anhaengen. */
+const ENEMY_TYPES: readonly EnemyType[] = ["grunt", "swarmer", "charger", "spitter", "bruiser", "elite", "boss", "exploder", "splitter"];
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
@@ -143,6 +148,8 @@ function encodePlayer(player: PlayerState): WirePlayer {
     rd: player.ready ? 1 : 0,
     lc: player.lastCmd,
     k: player.kills,
+    ac: round1(player.abilityCd),
+    bf: round1(player.buff),
   };
 }
 
@@ -162,6 +169,7 @@ export function encodeState(state: GameState): WireState {
       round0(enemy.hp),
       enemy.maxHp,
       enemy.flash > 0 ? 1 : 0,
+      (enemy.burn > 0 ? 1 : 0) | (enemy.slow > 0 ? 2 : 0) | (enemy.stun > 0 ? 4 : 0) | (enemy.mode === "windup" ? 8 : 0),
     ]),
     s: state.shots.map((shot) => [
       shot.id,
@@ -172,6 +180,7 @@ export function encodeState(state: GameState): WireState {
       shot.friendly ? 1 : 0,
       shot.radius,
       shot.crit ? 1 : 0,
+      shot.look,
     ]),
     pu: state.pickups.map((pickup) => [pickup.id, round0(pickup.x), round0(pickup.y), pickup.value]),
     m: state.markers.map((marker) => [round0(marker.x), round0(marker.y), round1(marker.t), ENEMY_TYPES.indexOf(marker.type)]),
@@ -202,6 +211,9 @@ function decodePlayer(wire: WirePlayer): PlayerState {
     kills: wire.k,
     stats: computeStats(wire.ch, wire.it, wire.up),
     regenCarry: 0,
+    abilityCd: wire.ac ?? 0,
+    buff: wire.bf ?? 0,
+    abilityAck: 0,
   };
   return player;
 }
@@ -214,7 +226,7 @@ function decodeEnemy(wire: WireEnemy): Enemy {
     y: wire[3],
     hp: wire[4],
     maxHp: wire[5],
-    mode: "move",
+    mode: ((wire[7] ?? 0) & 8) !== 0 ? "windup" : "move",
     timer: 0,
     timer2: 0,
     dirX: 0,
@@ -222,6 +234,10 @@ function decodeEnemy(wire: WireEnemy): Enemy {
     kx: 0,
     ky: 0,
     flash: wire[6] === 1 ? 0.1 : 0,
+    burn: ((wire[7] ?? 0) & 1) !== 0 ? 1 : 0,
+    burnDps: 0,
+    slow: ((wire[7] ?? 0) & 2) !== 0 ? 1 : 0,
+    stun: ((wire[7] ?? 0) & 4) !== 0 ? 1 : 0,
   };
 }
 
@@ -240,6 +256,8 @@ function decodeShot(wire: WireShot): Projectile {
     crit: wire[7] === 1,
     radius: wire[6],
     hit: [],
+    weapon: "",
+    look: wire[8] ?? 0,
   };
 }
 

@@ -47,6 +47,8 @@ export const ENEMY_TILES: Record<EnemyType, number> = {
   bruiser: tile(28, 14),
   elite: tile(28, 8),
   boss: tile(28, 15),
+  exploder: tile(28, 8),
+  splitter: tile(28, 7),
 };
 
 /** Boden: warmer Sand, zwei Varianten fuers Schachbrettmuster. */

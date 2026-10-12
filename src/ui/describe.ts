@@ -39,9 +39,35 @@ export function weaponLines(id: WeaponId, tier: number, stats: Stats): string[] 
   const cooldown = weaponCooldown(id, tier, stats);
   const perSecond = Math.round((damage * def.count) / cooldown);
   const shots = def.count > 1 ? ` × ${def.count}` : "";
-  return [
-    `Schaden ${damage}${shots}`,
-    `${perSecond} pro Sekunde`,
-    `Reichweite ${Math.round(weaponReach(id, stats))}`,
-  ];
+  const lines = [`Schaden ${damage}${shots}`, `${perSecond} pro Sekunde`, `Reichweite ${Math.round(weaponReach(id, stats))}`];
+  const special = weaponSpecial(id, tier);
+  if (special) {
+    lines.push(special);
+  }
+  return lines;
+}
+
+/** Die Besonderheit einer Waffe in einer kurzen Zeile - oder nichts. */
+export function weaponSpecial(id: WeaponId, tier: number): string | null {
+  const def = WEAPONS[id];
+  if (def.explode) {
+    return `Explodiert (Umkreis ${def.explode})`;
+  }
+  if (def.burn) {
+    return "Setzt in Brand";
+  }
+  if (def.chain) {
+    return `Blitz springt ${def.chain + tier - 1}×`;
+  }
+  if (def.slow) {
+    return `Verlangsamt ${def.slow} s`;
+  }
+  if (def.stun) {
+    return "Rundumschlag, betäubt";
+  }
+  const pierce = def.pierce[tier - 1] ?? 0;
+  if (def.kind === "ranged" && pierce >= 3) {
+    return `Durchschlägt ${pierce} Gegner`;
+  }
+  return null;
 }

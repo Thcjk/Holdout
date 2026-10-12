@@ -126,6 +126,67 @@ function drawShape(ctx: Ctx, id: WeaponId, s: WeaponStyle): void {
       ellipse(ctx, 6, 45, 5, 5, s.body, s.line - 1);
       break;
     }
+    case "crossbow": {
+      // Schaft, quer der Bogen mit Sehne, ein Bolzen aufgelegt
+      polygon(ctx, [[4, 46], [24, 42], [26, 54], [8, 58]], s.grip, s.line);
+      box(ctx, s, 20, 42, 52, 9, s.body, s.bodyDark);
+      stroke(ctx, [[60, 22], [52, 46], [60, 72]], 6, "#14101c");
+      stroke(ctx, [[60, 22], [52, 46], [60, 72]], 3, "#6b4228");
+      stroke(ctx, [[60, 22], [40, 46], [60, 72]], 1.4, "#14101c");
+      stroke(ctx, [[30, 46], [84, 46]], 2.4, "#14101c");
+      polygon(ctx, [[84, 42], [92, 46], [84, 50]], s.metal, 2);
+      break;
+    }
+    case "rocket": {
+      // dickes Rohr mit Rakete vorne
+      box(ctx, s, 10, 36, 64, 18, s.body, s.bodyDark, 6);
+      box(ctx, s, 34, 54, 10, 14, s.grip);
+      box(ctx, s, 24, 30, 12, 6, s.accent);
+      polygon(ctx, [[74, 38], [88, 45], [74, 52]], "#b5532f", s.line);
+      ellipse(ctx, 10, 45, 4, 9, "#2a2f3a", 2);
+      rivets(ctx, s, [[20, 42], [62, 42]]);
+      break;
+    }
+    case "flamer": {
+      // Tank, Rohr und eine Stichflamme
+      ellipse(ctx, 20, 52, 12, 12, "#b5532f", s.line);
+      box(ctx, s, 26, 38, 38, 12, s.body, s.bodyDark);
+      box(ctx, s, 62, 41, 14, 6, s.metal);
+      polygon(ctx, [[76, 36], [94, 44], [76, 52], [82, 44]], "#e8862a", 2.5);
+      polygon(ctx, [[78, 40], [88, 44], [78, 48]], "#f6d36b", 1.2);
+      stroke(ctx, [[22, 41], [30, 41]], 3, "#14101c");
+      break;
+    }
+    case "wand": {
+      // Holzstab mit Kristall und Funken
+      stroke(ctx, [[10, 72], [64, 26]], 8, "#14101c");
+      stroke(ctx, [[10, 72], [64, 26]], 4.5, "#6b4228");
+      polygon(ctx, [[62, 14], [76, 22], [70, 36], [56, 28]], "#9fd8e8", s.line);
+      stroke(ctx, [[80, 12], [86, 6]], 2.4, s.accent);
+      stroke(ctx, [[84, 26], [92, 26]], 2.4, s.accent);
+      stroke(ctx, [[70, 6], [72, -1]], 2.4, s.accent);
+      break;
+    }
+    case "hammer": {
+      // langer Stiel, schwerer Kopf
+      stroke(ctx, [[14, 74], [60, 30]], 8, "#14101c");
+      stroke(ctx, [[14, 74], [60, 30]], 4.5, "#6b4228");
+      box(ctx, s, 46, 12, 30, 30, s.body, s.bodyDark, 4);
+      box(ctx, s, 44, 22, 34, 8, s.accent, undefined, 2);
+      rivets(ctx, s, [[52, 17], [70, 17], [52, 36], [70, 36]]);
+      break;
+    }
+    case "frost": {
+      // heller Stab mit Eiskristall
+      stroke(ctx, [[10, 72], [62, 28]], 8, "#14101c");
+      stroke(ctx, [[10, 72], [62, 28]], 4.5, "#9fb8b3");
+      for (const a of [0, Math.PI / 3, (2 * Math.PI) / 3]) {
+        stroke(ctx, [[68 - Math.cos(a) * 14, 22 - Math.sin(a) * 14], [68 + Math.cos(a) * 14, 22 + Math.sin(a) * 14]], 6, "#14101c");
+        stroke(ctx, [[68 - Math.cos(a) * 14, 22 - Math.sin(a) * 14], [68 + Math.cos(a) * 14, 22 + Math.sin(a) * 14]], 3, "#bfe4f0");
+      }
+      ellipse(ctx, 68, 22, 4, 4, "#ffffff", 2);
+      break;
+    }
     case "spear": {
       stroke(ctx, [[6, 54], [74, 42]], 9, "#14101c");
       stroke(ctx, [[6, 54], [74, 42]], 4.5, s.grip);
@@ -155,7 +216,21 @@ export function drawWeapon(ctx: Ctx, id: WeaponId, s: WeaponStyle = WEAPON_STYLE
   }
 }
 
-export const WEAPON_ORDER: readonly WeaponId[] = ["pistol", "smg", "shotgun", "sniper", "fist", "knife", "spear"];
+export const WEAPON_ORDER: readonly WeaponId[] = [
+  "pistol",
+  "smg",
+  "shotgun",
+  "sniper",
+  "fist",
+  "knife",
+  "spear",
+  "crossbow",
+  "rocket",
+  "flamer",
+  "wand",
+  "hammer",
+  "frost",
+];
 
 /** Malt die sieben Waffensymbole als Texturen. Mehrfach aufrufen ist harmlos. */
 export function createWeaponTextures(scene: Phaser.Scene): void {

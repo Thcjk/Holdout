@@ -55,6 +55,9 @@ export function createPlayer(setup: PlayerSetup, index: number, total: number): 
     kills: 0,
     stats: computeStats(setup.character, [], []),
     regenCarry: 0,
+    abilityCd: 3,
+    buff: 0,
+    abilityAck: 0,
   };
   player.hp = player.stats.maxHp;
   return player;

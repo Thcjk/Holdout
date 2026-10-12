@@ -427,6 +427,104 @@ function createBullet(scene: Phaser.Scene): void {
   addTexture(scene, "bullet", target.canvas);
 }
 
+/**
+ * Geschosse nach Aussehen (`Projectile.look`): 1 Bolzen, 2 Rakete, 3 Flamme,
+ * 4 Blitzfunke, 5 Eissplitter, 6 Granate. Alle zeigen nach rechts.
+ */
+function createShotLooks(scene: Phaser.Scene): void {
+  const make = (key: string, w: number, h: number, draw: (c: Ctx) => void): void => {
+    const target = canvasOf(w, h);
+    if (target) {
+      draw(target.context);
+      addTexture(scene, key, target.canvas);
+    }
+  };
+  const inked = (c: Ctx, fill: string, width = 2): void => {
+    c.fillStyle = fill;
+    c.fill();
+    c.lineWidth = width;
+    c.lineJoin = "round";
+    c.strokeStyle = INK;
+    c.stroke();
+  };
+  make("shot-1", 44, 14, (c) => {
+    c.beginPath();
+    c.rect(4, 5, 30, 4);
+    inked(c, "#c9a66b", 1.6);
+    c.beginPath();
+    c.moveTo(32, 2);
+    c.lineTo(42, 7);
+    c.lineTo(32, 12);
+    c.closePath();
+    inked(c, "#c9c6b4", 1.6);
+    c.beginPath();
+    c.moveTo(2, 2);
+    c.lineTo(10, 7);
+    c.lineTo(2, 12);
+    c.closePath();
+    inked(c, "#b5532f", 1.4);
+  });
+  make("shot-2", 40, 20, (c) => {
+    c.beginPath();
+    c.moveTo(2, 10);
+    c.lineTo(10, 3);
+    c.lineTo(10, 17);
+    c.closePath();
+    inked(c, "#f6d36b", 1.2);
+    c.beginPath();
+    c.roundRect(9, 5, 22, 10, 4);
+    inked(c, "#587a7c");
+    c.beginPath();
+    c.moveTo(30, 5);
+    c.lineTo(38, 10);
+    c.lineTo(30, 15);
+    c.closePath();
+    inked(c, "#b5532f");
+  });
+  make("shot-3", 28, 28, (c) => {
+    const g = c.createRadialGradient(14, 14, 1, 14, 14, 13);
+    g.addColorStop(0, "rgba(246,211,107,1)");
+    g.addColorStop(0.5, "rgba(232,134,42,0.9)");
+    g.addColorStop(1, "rgba(181,83,47,0)");
+    c.fillStyle = g;
+    c.fillRect(0, 0, 28, 28);
+  });
+  make("shot-4", 24, 24, (c) => {
+    c.beginPath();
+    for (let i = 0; i < 8; i += 1) {
+      const a = (i / 8) * Math.PI * 2;
+      const r = i % 2 === 0 ? 11 : 4;
+      c.lineTo(12 + Math.cos(a) * r, 12 + Math.sin(a) * r);
+    }
+    c.closePath();
+    inked(c, "#dff4fa", 1.4);
+  });
+  make("shot-5", 26, 16, (c) => {
+    c.beginPath();
+    c.moveTo(2, 8);
+    c.lineTo(14, 2);
+    c.lineTo(24, 8);
+    c.lineTo(14, 14);
+    c.closePath();
+    inked(c, "#bfe4f0", 1.6);
+  });
+  make("shot-6", 26, 26, (c) => {
+    c.beginPath();
+    c.arc(12, 14, 9, 0, Math.PI * 2);
+    inked(c, "#4a5652", 2);
+    c.beginPath();
+    c.moveTo(16, 6);
+    c.lineTo(21, 2);
+    c.lineWidth = 2;
+    c.strokeStyle = "#6b4228";
+    c.stroke();
+    c.fillStyle = "#f6d36b";
+    c.beginPath();
+    c.arc(22, 2.5, 2.4, 0, Math.PI * 2);
+    c.fill();
+  });
+}
+
 /** Das Material: ein Bernstein-Splitter mit Tusche-Rand. */
 function createGem(scene: Phaser.Scene): void {
   const target = canvasOf(48, 48);
@@ -617,6 +715,7 @@ export function createComicTextures(scene: Phaser.Scene): void {
   createArena(scene);
   createGameBackground(scene);
   createBullet(scene);
+  createShotLooks(scene);
   createGem(scene);
   createHeart(scene);
   createLogo(scene);

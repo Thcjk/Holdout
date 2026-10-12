@@ -35,6 +35,18 @@ export interface WeaponDef {
   critBonus: number;
   /** Farbe fuer Geschoss bzw. Schlag. */
   color: number;
+  /** Aussehen des Geschosses (siehe `Projectile.look`). */
+  look?: number;
+  /** Explosion beim Treffer: Radius. Alle Gegner darin bekommen 60 % des Schadens. */
+  explode?: number;
+  /** Brand: Anteil des Treffers, der drei Sekunden lang als Schaden pro Sekunde nachbrennt. */
+  burn?: number;
+  /** Kette: So oft springt der Treffer auf den naechsten Gegner (je Stufe +1). */
+  chain?: number;
+  /** Verlangsamung in Sekunden (halbes Tempo). */
+  slow?: number;
+  /** Betaeubung in Sekunden (Gegner steht still). */
+  stun?: number;
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
@@ -156,6 +168,118 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     scaling: 1.4,
     critBonus: 0,
     color: 0xc9a66b,
+  },
+  crossbow: {
+    id: "crossbow",
+    name: "Armbrust",
+    kind: "ranged",
+    price: 30,
+    damage: [22, 32, 46, 66],
+    cooldown: [0.95, 0.88, 0.8, 0.7],
+    range: 480,
+    count: 1,
+    spread: 2,
+    pierce: [3, 4, 6, 9],
+    speed: 900,
+    knockback: 30,
+    scaling: 1.1,
+    critBonus: 5,
+    color: 0xc9a66b,
+    look: 1,
+  },
+  rocket: {
+    id: "rocket",
+    name: "Raketenwerfer",
+    kind: "ranged",
+    price: 42,
+    damage: [26, 38, 54, 80],
+    cooldown: [1.7, 1.55, 1.4, 1.2],
+    range: 430,
+    count: 1,
+    spread: 4,
+    pierce: [0, 0, 0, 0],
+    speed: 420,
+    knockback: 80,
+    scaling: 1.2,
+    critBonus: 0,
+    color: 0xb5532f,
+    look: 2,
+    explode: 70,
+  },
+  flamer: {
+    id: "flamer",
+    name: "Flammenwerfer",
+    kind: "ranged",
+    price: 34,
+    damage: [3, 4, 6, 9],
+    cooldown: [0.1, 0.09, 0.085, 0.08],
+    range: 150,
+    count: 2,
+    spread: 26,
+    pierce: [1, 1, 2, 3],
+    speed: 380,
+    knockback: 6,
+    scaling: 0.35,
+    critBonus: 0,
+    color: 0xe8862a,
+    look: 3,
+    burn: 0.35,
+  },
+  wand: {
+    id: "wand",
+    name: "Blitzstab",
+    kind: "ranged",
+    price: 36,
+    damage: [14, 20, 29, 42],
+    cooldown: [0.85, 0.78, 0.7, 0.6],
+    range: 360,
+    count: 1,
+    spread: 0,
+    pierce: [0, 0, 0, 0],
+    speed: 1300,
+    knockback: 10,
+    scaling: 0.9,
+    critBonus: 0,
+    color: 0x9fd8e8,
+    look: 4,
+    chain: 2,
+  },
+  hammer: {
+    id: "hammer",
+    name: "Hammer",
+    kind: "melee",
+    price: 36,
+    damage: [22, 32, 46, 66],
+    cooldown: [1.4, 1.3, 1.2, 1.05],
+    range: 95,
+    count: 6,
+    spread: 360,
+    pierce: [0, 0, 0, 0],
+    speed: 0,
+    knockback: 140,
+    scaling: 1.6,
+    critBonus: 0,
+    color: 0x8d9688,
+    stun: 0.6,
+  },
+  frost: {
+    id: "frost",
+    name: "Froststab",
+    kind: "ranged",
+    price: 30,
+    damage: [9, 13, 19, 28],
+    cooldown: [0.6, 0.55, 0.5, 0.45],
+    range: 340,
+    count: 1,
+    spread: 4,
+    pierce: [1, 1, 2, 2],
+    speed: 620,
+    knockback: 10,
+    scaling: 0.8,
+    critBonus: 0,
+    color: 0xbfe4f0,
+    look: 5,
+    slow: 2,
   },
 };
 

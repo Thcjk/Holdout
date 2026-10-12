@@ -30,6 +30,7 @@ const STAT_COLORS: Record<StatKey, string> = {
   speed: "#4f8a8e",
   luck: "#6e8f3a",
   harvesting: "#c98a2e",
+  ability: "#6a5f8f",
 };
 
 const INK = "#1d1c19";
@@ -94,7 +95,8 @@ function drawGlyph(context: Ctx, stat: StatKey, accent: string): void {
       break;
     }
     case "attackSpeed":
-    case "speed": {
+    case "speed":
+    case "ability": {
       // Blitz
       context.beginPath();
       context.moveTo(4, -22);

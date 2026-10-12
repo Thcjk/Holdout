@@ -27,6 +27,9 @@ import { Hud } from "../ui/Hud";
 import { ARENA_WALL } from "../ui/comic";
 import { menuText, woodPanel } from "../ui/menuStyle";
 import { ShopPanel } from "../ui/ShopPanel";
+import { AbilityButton } from "../ui/AbilityButton";
+import { abilityCooldown } from "../game/data/abilities";
+import { WEAPONS } from "../game/data/weapons";
 import { FONT_HAND, FONT_TITLE } from "../ui/paper";
 import type { PlayMode } from "../app";
 
@@ -76,6 +79,7 @@ export class GameScene extends Phaser.Scene {
 
   private stick!: FloatingStick;
   private hud!: Hud;
+  private ability: AbilityButton | null = null;
   private shop!: ShopPanel;
   private bars!: Phaser.GameObjects.Graphics;
   private waitText!: Phaser.GameObjects.Text;
@@ -133,6 +137,8 @@ export class GameScene extends Phaser.Scene {
     this.bars = this.add.graphics().setDepth(8000);
     this.selfRing = this.add.ellipse(0, 0, 34, 16).setStrokeStyle(2, 0xdba636, 0.9).setDepth(2);
     this.hud = new Hud(this);
+    const me = this.session.view.state.players.find((player) => player.id === this.session.selfId);
+    this.ability = me ? new AbilityButton(this, me.character) : null;
     this.shop = new ShopPanel(this, (command) => this.session.send(command));
 
     const stickRegion = new Phaser.Geom.Rectangle(0, 56, VIEWPORT.width * 0.62, VIEWPORT.height - 56);
@@ -287,7 +293,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!this.paused) {
-      session.update(dt, this.stick.value);
+      session.update(dt, { ...this.stick.value, ability: this.ability?.presses ?? 0 });
     }
     const view = session.view;
     const state = view.state;
@@ -303,6 +309,9 @@ export class GameScene extends Phaser.Scene {
 
     const self = state.players.find((player) => player.id === session.selfId);
     this.hud.update(state, self, session.selfId);
+    if (self && this.ability) {
+      this.ability.update(self.abilityCd, abilityCooldown(self.character, self.stats.ability), self.alive);
+    }
     this.shop.update(state, self);
 
     if (state.phase !== "shop") {
@@ -320,11 +329,13 @@ export class GameScene extends Phaser.Scene {
       this.stick.enabled = false;
       this.shop.setVisible(true);
       this.hud.setVisible(false);
+      this.ability?.setVisible(false);
       this.pauseButton.setVisible(false);
       audio.setMusic("menu", 0.35);
     } else if (phase === "wave") {
       this.shop.setVisible(false);
       this.hud.setVisible(true);
+      this.ability?.setVisible(true);
       this.pauseButton.setVisible(true);
       this.stick.enabled = !this.pauseOpen;
       audio.setMusic("wave");
@@ -488,7 +499,14 @@ export class GameScene extends Phaser.Scene {
     if (enemy.flash > 0) {
       view.sprite.setTintFill(0xffffff);
     } else if (windup) {
-      view.sprite.setTint(0xff9a9a);
+      // Holt aus (Stuermer) oder zischt gleich (Zuender): rot blinken.
+      view.sprite.setTint(Math.floor(now / 80) % 2 === 0 ? 0xff7a5a : 0xffd0c0);
+    } else if (enemy.burn > 0) {
+      view.sprite.setTint(Math.floor(now / 120) % 2 === 0 ? 0xffa060 : 0xffc890);
+    } else if (enemy.slow > 0) {
+      view.sprite.setTint(0x9fd0e8);
+    } else if (enemy.stun > 0) {
+      view.sprite.setTint(0xc8c8c8);
     } else {
       view.sprite.clearTint();
     }
@@ -575,29 +593,45 @@ export class GameScene extends Phaser.Scene {
       }
       view.weapons = player.weapons.map((weapon) => this.add.image(0, 0, weaponIconKey(weapon.id)).setDisplaySize(30, 30));
     }
+    // Die Waffen schweben links und rechts neben der Figur (nicht ueber dem Kopf)
+    // und zeigen dorthin, wohin geschossen wird.
     const count = view.weapons.length;
+    const aim = player.facing;
+    const left = Math.cos(aim) < 0;
     view.weapons.forEach((image, index) => {
-      const angle = -Math.PI / 2 + (index / Math.max(1, count)) * Math.PI * 2;
+      const spread = count > 1 ? (index / (count - 1) - 0.5) * Math.min(2.6, 0.75 * (count - 1)) : 0;
+      const around = aim + spread;
       image
-        .setPosition(view.x + Math.cos(angle) * 25, view.y + Math.sin(angle) * 20)
-        .setDepth(depth + 1)
+        .setPosition(view.x + Math.cos(around) * 24, view.y + 4 + Math.sin(around) * 18)
+        // Das Symbol ist um ~22 Grad nach oben gekippt gezeichnet - das gleicht die Drehung aus.
+        .setRotation(left ? aim - Math.PI - 0.38 : aim + 0.38)
+        .setFlipX(left)
+        .setDepth(Math.sin(around) < 0 ? depth - 1 : depth + 1)
         .setVisible(player.alive);
     });
-
-    if (player.alive) {
-      const fraction = Phaser.Math.Clamp(player.hp / player.stats.maxHp, 0, 1);
-      this.bars.fillStyle(0x14101c, 1).fillRoundedRect(view.x - 19, view.y - 29, 38, 9, 3);
-      this.bars.fillStyle(COLORS.hpPlayer, 1).fillRoundedRect(view.x - 17, view.y - 27, 34 * fraction, 5, 2);
+    // Laufende Faehigkeit sichtbar machen: Schild beim Bollwerk, Goldschimmer bei der Gluecksstraehne.
+    if (player.alive && player.buff > 0 && (player.character === "panzer" || player.character === "glueckspilz")) {
+      const color = player.character === "panzer" ? 0x9fb8b3 : 0xdba636;
+      this.bars.fillStyle(color, 0.22).fillCircle(view.x, view.y, 28);
+      this.bars.lineStyle(3, 0x1d1c19, 0.8).strokeCircle(view.x, view.y, 28 + Math.sin(time / 90) * 1.5);
     }
   }
 
   private makeShot(shot: Projectile): ShotView {
-    const size = Math.max(11, shot.radius * 2.8);
-    const image = this.add
-      .image(0, 0, "bullet")
-      .setDisplaySize(size, size)
-      .setTint(shot.friendly ? COLORS.playerBullet : COLORS.enemyBullet)
-      .setDepth(5000);
+    let image: Phaser.GameObjects.Image;
+    if (shot.look > 0 && shot.friendly) {
+      image = this.add.image(0, 0, `shot-${shot.look}`).setDepth(5000).setRotation(Math.atan2(shot.vy, shot.vx));
+      if (shot.look === 3) {
+        image.setScale(0.9 + Math.random() * 0.5).setAlpha(0.9);
+      }
+    } else {
+      const size = Math.max(11, shot.radius * 2.8);
+      image = this.add
+        .image(0, 0, "bullet")
+        .setDisplaySize(size, size)
+        .setTint(shot.friendly ? COLORS.playerBullet : COLORS.enemyBullet)
+        .setDepth(5000);
+    }
     return { image, x: this.originX + shot.x, y: this.originY + shot.y, destroy: () => image.destroy() };
   }
 
@@ -607,6 +641,9 @@ export class GameScene extends Phaser.Scene {
     view.x += (targetX - view.x) * k;
     view.y += (targetY - view.y) * k;
     view.image.setPosition(view.x, view.y);
+    if (shot.look === 6) {
+      view.image.rotation += 0.25;
+    }
   }
 
   private makePickup(pickup: Pickup): Phaser.GameObjects.Image {
@@ -672,7 +709,8 @@ export class GameScene extends Phaser.Scene {
         break;
       case "shot":
         if (event.kind === "melee") {
-          this.swing(event.x, event.y, event.angle);
+          const def = WEAPONS[event.w];
+          this.swing(event.x, event.y, event.angle, def?.spread ?? 80, Math.min(140, def?.range ?? 70));
           this.playSound("swing", 70);
         } else {
           this.playSound("shoot", 70);
@@ -715,6 +753,17 @@ export class GameScene extends Phaser.Scene {
         if (event.pid === selfId) {
           this.playSound("pickup", 40);
         }
+        break;
+      case "boom":
+        this.boom(event.x, event.y, event.r, event.enemy);
+        this.playSound("blast", 60);
+        break;
+      case "zap":
+        this.zap(event.x1, event.y1, event.x2, event.y2);
+        break;
+      case "ability":
+        this.abilityEffect(event);
+        this.playSound("superUsed", 0);
         break;
       case "enemyShot":
         this.playSound("enemyShoot", 80);
@@ -806,12 +855,101 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private swing(x: number, y: number, angle: number): void {
+  private swing(x: number, y: number, angle: number, spread: number, reach: number): void {
     const arc = this.add.graphics().setDepth(8600);
-    arc.lineStyle(5, 0xf1e5c9, 0.9);
+    const half = Math.min(Math.PI, ((spread / 2) * Math.PI) / 180 + 0.3);
+    const radius = Math.max(30, reach * 0.55);
+    arc.lineStyle(6, 0x1d1c19, 0.5);
     arc.beginPath();
-    arc.arc(this.originX + x, this.originY + y, 30, angle - 0.8, angle + 0.8);
+    arc.arc(this.originX + x, this.originY + y, radius, angle - half, angle + half);
     arc.strokePath();
-    this.tweens.add({ targets: arc, alpha: 0, duration: 160, onComplete: () => arc.destroy() });
+    arc.lineStyle(3.5, 0xf1e5c9, 0.95);
+    arc.beginPath();
+    arc.arc(this.originX + x, this.originY + y, radius, angle - half, angle + half);
+    arc.strokePath();
+    this.tweens.add({ targets: arc, alpha: 0, duration: 170, onComplete: () => arc.destroy() });
+  }
+
+  /** Explosion: Tuschering, der aufgeht, darunter ein heller Fleck und Splitter. */
+  private boom(x: number, y: number, r: number, enemy: boolean): void {
+    const cx = this.originX + x;
+    const cy = this.originY + y;
+    const flash = this.add.circle(cx, cy, r, enemy ? 0xe8862a : 0xf6d36b, 0.55).setDepth(8550).setScale(0.3);
+    const ring = this.add.circle(cx, cy, r).setStrokeStyle(4, 0x1d1c19, 0.9).setDepth(8560).setScale(0.3);
+    this.tweens.add({ targets: [flash, ring], scale: 1, duration: 180, ease: "Quad.Out" });
+    this.tweens.add({ targets: [flash, ring], alpha: 0, delay: 120, duration: 260, onComplete: () => {
+      flash.destroy();
+      ring.destroy();
+    } });
+    this.burst(x, y, 8, enemy ? 0xb5532f : 0xdba636);
+    this.cameras.main.shake(110, 0.004);
+    if (this.time.now - this.lastWord > 200) {
+      this.lastWord = this.time.now;
+      this.comic(x, y - 10, enemy ? "KAWUMM!" : "BUMM!", enemy ? "#b5532f" : "#1d1c19");
+    }
+  }
+
+  /** Blitz zwischen zwei Gegnern: gezackte Linie, die schnell verblasst. */
+  private zap(x1: number, y1: number, x2: number, y2: number): void {
+    const g = this.add.graphics().setDepth(8600);
+    const points: Phaser.Math.Vector2[] = [];
+    const steps = 6;
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const jitter = i === 0 || i === steps ? 0 : (Math.random() - 0.5) * 16;
+      points.push(new Phaser.Math.Vector2(this.originX + x1 + (x2 - x1) * t + jitter, this.originY + y1 + (y2 - y1) * t + jitter));
+    }
+    g.lineStyle(5, 0x1d1c19, 0.7).strokePoints(points);
+    g.lineStyle(2.5, 0xdff4fa, 1).strokePoints(points);
+    this.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => g.destroy() });
+  }
+
+  /** Sichtbare Wirkung der Faehigkeiten - gerechnet wird in der Simulation. */
+  private abilityEffect(event: Extract<GameEvent, { t: "ability" }>): void {
+    const cx = this.originX + event.x;
+    const cy = this.originY + event.y;
+    const words: Record<string, string> = {
+      soeldner: "WURF!",
+      raufbold: "STAMPF!",
+      jaeger: "HAGEL!",
+      panzer: "BOLLWERK!",
+      glueckspilz: "GLÜCK!",
+      schatten: "WUSCH!",
+    };
+    this.comic(event.x, event.y - 30, words[event.kind] ?? "!", "#b5532f");
+    switch (event.kind) {
+      case "raufbold":
+      case "panzer": {
+        const radius = event.kind === "raufbold" ? 135 : 120;
+        const ring = this.add.circle(cx, cy, radius).setStrokeStyle(6, 0x1d1c19, 0.8).setDepth(8560).setScale(0.2);
+        const fill = this.add
+          .circle(cx, cy, radius, event.kind === "raufbold" ? 0xdba636 : 0x9fb8b3, 0.35)
+          .setDepth(8550)
+          .setScale(0.2);
+        this.tweens.add({ targets: [ring, fill], scale: 1, alpha: 0, duration: 380, ease: "Quad.Out", onComplete: () => {
+          ring.destroy();
+          fill.destroy();
+        } });
+        this.cameras.main.shake(140, 0.006);
+        break;
+      }
+      case "schatten": {
+        const g = this.add.graphics().setDepth(8540);
+        g.lineStyle(16, 0x2c3a3c, 0.5);
+        g.lineBetween(cx, cy, this.originX + event.x2, this.originY + event.y2);
+        g.lineStyle(4, 0x1d1c19, 0.8);
+        g.lineBetween(cx, cy, this.originX + event.x2, this.originY + event.y2);
+        this.tweens.add({ targets: g, alpha: 0, duration: 320, onComplete: () => g.destroy() });
+        break;
+      }
+      case "glueckspilz": {
+        this.burst(event.x, event.y, 14, 0xdba636);
+        break;
+      }
+      case "jaeger":
+      case "soeldner":
+      default:
+        break;
+    }
   }
 }

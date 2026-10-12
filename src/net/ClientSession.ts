@@ -96,6 +96,7 @@ export class ClientSession implements GameSession {
       seq: this.seq,
       mx: round2(this.lastInput.mx),
       my: round2(this.lastInput.my),
+      ab: this.lastInput.ability ?? 0,
       cmds: this.pendingCommands,
     });
   }

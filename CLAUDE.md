@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout** (v3.6.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
+**Holdout** (v3.7.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
 Online-Koop (1–4). Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android-APK über
 Capacitor. Der frühere Koop-Arena-Shooter (v2.5.0, Brawl-Stars-artig, mit 3D) wurde auf dem
 Branch `brotato-umbau` komplett ersetzt; sein Stand liegt auf `main` bis zum Merge, seine
@@ -18,8 +18,9 @@ und Texte im Spiel auf Deutsch**, Code lesbar statt clever.
 
 Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
 
-- Spielkern, Shop, 6 Charaktere (Söldner, Raufbold, Jäger, Panzer, Glückspilz, Schatten), 7 Waffen (je 4 Stufen), 24 Gegenstände, 14 Level-Ups,
-  7 Gegnertypen, 20 Wellen: fertig, 20 Tests + Bot-Balancemessung.
+- Spielkern, Shop, 6 Charaktere (Söldner, Raufbold, Jäger, Panzer, Glückspilz, Schatten) mit je einer aktiven
+  Fähigkeit, 13 Waffen (je 4 Stufen), 27 Gegenstände, 15 Level-Ups, 9 Gegnertypen, 20 Wellen: fertig,
+  50 Tests + Bot-Balancemessung.
 - Solo, Koop (Host/Client, Lobby, Raumcode) und die ganze Oberfläche: fertig. Im Test-Browser
   durchgespielt: Titel → Charakterwahl → Gefecht → Level-Up → Shop → nächste Welle, und Koop mit
   zwei Tabs (`?debug=lokal`): beide Spieler sichtbar, Bewegung kommt an.
@@ -43,6 +44,17 @@ Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
   Client ankommt (die Lobby wiederholt es in dieser Zeit).
 - Alle Spielwerte stehen in `src/game/data/*.ts`, feste Zahlen in `src/game/constants.ts`.
   **Reihenfolge von `ITEMS` und `UPGRADES` ist Protokoll** (Zähler je Index) – neue nur hinten.
+  Ebenso `ENEMY_TYPES` in `net/protocol.ts`.
+- **Waffen-Effekte** (`data/weapons.ts`, optionale Felder): `explode` (Radius), `burn` (Brand, 3 s), `chain`
+  (Blitz springt, je Stufe +1), `slow`, `stun`, `look` (Geschossbild `shot-<n>`). Gerechnet in
+  `Simulation.shotHits` / `explode` / `chainLightning`. Gegner haben dafür `burn`, `slow`, `stun`; übers Netz als Bits.
+- **Fähigkeiten** (`data/abilities.ts`, `Simulation.useAbility`): eine je Held, ausgelöst über einen Zähler in
+  `PlayerInput.ability` (steigt mit jedem Knopfdruck; nur ein höherer Wert als `player.abilityAck` löst aus –
+  so zündet ein doppelt angekommenes Netzpaket nicht zweimal). `player.abilityCd`, `player.buff` (Bollwerk,
+  Glückssträhne, Schattenschritt). Wert „Fähigkeit-Tempo“ (`stats.ability`) verkürzt die Abklingzeit.
+  Knopf: `ui/AbilityButton.ts` (rechts unten). Effekte: `GameScene.abilityEffect`, `boom`, `zap`.
+- **Neue Gegner:** Zünder (`exploder`, bleibt neben dem Spieler stehen und explodiert), Teiler (`splitter`,
+  zerfällt in 3 Wuselchen). Elite schießt zusätzlich Fächer, Boss wechselt Ring/Fächer und ruft Zünder.
 
 ## Oberfläche
 
@@ -74,7 +86,8 @@ Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
     (`ARENA_WALL` = 44, so weit ragt das Bild über die Spielfläche), Papier-Hintergrund, Logo, Herz, Klippe.
   - `menuStyle.paintBackground`: Plakat-Landschaft (Bergschichten, dunkler Berg mit Burg und Dornenring, Tannen).
   - TitleScene ist als Plakat gebaut: Schriftzug und Satz links, Held auf Klippe Mitte, Band mit Stichworten unten.
-  - HUD (`ui/Hud.ts`): Papierschilder, Herz, Balken mit Tuscherand.
+  - HUD (`ui/Hud.ts`): Papierschilder, Herz, Balken mit Tuscherand. Kein Lebensbalken über der Spielfigur (Nutzerwunsch);
+    Waffen schweben neben der Figur und zeigen in Schussrichtung (`GameScene.applyPlayer`).
 - `setReloadSafe(true)` nur im Titel und im Ergebnis (Selbst-Update der PWA nur dort).
 
 ## Entwickeln und prüfen
@@ -89,8 +102,9 @@ Adress-Zusätze: `?desktop`, `?debug=lokal|werte|netz|all`, `?seed=N` (nur solo)
 
 ## Offene Punkte / Ideen
 
-- Schwierigkeit 2026-10-12 angezogen (erster Testspieler hat beim ersten Versuch gewonnen): steilere Gegnerskalierung,
-  größeres Wellenbudget, Königslarven in Welle 8/12/16 (2×) und 2 beim Boss. Bot-Mittel jetzt ~5–13. Echte Spieltests nötig.
+- Schwierigkeit 2026-10-12 zweimal angezogen (Nutzer: „darf schwerer werden“): Leben `1+0.2w+0.055w²`, Schaden
+  +14 %/Welle, Budget `7+5.2·Welle`, Königslarven in 8/12/14/16/18 (ab 16 doppelt), Boss 1400 Leben.
+  Bot (mit Fähigkeit): Mittel ~5–14, Söldner erreicht oft Welle 20, scheitert meist am Boss. Panzer im Bot weiterhin schwach.
 - Kartoffel ist durch den Söldner (3 Waffenplätze, +Schaden/+Tempo) ersetzt.
 
 - Echte Spieltests: Balance (Panzer/Raufbold waren im Bot schwach), Dropmenge, Shop-Preise.

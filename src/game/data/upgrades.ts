@@ -28,4 +28,5 @@ export const UPGRADES: readonly UpgradeDef[] = [
   { id: "luck", name: "+8 Glück", mods: { luck: 8 } },
   { id: "harvest", name: "+2 Ernte", mods: { harvesting: 2 } },
   { id: "steal", name: "+2 % Lebensraub", mods: { lifesteal: 2 } },
+  { id: "ability", name: "+12 % Fähigkeit-Tempo", mods: { ability: 12 } },
 ];

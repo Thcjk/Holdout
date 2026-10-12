@@ -45,6 +45,9 @@ export const ITEMS: readonly ItemDef[] = [
   { id: "goldzahn", name: "Goldzahn", price: 17, mods: { harvesting: 5, luck: 5, armor: -1 }, icon: "Gz" },
   { id: "helm", name: "Helm", price: 13, mods: { armor: 2, maxHp: 4 }, icon: "He" },
   { id: "uhr", name: "Zeitlupe-Uhr", price: 17, mods: { attackSpeed: 10, speed: -6 }, icon: "Zu" },
+  { id: "sanduhr", name: "Sanduhr", price: 16, mods: { ability: 25, maxHp: -3 }, icon: "Su" },
+  { id: "kriegstrommel", name: "Kriegstrommel", price: 18, mods: { ability: 12, damage: 4 }, icon: "Kt" },
+  { id: "dornenring", name: "Dornenring", price: 19, mods: { armor: 2, damage: 3, dodge: -2 }, icon: "Dr" },
 ];
 
 export const ITEM_INDEX: ReadonlyMap<string, number> = new Map(ITEMS.map((item, index) => [item.id, index]));

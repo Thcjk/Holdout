@@ -525,6 +525,32 @@ function drawEnemy(ctx: Ctx, type: EnemyType): void {
       stroke(ctx, [[56, 34], [44, 39]], 3, "#0f1719");
       break;
     }
+    case "exploder": {
+      // Zuender: runde Bombe aus Schatten, Lunte mit Funken, gluehende Augen
+      stroke(ctx, [[46, 16], [52, 8], [58, 6]], 3, "#6b4228");
+      lamp(ctx, 60, 5, 4, "#f6d36b");
+      shadowBlob(ctx, () => ctx.ellipse(40, 44, 26, 25, 0, 0, Math.PI * 2));
+      lamp(ctx, 32, 42, 4.5, "#f08a3c");
+      lamp(ctx, 48, 42, 4.5, "#f08a3c");
+      stroke(ctx, [[30, 56], [36, 53], [42, 57], [48, 53], [52, 56]], 2.4, "#f08a3c");
+      break;
+    }
+    case "splitter": {
+      // Teiler: Klumpen mit Riss in der Mitte und drei kleinen Augenpaaren
+      shadowBlob(ctx, () => {
+        ctx.moveTo(8, 60);
+        ctx.quadraticCurveTo(2, 30, 24, 20);
+        ctx.quadraticCurveTo(40, 12, 56, 20);
+        ctx.quadraticCurveTo(78, 30, 72, 60);
+        ctx.quadraticCurveTo(60, 74, 40, 70);
+        ctx.quadraticCurveTo(20, 74, 8, 60);
+      });
+      stroke(ctx, [[40, 16], [36, 30], [44, 40], [38, 54], [42, 70]], 2.6, "#8da64f");
+      for (const [x, y] of [[24, 36], [56, 34], [30, 56], [54, 56]] as const) {
+        eyeBig(ctx, x, y, 3.6, 0.4);
+      }
+      break;
+    }
     case "boss": {
       // Der Wächter: Spitzturm-Silhouette mit Dornenring und vielen Augen
       thornRing(ctx, 40, 9, 24, 7);
@@ -671,7 +697,7 @@ export function createFigureTextures(scene: Phaser.Scene): void {
   for (const id of CHARACTER_IDS) {
     paint(scene, characterKey(id), (ctx) => drawHero(ctx, id));
   }
-  const types: EnemyType[] = ["grunt", "swarmer", "charger", "spitter", "bruiser", "elite", "boss"];
+  const types: EnemyType[] = ["grunt", "swarmer", "charger", "spitter", "bruiser", "elite", "boss", "exploder", "splitter"];
   for (const type of types) {
     paint(scene, enemyKey(type), (ctx) => drawEnemy(ctx, type), true);
   }

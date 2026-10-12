@@ -249,7 +249,9 @@ export function playBot(options: {
     const inputs = new Map<string, PlayerInput>();
     for (const player of sim.state.players) {
       if (player.alive) {
-        inputs.set(player.id, steer(sim, player));
+        // Faehigkeit: sobald bereit und ein paar Gegner da sind - der Bot drueckt einfach.
+        const press = player.abilityCd <= 0 && sim.state.enemies.length >= 4 ? 1 : 0;
+        inputs.set(player.id, { ...steer(sim, player), ability: player.abilityAck + press });
       }
     }
     sim.step(inputs);

@@ -37,6 +37,7 @@ import {
   waveLength,
 } from "./data/enemies";
 import type { SpawnPlan } from "./data/enemies";
+import { abilityCooldown } from "./data/abilities";
 import { armorFactor } from "./data/stats";
 import { WEAPONS, weaponCooldown, weaponDamage, weaponReach } from "./data/weapons";
 import { createPlayer, grantXp, startPosition } from "./player";
@@ -64,6 +65,15 @@ const KNOCKBACK_DECAY = 8;
 /** Abstand zu allen Spielern, in dem kein Gegner erscheinen darf. */
 const SPAWN_SAFE_DISTANCE = 150;
 
+/** Geschoss-Aussehen der Granate (siehe `Projectile.look`). */
+const LOOK_GRENADE = 6;
+const GRENADE_RADIUS = 110;
+
+/** So lange brennt ein Gegner nach einem Treffer mit dem Flammenwerfer. */
+const BURN_TIME = 3;
+/** Reichweite, in der ein Blitz zum naechsten Gegner springt. */
+const CHAIN_REACH = 150;
+
 export class Simulation {
   readonly state: GameState;
   /** Ereignisse des letzten `advance`-Aufrufs. */
@@ -75,6 +85,8 @@ export class Simulation {
   private planIndex = 0;
   private waveClock = 0;
   private accumulator = 0;
+  /** Letzte Laufrichtung je Spieler - fuer den Schattenschritt. */
+  private readonly moveAngle = new Map<string, number>();
 
   constructor(setups: readonly PlayerSetup[], seed: number) {
     this.rng = createRng(seed);
@@ -199,6 +211,8 @@ export class Simulation {
       player.iframes = 0.6;
       player.ready = false;
       player.shop.upgradeChoices = null;
+      player.abilityCd = Math.min(player.abilityCd, 1.5);
+      player.buff = 0;
       for (const weapon of player.weapons) {
         weapon.cd = 0.3;
       }
@@ -363,6 +377,10 @@ export class Simulation {
       kx: 0,
       ky: 0,
       flash: 0,
+      burn: 0,
+      burnDps: 0,
+      slow: 0,
+      stun: 0,
     };
     this.state.enemies.push(enemy);
     return enemy;
@@ -378,6 +396,8 @@ export class Simulation {
         continue;
       }
       player.iframes = Math.max(0, player.iframes - TICK);
+      player.abilityCd = Math.max(0, player.abilityCd - TICK);
+      player.buff = Math.max(0, player.buff - TICK);
 
       const input = inputs.get(player.id);
       if (input) {
@@ -393,6 +413,15 @@ export class Simulation {
           player.x = clamp(player.x + mx * speed * TICK, PLAYER_RADIUS, ARENA.width - PLAYER_RADIUS);
           player.y = clamp(player.y + my * speed * TICK, PLAYER_RADIUS, ARENA.height - PLAYER_RADIUS);
           player.facing = Math.atan2(my, mx);
+          this.moveAngle.set(player.id, player.facing);
+        }
+        // Faehigkeit: Der Zaehler steigt mit jedem Knopfdruck. Nur ein neuer Wert loest aus,
+        // damit ein im Netz doppelt angekommenes Paket nicht zweimal zuendet.
+        if (input.ability !== undefined && input.ability > player.abilityAck) {
+          player.abilityAck = input.ability;
+          if (player.abilityCd <= 0) {
+            this.useAbility(player);
+          }
         }
       }
 
@@ -446,7 +475,8 @@ export class Simulation {
     player.facing = angle;
 
     const damage = weaponDamage(weapon.id, weapon.tier, stats);
-    const critChance = stats.crit + def.critBonus;
+    const lucky = player.character === "glueckspilz" && player.buff > 0 ? 40 : 0;
+    const critChance = stats.crit + def.critBonus + lucky;
 
     weapon.cd += weaponCooldown(weapon.id, weapon.tier, stats);
 
@@ -485,12 +515,14 @@ export class Simulation {
         friendly: true,
         ownerId: player.id,
         crit,
-        radius: 4,
+        radius: def.look === 2 ? 6 : def.look === 3 ? 7 : 4,
         hit: [],
+        weapon: weapon.id,
+        look: def.look ?? 0,
       };
       this.state.shots.push(shot);
     }
-    this.events.push({ t: "shot", pid: player.id, kind: "ranged", x: player.x, y: player.y, angle });
+    this.events.push({ t: "shot", pid: player.id, kind: "ranged", x: player.x, y: player.y, angle, w: weapon.id });
   }
 
   private swing(
@@ -522,6 +554,9 @@ export class Simulation {
     candidates.sort((a, b) => a.distance - b.distance);
     for (const { enemy } of candidates.slice(0, def.count)) {
       const crit = this.rng() * 100 < critChance;
+      if (def.stun) {
+        enemy.stun = Math.max(enemy.stun, def.stun);
+      }
       this.damageEnemy(
         enemy,
         Math.max(1, Math.round(damage * (crit ? 2 : 1))),
@@ -532,7 +567,7 @@ export class Simulation {
         player.y,
       );
     }
-    this.events.push({ t: "shot", pid: player.id, kind: "melee", x: player.x, y: player.y, angle });
+    this.events.push({ t: "shot", pid: player.id, kind: "melee", x: player.x, y: player.y, angle, w: weapon.id });
   }
 
   private nearestEnemy(x: number, y: number, reach: number): Enemy | null {
@@ -590,14 +625,30 @@ export class Simulation {
   private killEnemy(enemy: Enemy, owner: PlayerState | null): void {
     const state = this.state;
     const index = state.enemies.indexOf(enemy);
-    if (index >= 0) {
-      state.enemies.splice(index, 1);
+    if (index < 0) {
+      return;
+    }
+    state.enemies.splice(index, 1);
+    // Der Teiler zerfaellt in drei Wuselchen.
+    if (enemy.type === "splitter") {
+      for (let i = 0; i < 3; i += 1) {
+        if (state.enemies.length < MAX_ENEMIES) {
+          const angle = (i / 3) * Math.PI * 2 + this.rng();
+          const child = this.spawnEnemy(
+            "swarmer",
+            clamp(enemy.x + Math.cos(angle) * 14, 10, ARENA.width - 10),
+            clamp(enemy.y + Math.sin(angle) * 14, 10, ARENA.height - 10),
+          );
+          child.kx = Math.cos(angle) * 260;
+          child.ky = Math.sin(angle) * 260;
+        }
+      }
     }
     if (owner) {
       owner.kills += 1;
     }
     const def = ENEMIES[enemy.type];
-    const big = enemy.type === "bruiser" || enemy.type === "elite" || enemy.type === "boss";
+    const big = enemy.type === "bruiser" || enemy.type === "elite" || enemy.type === "boss" || enemy.type === "splitter";
     this.events.push({ t: "kill", x: enemy.x, y: enemy.y, big });
 
     const luck = owner?.stats.luck ?? 0;
@@ -622,6 +673,10 @@ export class Simulation {
 
   private hurtPlayer(player: PlayerState, raw: number): void {
     if (!player.alive || player.iframes > 0) {
+      return;
+    }
+    // Bollwerk und Schattenschritt machen unverwundbar.
+    if (player.buff > 0 && (player.character === "panzer" || player.character === "schatten")) {
       return;
     }
     if (this.rng() * 100 < player.stats.dodge) {
@@ -651,12 +706,30 @@ export class Simulation {
 
     // Kopie, weil Gegner waehrend der Schleife neue Gegner (Schwarm) erzeugen koennen.
     for (const enemy of [...this.state.enemies]) {
+      if (enemy.hp <= 0 || !this.state.enemies.includes(enemy)) {
+        continue;
+      }
       const def = ENEMIES[enemy.type];
       enemy.flash = Math.max(0, enemy.flash - TICK);
+      enemy.slow = Math.max(0, enemy.slow - TICK);
+      enemy.stun = Math.max(0, enemy.stun - TICK);
+
+      // Brand: Schaden ueber Zeit, ohne Rueckstoss.
+      if (enemy.burn > 0) {
+        enemy.burn -= TICK;
+        enemy.hp -= enemy.burnDps * TICK;
+        if (enemy.hp <= 0) {
+          this.killEnemy(enemy, this.nearestAlivePlayer(enemy.x, enemy.y));
+          continue;
+        }
+      }
 
       const target = this.nearestAlivePlayer(enemy.x, enemy.y);
-      if (target) {
-        this.runEnemyAi(enemy, target, spdScale, dmgScale);
+      if (target && enemy.stun <= 0) {
+        this.runEnemyAi(enemy, target, spdScale * (enemy.slow > 0 ? 0.5 : 1), dmgScale);
+        if (!this.state.enemies.includes(enemy)) {
+          continue;
+        }
       }
 
       // Rueckstoss
@@ -695,9 +768,28 @@ export class Simulation {
       case "grunt":
       case "swarmer":
       case "bruiser":
+      case "splitter":
         enemy.x += nx * speed * TICK;
         enemy.y += ny * speed * TICK;
         break;
+
+      case "exploder": {
+        // Rennt heran, bleibt kurz stehen und zischt - dann knallt es.
+        if (enemy.mode === "windup") {
+          enemy.timer -= TICK;
+          if (enemy.timer <= 0) {
+            this.enemyExplode(enemy, 85, def.damage * 4.5 * dmgScale);
+          }
+        } else {
+          enemy.x += nx * speed * TICK;
+          enemy.y += ny * speed * TICK;
+          if (distance < 52) {
+            enemy.mode = "windup";
+            enemy.timer = 0.55;
+          }
+        }
+        break;
+      }
 
       case "spitter": {
         // Haelt Abstand: zu nah -> zurueck, zu weit -> heran.
@@ -719,8 +811,25 @@ export class Simulation {
         if (enemy.type === "boss") {
           enemy.timer2 -= TICK;
           if (enemy.timer2 <= 0) {
-            enemy.timer2 = 3.5;
-            this.radialBurst(enemy, 10, 170, def.damage * 0.9 * dmgScale);
+            enemy.timer2 = 2.6;
+            // Abwechselnd: Ring, gezielter Faecher, Ring - und dazwischen ruft er Zuender.
+            const pattern = Math.floor(this.state.tick / 60) % 3;
+            if (pattern === 1) {
+              this.fanShot(enemy, nx, ny, 5, 0.5, 230, def.damage * 0.8 * dmgScale);
+            } else {
+              this.radialBurst(enemy, 14, 170, def.damage * 0.8 * dmgScale);
+            }
+            if (this.rng() < 0.45) {
+              for (let i = 0; i < 2; i += 1) {
+                if (this.state.enemies.length < MAX_ENEMIES) {
+                  this.spawnEnemy(
+                    "exploder",
+                    clamp(enemy.x + (this.rng() - 0.5) * 120, 20, ARENA.width - 20),
+                    clamp(enemy.y + (this.rng() - 0.5) * 120, 20, ARENA.height - 20),
+                  );
+                }
+              }
+            }
           }
         }
         break;
@@ -728,6 +837,12 @@ export class Simulation {
       case "elite": {
         enemy.x += nx * speed * TICK;
         enemy.y += ny * speed * TICK;
+        // Spuckt alle drei Sekunden einen Faecher aus drei Kugeln.
+        enemy.timer -= TICK;
+        if (enemy.timer <= 0) {
+          enemy.timer = 3;
+          this.fanShot(enemy, nx, ny, 3, 0.35, 200, def.damage * 0.7 * dmgScale);
+        }
         enemy.timer2 -= TICK;
         if (enemy.timer2 <= 0) {
           enemy.timer2 = 5;
@@ -807,8 +922,33 @@ export class Simulation {
       crit: false,
       radius: 5,
       hit: [],
+      weapon: "",
+      look: 0,
     });
     this.events.push({ t: "enemyShot", x: enemy.x, y: enemy.y });
+  }
+
+  /** Mehrere Kugeln im Faecher in Richtung (nx, ny). `spread` ist der halbe Winkel. */
+  private fanShot(enemy: Enemy, nx: number, ny: number, count: number, spread: number, speed: number, damage: number): void {
+    const base = Math.atan2(ny, nx);
+    for (let i = 0; i < count; i += 1) {
+      const angle = base + (count > 1 ? (i / (count - 1) - 0.5) * 2 * spread : 0);
+      this.enemyShot(enemy, Math.cos(angle), Math.sin(angle), speed, damage);
+    }
+  }
+
+  /** Ein Zuender explodiert: trifft alle Spieler im Umkreis, laesst nichts fallen. */
+  private enemyExplode(enemy: Enemy, radius: number, damage: number): void {
+    this.events.push({ t: "boom", x: enemy.x, y: enemy.y, r: radius, enemy: true });
+    for (const player of this.state.players) {
+      if (player.alive && Math.hypot(player.x - enemy.x, player.y - enemy.y) < radius + PLAYER_RADIUS) {
+        this.hurtPlayer(player, damage);
+      }
+    }
+    const index = this.state.enemies.indexOf(enemy);
+    if (index >= 0) {
+      this.state.enemies.splice(index, 1);
+    }
   }
 
   private radialBurst(enemy: Enemy, count: number, speed: number, damage: number): void {
@@ -866,6 +1006,9 @@ export class Simulation {
       shot.x += shot.vx * TICK;
       shot.y += shot.vy * TICK;
       shot.life -= TICK;
+      if (shot.look === LOOK_GRENADE && shot.life <= 0) {
+        continue;
+      }
       if (shot.life <= 0 || shot.x < -30 || shot.x > ARENA.width + 30 || shot.y < -30 || shot.y > ARENA.height + 30) {
         continue;
       }
@@ -880,7 +1023,7 @@ export class Simulation {
           const reach = ENEMIES[enemy.type].radius + shot.radius;
           if (Math.hypot(enemy.x - shot.x, enemy.y - shot.y) < reach) {
             shot.hit.push(enemy.id);
-            this.damageEnemy(enemy, shot.damage, shot.crit, owner, 40, shot.x - shot.vx * 0.05, shot.y - shot.vy * 0.05);
+            this.shotHits(shot, enemy, owner);
             if (shot.pierce <= 0) {
               alive = false;
               break;
@@ -889,6 +1032,11 @@ export class Simulation {
           }
         }
         if (!alive) {
+          continue;
+        }
+        // Die Granate fliegt bis zum Zielpunkt und explodiert dort.
+        if (shot.look === LOOK_GRENADE && shot.life <= TICK * 1.5) {
+          this.explode(shot.x, shot.y, GRENADE_RADIUS, shot.damage, shot.crit, owner);
           continue;
         }
       } else {
@@ -907,6 +1055,190 @@ export class Simulation {
       remaining.push(shot);
     }
     state.shots = remaining;
+  }
+
+  /** Ein Spielergeschoss trifft: Schaden plus die Besonderheit der Waffe. */
+  private shotHits(shot: Projectile, enemy: Enemy, owner: PlayerState | null): void {
+    if (shot.look === LOOK_GRENADE) {
+      this.explode(shot.x, shot.y, GRENADE_RADIUS, shot.damage, shot.crit, owner);
+      shot.life = 0;
+      return;
+    }
+    const def = shot.weapon ? WEAPONS[shot.weapon] : null;
+    if (def?.explode) {
+      this.explode(shot.x, shot.y, def.explode, shot.damage, shot.crit, owner);
+      return;
+    }
+    this.damageEnemy(enemy, shot.damage, shot.crit, owner, def?.knockback ?? 40, shot.x - shot.vx * 0.05, shot.y - shot.vy * 0.05);
+    if (!def) {
+      return;
+    }
+    if (def.burn) {
+      enemy.burn = BURN_TIME;
+      enemy.burnDps = Math.max(enemy.burnDps * 0.6, shot.damage * def.burn * 3);
+    }
+    if (def.slow) {
+      enemy.slow = Math.max(enemy.slow, def.slow);
+    }
+    if (def.chain) {
+      const tier = owner?.weapons.find((weapon) => weapon.id === shot.weapon)?.tier ?? 1;
+      this.chainLightning(enemy, Math.round(shot.damage * 0.7), def.chain + tier - 1, owner, shot.hit);
+    }
+  }
+
+  /** Der Blitz springt von Gegner zu Gegner, jedes Mal zum naechsten noch nicht getroffenen. */
+  private chainLightning(from: Enemy, damage: number, jumps: number, owner: PlayerState | null, hit: number[]): void {
+    let current = { x: from.x, y: from.y };
+    for (let i = 0; i < jumps; i += 1) {
+      let best: Enemy | null = null;
+      let bestDistance = CHAIN_REACH;
+      for (const enemy of this.state.enemies) {
+        if (hit.includes(enemy.id)) {
+          continue;
+        }
+        const distance = Math.hypot(enemy.x - current.x, enemy.y - current.y);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = enemy;
+        }
+      }
+      if (!best) {
+        return;
+      }
+      hit.push(best.id);
+      this.events.push({ t: "zap", x1: current.x, y1: current.y, x2: best.x, y2: best.y });
+      current = { x: best.x, y: best.y };
+      this.damageEnemy(best, damage, false, owner, 10, current.x, current.y);
+    }
+  }
+
+  /** Explosion: voller Schaden in der Mitte, alle Gegner im Umkreis werden getroffen. */
+  private explode(x: number, y: number, radius: number, damage: number, crit: boolean, owner: PlayerState | null): void {
+    this.events.push({ t: "boom", x, y, r: radius, enemy: false });
+    for (const enemy of [...this.state.enemies]) {
+      const distance = Math.hypot(enemy.x - x, enemy.y - y);
+      if (distance < radius + ENEMIES[enemy.type].radius) {
+        this.damageEnemy(enemy, Math.max(1, Math.round(damage * (distance < radius * 0.4 ? 1 : 0.6))), crit, owner, 70, x, y);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Faehigkeiten
+  // ---------------------------------------------------------------------------
+
+  /** Grundstaerke einer Faehigkeit: waechst mit der Welle und dem Schadenswert. */
+  private abilityPower(player: PlayerState): number {
+    return (12 + this.state.wave * 3.5) * (1 + player.stats.damage / 100);
+  }
+
+  private useAbility(player: PlayerState): void {
+    player.abilityCd = abilityCooldown(player.character, player.stats.ability);
+    const power = this.abilityPower(player);
+    const event = { t: "ability" as const, pid: player.id, kind: player.character, x: player.x, y: player.y, x2: player.x, y2: player.y };
+    switch (player.character) {
+      case "soeldner": {
+        const target = this.nearestEnemy(player.x, player.y, 460);
+        const tx = target ? target.x : clamp(player.x + Math.cos(player.facing) * 200, 10, ARENA.width - 10);
+        const ty = target ? target.y : clamp(player.y + Math.sin(player.facing) * 200, 10, ARENA.height - 10);
+        const distance = Math.max(30, Math.hypot(tx - player.x, ty - player.y));
+        const speed = 520;
+        this.state.shots.push({
+          id: this.nextId++,
+          x: player.x,
+          y: player.y,
+          vx: ((tx - player.x) / distance) * speed,
+          vy: ((ty - player.y) / distance) * speed,
+          damage: Math.round(power * 1.5),
+          pierce: 0,
+          life: distance / speed,
+          friendly: true,
+          ownerId: player.id,
+          crit: false,
+          radius: 7,
+          hit: [],
+          weapon: "",
+          look: LOOK_GRENADE,
+        });
+        event.x2 = tx;
+        event.y2 = ty;
+        break;
+      }
+      case "raufbold": {
+        for (const enemy of [...this.state.enemies]) {
+          if (Math.hypot(enemy.x - player.x, enemy.y - player.y) < 135 + ENEMIES[enemy.type].radius) {
+            enemy.stun = Math.max(enemy.stun, 1.2);
+            this.damageEnemy(enemy, Math.round(power * 1.1), false, player, 230, player.x, player.y);
+          }
+        }
+        break;
+      }
+      case "jaeger": {
+        for (let i = 0; i < 18; i += 1) {
+          const angle = (i / 18) * Math.PI * 2;
+          this.state.shots.push({
+            id: this.nextId++,
+            x: player.x,
+            y: player.y,
+            vx: Math.cos(angle) * 720,
+            vy: Math.sin(angle) * 720,
+            damage: Math.round(power * 0.75),
+            pierce: 3,
+            life: 0.75,
+            friendly: true,
+            ownerId: player.id,
+            crit: false,
+            radius: 5,
+            hit: [],
+            weapon: "crossbow",
+            look: 1,
+          });
+        }
+        break;
+      }
+      case "panzer": {
+        player.buff = 3;
+        player.hp = Math.min(player.stats.maxHp, player.hp + player.stats.maxHp * 0.2);
+        for (const enemy of this.state.enemies) {
+          const dx = enemy.x - player.x;
+          const dy = enemy.y - player.y;
+          const distance = Math.hypot(dx, dy) || 1;
+          if (distance < 120) {
+            const push = 260 * ENEMIES[enemy.type].knockback;
+            enemy.kx += (dx / distance) * push * 6;
+            enemy.ky += (dy / distance) * push * 6;
+          }
+        }
+        break;
+      }
+      case "glueckspilz": {
+        player.buff = 5;
+        for (const pickup of this.state.pickups) {
+          pickup.magnet = true;
+        }
+        break;
+      }
+      case "schatten": {
+        const angle = this.moveAngle.get(player.id) ?? player.facing;
+        const startX = player.x;
+        const startY = player.y;
+        player.x = clamp(player.x + Math.cos(angle) * 170, PLAYER_RADIUS, ARENA.width - PLAYER_RADIUS);
+        player.y = clamp(player.y + Math.sin(angle) * 170, PLAYER_RADIUS, ARENA.height - PLAYER_RADIUS);
+        player.buff = 0.6;
+        player.iframes = Math.max(player.iframes, 0.6);
+        for (const enemy of [...this.state.enemies]) {
+          if (distanceToSegment(enemy.x, enemy.y, startX, startY, player.x, player.y) < 26 + ENEMIES[enemy.type].radius) {
+            this.damageEnemy(enemy, Math.round(power * 1.4), true, player, 60, startX, startY);
+          }
+        }
+        event.x = startX;
+        event.y = startY;
+        event.x2 = player.x;
+        event.y2 = player.y;
+        break;
+      }
+    }
+    this.events.push(event);
   }
 
   private collect(player: PlayerState, value: number, announce: boolean): void {
@@ -950,6 +1282,15 @@ export class Simulation {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/** Abstand eines Punktes zu einer Strecke - fuer den Schattenschritt. */
+function distanceToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const length = dx * dx + dy * dy;
+  const t = length > 0 ? clamp(((px - ax) * dx + (py - ay) * dy) / length, 0, 1) : 0;
+  return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
 }
 
 function normalizeAngle(angle: number): number {

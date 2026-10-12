@@ -89,7 +89,7 @@ export class HostSession implements GameSession {
       return;
     }
     this.lastSeq.set(from, message.seq);
-    this.inputs.set(from, { mx: message.mx, my: message.my });
+    this.inputs.set(from, { mx: message.mx, my: message.my, ability: message.ab ?? 0 });
 
     // Befehle: Der Client schickt ALLE noch unbestaetigten in jedem Paket, damit
     // ein verlorenes Paket sie nicht kostet. Hier zaehlt nur, was neu ist.

@@ -26,6 +26,7 @@ export const STAT_KEYS: readonly StatKey[] = [
   "speed",
   "luck",
   "harvesting",
+  "ability",
 ];
 
 /** Anzeigenamen (Deutsch) und Einheit. */
@@ -44,6 +45,7 @@ export const STAT_LABELS: Record<StatKey, { name: string; unit: string }> = {
   speed: { name: "Tempo", unit: "%" },
   luck: { name: "Glück", unit: "" },
   harvesting: { name: "Ernte", unit: "" },
+  ability: { name: "Fähigkeit-Tempo", unit: "%" },
 };
 
 /** Ausgangswerte, bevor Charakter, Gegenstaende und Level-Ups etwas aendern. */
@@ -62,6 +64,7 @@ export const BASE_STATS: Stats = {
   speed: 0,
   luck: 0,
   harvesting: 0,
+  ability: 0,
 };
 
 function addMods(stats: Stats, mods: StatMods, times: number): void {
@@ -94,6 +97,7 @@ export function computeStats(
   stats.speed = Math.min(80, Math.max(-50, stats.speed));
   stats.harvesting = Math.max(0, stats.harvesting);
   stats.luck = Math.max(-50, stats.luck);
+  stats.ability = Math.min(150, Math.max(-50, stats.ability));
   return stats;
 }
 

@@ -10,6 +10,7 @@ import { figureScale } from "../ui/comicFigures";
 import { characterKey, weaponIconKey } from "../config/assets";
 import { SAFE, VIEWPORT } from "../config/constants";
 import { UI } from "../config/ui";
+import { ABILITIES } from "../game/data/abilities";
 import { CHARACTERS, CHARACTER_IDS } from "../game/data/characters";
 import { WEAPONS } from "../game/data/weapons";
 import type { CharacterId, WeaponId } from "../game/types";
@@ -145,14 +146,32 @@ export class SelectScene extends Phaser.Scene {
       );
     });
 
+    // Faehigkeit des Helden.
+    const ability = ABILITIES[this.character];
+    add(
+      this.add.text(panelX + 20, top + 158, `Fähigkeit: ${ability.name}`, {
+        fontFamily: UI.font,
+        fontSize: "17px",
+        color: UI.text.accent,
+      }),
+    );
+    add(
+      this.add.text(panelX + 20, top + 178, ability.description, {
+        fontFamily: UI.font,
+        fontSize: "14px",
+        color: UI.text.body,
+        wordWrap: { width: panelW - 40 },
+      }),
+    );
+
     // Startwaffen.
-    add(menuText(this, cx, top + 200, "Startwaffe", 18, UI.text.muted));
+    add(menuText(this, cx, top + 214, "Startwaffe", 18, UI.text.muted));
     const starts = def.starts;
     const slot = 76;
     const rowW = starts.length * slot + (starts.length - 1) * 8;
     starts.forEach((id, index) => {
       const x = cx - rowW / 2 + slot / 2 + index * (slot + 8);
-      const y = top + 252;
+      const y = top + 262;
       const selected = id === this.weapon;
       add(insetPanel(this, x, y, slot, slot) as unknown as Phaser.GameObjects.GameObject);
       add(this.add.image(x, y - 4, weaponIconKey(id)).setDisplaySize(52, 52));
