@@ -6,7 +6,7 @@
  */
 import { chromium } from "/opt/npm-tools/node_modules/playwright/index.mjs";
 import { build } from "esbuild";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 const bundle = await build({
@@ -21,7 +21,17 @@ const bundle = await build({
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const page = await browser.newPage();
 await page.setContent("<body></body>");
+// Die Handschriften als eingebettete Dateien - die Seite hat keinen Zugriff auf die Platte.
+const font = (file) => readFileSync(`node_modules/@fontsource/${file}`).toString("base64");
+await page.addStyleTag({
+  content: `
+    @font-face { font-family: "Londrina Solid"; font-weight: 900; src: url(data:font/woff2;base64,${font("londrina-solid/files/londrina-solid-latin-900-normal.woff2")}) format("woff2"); }
+    @font-face { font-family: "Londrina Solid"; font-weight: 400; src: url(data:font/woff2;base64,${font("londrina-solid/files/londrina-solid-latin-400-normal.woff2")}) format("woff2"); }
+    @font-face { font-family: "Patrick Hand SC"; src: url(data:font/woff2;base64,${font("patrick-hand-sc/files/patrick-hand-sc-latin-400-normal.woff2")}) format("woff2"); }
+  `,
+});
 await page.addScriptTag({ content: bundle.outputFiles[0].text });
+await page.evaluate(() => window.brand.ready);
 
 const save = (path, dataUrl) => {
   mkdirSync(dirname(path), { recursive: true });
@@ -34,7 +44,7 @@ const splash = (w, h) => page.evaluate(([a, b]) => window.brand.splash(a, b), [w
 // PWA
 save("public/icons/icon-192.png", await icon(192, 1.0, false));
 save("public/icons/icon-512.png", await icon(512, 1.0, false));
-save("public/icons/icon-maskable-512.png", await icon(512, 0.68, false));
+save("public/icons/icon-maskable-512.png", await icon(512, 0.7, false));
 
 // Android
 const RES = "android/app/src/main/res";
@@ -44,7 +54,7 @@ for (const [folder, size] of [["mdpi", 48], ["hdpi", 72], ["xhdpi", 96], ["xxhdp
   save(`${RES}/mipmap-${folder}/ic_launcher_round.png`, png);
 }
 for (const [folder, size] of [["mdpi", 108], ["hdpi", 162], ["xhdpi", 216], ["xxhdpi", 324], ["xxxhdpi", 432]]) {
-  save(`${RES}/mipmap-${folder}/ic_launcher_foreground.png`, await icon(size, 0.62, true));
+  save(`${RES}/mipmap-${folder}/ic_launcher_foreground.png`, await icon(size, 0.6, true));
 }
 const sizes = { mdpi: [320, 480], hdpi: [480, 800], xhdpi: [720, 1280], xxhdpi: [960, 1600], xxxhdpi: [1280, 1920] };
 for (const [density, [w, h]] of Object.entries(sizes)) {

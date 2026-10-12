@@ -9,6 +9,7 @@
  */
 
 import Phaser from "phaser";
+import { figureScale } from "../ui/comicFigures";
 import { audio } from "../audio/AudioEngine";
 import { characterKey, weaponIconKey } from "../config/assets";
 import { SAFE, VIEWPORT } from "../config/constants";
@@ -85,7 +86,7 @@ export class LobbyScene extends Phaser.Scene {
     menuBackground(this);
     const panelW = Math.min(720, VIEWPORT.width - SAFE.left - SAFE.right - 60);
     woodPanel(this, cx, 290, panelW, 450);
-    menuText(this, cx, 62, this.mode === "host" ? "Koop-Raum" : "Raum beitreten", 34, UI.text.title, true);
+    menuText(this, cx, 34, this.mode === "host" ? "Koop-Raum" : "Raum beitreten", 34, UI.text.title, true);
 
     insetPanel(this, cx, 128, 280, 66);
     this.codeText = menuText(this, cx, 128, "", 44, UI.text.dark, true);
@@ -223,7 +224,7 @@ export class LobbyScene extends Phaser.Scene {
       const def = CHARACTERS[player.character];
       this.listObjects.push(
         insetPanel(this, cx, y, rowW, 40).container,
-        this.add.image(cx - rowW / 2 + 28, y, characterKey(player.character)).setScale(0.45),
+        this.add.image(cx - rowW / 2 + 28, y, characterKey(player.character)).setScale(figureScale(0.45)),
         this.add
           .text(cx - rowW / 2 + 58, y, `${player.name}${player.isHost ? "  (Host)" : ""}`, {
             fontFamily: UI.font,

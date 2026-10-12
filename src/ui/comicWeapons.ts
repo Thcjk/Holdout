@@ -6,7 +6,7 @@
 import type Phaser from "phaser";
 import { weaponIconKey } from "../config/assets";
 import type { WeaponId } from "../game/types";
-import { ellipse, polygon, shape, shine, star, stroke } from "./comicFigures";
+import { ellipse, inkify, polygon, shape, shine, star, stroke } from "./comicFigures";
 import { NOIR } from "./noir";
 
 type Ctx = CanvasRenderingContext2D;
@@ -29,8 +29,8 @@ export const WEAPON_STYLE: WeaponStyle = {
   body: NOIR.steel2,
   bodyDark: NOIR.steel0,
   accent: NOIR.amber,
-  grip: "#4a3426",
-  metal: "#b9c4bc",
+  grip: "#6b4228",
+  metal: "#c9c6b4",
   round: 2,
   line: 4.5,
   burst: false,
@@ -171,7 +171,10 @@ export function createWeaponTextures(scene: Phaser.Scene): void {
     if (!ctx) {
       continue;
     }
+    ctx.translate(48, 48);
+    ctx.scale(0.88, 0.88);
+    ctx.translate(-48, -48);
     drawWeapon(ctx, id);
-    scene.textures.addCanvas(key, canvas)?.setFilter(1);
+    scene.textures.addCanvas(key, inkify(canvas, key, false, 1.8))?.setFilter(1);
   }
 }

@@ -6,6 +6,7 @@
  */
 
 import Phaser from "phaser";
+import { figureScale } from "../ui/comicFigures";
 import { characterKey, weaponIconKey } from "../config/assets";
 import { SAFE, VIEWPORT } from "../config/constants";
 import { UI } from "../config/ui";
@@ -73,11 +74,11 @@ export class SelectScene extends Phaser.Scene {
     const def = CHARACTERS[id];
     woodPanel(this, x, y, CARD_W, CARD_H);
     insetPanel(this, x, y - 20, CARD_W - 28, 104);
-    this.add.image(x, y - 20, characterKey(id)).setScale(1.3);
+    this.add.image(x, y - 20, characterKey(id)).setScale(figureScale(1.3));
     menuText(this, x, y + 56, def.name, 22, UI.text.body, true);
     menuText(this, x, y + 78, `${def.slots} Waffenplätze`, 14, UI.text.muted);
 
-    const frame = this.add.rectangle(x, y, CARD_W - 2, CARD_H - 2).setStrokeStyle(4, 0xffd166).setFillStyle(0, 0);
+    const frame = this.add.rectangle(x, y, CARD_W - 2, CARD_H - 2).setStrokeStyle(4, 0xb5532f).setFillStyle(0, 0);
     frame.setVisible(false);
     this.frames.set(id, frame);
 
@@ -137,7 +138,7 @@ export class SelectScene extends Phaser.Scene {
           .text(panelX + 20 + (index % 2) * (panelW / 2 - 10), top + 108 + Math.floor(index / 2) * 22, line.text, {
             fontFamily: UI.font,
             fontSize: "16px",
-            color: line.good ? "#b5e08c" : "#ff8a65",
+            color: line.good ? "#4e6b2a" : "#a8321c",
             fontStyle: "bold",
           })
           .setShadow(1, 2, UI.text.shadow, 2),
@@ -157,7 +158,7 @@ export class SelectScene extends Phaser.Scene {
       add(this.add.image(x, y - 4, weaponIconKey(id)).setDisplaySize(52, 52));
       add(menuText(this, x, y + 28, WEAPONS[id].name, 12, UI.text.dark, true));
       if (selected) {
-        add(this.add.rectangle(x, y, slot + 2, slot + 2).setStrokeStyle(4, 0xe4572e).setFillStyle(0, 0));
+        add(this.add.rectangle(x, y, slot + 2, slot + 2).setStrokeStyle(4, 0xb5532f).setFillStyle(0, 0));
       }
       const hit = add(this.add.rectangle(x, y, slot, slot, 0, 0).setInteractive());
       hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {

@@ -36,8 +36,8 @@ export default defineConfig({
         id: "koop-arena-shooter",
         categories: ["games"],
         orientation: "landscape",
-        background_color: "#1d1c19",
-        theme_color: "#242a2b",
+        background_color: "#f1e5c9",
+        theme_color: "#f1e5c9",
         icons: [
           { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" },
@@ -58,7 +58,7 @@ export default defineConfig({
         // Phaser ist gross - die Voreinstellung von 2 MB wuerde es vom
         // Offline-Zwischenspeicher ausschliessen.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
-        globPatterns: ["**/*.{js,css,html,svg,png,ogg,m4a,json,glb,xml}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,ogg,m4a,json,glb,xml,woff2}"],
         /*
          * Das hochgeladene Kenney-Paket liegt komplett unter `public/` -
          * Vorschaubilder, 51 SVG-Haeute, UI-Paket, Sci-Fi-RTS-Grafiken. Das

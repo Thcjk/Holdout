@@ -1,43 +1,41 @@
 /**
- * Eine gezeichnete Comic-Flaeche: Tafeln, Einlagen und Knoepfe.
+ * Eine gezeichnete Flaeche im Poster-Stil: Papierblaetter, Einlagen und Knoepfe.
  *
- * Ersetzt die Holz-Grafiken aus dem UI-Paket. Jede Flaeche hat eine dicke
- * schwarze Kontur, eine flache Farbe, einen Schattenstreifen unten, einen
- * hellen Glanzstreifen oben und einen harten Versatzschatten - wie ein
- * Sprechblasen-Kaestchen im Comic. Gezeichnet wird mit einer Graphics-Ebene,
- * das funktioniert mit jedem Renderer und in jeder Groesse ohne Verzerrung.
+ * Statt glatter Rechtecke mit Glanzstreifen: Papier mit einem leicht
+ * wackelnden Tuscherand, der zweimal nachgezogen ist (wie eine Skizze), und
+ * ein weicher Schatten darunter. Knoepfe sind Stempel in Rost oder
+ * Papierschilder mit Tuscherand.
  */
 
 import Phaser from "phaser";
+import { INK, PAPER, PAPER_DARK, RUST, wobblyRect } from "./paper";
 
 export interface BoxStyle {
   fill: number;
-  /** Streifen unten (dunkler). */
-  shade: number;
-  /** Streifen oben (heller). */
-  light: number;
-  radius: number;
+  /** Dicke des Tuscherands. */
   border: number;
-  /** Versatz des harten Schattens; 0 = keiner. */
+  /** Versatz des Schattens nach unten; 0 = keiner. */
   shadow: number;
+  radius: number;
+  /** Zweite, duennere Linie daneben - sieht skizziert aus. */
+  sketch: boolean;
 }
 
-const INK = 0x1d1c19;
-
 export const BOX = {
-  /** Grosse Tafel: dunkles Teal wie ein Nachthimmel im Maerchenbuch. */
-  panel: { fill: 0x2c3a3c, shade: 0x243133, light: 0x587a7c, radius: 12, border: 2, shadow: 4 } satisfies BoxStyle,
-  /** Cremefarbenes Papier fuer alles, was man lesen soll. */
-  inset: { fill: 0xf0e4c8, shade: 0xdccfa9, light: 0xfff8e4, radius: 8, border: 2, shadow: 0 } satisfies BoxStyle,
-  /** Hauptknopf: Rost. */
-  primary: { fill: 0xb5532f, shade: 0x8f3f22, light: 0xe08a62, radius: 10, border: 2, shadow: 3 } satisfies BoxStyle,
-  /** Nebenknopf: Teal. */
-  secondary: { fill: 0x4f8a8e, shade: 0x3a6a6e, light: 0xa9cfc9, radius: 10, border: 2, shadow: 3 } satisfies BoxStyle,
+  /** Ein Papierblatt. */
+  panel: { fill: PAPER, border: 2.4, shadow: 5, radius: 5, sketch: true } satisfies BoxStyle,
+  /** Etwas dunkleres Papier fuer eingelegte Felder. */
+  inset: { fill: PAPER_DARK, border: 1.6, shadow: 0, radius: 4, sketch: false } satisfies BoxStyle,
+  /** Hauptknopf: ein Stempel in Rost. */
+  primary: { fill: RUST, border: 2.4, shadow: 3, radius: 7, sketch: true } satisfies BoxStyle,
+  /** Nebenknopf: ein Papierschild. */
+  secondary: { fill: PAPER, border: 2.2, shadow: 3, radius: 7, sketch: true } satisfies BoxStyle,
 } as const;
 
 export class ComicBox {
   readonly container: Phaser.GameObjects.Container;
   private readonly graphics: Phaser.GameObjects.Graphics;
+  private readonly seed = Math.floor(Math.random() * 1e9);
   private pressed = false;
 
   /** @param x, y  Mittelpunkt (wie bei `add.rectangle`). */
@@ -54,7 +52,7 @@ export class ComicBox {
     this.draw();
   }
 
-  /** Gedrueckt: Der Knopf sinkt auf seinen Schatten, der Schatten verschwindet. */
+  /** Gedrueckt: Das Schild sinkt auf seinen Schatten. */
   setPressed(pressed: boolean): this {
     if (pressed !== this.pressed) {
       this.pressed = pressed;
@@ -99,27 +97,23 @@ export class ComicBox {
     const { style } = this;
     const w = this.width;
     const h = this.height;
+    const dy = this.pressed ? Math.min(2, style.shadow) : 0;
     const left = -w / 2;
-    const top = -h / 2;
-    const dy = this.pressed ? Math.min(3, style.shadow) : 0;
-    const r = Math.min(style.radius, h / 2, w / 2);
-    const b = style.border;
+    const top = -h / 2 + dy;
 
     g.clear();
     if (style.shadow > 0 && !this.pressed) {
-      g.fillStyle(INK, 0.35).fillRoundedRect(left + style.shadow * 0.3, top + style.shadow, w, h, r);
+      g.fillStyle(INK, 0.22);
+      g.fillPoints(wobblyRect(left + 2, top + style.shadow, w, h, style.radius, this.seed + 7, 1.2), true);
     }
-    // Kontur, dann Flaeche.
-    g.fillStyle(INK, 1).fillRoundedRect(left, top + dy, w, h, r);
-    const iw = w - b * 2;
-    const ih = h - b * 2;
-    const ir = Math.max(2, r - b * 0.6);
-    g.fillStyle(style.fill, 1).fillRoundedRect(left + b, top + b + dy, iw, ih, ir);
-    // Schattenstreifen unten.
-    const shadeH = Math.min(ih * 0.28, 16);
-    g.fillStyle(style.shade, 1).fillRoundedRect(left + b, top + b + dy + ih - shadeH, iw, shadeH, { tl: 0, tr: 0, bl: ir, br: ir });
-    // Glanzstreifen oben.
-    const lightH = Math.min(ih * 0.22, 9);
-    g.fillStyle(style.light, 0.22).fillRoundedRect(left + b + 4, top + b + dy + 3, iw - 8, lightH, Math.min(ir, lightH / 2));
+    const outline = wobblyRect(left, top, w, h, style.radius, this.seed, 1.2);
+    g.fillStyle(style.fill, 1);
+    g.fillPoints(outline, true);
+    g.lineStyle(style.border, INK, 1);
+    g.strokePoints(outline, true);
+    if (style.sketch) {
+      g.lineStyle(Math.max(1, style.border * 0.45), INK, 0.55);
+      g.strokePoints(wobblyRect(left + 1.5, top - 1, w - 2, h + 1, style.radius, this.seed + 3, 1.8), true);
+    }
   }
 }

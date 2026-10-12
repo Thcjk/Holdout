@@ -1,5 +1,5 @@
 /**
- * Ein Knopf aus dem UI-Paket (Kenney "UI Pack RPG") mit Beschriftung.
+ * Ein Knopf im Poster-Stil: Rost-Stempel oder Papierschild mit Handschrift.
  *
  * Phaser bringt keine fertigen Bedienelemente mit - das ist Absicht, denn ein
  * Spiel braucht selten Standardknoepfe. Fuer die Menues reicht diese kleine
@@ -16,8 +16,8 @@
  */
 
 import Phaser from "phaser";
-import { UI } from "../config/ui";
 import { BOX, ComicBox } from "./ComicBox";
+import { FONT_HAND } from "./paper";
 
 export interface ButtonOptions {
   width?: number;
@@ -35,7 +35,7 @@ export class Button {
   private readonly hitArea: Phaser.GameObjects.Rectangle;
   private readonly image: ComicBox;
   private readonly label: Phaser.GameObjects.Text;
-  private readonly pressOffset = 3;
+  private readonly pressOffset = 2;
   private pressed = false;
 
   constructor(
@@ -50,15 +50,13 @@ export class Button {
     const height = options.height ?? 56;
     this.image = new ComicBox(scene, BOX[options.variant ?? "primary"], x, y, width, height);
 
+    const variant = options.variant ?? "primary";
     this.label = scene.add.text(x, y, text, {
-      fontFamily: UI.font,
-      fontSize: `${options.fontSize ?? 22}px`,
-      color: "#f0e4c8",
-      fontStyle: "bold",
+      fontFamily: FONT_HAND,
+      fontSize: `${(options.fontSize ?? 22) + 2}px`,
+      color: variant === "primary" ? "#f6ecd4" : "#1d1c19",
     });
-    this.label.setStroke("#1d1c19", Math.max(4, Math.round((options.fontSize ?? 22) / 4)));
-    this.label.setShadow(0, 2, "#1d1c19", 0, true, true);
-    this.label.setOrigin(0.5);
+    this.label.setOrigin(0.5, 0.52);
 
     // Unsichtbar, aber beruehrbar (Deckkraft 0 blockt die Eingabe nicht).
     this.hitArea = scene.add.rectangle(x, y, width, height, 0x000000, 0);

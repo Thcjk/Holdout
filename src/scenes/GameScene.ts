@@ -10,6 +10,7 @@
  */
 
 import Phaser from "phaser";
+import { figureScale } from "../ui/comicFigures";
 import { audio } from "../audio/AudioEngine";
 import type { SoundName } from "../audio/AudioEngine";
 import { arenaKey, characterKey, enemyKey, weaponIconKey } from "../config/assets";
@@ -26,6 +27,7 @@ import { Hud } from "../ui/Hud";
 import { ARENA_WALL } from "../ui/comic";
 import { menuText, woodPanel } from "../ui/menuStyle";
 import { ShopPanel } from "../ui/ShopPanel";
+import { FONT_HAND, FONT_TITLE } from "../ui/paper";
 import type { PlayMode } from "../app";
 
 const ARENA_TOP = 64;
@@ -138,12 +140,11 @@ export class GameScene extends Phaser.Scene {
 
     this.banner = this.add
       .text(VIEWPORT.width / 2, 200, "", {
-        fontFamily: UI.font,
-        fontSize: "56px",
-        color: PALETTE.gold,
-        fontStyle: "bold",
-        stroke: "#000000",
-        strokeThickness: 6,
+        fontFamily: FONT_TITLE,
+        fontSize: "60px",
+        color: "#1d1c19",
+        stroke: "#f1e5c9",
+        strokeThickness: 8,
       })
       .setOrigin(0.5)
       .setDepth(9300)
@@ -151,11 +152,10 @@ export class GameScene extends Phaser.Scene {
 
     this.waitText = this.add
       .text(VIEWPORT.width / 2, VIEWPORT.height / 2, "Warte auf den Host …", {
-        fontFamily: UI.font,
+        fontFamily: FONT_HAND,
         fontSize: "28px",
         color: UI.text.body,
-        fontStyle: "bold",
-        backgroundColor: "#000000aa",
+        backgroundColor: "#f1e5c9ee",
         padding: { x: 18, y: 10 },
       })
       .setOrigin(0.5)
@@ -204,7 +204,7 @@ export class GameScene extends Phaser.Scene {
   ): { setVisible(visible: boolean): unknown }[] {
     const cx = VIEWPORT.width / 2;
     const objects: { setVisible(visible: boolean): unknown }[] = [];
-    const dim = this.add.rectangle(0, 0, 2000, 1200, 0x000000, 0.65).setOrigin(0).setDepth(OVERLAY_DEPTH).setInteractive();
+    const dim = this.add.rectangle(0, 0, 2000, 1200, 0x1d1c19, 0.45).setOrigin(0).setDepth(OVERLAY_DEPTH).setInteractive();
     objects.push(dim);
     objects.push(woodPanel(this, cx, 270, 440, 300).setDepth(OVERLAY_DEPTH + 1));
     objects.push(menuText(this, cx, 156, title, 36, UI.text.title, true).setDepth(OVERLAY_DEPTH + 2));
@@ -452,7 +452,7 @@ export class GameScene extends Phaser.Scene {
 
   private makeEnemy(enemy: Enemy): EnemyView {
     const def = ENEMIES[enemy.type];
-    const base = def.radius / 19;
+    const base = figureScale(def.radius / 19);
     const sprite = this.add.sprite(0, 0, enemyKey(enemy.type)).setScale(0);
     const view: EnemyView = {
       sprite,
@@ -505,17 +505,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private makePlayer(player: PlayerState): PlayerView {
-    const sprite = this.add.sprite(0, 0, characterKey(player.character)).setScale(0.6);
+    const sprite = this.add.sprite(0, 0, characterKey(player.character)).setScale(figureScale(0.6));
     const shadow = this.add.image(0, 0, "shadow").setDisplaySize(34, 16).setAlpha(0.9);
     const name = this.add
       .text(0, 0, this.session.isMultiplayer ? player.name : "", {
-        fontFamily: UI.font,
-        fontSize: "12px",
-        color: "#ffffff",
-        fontStyle: "bold",
+        fontFamily: FONT_HAND,
+        fontSize: "14px",
+        color: "#1d1c19",
+        stroke: "#f1e5c9",
+        strokeThickness: 3,
       })
       .setOrigin(0.5, 1)
-      .setShadow(1, 1, "#000000", 2)
       .setDepth(8100);
     const view: PlayerView = {
       sprite,
@@ -651,10 +651,10 @@ export class GameScene extends Phaser.Scene {
     switch (event.t) {
       case "hit":
         if (event.enemy) {
-          this.floater(event.x, event.y - 10, String(Math.round(event.dmg)), event.crit ? PALETTE.gold : "#ffffff", event.crit ? 22 : 15);
+          this.floater(event.x, event.y - 10, String(Math.round(event.dmg)), event.crit ? "#b5532f" : "#1d1c19", event.crit ? 22 : 15);
           if (event.crit && this.time.now - this.lastWord > 140) {
             this.lastWord = this.time.now;
-            this.comic(event.x, event.y - 8, "KRIT!", PALETTE.gold);
+            this.comic(event.x, event.y - 8, "KRIT!", "#b5532f");
           }
           this.playSound("hit", 55);
         } else {
@@ -666,7 +666,7 @@ export class GameScene extends Phaser.Scene {
       case "kill":
         this.burst(event.x, event.y, event.big ? 12 : 5, event.big ? 0xdba636 : 0xcdbf9b);
         if (event.big) {
-          this.comic(event.x, event.y, ["BAM!", "POW!", "ZACK!", "WUMM!"][Math.floor(Math.random() * 4)] ?? "BAM!", "#ff4a3a");
+          this.comic(event.x, event.y, ["BAM!", "POW!", "ZACK!", "WUMM!"][Math.floor(Math.random() * 4)] ?? "BAM!", "#1d1c19");
         }
         this.playSound("enemyDied", 45);
         break;
@@ -736,12 +736,11 @@ export class GameScene extends Phaser.Scene {
     this.floaters += 1;
     const text = this.add
       .text(this.originX + x, this.originY + y, value, {
-        fontFamily: UI.font,
-        fontSize: `${size}px`,
+        fontFamily: FONT_TITLE,
+        fontSize: `${size + 2}px`,
         color,
-        fontStyle: "bold",
-        stroke: "#000000",
-        strokeThickness: 3,
+        stroke: "#f1e5c9",
+        strokeThickness: 4,
       })
       .setOrigin(0.5)
       .setDepth(9000);
@@ -766,11 +765,10 @@ export class GameScene extends Phaser.Scene {
     this.floaters += 1;
     const text = this.add
       .text(this.originX + x, this.originY + y - 16, word, {
-        fontFamily: UI.font,
-        fontSize: "30px",
+        fontFamily: FONT_TITLE,
+        fontSize: "34px",
         color,
-        fontStyle: "italic 900",
-        stroke: "#14101c",
+        stroke: "#f1e5c9",
         strokeThickness: 7,
       })
       .setOrigin(0.5)
@@ -810,7 +808,7 @@ export class GameScene extends Phaser.Scene {
 
   private swing(x: number, y: number, angle: number): void {
     const arc = this.add.graphics().setDepth(8600);
-    arc.lineStyle(5, 0xffffff, 0.85);
+    arc.lineStyle(5, 0xf1e5c9, 0.9);
     arc.beginPath();
     arc.arc(this.originX + x, this.originY + y, 30, angle - 0.8, angle + 0.8);
     arc.strokePath();

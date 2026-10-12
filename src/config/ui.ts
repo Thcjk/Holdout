@@ -80,7 +80,7 @@ const BUTTON_PRESSED_SLICE: SliceInsets = { left: 8, right: 8, top: 6, bottom: 6
 
 export const UI = {
   /** Schriftfamilie fuer alles Gezeichnete - kein Paket, also Systemschrift. */
-  font: "system-ui, sans-serif",
+  font: '"Patrick Hand SC", "Comic Sans MS", system-ui, sans-serif',
 
   button: {
     /**
@@ -114,13 +114,13 @@ export const UI = {
    * nicht zum In-Game").
    */
   text: {
-    title: "#f0e4c8",
-    body: "#f0e4c8",
-    muted: "#9aa1b2",
-    accent: "#dba636",
-    /** Auf hellen Flaechen (Papier-Einlage). */
-    dark: "#242a2b",
-    shadow: "#1d1c19",
+    title: "#1d1c19",
+    body: "#2b2a26",
+    muted: "#6e6553",
+    accent: "#b5532f",
+    /** Auf hellen Flaechen (Papier). */
+    dark: "#1d1c19",
+    shadow: "#00000000",
   },
 
   /** Einlage auf einer Tafel: Raumcode, Spielerliste, Portraet. */

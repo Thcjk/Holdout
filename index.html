@@ -7,15 +7,15 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <meta name="description" content="Holdout – Top-down-Koop-Survival fürs Handy." />
-    <meta name="theme-color" content="#242a2b" />
+    <meta name="theme-color" content="#f1e5c9" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/png" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
     <title>Holdout</title>
     <style>
       :root {
-        color-scheme: dark;
+        color-scheme: light;
       }
 
       html,
@@ -25,7 +25,7 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #1d1c19;
+        background: #f1e5c9;
         font-family: system-ui, sans-serif;
       }
 
@@ -73,8 +73,8 @@
         gap: 18px;
         padding: 24px;
         box-sizing: border-box;
-        background: radial-gradient(circle at 50% 35%, #222838, #1d1c19 75%);
-        color: #f0e4c8;
+        background: radial-gradient(circle at 50% 40%, #f6ecd4, #e6d6b0 80%);
+        color: #1d1c19;
         text-align: center;
       }
 
@@ -86,17 +86,15 @@
       #rotate-gate .gate-title {
         font-size: 44px;
         font-weight: 900;
-        font-style: italic;
         letter-spacing: 1px;
-        color: #f0e4c8;
-        -webkit-text-stroke: 7px #1d1c19;
-        paint-order: stroke fill;
-        text-shadow: 4px 5px 0 #b5532f;
+        color: #1d1c19;
+        font-family: "Londrina Solid", "Arial Black", system-ui, sans-serif;
+        text-transform: uppercase;
       }
 
       #rotate-gate .gate-text {
         font-size: 15px;
-        color: #9aa1b2;
+        color: #4a443a;
         max-width: 420px;
         line-height: 1.5;
       }
@@ -105,9 +103,9 @@
       #rotate-gate .gate-phone {
         width: 54px;
         height: 92px;
-        border: 4px solid #dba636;
+        border: 4px solid #1d1c19;
         border-radius: 12px;
-        box-shadow: 3px 4px 0 #1d1c19;
+        box-shadow: 3px 4px 0 rgba(29,28,25,0.3);
         animation: gate-turn 2.4s ease-in-out infinite;
       }
 
@@ -136,7 +134,7 @@
         border: 3px solid #1d1c19;
         border-radius: 12px;
         background: #b5532f;
-        box-shadow: 0 4px 0 #1d1c19;
+        box-shadow: 0 3px 0 rgba(29,28,25,0.4);
         font-weight: 800;
         color: #ffffff;
         font: inherit;
@@ -187,24 +185,24 @@
           page.style.cssText =
             "position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;" +
             "align-items:center;justify-content:center;gap:16px;padding:24px;" +
-            "box-sizing:border-box;background:#1d1c19;color:#f0e4c8;text-align:center;" +
+            "box-sizing:border-box;background:#f1e5c9;color:#1d1c19;text-align:center;" +
             "font-family:system-ui,sans-serif";
 
           var title = document.createElement("div");
           title.textContent = "Die Spieldateien konnten nicht geladen werden.";
-          title.style.cssText = "font-size:18px;font-weight:700;color:#ff5470;max-width:520px";
+          title.style.cssText = "font-size:18px;font-weight:700;color:#b5532f;max-width:520px";
           page.appendChild(title);
 
           var hint = document.createElement("div");
           hint.textContent =
             "Meistens hilft der Knopf unten. Bleibt es dabei, ist die Adresse " +
             "dieser Seite falsch - dann liegt es am Spiel, nicht an dir.";
-          hint.style.cssText = "font-size:14px;color:#8ea6c4;max-width:520px;line-height:1.5";
+          hint.style.cssText = "font-size:14px;color:#4a443a;max-width:520px;line-height:1.5";
           page.appendChild(hint);
 
           var where = document.createElement("div");
           where.textContent = location.href;
-          where.style.cssText = "font-size:12px;color:#8ea6c4;word-break:break-all;max-width:520px";
+          where.style.cssText = "font-size:12px;color:#4a443a;word-break:break-all;max-width:520px";
           page.appendChild(where);
 
           var button = document.createElement("button");

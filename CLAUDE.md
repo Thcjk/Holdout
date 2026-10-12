@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout** (v3.5.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
+**Holdout** (v3.6.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
 Online-Koop (1–4). Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android-APK über
 Capacitor. Der frühere Koop-Arena-Shooter (v2.5.0, Brawl-Stars-artig, mit 3D) wurde auf dem
 Branch `brotato-umbau` komplett ersetzt; sein Stand liegt auf `main` bis zum Merge, seine
@@ -56,15 +56,25 @@ Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
   werden nicht mehr angezeigt; `UiNineSlice` und `CHARACTER_TILES` sind Altlast). Symbole für Gegenstände,
   Spawn-Kreuz und Schatten werden in `ui/icons.ts` gezeichnet –
   **nach dem Zeichnen `refresh()` auf der Canvas-Textur**, sonst bleibt sie leer.
-- **Look (Märchenbuch-Poster, Vorbild: Pinterest-Bild „Out of Line“ vom Nutzer; davor Bonbon-Comic und düsterer
-  Graphic-Novel – beides verworfen):** handgemalt, gedämpft, warm. Palette in `ui/noir.ts` (Name stammt aus der
-  düsteren Fassung: `ink` dunkle Tinte, `steel*` Teal-Töne, `bone` Creme, `blood` Rost, `amber` Senfgelb).
-  Helden (`ui/comicFigures.ts`): kleine Wanderer mit Kapuze/Schal und einem großen Auge. Gegner: dunkle Schattenwesen
-  mit hellen Augen, Elite/Boss mit Dornenring. Dünne Konturen, flache Farben, dunklerer Streifen unten.
-  `ui/comicWeapons.ts`: 7 Waffensymbole (Teal-Stahl, Holz, Senfgelb). `ui/ComicBox.ts`: Teal-Tafeln, Creme-Papier,
-  Rost-/Teal-Knöpfe (`BOX.*`). `ui/comic.ts`: Arena (Salbei-Wiese mit Korn, Nebelflecken, Gras, Hecken-Rand), `bg-game`,
-  `bullet`, `gem`, `logo`. Menühintergrund: `menuStyle.paintBackground` (Nebelberge, Turm, Tannen). Schlüssel über
-  `config/assets.ts`. Gegner wackeln/quetschen sich, Comic-Wörter („BAM!“, „KRIT!“) in `GameScene.comic()`.
+- **Look: Poster auf Papier** (Vorbild: Pinterest-Bild „Out of Line“ vom Nutzer). Verworfen: Bonbon-Comic,
+  düsterer Graphic-Novel, Märchenbuch nur als Umfärbung („sieht aus wie vorher, nur andere Farben“).
+  Kennzeichen: Creme-Papier mit Korn überall, Tusche-Linien, die leicht wackeln, zwei Handschriften
+  (`ui/paper.ts`: `FONT_TITLE` Londrina Solid, `FONT_HAND` Patrick Hand SC, per `@fontsource` mitgebaut;
+  BootScene wartet mit `waitForFonts()` vor dem Malen). Phaser läuft deshalb mit `pixelArt: false`, Antialiasing an.
+  - `ui/paper.ts`: Farben, `wobblyRect` (zittriges Rechteck für Graphics), `grain`, `inkLine`.
+  - `ui/ComicBox.ts`: Papierblatt / Einlage / Rost-Stempel / Papierschild mit doppeltem Tuscherand (`BOX.*`).
+    Alle Texte dunkel (`UI.text`), keine Konturen.
+  - `ui/comicFigures.ts`: Helden (Wanderer mit Kapuze, Schal, einem großen Auge) und Gegner (Schattenwesen)
+    werden im 78er-Raster gezeichnet, auf 136 px Leinwand gemalt und mit `inkify` „gedruckt“ (Korn,
+    Schraffur, ungleicher Tusche-Umriss). Szenen rechnen Maßstäbe mit `figureScale(alterWert)` um.
+    `renderHero(id, size)` malt einen Helden groß (für das App-Icon).
+  - `ui/comicWeapons.ts` (Waffen, ebenfalls `inkify`), `ui/icons.ts` (Gegenstände: Papier-Medaillon mit
+    Tusche-Bild je Hauptwert – Schwert, Schild, Herz, Blitz, Kleeblatt …).
+  - `ui/comic.ts`: Arena als gemalte Lichtung mit welligem Tuscherand, Pfad, Steinkreis, Bäumen ringsum
+    (`ARENA_WALL` = 44, so weit ragt das Bild über die Spielfläche), Papier-Hintergrund, Logo, Herz, Klippe.
+  - `menuStyle.paintBackground`: Plakat-Landschaft (Bergschichten, dunkler Berg mit Burg und Dornenring, Tannen).
+  - TitleScene ist als Plakat gebaut: Schriftzug und Satz links, Held auf Klippe Mitte, Band mit Stichworten unten.
+  - HUD (`ui/Hud.ts`): Papierschilder, Herz, Balken mit Tuscherand.
 - `setReloadSafe(true)` nur im Titel und im Ergebnis (Selbst-Update der PWA nur dort).
 
 ## Entwickeln und prüfen
@@ -85,11 +95,11 @@ Adress-Zusätze: `?desktop`, `?debug=lokal|werte|netz|all`, `?seed=N` (nur solo)
 
 - Echte Spieltests: Balance (Panzer/Raufbold waren im Bot schwach), Dropmenge, Shop-Preise.
 - Nach einem Koop-Run gibt es keine Rückkehr in dieselbe Lobby – zurück ins Menü, neuer Raum.
-- Arena ist ein einfarbiger Sandboden ohne Hindernisse; Dekoration, Bildschirm-Treffer-Feedback,
-  Musik-Lautstärke-Regeln feinschleifen.
+- Arena hat keine Hindernisse (nur Dekoration); Bildschirm-Treffer-Feedback, Musik-Lautstärke feinschleifen.
+- `noir.ts`-Namen (`blood`, `bone` …) stammen aus der düsteren Fassung, Werte sind die Plakatfarben.
 - Kein Speichern von Fortschritt; kein Charakter-Freischalten.
 - App-Icon, Favicon und Android-Splash kommen aus `node tools/generate-brand.mjs` (zeichnet mit denselben Funktionen wie
-  das Spiel; Playwright aus `/opt/npm-tools`). Danach `npm run build` und für Android neu bauen. Farben: Teal `#4b7a80`, Tinte `#1d1c19`.
+  das Spiel; Playwright aus `/opt/npm-tools`). Danach `npm run build` und für Android neu bauen. Icon = Söldner-Gesicht auf Papier. Farben: Papier `#f1e5c9`, Tinte `#1d1c19`, Rost `#b5532f`.
 - Bundle ~1,6 MB (Phaser komplett).
 
 ## Deployment

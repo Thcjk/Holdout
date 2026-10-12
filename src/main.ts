@@ -10,6 +10,10 @@ import { installCrashScreen } from "./platform/crashScreen";
 installCrashScreen(__APP_VERSION__);
 
 import Phaser from "phaser";
+// Die beiden Handschriften werden mitgebaut, damit sie auch ohne Internet da sind.
+import "@fontsource/londrina-solid/400.css";
+import "@fontsource/londrina-solid/900.css";
+import "@fontsource/patrick-hand-sc/400.css";
 import { isSupportedDevice } from "./platform/device";
 import { showDesktopNotice } from "./platform/DesktopNotice";
 // Nur importiert, damit der Empfaenger fuer `beforeinstallprompt` frueh genug
@@ -67,11 +71,11 @@ function buildConfig(): Phaser.Types.Core.GameConfig {
       // Daumen fuer den Stick plus Reserve fuer Knoepfe.
       activePointers: 3,
     },
-    // Pixel-Art: keine Glaettung beim Vergroessern, Sprites auf ganzen Pixeln.
-    pixelArt: true,
+    // Gemalter Poster-Stil: weich skalieren, nicht in harte Pixel zerfallen.
+    pixelArt: false,
     render: {
-      antialias: false,
-      roundPixels: true,
+      antialias: true,
+      roundPixels: false,
     },
     // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser
     // keine eigene Physik-Engine.

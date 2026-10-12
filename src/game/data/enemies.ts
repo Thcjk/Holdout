@@ -70,7 +70,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     cost: 2,
     minWave: 4,
     knockback: 0.8,
-    color: 0xe4572e,
+    color: 0xb5532f,
   },
   spitter: {
     type: "spitter",

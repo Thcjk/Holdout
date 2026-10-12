@@ -70,7 +70,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     knockback: 20,
     scaling: 0.5,
     critBonus: 0,
-    color: 0xffd166,
+    color: 0xb5532f,
   },
   shotgun: {
     id: "shotgun",

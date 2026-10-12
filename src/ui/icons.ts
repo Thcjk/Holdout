@@ -1,9 +1,10 @@
 /**
  * Symbole, die beim Start gezeichnet werden, weil das Grafikpaket sie nicht hat.
  *
- * Gegenstaende bekommen eine farbige Plakette mit Kuerzel - die Farbe sagt, was
- * der Gegenstand vor allem tut (rot = Schaden, grau = Schutz, blau = Tempo ...).
- * So findet man im Shop schon am Farbton, was man sucht, ohne zu lesen.
+ * Gegenstaende bekommen ein Papier-Medaillon mit einer Tusche-Zeichnung, die
+ * zeigt, was er vor allem tut: Schwert = Schaden, Schild = Ruestung, Herz =
+ * Leben, Blitz = Tempo, Kleeblatt = Glueck ... So erkennt man im Shop ohne zu lesen,
+ * was man vor sich hat.
  */
 
 import type Phaser from "phaser";
@@ -13,23 +14,223 @@ import type { StatKey } from "../game/types";
 
 const ICON_SIZE = 64;
 
-/** Farbe nach dem wichtigsten Wert des Gegenstands. */
+/** Farbe des Medaillons nach dem wichtigsten Wert - gedaempft wie die Plakatfarben. */
 const STAT_COLORS: Record<StatKey, string> = {
-  damage: "#c9503c",
-  melee: "#c9503c",
-  ranged: "#d9783c",
-  attackSpeed: "#d9a23c",
-  crit: "#e8c14a",
-  range: "#6aa0c9",
-  maxHp: "#5fa05a",
-  regen: "#4fae8a",
-  lifesteal: "#a8406a",
-  armor: "#7d8794",
-  dodge: "#5a7fc9",
-  speed: "#4a9ad9",
-  luck: "#8ab83c",
-  harvesting: "#c9a03c",
+  damage: "#b5532f",
+  melee: "#9c4426",
+  ranged: "#c98a2e",
+  attackSpeed: "#d8a23a",
+  crit: "#d8a23a",
+  range: "#4f8a8e",
+  maxHp: "#b5532f",
+  regen: "#7f9a5a",
+  lifesteal: "#8f2f2f",
+  armor: "#7f8f8c",
+  dodge: "#6f9fa0",
+  speed: "#4f8a8e",
+  luck: "#6e8f3a",
+  harvesting: "#c98a2e",
 };
+
+const INK = "#1d1c19";
+const CREAM = "#f1e5c9";
+
+type Ctx = CanvasRenderingContext2D;
+
+function inked(context: Ctx, fill: string, width = 2.6): void {
+  context.fillStyle = fill;
+  context.fill();
+  context.lineWidth = width;
+  context.lineJoin = "round";
+  context.lineCap = "round";
+  context.strokeStyle = INK;
+  context.stroke();
+}
+
+/** Ein Tusche-Bild je Wert, in der Mitte eines 64er-Feldes. */
+function drawGlyph(context: Ctx, stat: StatKey, accent: string): void {
+  context.save();
+  context.translate(32, 32);
+  switch (stat) {
+    case "damage":
+    case "melee": {
+      // Schwert
+      context.rotate(-0.78);
+      context.beginPath();
+      context.moveTo(-3, -18);
+      context.lineTo(0, -23);
+      context.lineTo(3, -18);
+      context.lineTo(3, 6);
+      context.lineTo(-3, 6);
+      context.closePath();
+      inked(context, "#d9d4c0");
+      context.beginPath();
+      context.rect(-9, 6, 18, 4);
+      inked(context, accent);
+      context.beginPath();
+      context.rect(-2.5, 10, 5, 10);
+      inked(context, "#6b4228");
+      break;
+    }
+    case "ranged":
+    case "range": {
+      // Zielscheibe mit Pfeil
+      for (const [r, color] of [[17, CREAM], [11, accent], [5, CREAM]] as const) {
+        context.beginPath();
+        context.arc(0, 0, r, 0, Math.PI * 2);
+        inked(context, color, 2.2);
+      }
+      context.beginPath();
+      context.moveTo(18, -18);
+      context.lineTo(0, 0);
+      context.lineWidth = 3;
+      context.strokeStyle = INK;
+      context.stroke();
+      context.beginPath();
+      context.moveTo(14, -20);
+      context.lineTo(20, -20);
+      context.lineTo(20, -14);
+      inked(context, accent, 2);
+      break;
+    }
+    case "attackSpeed":
+    case "speed": {
+      // Blitz
+      context.beginPath();
+      context.moveTo(4, -22);
+      context.lineTo(-10, 2);
+      context.lineTo(-1, 2);
+      context.lineTo(-5, 22);
+      context.lineTo(11, -4);
+      context.lineTo(2, -4);
+      context.closePath();
+      inked(context, accent);
+      break;
+    }
+    case "crit": {
+      // Auge
+      context.beginPath();
+      context.moveTo(-20, 0);
+      context.quadraticCurveTo(0, -18, 20, 0);
+      context.quadraticCurveTo(0, 18, -20, 0);
+      inked(context, CREAM);
+      context.beginPath();
+      context.arc(0, 0, 7, 0, Math.PI * 2);
+      inked(context, accent, 2);
+      context.beginPath();
+      context.arc(1, 0, 3, 0, Math.PI * 2);
+      context.fillStyle = INK;
+      context.fill();
+      break;
+    }
+    case "maxHp":
+    case "regen": {
+      // Herz, bei Regeneration mit Pluszeichen
+      context.beginPath();
+      context.moveTo(0, 17);
+      context.bezierCurveTo(-18, 6, -20, -8, -12, -14);
+      context.bezierCurveTo(-6, -18, -1, -14, 0, -9);
+      context.bezierCurveTo(1, -14, 6, -18, 12, -14);
+      context.bezierCurveTo(20, -8, 18, 6, 0, 17);
+      inked(context, accent);
+      if (stat === "regen") {
+        context.fillStyle = CREAM;
+        context.fillRect(-2.5, -8, 5, 15);
+        context.fillRect(-7.5, -3, 15, 5);
+      }
+      break;
+    }
+    case "lifesteal": {
+      // Tropfen mit Zahn
+      context.beginPath();
+      context.moveTo(0, -20);
+      context.bezierCurveTo(10, -6, 14, 2, 14, 7);
+      context.arc(0, 7, 14, 0, Math.PI);
+      context.bezierCurveTo(-14, 2, -10, -6, 0, -20);
+      inked(context, accent);
+      context.beginPath();
+      context.moveTo(-5, 2);
+      context.lineTo(0, 12);
+      context.lineTo(5, 2);
+      context.closePath();
+      inked(context, CREAM, 1.8);
+      break;
+    }
+    case "armor": {
+      // Schild
+      context.beginPath();
+      context.moveTo(0, -20);
+      context.lineTo(16, -14);
+      context.quadraticCurveTo(16, 10, 0, 20);
+      context.quadraticCurveTo(-16, 10, -16, -14);
+      context.closePath();
+      inked(context, accent);
+      context.beginPath();
+      context.moveTo(0, -14);
+      context.lineTo(0, 14);
+      context.moveTo(-10, -4);
+      context.lineTo(10, -4);
+      context.lineWidth = 2;
+      context.strokeStyle = INK;
+      context.stroke();
+      break;
+    }
+    case "dodge": {
+      // Feder
+      context.rotate(-0.6);
+      context.beginPath();
+      context.moveTo(0, -22);
+      context.quadraticCurveTo(12, -6, 0, 18);
+      context.quadraticCurveTo(-12, -6, 0, -22);
+      inked(context, accent);
+      context.beginPath();
+      context.moveTo(0, -18);
+      context.lineTo(0, 22);
+      context.lineWidth = 2;
+      context.stroke();
+      for (let y = -12; y < 12; y += 5) {
+        context.beginPath();
+        context.moveTo(0, y);
+        context.lineTo(6, y - 3);
+        context.moveTo(0, y);
+        context.lineTo(-6, y - 3);
+        context.lineWidth = 1;
+        context.stroke();
+      }
+      break;
+    }
+    case "luck": {
+      // Kleeblatt
+      for (const [dx, dy] of [[-7, -7], [7, -7], [-7, 7], [7, 7]] as const) {
+        context.beginPath();
+        context.arc(dx, dy, 8, 0, Math.PI * 2);
+        inked(context, accent, 2);
+      }
+      context.beginPath();
+      context.moveTo(2, 4);
+      context.quadraticCurveTo(8, 14, 6, 22);
+      context.lineWidth = 2.4;
+      context.strokeStyle = INK;
+      context.stroke();
+      break;
+    }
+    case "harvesting": {
+      // Muenzstapel
+      for (const y of [10, 3, -4]) {
+        context.beginPath();
+        context.ellipse(0, y, 15, 6, 0, 0, Math.PI * 2);
+        inked(context, accent, 2);
+      }
+      context.font = `bold 11px ${'"Londrina Solid", sans-serif'}`;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillStyle = INK;
+      context.fillText("$", 0, -4);
+      break;
+    }
+  }
+  context.restore();
+}
 
 function createCanvas(scene: Phaser.Scene, key: string): CanvasRenderingContext2D | null {
   if (scene.textures.exists(key)) {
@@ -51,38 +252,26 @@ function refreshTexture(scene: Phaser.Scene, key: string): void {
   (scene.textures.get(key) as Phaser.Textures.CanvasTexture).refresh();
 }
 
-function roundedRect(context: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  context.beginPath();
-  context.moveTo(x + r, y);
-  context.arcTo(x + w, y, x + w, y + h, r);
-  context.arcTo(x + w, y + h, x, y + h, r);
-  context.arcTo(x, y + h, x, y, r);
-  context.arcTo(x, y, x + w, y, r);
-  context.closePath();
-}
-
-function drawItemIcon(scene: Phaser.Scene, id: string, label: string, color: string): void {
+function drawItemIcon(scene: Phaser.Scene, id: string, stat: StatKey | undefined): void {
   const context = createCanvas(scene, itemIconKey(id));
   if (!context) {
     return;
   }
-  context.fillStyle = "#3a2a1a";
-  roundedRect(context, 2, 2, ICON_SIZE - 4, ICON_SIZE - 4, 12);
+  const accent = stat ? STAT_COLORS[stat] : "#888888";
+  // Papier-Medaillon mit Tuscherand, das Bild in der Mitte.
+  context.beginPath();
+  context.arc(32, 33, 28, 0, Math.PI * 2);
+  context.fillStyle = "rgba(29,28,25,0.25)";
   context.fill();
-  context.fillStyle = color;
-  roundedRect(context, 6, 6, ICON_SIZE - 12, ICON_SIZE - 12, 9);
-  context.fill();
-  // Heller Streifen oben gibt der Plakette etwas Koerper.
-  context.fillStyle = "rgba(255,255,255,0.18)";
-  roundedRect(context, 8, 8, ICON_SIZE - 16, 16, 7);
-  context.fill();
-  context.fillStyle = "#fff8e6";
-  context.font = "bold 26px system-ui, sans-serif";
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.shadowColor = "rgba(0,0,0,0.5)";
-  context.shadowBlur = 3;
-  context.fillText(label, ICON_SIZE / 2, ICON_SIZE / 2 + 3);
+  context.beginPath();
+  context.arc(32, 31, 28, 0, Math.PI * 2);
+  inked(context, "#efe1bf", 2.6);
+  context.beginPath();
+  context.arc(32, 31, 23, 0, Math.PI * 2);
+  context.lineWidth = 1;
+  context.strokeStyle = "rgba(29,28,25,0.35)";
+  context.stroke();
+  drawGlyph(context, stat ?? "damage", accent);
   refreshTexture(scene, itemIconKey(id));
 }
 
@@ -91,7 +280,7 @@ export function createIcons(scene: Phaser.Scene): void {
   for (const item of ITEMS) {
     const first = (Object.keys(item.mods) as StatKey[])[0];
     const main = (Object.keys(item.mods) as StatKey[]).find((key) => (item.mods[key] ?? 0) > 0) ?? first;
-    drawItemIcon(scene, item.id, item.icon, main ? STAT_COLORS[main] : "#888888");
+    drawItemIcon(scene, item.id, main);
   }
 
   // Das Kreuz, das vor einem Gegner am Boden erscheint.

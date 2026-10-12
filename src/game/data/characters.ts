@@ -42,7 +42,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     slots: 6,
     allowed: ["fist"],
     starts: ["fist"],
-    color: 0xe4572e,
+    color: 0xb5532f,
   },
   jaeger: {
     id: "jaeger",
@@ -72,7 +72,7 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     slots: 6,
     allowed: ALL_WEAPONS,
     starts: ["pistol", "knife", "smg"],
-    color: 0xffd166,
+    color: 0xb5532f,
   },
   schatten: {
     id: "schatten",

@@ -26,7 +26,7 @@ import { itemLines, weaponLines } from "./describe";
 import { insetPanel, menuBackground, menuText, woodPanel } from "./menuStyle";
 
 const DEPTH = 9600;
-const TIER_COLORS = [0xb8b2a4, 0x6aa0c9, 0xa070d0, 0xe4572e];
+const TIER_COLORS = [0xb8b2a4, 0x6aa0c9, 0xa070d0, 0xb5532f];
 
 type Disposable = { destroy: () => void };
 
@@ -44,7 +44,7 @@ export class ShopPanel {
     private readonly send: (command: Command) => void,
   ) {
     this.background = menuBackground(scene).setDepth(DEPTH);
-    this.dim = scene.add.rectangle(0, 0, 2000, 1200, 0x000000, 0.25).setOrigin(0).setDepth(DEPTH);
+    this.dim = scene.add.rectangle(0, 0, 2000, 1200, 0xf1e5c9, 0.35).setOrigin(0).setDepth(DEPTH);
     this.setVisible(false);
   }
 
@@ -161,8 +161,10 @@ export class ShopPanel {
       this.buildStats(self, left, width);
     } else {
       this.buildOffers(self, left, width);
-      this.buildWeapons(state, self, left);
-      this.buildItems(self, left + 440, right);
+      // Ein Papierblatt unter Waffen und Gegenstaenden, damit der Text nicht auf dem Bild liegt.
+      this.keep(woodPanel(this.scene, left + width / 2, 352, width, 206).setDepth(DEPTH + 1));
+      this.buildWeapons(state, self, left + 14);
+      this.buildItems(self, left + 454, right - 14);
     }
     this.buildFooter(state, self, readyCount, left, right);
   }
@@ -236,7 +238,7 @@ export class ShopPanel {
       ? weaponLines(offer.id as WeaponId, offer.tier, self.stats).map((text) => ({ text, good: true }))
       : itemLines(offer.id);
     lines.slice(0, 4).forEach((line, index) => {
-      this.text(left + 2, top + 70 + index * 17, line.text, 15, isWeapon ? UI.text.body : line.good ? "#b5e08c" : "#ff8a65", true);
+      this.text(left + 2, top + 70 + index * 17, line.text, 15, isWeapon ? UI.text.body : line.good ? "#4e6b2a" : "#a8321c", true);
     });
 
     const canTake = !isWeapon || canTakeWeapon(self, offer.id as WeaponId, offer.tier);
@@ -273,7 +275,7 @@ export class ShopPanel {
       this.keep(
         this.scene.add
           .rectangle(x, y, cell + 2, cell + 2)
-          .setStrokeStyle(index === this.selected ? 5 : 3, index === this.selected ? 0xe4572e : (TIER_COLORS[weapon.tier - 1] ?? 0xffffff))
+          .setStrokeStyle(index === this.selected ? 5 : 3, index === this.selected ? 0xb5532f : (TIER_COLORS[weapon.tier - 1] ?? 0xffffff))
           .setFillStyle(0, 0)
           .setDepth(DEPTH + 2),
       );
