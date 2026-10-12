@@ -1,27 +1,14 @@
 /**
- * Titelbildschirm: Neu, Laden, Einstellungen.
- *
- * Seit 2026-09-26 der erste Bildschirm nach dem Laden (vorher sofort die
- * Charakterwahl). Rueckmeldung: "zuerst ein Speichersystem - neu, laden und
- * Einstellungen; wenn neu, dann solo oder koop usw."
- *
- * Ablauf:
- *   Neu            -> Platz waehlen -> Solo/Koop -> Charakter -> Packen -> ...
- *   Laden          -> Platz waehlen -> (laufender Run) Karte
- *                                   -> (sonst) Solo/Koop -> Charakter -> ...
- *   Einstellungen  -> Ton, Vollbild, App installieren, Spielstand loeschen
+ * Der Titelbildschirm: Solo spielen, Koop-Raum erstellen, Koop beitreten.
  */
 
 import Phaser from "phaser";
-import { audio } from "../audio/AudioEngine";
 import { SAFE, VIEWPORT } from "../config/constants";
-import { STORY } from "../config/story";
 import { UI } from "../config/ui";
-import { setReloadSafe } from "../platform/update";
-import { loadHighscore } from "../storage/highscore";
-import { listSlots } from "../storage/saveSlots";
+import { audio } from "../audio/AudioEngine";
 import { Button } from "../ui/Button";
 import { menuBackground, menuText } from "../ui/menuStyle";
+import type { PlayMode } from "../app";
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -29,60 +16,54 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Hier darf eine wartende neue Version sofort greifen - es laeuft nichts.
-    setReloadSafe(true);
+    const cx = VIEWPORT.width / 2;
     menuBackground(this);
 
-    // Musik wie frueher im Menue: sofort (Rueckweg aus einem Run) und beim
-    // ersten Antippen (Browser geben Ton erst nach einer Beruehrung frei).
-    audio.setMusic("menu");
+    // Der erste Tipp schaltet den Ton frei (Browser erlauben Ton nur nach einer Beruehrung).
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {
       audio.unlock();
       audio.setMusic("menu");
     });
+    audio.setMusic("menu");
 
-    const centerX = VIEWPORT.width / 2;
-    menuText(this, centerX, 96, "Holdout", 60, UI.text.title, true);
-    menuText(this, centerX, 150, STORY.title, 18, UI.text.accent, true);
+    menuText(this, cx, 96, "HOLDOUT", 76, UI.text.accent, true).setShadow(3, 5, UI.text.shadow, 6);
+    menuText(this, cx, 156, "Überlebe 20 Wellen. Kauf klug ein.", 22, UI.text.body);
 
-    const hasSaves = listSlots().some((slot) => slot !== null);
+    const choose = (mode: PlayMode): void => {
+      audio.unlock();
+      this.scene.start("Select", { mode });
+    };
 
-    new Button(this, centerX, 232, "Neu", () => this.scene.start("Slots", { mode: "new" }), {
-      width: 300,
+    new Button(this, cx, 250, "Solo spielen", () => choose("solo"), { width: 340, height: 64, fontSize: 26 });
+    new Button(this, cx, 330, "Koop: Raum erstellen", () => choose("host"), {
+      width: 340,
+      height: 58,
+      fontSize: 22,
+      variant: "secondary",
     });
-    const load = new Button(
-      this,
-      centerX,
-      302,
-      "Laden",
-      () => this.scene.start("Slots", { mode: "load" }),
-      { width: 300 },
-    );
-    // Ohne Spielstand gibt es nichts zu laden - grau statt versteckt, damit
-    // man sieht, dass es den Weg gibt.
-    load.setEnabled(hasSaves);
-    new Button(this, centerX, 372, "Einstellungen", () => this.scene.start("Settings"), {
-      width: 300,
+    new Button(this, cx, 400, "Koop: Beitreten", () => choose("join"), {
+      width: 340,
+      height: 58,
+      fontSize: 22,
       variant: "secondary",
     });
 
-    const best = loadHighscore();
-    menuText(
+    const mute = new Button(
       this,
-      centerX,
-      438,
-      best ? `Rekord: ${best.score} Punkte` : "Halte durch, solange du kannst.",
-      14,
-      UI.text.muted,
+      SAFE.left + 70,
+      VIEWPORT.height - 40,
+      audio.isMuted ? "Ton: aus" : "Ton: an",
+      () => {
+        audio.unlock();
+        const muted = audio.toggleMuted();
+        mute.setText(muted ? "Ton: aus" : "Ton: an");
+        if (!muted) {
+          audio.setMusic("menu");
+        }
+      },
+      { width: 120, height: 44, fontSize: 18, variant: "secondary" },
     );
 
-    // Versionsnummer: Diagnose, welcher Stand auf dem Geraet laeuft.
-    this.add
-      .text(VIEWPORT.width - SAFE.right - 10, VIEWPORT.height - SAFE.bottom - 8, `v${__APP_VERSION__}`, {
-        fontFamily: UI.font,
-        fontSize: "11px",
-        color: "#a8977a",
-      })
-      .setOrigin(1, 1);
+    menuText(this, VIEWPORT.width - SAFE.right - 60, VIEWPORT.height - 28, `v${__APP_VERSION__}`, 14, UI.text.muted);
   }
 }

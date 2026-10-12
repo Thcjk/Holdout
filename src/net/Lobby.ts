@@ -4,15 +4,14 @@
  * Absichtlich getrennt vom Spiel: Hier geht es nur um das Zusammenfinden. Sobald
  * der Host startet, uebernimmt HostSession bzw. ClientSession.
  *
- * Weil der Datenkanal absichtlich unzuverlaessig ist (die neueste Spielposition
- * ist wichtiger als die vollstaendige Reihenfolge), werden die wenigen wichtigen
- * Nachrichten hier wiederholt, bis sie ankommen: `hello` bis eine Spielerliste
- * zurueckkommt, `start` bis jeder Client sich gemeldet hat.
+ * Weil der Datenkanal absichtlich unzuverlaessig ist, werden die wenigen
+ * wichtigen Nachrichten hier wiederholt, bis sie ankommen: `hello` bis eine
+ * Spielerliste zurueckkommt, `start` bis jeder Client sich gemeldet hat.
  */
 
-import { flattenPacked, unflattenPacked } from "../systems/backpackCodec";
-import type { CharacterId, PackedItem } from "../systems/types";
-import type { PlayerSetup } from "../systems/world";
+import { MAX_PLAYERS } from "../game/constants";
+import type { CharacterId, PlayerSetup, WeaponId } from "../game/types";
+import { toSetups } from "./protocol";
 import type { NetMessage, NetPlayerInfo } from "./protocol";
 import type { Transport } from "./Transport";
 
@@ -20,13 +19,10 @@ const LOBBY_BROADCAST_MS = 500;
 const HELLO_RETRY_MS = 400;
 const START_RETRY_MS = 250;
 
-export const MAX_PLAYERS = 4;
-
 export interface LobbyIdentity {
   name: string;
   character: CharacterId;
-  /** Der gepackte Rucksack, flach als je vier Zahlen (def, x, y, gedreht). */
-  backpack?: number[];
+  weapon: WeaponId;
 }
 
 export class Lobby {
@@ -54,8 +50,8 @@ export class Lobby {
           id: transport.selfId,
           name: identity.name,
           character: identity.character,
+          startWeapon: identity.weapon,
           isHost: true,
-          backpack: identity.backpack,
         },
       ];
       this.timers.push(
@@ -70,7 +66,7 @@ export class Lobby {
             t: "hello",
             name: identity.name,
             character: identity.character,
-            backpack: identity.backpack,
+            weapon: identity.weapon,
           });
         }
       };
@@ -93,6 +89,11 @@ export class Lobby {
 
   get playerList(): readonly NetPlayerInfo[] {
     return this.players;
+  }
+
+  /** Der Transport wird von der Spielsitzung weitergenutzt. */
+  get connection(): Transport {
+    return this.transport;
   }
 
   onPlayersChanged(handler: (players: NetPlayerInfo[]) => void): void {
@@ -161,7 +162,7 @@ export class Lobby {
           return;
         }
         if (this.players.length >= MAX_PLAYERS) {
-          this.transport.send(from, { t: "bye", reason: "Der Raum ist voll (4 Spieler)." });
+          this.transport.send(from, { t: "bye", reason: `Der Raum ist voll (${MAX_PLAYERS} Spieler).` });
           return;
         }
         this.players = [
@@ -170,8 +171,8 @@ export class Lobby {
             id: from,
             name: message.name,
             character: message.character,
+            startWeapon: message.weapon,
             isHost: false,
-            backpack: message.backpack,
           },
         ];
         this.transport.broadcast({ t: "lobby", players: this.players });
@@ -217,10 +218,7 @@ export class Lobby {
   }
 
   private handleLeave(peerId: string): void {
-    // Als Client gibt es nur einen, der gehen kann: den Host. Vorher blieb
-    // der Client dann stumm in der Lobby haengen - seit Etappe 7 kommt man
-    // nach einem Run hierher zurueck, waehrend der Host vielleicht schon weg
-    // ist. Das muss man sehen.
+    // Als Client gibt es nur einen, der gehen kann: den Host.
     if (!this.transport.isHost) {
       if (!this.started) {
         this.errorHandler("Der Host hat den Raum verlassen. Zurück ins Menü.");
@@ -237,38 +235,4 @@ export class Lobby {
       this.playersChanged(this.players);
     }
   }
-}
-
-export function toSetups(players: readonly NetPlayerInfo[]): PlayerSetup[] {
-  return players.map((player) => ({
-    id: player.id,
-    name: player.name,
-    character: player.character,
-    backpack: unpack(player.backpack),
-    health: player.health,
-    backpackSize:
-      player.bw !== undefined && player.bh !== undefined
-        ? { width: player.bw, height: player.bh }
-        : undefined,
-  }));
-}
-
-/** Umkehrung von `toSetups` - fuer das `move`-Paket der Kartenansicht. */
-export function toNetPlayers(setups: readonly PlayerSetup[], hostId: string): NetPlayerInfo[] {
-  return setups.map((setup) => ({
-    id: setup.id,
-    name: setup.name,
-    character: setup.character,
-    isHost: setup.id === hostId,
-    backpack: setup.backpack ? flattenPacked(setup.backpack) : undefined,
-    health: setup.health,
-    bw: setup.backpackSize?.width,
-    bh: setup.backpackSize?.height,
-  }));
-}
-
-/** Die flache Reihe aus der Lobby als Rucksack - `undefined`, wenn leer. */
-function unpack(flat: readonly number[] | undefined): PackedItem[] | undefined {
-  const items = unflattenPacked(flat);
-  return items.length > 0 ? items : undefined;
 }

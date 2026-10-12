@@ -16,11 +16,9 @@ import { showDesktopNotice } from "./platform/DesktopNotice";
 // haengt - das Ereignis kommt einmal und sehr frueh.
 import "./platform/install";
 import { startUpdateWatch } from "./platform/update";
-import { applyTuningFromUrl } from "./config/tuning";
 import { lockLandscape } from "./platform/orientation";
 import { waitForLandscape, watchOrientation } from "./platform/rotateGate";
 import { readSafeArea } from "./platform/safeArea";
-import { VIEW_MODE } from "./platform/debugFlags";
 import { installNetLogOverlay } from "./platform/netLogOverlay";
 import {
   COLORS,
@@ -30,16 +28,10 @@ import {
   setSafeAreaFromScreen,
 } from "./config/constants";
 import { BootScene } from "./scenes/BootScene";
-import { GameOverScene } from "./scenes/GameOverScene";
 import { GameScene } from "./scenes/GameScene";
-import { HudScene } from "./scenes/HudScene";
-import { LoadoutScene } from "./scenes/LoadoutScene";
 import { LobbyScene } from "./scenes/LobbyScene";
-import { MenuScene } from "./scenes/MenuScene";
-import { MapScene } from "./scenes/MapScene";
-import { ModeScene } from "./scenes/ModeScene";
-import { SettingsScene } from "./scenes/SettingsScene";
-import { SlotScene } from "./scenes/SlotScene";
+import { ResultScene } from "./scenes/ResultScene";
+import { SelectScene } from "./scenes/SelectScene";
 import { TitleScene } from "./scenes/TitleScene";
 
 /**
@@ -51,95 +43,39 @@ import { TitleScene } from "./scenes/TitleScene";
  * berechnet, also mit den alten 960x540.
  */
 function buildConfig(): Phaser.Types.Core.GameConfig {
-  const world3d = VIEW_MODE === "3d";
   return {
-    /*
-     * In der 3D-Ansicht zeichnet Phaser nur noch Menues, HUD und Knoepfe -
-     * durchsichtig UEBER dem Three.js-Canvas (siehe `render/SceneSetup.ts`).
-     * Dafuer reicht der Canvas-Renderer, und das hat einen handfesten Grund:
-     * Mit WebGL haette die Seite ZWEI WebGL-Kontexte, einen fuer Phaser und
-     * einen fuer Three.js. Auf dem Handy ist jeder Kontext Grafikspeicher
-     * und Umschaltzeit. So gibt es genau einen, und der gehoert der Welt.
-     *
-     * In der alten 2D-Ansicht (`?view=2d`) bleibt alles wie vorher: AUTO
-     * nimmt WebGL, wenn das Geraet es kann.
-     */
-    type: world3d ? Phaser.CANVAS : Phaser.AUTO,
-    transparent: world3d,
+    type: Phaser.AUTO,
     parent: "game-root",
     backgroundColor: COLORS.background,
     scale: {
-      /*
-       * FIT, aber mit einer Aufloesung, die zum Geraet passt.
-       *
-       * Warum nicht ENVELOP: Der wuerde formatfuellend skalieren und den
-       * Ueberstand abschneiden. Genau an den Raendern sitzen hier aber FEUER,
-       * SUPER, Punktzahl und Wellenanzeige - abgeschnitten wuerde also die
-       * Bedienung.
-       *
-       * Warum nicht RESIZE: Der gibt jedem Geraet seine eigene Weltansicht. Auf
-       * einem breiten Handy saehe man deutlich mehr Arena als auf einem schmalen,
-       * und im Koop waere das ein echter Vorteil.
-       *
-       * FIT auf einer abgeleiteten Aufloesung hat beides nicht: nichts wird
-       * abgeschnitten, und der Unterschied zwischen Geraeten ist auf ein Drittel
-       * Breite begrenzt.
-       */
+      // FIT auf einer zum Geraet passenden Aufloesung: nichts wird abgeschnitten,
+      // und der Unterschied zwischen Geraeten bleibt klein (siehe
+      // `fitViewportToScreen` in config/constants.ts).
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
       width: VIEWPORT.width,
       height: VIEWPORT.height,
     },
     dom: {
-      // Erlaubt echte HTML-Elemente ueber dem Canvas. Gebraucht wird das nur fuer
-      // das Raumcode-Feld: Nur ein echtes Eingabefeld oeffnet auf dem Handy die
-      // Systemtastatur.
+      // Echte HTML-Elemente ueber dem Canvas - gebraucht nur fuer das
+      // Raumcode-Feld (nur ein echtes Eingabefeld oeffnet die Tastatur).
       createContainer: true,
     },
     input: {
-      // Tastatur wird nicht gebraucht: Das Spiel laeuft nur auf Touchgeraeten.
+      // Das Spiel laeuft nur auf Touchgeraeten.
       keyboard: false,
-      // Drei gleichzeitige Finger: linker Stick, rechter Stick, Super-Knopf.
-      // Ohne diese Zeile meldet Phaser nur einen Zeiger, und der zweite Daumen
-      // wird stillschweigend ignoriert.
-      activePointers: 4,
+      // Daumen fuer den Stick plus Reserve fuer Knoepfe.
+      activePointers: 3,
     },
-    /*
-     * Pixel-Art statt weichgezeichneter Formen.
-     *
-     * `pixelArt` schaltet die Glaettung beim Vergroessern ab. Ohne das wird ein
-     * 16 Pixel grosses Sprite, das auf das Dreifache skaliert wird, matschig -
-     * der Browser rechnet dann Zwischenfarben aus, und genau die will man bei
-     * Pixel-Art nicht.
-     *
-     * `roundPixels` setzt Sprites auf ganze Pixel statt auf Zwischenpositionen.
-     * Ohne das flimmern die Kanten, sobald sich etwas langsam bewegt.
-     *
-     * Hier stand vorher `antialias: true` und `roundPixels: false`, gegen
-     * Weisspixel an den Raendern GEZEICHNETER Formen. Diese Formen sind
-     * groesstenteils weg - Figuren und Arena kommen jetzt aus dem Sheet.
-     */
+    // Pixel-Art: keine Glaettung beim Vergroessern, Sprites auf ganzen Pixeln.
     pixelArt: true,
     render: {
       antialias: false,
       roundPixels: true,
     },
-    // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser hier
-    // keine eigene Physik-Engine (siehe CLAUDE.md, Architektur-Grundregel).
-    scene: [
-      BootScene,
-      TitleScene,
-      SlotScene,
-      ModeScene,
-      SettingsScene,
-      MenuScene,
-      LoadoutScene,
-      LobbyScene,
-      MapScene,
-      GameScene,
-      HudScene,
-      GameOverScene,
-    ],
+    // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser
+    // keine eigene Physik-Engine.
+    scene: [BootScene, TitleScene, SelectScene, LobbyScene, GameScene, ResultScene],
   };
 }
 
@@ -148,10 +84,6 @@ function buildConfig(): Phaser.Types.Core.GameConfig {
 // Dem Wächter in index.html melden, dass der Start geklappt hat - sonst
 // blendet er nach acht Sekunden seine Fehlermeldung ein.
 (window as unknown as { __holdoutBooted: boolean }).__holdoutBooted = true;
-
-// Werte aus `?tune=` setzen, bevor die erste Runde startet. Ohne `?tune=`
-// passiert hier nichts.
-applyTuningFromUrl();
 
 if (isSupportedDevice()) {
   void startWhenLandscape();
@@ -186,12 +118,6 @@ async function startWhenLandscape(): Promise<void> {
   setSafeAreaFromScreen(readSafeArea(), window.innerWidth);
 
   const game = new Phaser.Game(buildConfig());
-
-  // 3D-Modelle schon im Menue laden, nicht erst bei Rundenbeginn: Bis man
-  // Charakter und Rucksack gewaehlt hat, sind sie meist da.
-  if (VIEW_MODE === "3d") {
-    void import("./render/ModelLoader").then(({ preloadGameModels }) => preloadGameModels());
-  }
 
   // Mit ?debug=netz: Protokoll des Koop-Verbindungsaufbaus auf dem Bildschirm.
   // Ohne den Schalter passiert hier nichts.

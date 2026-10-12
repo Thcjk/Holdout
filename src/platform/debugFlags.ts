@@ -5,10 +5,9 @@
  * einzige Weg, im echten Spiel auf dem echten Geraet etwas sichtbar zu machen,
  * fuehrt deshalb ueber die Adresse der Seite:
  *
- *   .../Holdout/?debug=hitbox        Trefferradien als Umriss
- *   .../Holdout/?debug=hitbox,werte  zusaetzlich die wichtigsten Zahlen
  *   .../Holdout/?debug=netz          Protokoll des Koop-Verbindungsaufbaus
- *   .../Holdout/?seed=4242           immer dieselbe Welt (nur solo)
+ *   .../Holdout/?debug=werte         Bildrate und Gegnerzahl
+ *   .../Holdout/?seed=4242           immer dieselbe Runde (nur solo)
  *
  * Mehrere Schalter werden mit Komma getrennt. Ohne `?debug=` ist alles aus -
  * es kostet also niemanden etwas, der einfach spielt.
@@ -36,10 +35,7 @@ function activeFlags(): Set<string> {
 // und pro Bild neu zu zerlegen waere Arbeit fuer nichts.
 const FLAGS = activeFlags();
 
-/** Trefferradien von Spielern, Gegnern und Projektilen als Umriss zeichnen. */
-export const SHOW_HITBOXES = FLAGS.has("hitbox") || FLAGS.has("1") || FLAGS.has("all");
-
-/** Zahlenanzeige: Bildrate, Gegnerzahl, Munition, Schusstakt. */
+/** Zahlenanzeige: Bildrate und Gegnerzahl. */
 export const SHOW_VALUES = FLAGS.has("werte") || FLAGS.has("values") || FLAGS.has("all");
 
 /**
@@ -51,16 +47,11 @@ export const SHOW_VALUES = FLAGS.has("werte") || FLAGS.has("values") || FLAGS.ha
 export const SHOW_NET_LOG = FLAGS.has("netz") || FLAGS.has("net") || FLAGS.has("all");
 
 /**
- * Fester Seed aus der Adresse, oder `null` fuer eine zufaellige Welt.
+ * Fester Seed aus der Adresse, oder `null` fuer eine zufaellige Runde.
  *
- * WOZU: Seit Phase 8 entsteht die Karte aus einer Zahl, und ein Fehler "beim
- * Boss weiter draussen" laesst sich ohne diese Zahl nicht nachstellen - beim
- * naechsten Start ist die Welt eine andere. Mit `?seed=` bekommt man exakt
- * dieselbe wieder, auch auf einem anderen Geraet.
- *
- * Nur solo: Im Koop gibt der Host den Seed vor, und ein Client mit eigenem
- * Seed saehe eine andere Karte als alle anderen - genau der Fehler, den die
- * Weltgenerierung vermeiden soll.
+ * Mit `?seed=` laesst sich ein Fehler nachstellen: gleiche Zahl, gleicher
+ * Wellenplan und gleiche Angebote im Shop. Nur solo - im Koop gibt der Host
+ * den Seed vor.
  */
 export const FORCED_SEED: number | null = (() => {
   try {
@@ -76,62 +67,21 @@ export const FORCED_SEED: number | null = (() => {
 })();
 
 /**
- * Welche Ansicht die Welt zeichnet: `"3d"` (Three.js, Standard seit dem
- * 3D-Umbau) oder `"2d"` (die alte Phaser-Darstellung).
- *
- *   .../Holdout/?view=2d
- *
- * WOZU DIE 2D-ANSICHT NOCH DA IST: Waehrend des Umbaus zeigt die 3D-Welt nur
- * Figuren, Gegner, Geschosse, Boden und Waende - Beute, Ausstiegszonen,
- * Effekte und Schadenszahlen fehlen noch. Mit `?view=2d` laesst sich das
- * ganze Spiel weiter spielen und beides vergleichen. Die Simulation ist in
- * beiden Faellen dieselbe; nur die Darstellung wechselt.
+ * Auch am Desktop starten (`?desktop=1`) - nur zum Entwickeln und fuer
+ * Bildschirmfotos. Normalen Spielern zeigt der Desktop weiter den QR-Code.
  */
-export const VIEW_MODE: "3d" | "2d" = (() => {
+export const FORCE_DESKTOP: boolean = (() => {
   try {
-    const raw = new URLSearchParams(window.location.search).get("view");
-    return raw?.trim().toLowerCase() === "2d" ? "2d" : "3d";
-  } catch {
-    return "3d";
-  }
-})();
-
-/**
- * Welcher Knoten gespielt wird (nur solo), solange es keine Kartenansicht gibt.
- *
- *   .../Holdout/?knoten=12        das Gebiet von Knoten 12 der Karte
- *   .../Holdout/?welt=offen       die alte offene Welt (Phase 8/9)
- *
- * Ohne Angabe: der erste Kampfknoten. Welche Knoten es gibt, zeigt
- * `npm run nodemap -- <seed>`; zusammen mit `?seed=` laesst sich so jedes
- * Gebiet gezielt ansehen - etwa ein Elite-Knoten mit hoher Gefahr.
- *
- * Nur solo: Im Koop muessen Host und Clients dasselbe Gebiet bauen.
- */
-export const FORCED_PLACE: "open" | { nodeId: number | null } = (() => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("welt")?.trim().toLowerCase() === "offen") {
-      return "open";
-    }
-    const raw = params.get("knoten");
-    const value = raw === null ? Number.NaN : Number.parseInt(raw, 10);
-    return { nodeId: Number.isFinite(value) ? value : null };
-  } catch {
-    return { nodeId: null };
-  }
-})();
-
-/**
- * Wurde ein Gebiet ausdruecklich ueber die Adresse gewaehlt (`?knoten=` oder
- * `?welt=offen`)? Dann ueberspringt solo der Packbildschirm die Karte und
- * startet direkt dort - zum Nachstellen und fuer Bildschirmfotos.
- */
-export const PLACE_FROM_URL: boolean = (() => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    return params.has("knoten") || params.has("welt");
+    return new URLSearchParams(window.location.search).has("desktop");
   } catch {
     return false;
   }
 })();
+
+/**
+ * Koop ueber zwei Tabs desselben Browsers statt ueber das Internet (`?debug=lokal`).
+ *
+ * Zum Ausprobieren des Koops ohne zweites Handy: Tab 1 erstellt einen Raum,
+ * Tab 2 tritt mit demselben Code bei. Kein Server, keine Wartezeit.
+ */
+export const LOCAL_NET = FLAGS.has("lokal") || FLAGS.has("local");

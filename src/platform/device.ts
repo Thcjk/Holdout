@@ -11,6 +11,8 @@
  * Browserversion; "hat dieses Geraet einen Finger statt einer Maus" ist stabil.
  */
 
+import { FORCE_DESKTOP } from "./debugFlags";
+
 /** Laeuft das Spiel in der nativen Android-App (Capacitor)? */
 export function isNativeApp(): boolean {
   if (typeof window === "undefined") {
@@ -58,7 +60,7 @@ export function isTouchDevice(): boolean {
 
 /** Darf das Spiel auf diesem Geraet starten? */
 export function isSupportedDevice(): boolean {
-  return isInstalledApp() || isTouchDevice();
+  return isInstalledApp() || isTouchDevice() || FORCE_DESKTOP;
 }
 
 /** iPhone oder iPad? Die Installation laeuft dort anders als auf Android. */

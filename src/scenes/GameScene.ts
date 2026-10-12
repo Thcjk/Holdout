@@ -1,976 +1,753 @@
 /**
- * Die Spielszene. Ihre einzige Aufgabe ist Darstellung und Eingabe:
+ * Die Arena: zeichnet den Zustand einer Spielsitzung und gibt Bewegung zurueck.
  *
- *   Eingabe einsammeln -> Runde weiterlaufen lassen -> Zustand zeichnen
+ * Die Szene weiss nicht, ob solo, als Host oder als Client gespielt wird - sie
+ * fragt die Sitzung (siehe `net/GameSession.ts`). Gerechnet wird hier nichts:
+ * Positionen, Leben und Schaden kommen aus dem Zustand, Toene und Effekte aus
+ * den Ereignissen.
  *
- * Bewusst keine Spiellogik hier. Und bewusst kein Wissen darueber, ob die Runde
- * allein, als Host oder als Client laeuft: Das steckt hinter `GameSession`.
+ * Zwischen den Wellen liegt der Shop als undurchsichtige Ebene darueber.
  */
 
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
-import { playEventSounds } from "../audio/eventSounds";
-import { ABILITIES, CHARACTERS, PLAYER, SUPERS } from "../config/balance";
-import { COLORS, DEPTH, VIEW3D, VIEWPORT } from "../config/constants";
+import type { SoundName } from "../audio/AudioEngine";
+import { BULLET_TILE, CHARACTER_TILES, ENEMY_TILES, FLOOR_TILES, MATERIAL_TILE, SHEET_KEY, weaponIconKey } from "../config/assets";
+import { COLORS, PALETTE, SAFE, VIEWPORT } from "../config/constants";
+import { UI } from "../config/ui";
+import { ARENA } from "../game/constants";
+import { ENEMIES } from "../game/data/enemies";
+import type { Enemy, GameEvent, PlayerState, Pickup, Projectile, SpawnMarker } from "../game/types";
 import type { GameSession } from "../net/GameSession";
-import { SoloSession } from "../net/SoloSession";
-import { ArenaRenderer } from "../render/ArenaRenderer";
-import { CameraController } from "../render/CameraController";
-import { EntityRenderer } from "../render/EntityRenderer";
-import { Juice } from "../render/Juice";
-import { graphicsPainter } from "../render/AimPainter";
-import type { AimPainter } from "../render/AimPainter";
-import { World3D } from "../render/World3D";
-import { VIEW_MODE } from "../platform/debugFlags";
-import { TOP_DOWN, groundToScreen } from "../input/viewMapping";
 import { setReloadSafe } from "../platform/update";
-import { hideValuesOverlay, updateValuesOverlay } from "../platform/valuesOverlay";
-import { loadHighscore } from "../storage/highscore";
-import { extractionFraction, leftBehind } from "../systems/encounters";
-import { distanceFromStart, safeRadiusOf } from "../systems/zones";
-import { nearestEnemy } from "../systems/targeting";
-import { attackLabel, attackRange, autoAimReach, reloadTimeOf } from "../systems/weapons";
-import { emptyInput } from "../systems/types";
-import type {
-  CharacterId,
-  GameEvent,
-  InputState,
-  PackedItem,
-  PlayerState,
-  Vec2,
-  WorldState,
-} from "../systems/types";
-import { createHudModel } from "../ui/HudModel";
-import type { HudModel } from "../ui/HudModel";
-import { HudScene } from "./HudScene";
-import { finishRun } from "../storage/carried";
-import { saveActive } from "../storage/saveSlots";
-import { packCarried } from "../systems/backpackCodec";
-import { completeNode, currentNode } from "../systems/run";
-import { placeName, regionOfLayer } from "../config/story";
-import type { RunState } from "../systems/run";
+import { Button } from "../ui/Button";
+import { FloatingStick } from "../ui/FloatingStick";
+import { Hud } from "../ui/Hud";
+import { menuText, woodPanel } from "../ui/menuStyle";
+import { ShopPanel } from "../ui/ShopPanel";
+import type { PlayMode } from "../app";
 
-/**
- * ================================================================
- * MUSIK: DER WECHSEL IST DAS SIGNAL - NUR HAENGT ER JETZT WORANDERS
- * ================================================================
- *
- * Frueher war die Regel an die Rundenphase geknuepft: leise in der Pause,
- * treibend waehrend der Welle. Seit Phase 8 gibt es keine Wellen und keine
- * Pause mehr - die Regel haette gar keinen Ausloeser mehr.
- *
- * Jetzt entscheidet die Lage: Ist ein Gegner nah, laeuft das treibende Stueck
- * in voller Lautstaerke; ist laengere Zeit keiner in der Naehe, wird es leise
- * und ruhig. Der Gedanke bleibt derselbe, und er passt sogar besser zur
- * offenen Welt: Die Musik sagt einem, dass etwas kommt, bevor man es sieht.
- *
- * ZWEI SCHWELLEN STATT EINER, und das ist der ganze Trick: Mit nur einer
- * Grenze wuerde ein Gegner, der genau auf ihr herumlaeuft, die Musik im
- * Sekundentakt umschalten lassen. Einschalten passiert nah und sofort,
- * ausschalten erst weiter weg und erst nach ein paar ruhigen Sekunden.
- */
-const COMBAT_ENTER_RANGE = 900;
-const COMBAT_LEAVE_RANGE = 1300;
-const COMBAT_LEAVE_SECONDS = 4;
-/** Lautstaerke des ruhigen Stuecks, als Anteil der vollen. */
-const CALM_MUSIC_VOLUME = 0.35;
+const ARENA_TOP = 64;
+const OVERLAY_DEPTH = 9800;
 
-export interface GameSceneData {
-  character?: CharacterId;
-  /** Gesetzt, wenn die Runde aus der Lobby kommt. Sonst wird solo gespielt. */
-  session?: GameSession;
-  /**
-   * Was im Loadout-Bildschirm eingepackt wurde.
-   *
-   * DAS HAT BIS HIERHER GEFEHLT, und es war der Grund, warum das Packen
-   * folgenlos blieb: `startRun` gab nur den Charakter weiter, die Spielszene
-   * legte eine `SoloSession` ohne Rucksack an, und im HUD stand "Beute 0",
-   * obwohl man gerade vier Gegenstaende eingeraeumt hatte.
-   *
-   * Im Koop steht hier nichts - dort reist der Rucksack ueber die Lobby zum
-   * Host (`PlayerSetup.backpack`), weil er die Runde fuer alle rechnet.
-   */
-  backpack?: PackedItem[];
-  /**
-   * Der Run auf der Knoten-Karte (seit 2026-09-25). Ist er gesetzt, fuehrt
-   * der Ausgang eines Gebiets zurueck auf die Karte statt zum Ergebnis.
-   */
-  run?: RunState;
+interface Destroyable {
+  destroy(): void;
 }
 
-/** Schadenszahlen erscheinen etwa ueber dem Kopf (Meter ueber dem Boden). */
-const NUMBER_HEIGHT = 2.2;
+interface EnemyView extends Destroyable {
+  sprite: Phaser.GameObjects.Sprite;
+  x: number;
+  y: number;
+}
+
+interface PlayerView extends Destroyable {
+  sprite: Phaser.GameObjects.Sprite;
+  shadow: Phaser.GameObjects.Image;
+  name: Phaser.GameObjects.Text;
+  weapons: Phaser.GameObjects.Image[];
+  weaponSignature: string;
+  x: number;
+  y: number;
+}
+
+interface ShotView extends Destroyable {
+  image: Phaser.GameObjects.Image;
+  x: number;
+  y: number;
+}
+
+interface GameData {
+  session: GameSession;
+  mode: PlayMode;
+}
 
 export class GameScene extends Phaser.Scene {
   private session!: GameSession;
+  private mode: PlayMode = "solo";
+  private originX = 0;
+  private originY = ARENA_TOP;
 
-  /*
-   * Die Darstellung der Welt: ENTWEDER die 3D-Welt (Standard seit dem
-   * 3D-Umbau) ODER die vier 2D-Teile (`?view=2d`). Die Szene selbst - Eingabe,
-   * Musik, HUD, Run-Ende - ist fuer beide dieselbe; nur diese Felder
-   * unterscheiden sich. Deshalb sind sie alle optional.
-   */
-  private world3d?: World3D;
-  private cameraController?: CameraController;
-  private arena?: ArenaRenderer;
-  private entities?: EntityRenderer;
-  private juice?: Juice;
+  private stick!: FloatingStick;
+  private hud!: Hud;
+  private shop!: ShopPanel;
+  private bars!: Phaser.GameObjects.Graphics;
+  private waitText!: Phaser.GameObjects.Text;
+  private banner!: Phaser.GameObjects.Text;
+  private pauseButton!: Button;
+  private pauseObjects: { setVisible(visible: boolean): unknown }[] = [];
+  private lostObjects: { setVisible(visible: boolean): unknown }[] = [];
 
-  /** Zeichnet die Zielvorschau - in 2D mit Graphics, in 3D am Boden. */
-  private aimPainter!: AimPainter;
-  private hudModel: HudModel = createHudModel();
-  /** Wie lange schon kein Gegner mehr in der Naehe war - steuert die Musik. */
-  private calmSeconds = COMBAT_LEAVE_SECONDS;
-  private hud?: HudScene;
-  private character: CharacterId = "scout";
-  private run?: RunState;
-  private finished = false;
+  private enemies = new Map<number, EnemyView>();
+  private players = new Map<string, PlayerView>();
+  private shots = new Map<number, ShotView>();
+  private pickups = new Map<number, Phaser.GameObjects.Image>();
+  private markers: Phaser.GameObjects.Image[] = [];
+  private selfRing!: Phaser.GameObjects.Ellipse;
 
-  /**
-   * Zwei verschiedene Dinge, die man leicht verwechselt:
-   *
-   *   overlayOpen  Der Zwischenbildschirm ist zu sehen. Das geht IMMER, auch
-   *                im Koop - es ist nur eine Anzeige.
-   *   paused       Die Simulation bekommt keine Zeit mehr. Das geht NUR solo.
-   *                Im Koop rechnet der Host die Runde fuer alle; ein Geraet,
-   *                das fuer sich anhaelt, muesste beim Weitermachen entweder
-   *                minutenlang nachrechnen oder springen.
-   *
-   * Frueher gab es nur `paused`, und weil das im Koop nicht geht, gab es dort
-   * auch keinen Zwischenbildschirm - der Knopf warf einen ohne Rueckfrage aus
-   * der Runde. Genau das war die Beschwerde. Die Rueckfrage braucht aber gar
-   * kein Anhalten, sie braucht nur eine Anzeige.
-   */
-  private overlayOpen = false;
   private paused = false;
-  /** Ist die Sitzung schon an den naechsten Run weitergegeben? */
-  private released = false;
-  /** Ist das Rucksack-Fenster offen? Solo steht dann die Runde, im Koop ruht nur die Eingabe. */
-  private backpackOpen = false;
+  private pauseOpen = false;
+  private ending = false;
+  private lastPhase: string | null = null;
+  private lastSound = new Map<string, number>();
+  private floaters = 0;
+  private onVisibility = (): void => {};
 
   constructor() {
     super("Game");
   }
 
-  init(data: GameSceneData): void {
-    this.character = data.character ?? "scout";
-    this.run = data.run;
-    this.finished = false;
-    this.released = false;
-    this.backpackOpen = false;
-    this.hudModel = createHudModel();
-    this.hudModel.highscore = loadHighscore()?.score ?? 0;
-
-    this.session =
-      data.session ??
-      new SoloSession({
-        id: "local",
-        name: "Du",
-        character: this.character,
-        backpack: data.backpack,
-      });
+  init(data: GameData): void {
+    this.session = data.session;
+    this.mode = data.mode;
+    this.enemies = new Map();
+    this.players = new Map();
+    this.shots = new Map();
+    this.pickups = new Map();
+    this.markers = [];
+    this.paused = false;
+    this.pauseOpen = false;
+    this.ending = false;
+    this.lastPhase = null;
+    this.lastSound = new Map();
+    this.floaters = 0;
+    this.pauseObjects = [];
+    this.lostObjects = [];
   }
 
   create(): void {
-    this.world3d = undefined;
-    this.arena = undefined;
-    this.juice = undefined;
-    this.entities = undefined;
-    this.cameraController = undefined;
+    setReloadSafe(false);
+    this.cameras.main.setBackgroundColor(COLORS.background);
+    this.originX = Math.round((VIEWPORT.width - ARENA.width) / 2);
+    this.originY = ARENA_TOP;
 
-    if (VIEW_MODE === "3d") {
-      // Three.js zeichnet die Welt UNTER dieser Szene; Phaser bleibt fuer
-      // HUD und Touch zustaendig (siehe CLAUDE.md, "3D-Umbau").
-      this.world3d = new World3D(this.session.view.state);
-      this.aimPainter = this.world3d.aim;
-    } else {
-      this.arena = new ArenaRenderer(this, this.session.view.state);
-      this.juice = new Juice(this);
-      this.entities = new EntityRenderer(this, this.session.view, this.session.selfId);
-      // Grenzen aus der GENERIERTEN Welt, nicht aus der alten Konstanten: Jeder
-      // Run hat seine eigene Karte, und die Kamera darf genau bis an deren Rand.
-      const bounds = this.session.view.state.bounds;
-      this.cameraController = new CameraController(this, bounds.width, bounds.height);
-      this.aimPainter = graphicsPainter(this.add.graphics().setDepth(DEPTH.projectiles));
+    this.buildArena();
+    this.bars = this.add.graphics().setDepth(8000);
+    this.selfRing = this.add.ellipse(0, 0, 34, 16).setStrokeStyle(2, 0xffd166, 0.9).setDepth(2);
+    this.hud = new Hud(this);
+    this.shop = new ShopPanel(this, (command) => this.session.send(command));
+
+    const stickRegion = new Phaser.Geom.Rectangle(0, 56, VIEWPORT.width * 0.62, VIEWPORT.height - 56);
+    this.stick = new FloatingStick(this, stickRegion);
+
+    this.banner = this.add
+      .text(VIEWPORT.width / 2, 200, "", {
+        fontFamily: UI.font,
+        fontSize: "56px",
+        color: PALETTE.gold,
+        fontStyle: "bold",
+        stroke: "#000000",
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5)
+      .setDepth(9300)
+      .setAlpha(0);
+
+    this.waitText = this.add
+      .text(VIEWPORT.width / 2, VIEWPORT.height / 2, "Warte auf den Host …", {
+        fontFamily: UI.font,
+        fontSize: "28px",
+        color: UI.text.body,
+        fontStyle: "bold",
+        backgroundColor: "#000000aa",
+        padding: { x: 18, y: 10 },
+      })
+      .setOrigin(0.5)
+      .setDepth(9900)
+      .setVisible(false);
+
+    this.pauseButton = new Button(this, VIEWPORT.width - SAFE.right - 38, 28, "II", () => this.openPause(), {
+      width: 52,
+      height: 44,
+      fontSize: 20,
+      variant: "secondary",
+    });
+    this.pauseButton.setDepth(9500);
+
+    this.buildPauseOverlay();
+    this.buildLostOverlay();
+
+    this.onVisibility = (): void => {
+      if (document.hidden && this.session.canPause && this.session.view.state.phase === "wave") {
+        this.openPause();
+      }
+    };
+    document.addEventListener("visibilitychange", this.onVisibility);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      document.removeEventListener("visibilitychange", this.onVisibility);
+      this.stick.destroy();
+      this.session.destroy();
+    });
+  }
+
+  // --- Aufbau -------------------------------------------------------------
+
+  private buildArena(): void {
+    const floor = this.add
+      .tileSprite(this.originX, this.originY, ARENA.width, ARENA.height, SHEET_KEY, FLOOR_TILES[0] ?? 0)
+      .setOrigin(0)
+      .setDepth(0);
+    floor.setTileScale(3, 3);
+    this.add
+      .rectangle(this.originX - 4, this.originY - 4, ARENA.width + 8, ARENA.height + 8)
+      .setOrigin(0)
+      .setStrokeStyle(8, 0x2a1f14)
+      .setFillStyle(0, 0)
+      .setDepth(1);
+  }
+
+  private overlayBox(
+    title: string,
+    hint: string,
+    buttons: { label: string; onClick: () => void; primary: boolean }[],
+  ): { setVisible(visible: boolean): unknown }[] {
+    const cx = VIEWPORT.width / 2;
+    const objects: { setVisible(visible: boolean): unknown }[] = [];
+    const dim = this.add.rectangle(0, 0, 2000, 1200, 0x000000, 0.65).setOrigin(0).setDepth(OVERLAY_DEPTH).setInteractive();
+    objects.push(dim);
+    objects.push(woodPanel(this, cx, 270, 440, 300).setDepth(OVERLAY_DEPTH + 1));
+    objects.push(menuText(this, cx, 156, title, 36, UI.text.title, true).setDepth(OVERLAY_DEPTH + 2));
+    const hintText = menuText(this, cx, 205, hint, 17, UI.text.muted).setDepth(OVERLAY_DEPTH + 2);
+    hintText.setWordWrapWidth(380);
+    objects.push(hintText);
+    buttons.forEach((entry, index) => {
+      const button = new Button(this, cx, 262 + index * 70, entry.label, entry.onClick, {
+        width: 320,
+        height: 56,
+        fontSize: 22,
+        variant: entry.primary ? "primary" : "secondary",
+      });
+      button.setDepth(OVERLAY_DEPTH + 3);
+      objects.push(button);
+    });
+    for (const object of objects) {
+      object.setVisible(false);
+    }
+    return objects;
+  }
+
+  private buildPauseOverlay(): void {
+    const solo = this.session.canPause;
+    this.pauseObjects = this.overlayBox(
+      solo ? "Pause" : "Menü",
+      solo ? "Die Runde wartet auf dich." : "Achtung: Die Runde läuft weiter – der Host rechnet für alle.",
+      [
+        { label: solo ? "Weiter" : "Weiter spielen", onClick: () => this.closePause(), primary: true },
+        { label: solo ? "Runde aufgeben" : "Runde verlassen", onClick: () => this.leave(), primary: false },
+      ],
+    );
+  }
+
+  private buildLostOverlay(): void {
+    this.lostObjects = this.overlayBox("Verbindung weg", "", [
+      { label: "Zurück zum Menü", onClick: () => this.leave(), primary: true },
+    ]);
+  }
+
+  private openPause(): void {
+    if (this.paused || this.ending || this.session.view.state.phase !== "wave") {
+      return;
+    }
+    this.paused = this.session.canPause;
+    this.stick.release();
+    this.stick.enabled = false;
+    for (const object of this.pauseObjects) {
+      object.setVisible(true);
+    }
+    this.pauseOpen = true;
+    if (this.paused) {
+      audio.setMusic(null);
+    }
+  }
+
+  private closePause(): void {
+    this.paused = false;
+    this.pauseOpen = false;
+    this.stick.enabled = this.session.view.state.phase === "wave";
+    for (const object of this.pauseObjects) {
+      object.setVisible(false);
+    }
+    audio.setMusic("wave");
+  }
+
+  private leave(): void {
+    this.scene.start("Title");
+  }
+
+  // --- Takt ---------------------------------------------------------------
+
+  update(time: number, delta: number): void {
+    const dt = Math.min(delta, 100);
+    const session = this.session;
+
+    if (session.connectionLost && !this.ending) {
+      this.showConnectionLost(session.connectionLost);
+      return;
     }
 
-    this.scene.launch("Hud", {
-      model: this.hudModel,
-      canPause: this.session.canPause,
-      onPause: () => this.setPaused(true),
-      onResume: () => this.setPaused(false),
-      onQuit: () => {
-        this.scene.stop("Hud");
-        // Der Spielstand bleibt, wie er auf der Karte gespeichert wurde:
-        // "Laden" beginnt dieses Gebiet neu.
-        this.scene.start("Title");
+    if (!this.paused) {
+      session.update(dt, this.stick.value);
+    }
+    const view = session.view;
+    const state = view.state;
+    this.waitText.setVisible(!session.isReady);
+
+    if (!this.paused) {
+      for (const event of view.events) {
+        this.handleEvent(event, time);
+      }
+    }
+
+    this.handlePhase(state.phase);
+
+    const self = state.players.find((player) => player.id === session.selfId);
+    this.hud.update(state, self, session.selfId);
+    this.shop.update(state, self);
+
+    if (state.phase !== "shop") {
+      this.draw(dt, time, self);
+    }
+  }
+
+  private handlePhase(phase: string): void {
+    if (phase === this.lastPhase) {
+      return;
+    }
+    this.lastPhase = phase;
+    if (phase === "shop") {
+      this.stick.release();
+      this.stick.enabled = false;
+      this.shop.setVisible(true);
+      this.hud.setVisible(false);
+      this.pauseButton.setVisible(false);
+      audio.setMusic("menu", 0.35);
+    } else if (phase === "wave") {
+      this.shop.setVisible(false);
+      this.hud.setVisible(true);
+      this.pauseButton.setVisible(true);
+      this.stick.enabled = !this.pauseOpen;
+      audio.setMusic("wave");
+    } else if (!this.ending) {
+      this.ending = true;
+      this.stick.release();
+      this.stick.enabled = false;
+      audio.setMusic("menu", 0.5);
+      if (phase === "lost") {
+        this.playSound("gameOver", 0);
+      }
+      this.time.delayedCall(1600, () => this.finish(phase === "won"));
+    }
+  }
+
+  private finish(won: boolean): void {
+    const state = this.session.view.state;
+    const self = state.players.find((player) => player.id === this.session.selfId);
+    this.scene.start("Result", {
+      won,
+      wave: state.wave,
+      kills: self?.kills ?? 0,
+      level: self?.level ?? 0,
+      items: self ? self.items.reduce((sum, count) => sum + count, 0) : 0,
+      name: self?.name ?? "",
+      mode: this.mode,
+    });
+  }
+
+  private showConnectionLost(message: string): void {
+    if (this.ending) {
+      return;
+    }
+    this.ending = true;
+    this.stick.enabled = false;
+    this.stick.release();
+    for (const object of this.lostObjects) {
+      object.setVisible(true);
+    }
+    this.add
+      .text(VIEWPORT.width / 2, 205, message, {
+        fontFamily: UI.font,
+        fontSize: "17px",
+        color: UI.text.muted,
+        align: "center",
+        wordWrap: { width: 380 },
+      })
+      .setOrigin(0.5)
+      .setDepth(OVERLAY_DEPTH + 3);
+  }
+
+  // --- Zeichnen -----------------------------------------------------------
+
+  private draw(dt: number, time: number, self: PlayerState | undefined): void {
+    const state = this.session.view.state;
+    // Im Koop kommen Zustaende nur 15-mal pro Sekunde: dazwischen gleitet alles
+    // sanft zum neuen Ziel, statt zu springen. Solo wird direkt gesetzt.
+    const k = this.session.isMultiplayer ? 1 - Math.exp(-dt * 0.022) : 1;
+
+    this.bars.clear();
+
+    this.sync(
+      this.enemies,
+      state.enemies,
+      (enemy) => enemy.id,
+      (enemy) => this.makeEnemy(enemy),
+      (enemyView, enemy) => this.applyEnemy(enemyView, enemy, k),
+    );
+    this.sync(
+      this.players,
+      state.players,
+      (player) => player.id,
+      (player) => this.makePlayer(player),
+      (playerView, player) => this.applyPlayer(playerView, player, k, time),
+    );
+    this.sync(
+      this.shots,
+      state.shots,
+      (shot) => shot.id,
+      (shot) => this.makeShot(shot),
+      (shotView, shot) => this.applyShot(shotView, shot, Math.min(1, k * 1.6)),
+    );
+    this.sync(
+      this.pickups,
+      state.pickups,
+      (pickup) => pickup.id,
+      (pickup) => this.makePickup(pickup),
+      (image, pickup) => image.setPosition(this.originX + pickup.x, this.originY + pickup.y + Math.sin(time / 180 + pickup.id) * 2),
+    );
+    this.syncMarkers(state.markers, time);
+
+    const selfView = self ? this.players.get(self.id) : undefined;
+    if (selfView) {
+      this.selfRing.setVisible(true).setPosition(selfView.x, selfView.y + 11).setDepth(2);
+    } else {
+      this.selfRing.setVisible(false);
+    }
+  }
+
+  private sync<K, S, V extends Destroyable>(
+    map: Map<K, V>,
+    items: readonly S[],
+    key: (item: S) => K,
+    make: (item: S) => V,
+    apply: (view: V, item: S) => void,
+  ): void {
+    const seen = new Set<K>();
+    for (const item of items) {
+      const id = key(item);
+      seen.add(id);
+      let view = map.get(id);
+      if (!view) {
+        view = make(item);
+        map.set(id, view);
+      }
+      apply(view, item);
+    }
+    for (const [id, view] of map) {
+      if (!seen.has(id)) {
+        view.destroy();
+        map.delete(id);
+      }
+    }
+  }
+
+  private makeEnemy(enemy: Enemy): EnemyView {
+    const def = ENEMIES[enemy.type];
+    const sprite = this.add.sprite(0, 0, SHEET_KEY, ENEMY_TILES[enemy.type]).setScale(def.radius / 6);
+    const view: EnemyView = {
+      sprite,
+      x: this.originX + enemy.x,
+      y: this.originY + enemy.y,
+      destroy: () => sprite.destroy(),
+    };
+    sprite.setPosition(view.x, view.y);
+    return view;
+  }
+
+  private applyEnemy(view: EnemyView, enemy: Enemy, k: number): void {
+    const targetX = this.originX + enemy.x;
+    const targetY = this.originY + enemy.y;
+    view.x += (targetX - view.x) * k;
+    view.y += (targetY - view.y) * k;
+    view.sprite.setPosition(view.x, view.y).setDepth(100 + view.y);
+    if (Math.abs(enemy.dirX) > 0.05) {
+      view.sprite.setFlipX(enemy.dirX < 0);
+    }
+    if (enemy.flash > 0) {
+      view.sprite.setTintFill(0xffffff);
+    } else {
+      view.sprite.clearTint();
+    }
+    // Windet sich ein Angriff an (Sturmlaeufer, Boss), pulsiert der Gegner.
+    view.sprite.setAlpha(enemy.mode === "windup" ? 0.7 : 1);
+
+    if (enemy.hp < enemy.maxHp) {
+      const r = ENEMIES[enemy.type].radius;
+      const width = Math.max(18, r * 2);
+      const fraction = Phaser.Math.Clamp(enemy.hp / enemy.maxHp, 0, 1);
+      this.bars.fillStyle(0x22140f, 0.8).fillRect(view.x - width / 2, view.y - r - 9, width, 4);
+      this.bars.fillStyle(COLORS.hpEnemy, 1).fillRect(view.x - width / 2, view.y - r - 9, width * fraction, 4);
+    }
+  }
+
+  private makePlayer(player: PlayerState): PlayerView {
+    const sprite = this.add.sprite(0, 0, SHEET_KEY, CHARACTER_TILES[player.character]).setScale(2);
+    const shadow = this.add.image(0, 0, "shadow").setDisplaySize(34, 16).setAlpha(0.9);
+    const name = this.add
+      .text(0, 0, this.session.isMultiplayer ? player.name : "", {
+        fontFamily: UI.font,
+        fontSize: "12px",
+        color: "#ffffff",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5, 1)
+      .setShadow(1, 1, "#000000", 2)
+      .setDepth(8100);
+    const view: PlayerView = {
+      sprite,
+      shadow,
+      name,
+      weapons: [],
+      weaponSignature: "",
+      x: this.originX + player.x,
+      y: this.originY + player.y,
+      destroy: () => {
+        sprite.destroy();
+        shadow.destroy();
+        name.destroy();
+        for (const image of view.weapons) {
+          image.destroy();
+        }
       },
-      onBackpack: (open: boolean) => {
-        // Solo haelt der offene Rucksack die Runde an, im Koop ruht nur die
-        // Eingabe und die Figur ist geschuetzt - siehe `ui/BackpackWindow.ts`.
-        this.backpackOpen = open;
+    };
+    return view;
+  }
+
+  private applyPlayer(view: PlayerView, player: PlayerState, k: number, time: number): void {
+    const isSelf = player.id === this.session.selfId;
+    const own = isSelf ? this.session.selfPosition() : null;
+    const targetX = this.originX + (own ? own.x : player.x);
+    const targetY = this.originY + (own ? own.y : player.y);
+    if (isSelf) {
+      view.x = targetX;
+      view.y = targetY;
+    } else {
+      view.x += (targetX - view.x) * k;
+      view.y += (targetY - view.y) * k;
+    }
+
+    const depth = 100 + view.y;
+    view.sprite.setPosition(view.x, view.y).setDepth(depth);
+    view.shadow.setPosition(view.x, view.y + 11).setDepth(depth - 1);
+    view.sprite.setFlipX(Math.cos(player.facing) < 0);
+    view.sprite.setAngle(player.alive ? 0 : 90);
+    const blink = player.iframes > 0 && Math.floor(time / 70) % 2 === 0;
+    view.sprite.setAlpha(!player.alive ? 0.45 : blink ? 0.5 : 1);
+    view.name.setPosition(view.x, view.y - 30).setVisible(player.alive);
+
+    // Waffen kreisen um die Figur.
+    const signature = player.weapons.map((weapon) => weapon.id).join(",");
+    if (signature !== view.weaponSignature) {
+      view.weaponSignature = signature;
+      for (const image of view.weapons) {
+        image.destroy();
+      }
+      view.weapons = player.weapons.map((weapon) => this.add.image(0, 0, weaponIconKey(weapon.id)).setDisplaySize(22, 22));
+    }
+    const count = view.weapons.length;
+    view.weapons.forEach((image, index) => {
+      const angle = -Math.PI / 2 + (index / Math.max(1, count)) * Math.PI * 2;
+      image
+        .setPosition(view.x + Math.cos(angle) * 21, view.y + Math.sin(angle) * 17)
+        .setDepth(depth + 1)
+        .setVisible(player.alive);
+    });
+
+    if (player.alive) {
+      const fraction = Phaser.Math.Clamp(player.hp / player.stats.maxHp, 0, 1);
+      this.bars.fillStyle(0x22140f, 0.8).fillRect(view.x - 16, view.y - 24, 32, 4);
+      this.bars.fillStyle(COLORS.hpPlayer, 1).fillRect(view.x - 16, view.y - 24, 32 * fraction, 4);
+    }
+  }
+
+  private makeShot(shot: Projectile): ShotView {
+    const image = this.add
+      .image(0, 0, SHEET_KEY, BULLET_TILE)
+      .setScale(Math.max(1, shot.radius / 4))
+      .setTint(shot.friendly ? COLORS.playerBullet : COLORS.enemyBullet)
+      .setDepth(5000);
+    return { image, x: this.originX + shot.x, y: this.originY + shot.y, destroy: () => image.destroy() };
+  }
+
+  private applyShot(view: ShotView, shot: Projectile, k: number): void {
+    const targetX = this.originX + shot.x;
+    const targetY = this.originY + shot.y;
+    view.x += (targetX - view.x) * k;
+    view.y += (targetY - view.y) * k;
+    view.image.setPosition(view.x, view.y).setRotation(Math.atan2(shot.vy, shot.vx));
+  }
+
+  private makePickup(pickup: Pickup): Phaser.GameObjects.Image {
+    return this.add
+      .image(this.originX + pickup.x, this.originY + pickup.y, SHEET_KEY, MATERIAL_TILE)
+      .setScale(1.6)
+      .setDepth(3);
+  }
+
+  private syncMarkers(markers: readonly SpawnMarker[], time: number): void {
+    while (this.markers.length < markers.length) {
+      this.markers.push(this.add.image(0, 0, "marker").setDisplaySize(26, 26).setDepth(4));
+    }
+    this.markers.forEach((image, index) => {
+      const marker = markers[index];
+      if (!marker) {
+        image.setVisible(false);
+        return;
+      }
+      image
+        .setVisible(true)
+        .setPosition(this.originX + marker.x, this.originY + marker.y)
+        .setAlpha(0.45 + 0.4 * Math.abs(Math.sin(time / 90)));
+    });
+  }
+
+  // --- Ereignisse: Toene und Effekte ----------------------------------------
+
+  /** Spielt einen Ton, aber nicht oefter als alle `gapMs` - bei 50 Treffern pro Sekunde waere das Krach. */
+  private playSound(name: SoundName, gapMs: number): void {
+    const now = this.time.now;
+    const last = this.lastSound.get(name) ?? -1e9;
+    if (now - last < gapMs) {
+      return;
+    }
+    this.lastSound.set(name, now);
+    audio.play(name);
+  }
+
+  private handleEvent(event: GameEvent, _time: number): void {
+    const selfId = this.session.selfId;
+    switch (event.t) {
+      case "hit":
+        if (event.enemy) {
+          this.floater(event.x, event.y - 10, String(Math.round(event.dmg)), event.crit ? PALETTE.gold : "#ffffff", event.crit ? 22 : 15);
+          this.playSound("hit", 55);
+        } else {
+          this.floater(event.x, event.y - 18, `-${Math.round(event.dmg)}`, PALETTE.danger, 20);
+          this.playSound("playerHit", 120);
+          this.cameras.main.shake(90, 0.003);
+        }
+        break;
+      case "kill":
+        this.burst(event.x, event.y, event.big ? 12 : 5, event.big ? 0xffd166 : 0xcfe8a0);
+        this.playSound("enemyDied", 45);
+        break;
+      case "shot":
+        if (event.kind === "melee") {
+          this.swing(event.x, event.y, event.angle);
+          this.playSound("swing", 70);
+        } else {
+          this.playSound("shoot", 70);
+        }
+        break;
+      case "pickup":
+        if (event.pid === selfId) {
+          this.playSound("pickup", 40);
+        }
+        break;
+      case "heal":
+        if (event.pid === selfId && event.amount >= 1) {
+          this.floater(event.x, event.y - 18, `+${Math.round(event.amount)}`, PALETTE.success, 18);
+          this.playSound("healed", 250);
+        }
+        break;
+      case "dodge":
+        this.floater(event.x, event.y - 18, "Ausgewichen", "#cfe8ff", 14);
+        break;
+      case "down":
+        this.playSound("playerDown", 200);
+        break;
+      case "revive":
+        this.playSound("revive", 200);
+        break;
+      case "waveStart":
+        this.announce(`Welle ${event.wave}`);
+        this.playSound("zoneReached", 0);
+        break;
+      case "waveEnd":
+        this.announce("Geschafft!");
+        this.playSound("superReady", 0);
+        break;
+      case "levelUp":
+        if (event.pid === selfId) {
+          this.playSound("superReady", 100);
+        }
+        break;
+      case "bought":
+        if (event.pid === selfId) {
+          this.playSound("pickup", 40);
+        }
+        break;
+      case "enemyShot":
+        this.playSound("enemyShoot", 80);
+        break;
+    }
+  }
+
+  private announce(text: string): void {
+    this.banner.setText(text).setAlpha(1).setScale(0.6);
+    this.tweens.killTweensOf(this.banner);
+    this.tweens.add({ targets: this.banner, scale: 1, duration: 180, ease: "Back.Out" });
+    this.tweens.add({ targets: this.banner, alpha: 0, delay: 900, duration: 400 });
+  }
+
+  private floater(x: number, y: number, value: string, color: string, size: number): void {
+    if (this.floaters > 36) {
+      return;
+    }
+    this.floaters += 1;
+    const text = this.add
+      .text(this.originX + x, this.originY + y, value, {
+        fontFamily: UI.font,
+        fontSize: `${size}px`,
+        color,
+        fontStyle: "bold",
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(9000);
+    this.tweens.add({
+      targets: text,
+      y: text.y - 26,
+      alpha: 0,
+      duration: 650,
+      ease: "Quad.Out",
+      onComplete: () => {
+        text.destroy();
+        this.floaters -= 1;
       },
     });
-    this.hud = this.scene.get("Hud") as HudScene;
+  }
 
-    /*
-     * Von selbst anhalten, wenn die App in den Hintergrund geht.
-     *
-     * DER FALL, UM DEN ES GEHT: Ein Anruf, eine Nachricht, kurz etwas
-     * nachschauen. Vorher lief die Runde dabei weiter, und man kam mit deutlich
-     * weniger Leben zurueck - oder gar nicht. Die Simulation verwirft nach
-     * einem langen Haenger zwar die aufgelaufene Zeit (`MAX_TICKS_PER_FRAME`),
-     * aber die Gegner haben in den Sekunden davor weiter zugeschlagen.
-     *
-     * Im Koop wird nicht angehalten: Dort rechnet der Host weiter, und ein
-     * Client, der fuer sich stehenbleibt, geriete nur aus dem Takt.
-     */
-    if (this.session.canPause) {
-      document.addEventListener("visibilitychange", this.onVisibilityChange);
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-        document.removeEventListener("visibilitychange", this.onVisibilityChange);
+  private burst(x: number, y: number, count: number, color: number): void {
+    for (let i = 0; i < count; i += 1) {
+      const angle = (i / count) * Math.PI * 2 + Math.random();
+      const distance = 14 + Math.random() * 16;
+      const piece = this.add.rectangle(this.originX + x, this.originY + y, 4, 4, color).setDepth(8500);
+      this.tweens.add({
+        targets: piece,
+        x: piece.x + Math.cos(angle) * distance,
+        y: piece.y + Math.sin(angle) * distance,
+        alpha: 0,
+        duration: 320,
+        onComplete: () => piece.destroy(),
       });
     }
-
-    // Ab jetzt laeuft eine Runde: Eine neue Version darf erst im Menue greifen,
-    // sonst reisst ein Neustart die Runde mitten im Gefecht ab.
-    setReloadSafe(false);
-
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      hideValuesOverlay();
-      this.scene.stop("Hud");
-      // Beim Run-Ende ist die Sitzung schon freigegeben (`release`) - ihre
-      // Verbindung lebt im naechsten Run weiter und darf hier nicht zu.
-      if (!this.released) {
-        this.session.destroy();
-      }
-      this.cameraController?.destroy();
-      this.entities?.destroy();
-      this.juice?.destroy();
-      this.arena?.destroy();
-      this.world3d?.destroy();
-    });
   }
 
-  update(_time: number, delta: number): void {
-    const player = this.selfPlayer();
-    // Die HudScene startet ein Bild spaeter als diese Szene. Solange sie nicht
-    // bereit ist, gibt es noch keine Eingabe - ein Bild ohne Steuerung faellt
-    // niemandem auf, ein Absturz schon.
-    if (!player || !this.hud?.ready) {
-      return;
-    }
-
-    // Der Daumen liefert Bildschirmrichtungen; wie die in Bodenrichtungen
-    // umzurechnen sind, haengt an der Kamera. In 2D ist es die Identitaet.
-    this.hud.inputManager.view = this.world3d?.orientation ?? TOP_DOWN;
-
-    // Solo haelt auch der offene Rucksack an (2026-09-26): in Ruhe umraeumen,
-    // ohne dass Gegner naeherkommen oder die Horde-Uhr weiterlaeuft.
-    if (this.backpackOpen && this.session.canPause && !this.paused) {
-      this.drawWorld3d(0);
-      this.hud.inputManager.clearOneShots();
-      const command = this.hud.peekInventoryCommand();
-      if (command && this.session.applyWhilePaused) {
-        this.session.applyWhilePaused(command);
-        this.hud.shiftInventoryCommand();
-        this.handleEvents();
-      }
-      this.entities?.update();
-      this.updateHudModel(player);
-      return;
-    }
-
-    if (this.paused) {
-      // Weiterzeichnen, damit die Welt auch nach einer Drehung des Handys
-      // in der Pause deckungsgleich unter dem HUD liegt.
-      this.drawWorld3d(0);
-      /*
-       * Angehalten: Die Simulation bekommt keine Zeit. Einmalige Wuensche
-       * werden trotzdem geloescht - sonst laege ein Schuss oder eine Faehigkeit
-       * aus dem Moment des Anhaltens bereit und ginge beim Weitermachen sofort
-       * los, ohne dass jemand den Knopf gedrueckt haette.
-       */
-      this.hud.inputManager.clearOneShots();
-      return;
-    }
-
-    /*
-     * Zwischenbildschirm offen, aber die Runde laeuft weiter (Koop).
-     *
-     * Dann wird eine LEERE Eingabe geschickt statt der echten. Der dunkle
-     * Hintergrund liegt zwar ueber den Knoepfen, aber die Touch-Steuerung
-     * hoert auf die ganze Szene - ein Daumen, der auf "Weiter spielen" zielt,
-     * wuerde sonst nebenbei den Joystick ziehen oder einen Schuss ausloesen.
-     * Stehenbleiben ist das ehrlichere Verhalten: Man spielt gerade nicht.
-     */
-    const idle = this.overlayOpen || this.backpackOpen;
-    const input = idle ? emptyInput() : this.hud.inputManager.getState();
-    if (idle) {
-      this.hud.inputManager.clearOneShots();
-    }
-    // Rucksack-Befehle kommen aus dem Fenster der HUD-Szene, nicht vom Daumen.
-    input.inventory = this.hud.peekInventoryCommand();
-    // Rucksack offen = geschuetzt (2026-09-26): in Ruhe umraeumen.
-    input.shielded = this.backpackOpen;
-
-    // Beim Super laeuft die Zeit kurz langsamer. Die Simulation merkt davon
-    // nichts - sie bekommt einfach weniger Zeit zugeteilt.
-    this.juice?.update(delta);
-    const consumed = this.session.update(delta * (this.juice?.currentTimeScale ?? 1), input);
-    if (consumed) {
-      // Einmalige Wuensche (Schuss, Super) erst loeschen, wenn sie verarbeitet
-      // wurden - sonst geht ein Klick zwischen zwei Ticks verloren.
-      this.hud.inputManager.clearOneShots();
-      if (input.inventory) {
-        this.hud.shiftInventoryCommand();
-      }
-    }
-
-    this.handleEvents();
-    this.updateValues(player, delta);
-    this.checkConnection();
-    this.entities?.update();
-    this.drawWorld3d(delta);
-    this.drawAim(player, input);
-    this.updateHudModel(player);
-    this.updateMusic(delta);
-
-    // Boden, Deckung und Buesche nach Kamerasicht ein- und ausblenden. In einer
-    // Welt dieser Groesse ist das der Unterschied zwischen "laeuft" und "ruckelt".
-    this.arena?.update();
-
-    this.cameraController?.update(
-      this.session.view.state.players.map((entry) => ({
-        position: this.session.view.renderPlayerPosition(entry.id),
-        isSelf: entry.id === this.session.selfId,
-        down: entry.down,
-      })),
-    );
+  private swing(x: number, y: number, angle: number): void {
+    const arc = this.add.graphics().setDepth(8600);
+    arc.lineStyle(5, 0xffffff, 0.85);
+    arc.beginPath();
+    arc.arc(this.originX + x, this.originY + y, 30, angle - 0.8, angle + 0.8);
+    arc.strokePath();
+    this.tweens.add({ targets: arc, alpha: 0, duration: 160, onComplete: () => arc.destroy() });
   }
-
-  /** Die 3D-Welt ein Bild weiterzeichnen - in der 2D-Ansicht nichts. */
-  private drawWorld3d(delta: number): void {
-    this.world3d?.update(this.session.view, this.session.selfId, delta, this.game.canvas);
-  }
-
-  /**
-   * Welche Musik gerade laufen soll.
-   *
-   *   Gefecht            das treibende Stueck, volle Lautstaerke
-   *   dazwischen         das ruhige Stueck, deutlich leiser
-   *   angehalten (solo)  nichts
-   *
-   * Der WECHSEL ist das Signal, nicht die Stille: Solange niemand in der Naehe
-   * ist, laeuft leise das ruhige Stueck; setzt das treibende in voller
-   * Lautstaerke ein, ist etwas im Anmarsch. Das hoert man auch dann, wenn man
-   * gerade nicht auf den Bildschirm schaut - in einer offenen Welt sogar,
-   * BEVOR man den Gegner sieht. Und anders als bei voelliger Stille wirkt die
-   * ruhige Phase nicht wie ein Aussetzer.
-   *
-   * Angehalten bleibt es still: Musik, die weiterlaeuft, waehrend das Bild
-   * steht, klingt nach Absturz.
-   *
-   * `setMusic` prueft selbst, ob sich ueberhaupt etwas aendert - deshalb darf
-   * das hier jedes Bild gerufen werden.
-   */
-  private updateMusic(delta: number): void {
-    if (this.paused || this.finished) {
-      audio.setMusic(null);
-      return;
-    }
-
-    const distance = this.nearestEnemyDistance();
-
-    if (distance < COMBAT_ENTER_RANGE) {
-      this.calmSeconds = 0;
-    } else if (distance > COMBAT_LEAVE_RANGE) {
-      this.calmSeconds += delta / 1000;
-    }
-
-    if (this.calmSeconds >= COMBAT_LEAVE_SECONDS) {
-      audio.setMusic("menu", CALM_MUSIC_VOLUME);
-    } else {
-      audio.setMusic("wave", 1);
-    }
-  }
-
-  /** Abstand zum naechsten Gegner - oder unendlich, wenn keiner da ist. */
-  private nearestEnemyDistance(): number {
-    const state = this.session.view.state;
-    const self = state.players.find((entry) => entry.id === this.session.selfId);
-    if (!self) {
-      return Number.POSITIVE_INFINITY;
-    }
-
-    let nearest = Number.POSITIVE_INFINITY;
-    for (const enemy of state.enemies) {
-      nearest = Math.min(
-        nearest,
-        Math.hypot(enemy.position.x - self.position.x, enemy.position.y - self.position.y),
-      );
-    }
-    return nearest;
-  }
-
-  /**
-   * Oeffnet oder schliesst den Zwischenbildschirm.
-   *
-   * Solo wird dabei wirklich angehalten, im Koop nur angezeigt. Diese eine
-   * Unterscheidung steht absichtlich NUR hier - die HUD-Szene fragt nicht nach
-   * dem Modus, sie zeigt nur an, was ihr gesagt wird.
-   */
-  setPaused(open: boolean): void {
-    if (this.overlayOpen === open || this.finished) {
-      return;
-    }
-    this.overlayOpen = open;
-
-    // Anhalten geht nur solo. Im Koop bleibt `paused` false, und die Runde
-    // laeuft hinter dem Bildschirm weiter.
-    this.paused = open && this.session.canPause;
-
-    this.hud?.setOverlayVisible(open);
-
-    // Der Ton geht nur mit, wenn wirklich angehalten wird. Im Koop laeuft die
-    // Runde weiter - stille Musik waere dort ein falsches Signal.
-    if (this.session.canPause) {
-      // Kein Zeitfortschritt: Hier geht es nur darum, die Musik sofort
-      // anzuhalten oder wieder zu starten.
-      this.updateMusic(0);
-    }
-  }
-
-  /** Beim Verlassen der App von selbst anhalten. Zurueck kommt man von Hand. */
-  private readonly onVisibilityChange = (): void => {
-    if (document.visibilityState === "hidden") {
-      this.setPaused(true);
-    }
-  };
-
-  /** Gesamter ausgeteilter Schaden und Zeit - fuer die Schaden/s-Anzeige. */
-  private damageDealt = 0;
-  private fightSeconds = 0;
-
-  /** Fuettert die Zahlenanzeige aus `?debug=werte`. Ohne den Schalter ein No-op. */
-  private updateValues(player: PlayerState, delta: number): void {
-    const state = this.session.view.state;
-    if (state.enemies.length > 0) {
-      this.fightSeconds += delta / 1000;
-    }
-    for (const event of this.session.view.events) {
-      if (event.type === "hit") {
-        this.damageDealt += event.damage;
-      }
-    }
-
-    updateValuesOverlay(
-      {
-        fps: this.game.loop.actualFps,
-        zone: state.zone,
-        enemies: state.enemies.length,
-        projectiles: state.projectiles.filter((entry) => entry.active).length,
-        ammo: player.reloadTimers.filter((timer) => timer <= 0).length,
-        health: player.health,
-        maxHealth: player.maxHealth,
-        superCharge: player.superCharge,
-        dps: this.fightSeconds > 0 ? this.damageDealt / this.fightSeconds : 0,
-        position: player.position,
-        view: this.world3d
-          ? `3D Neigung ${VIEW3D.pitch} Drehung ${VIEW3D.yaw} Abstand ${VIEW3D.distance} Bildwinkel ${VIEW3D.fov}`
-          : "2D",
-        render: this.world3d?.stats,
-      },
-      this.time.now,
-    );
-  }
-
-  /**
-   * Treffer-Feedback in der 3D-Ansicht (2026-09-26, Rueckmeldung "kein Hit-
-   * Feedback beim Gegner oder mir selber"). Die 2D-Ansicht hat dafuer
-   * `Juice`; in 3D fehlte es ganz. Das Aufleuchten der Figuren macht die
-   * `EntityView`, hier kommen die Zahlen und der rote Rand dazu.
-   *
-   *   - Schaden am Gegner: helle Zahl ueber ihm
-   *   - Schaden an einem Spieler: rote Zahl; am eigenen zusaetzlich roter
-   *     Bildrand (und auf Android ein kurzes Vibrieren)
-   *   - Heilung: gruene Zahl
-   */
-  private showHitFeedback3d(events: readonly GameEvent[]): void {
-    const world = this.world3d;
-    if (!world || !this.hud) return;
-    const at = (x: number, y: number): { x: number; y: number } | null => {
-      const fraction = world.screenFraction({ x, y }, NUMBER_HEIGHT);
-      return fraction ? { x: fraction.x * VIEWPORT.width, y: fraction.y * VIEWPORT.height } : null;
-    };
-    for (const event of events) {
-      if (event.type === "hit") {
-        const spot = at(event.x, event.y);
-        if (spot) this.hud.floatNumber(spot.x, spot.y, `${Math.round(event.damage)}`, "#fff1c9", 17);
-      } else if (event.type === "playerHit") {
-        const spot = at(event.x, event.y);
-        if (spot) this.hud.floatNumber(spot.x, spot.y, `-${Math.round(event.damage)}`, "#ff6b57", 19);
-        if (event.playerId === this.session.selfId) {
-          const self = this.session.view.state.players.find((entry) => entry.id === event.playerId);
-          this.hud.hurtFlash(self ? (event.damage / self.maxHealth) * 5 : 1);
-        }
-      } else if (event.type === "healed" && event.amount >= 1) {
-        const spot = at(event.x, event.y);
-        if (spot) this.hud.floatNumber(spot.x, spot.y, `+${Math.round(event.amount)}`, "#9be07a", 17);
-      }
-    }
-  }
-
-  private handleEvents(): void {
-    const events = this.session.view.events;
-
-    this.showHitFeedback3d(events);
-    for (const event of events) {
-      if (event.type === "hit") {
-        this.entities?.flashEnemy(event.enemyId);
-      }
-      if (event.type === "backpackGrown" && event.playerId === this.session.selfId) {
-        this.hudModel.flash = `Tasche gefunden – Rucksack jetzt ${event.width} × ${event.height}`;
-        this.hudModel.flashUntil = this.time.now + 2500;
-      }
-      if (event.type === "hordeStarted") {
-        this.hudModel.flash = "Die Horde kommt – schnell zum Ausgang!";
-        this.hudModel.flashUntil = this.time.now + 3500;
-      }
-      if (event.type === "runEnded" && !this.finished && event.outcome === "exited" && this.run) {
-        this.finished = true;
-        this.time.delayedCall(700, () => this.backToMap());
-        continue;
-      }
-      if (event.type === "runEnded" && !this.finished) {
-        this.finished = true;
-        // Kurz warten, damit der letzte Effekt noch zu sehen ist.
-        this.time.delayedCall(900, () => {
-          this.scene.stop("Hud");
-          // Beute abrechnen, bevor die Sitzung freigegeben wird - danach
-          // gibt es keinen Zustand mehr, aus dem man lesen koennte.
-          const loot = finishRun(
-            event.outcome,
-            this.selfPlayer()?.backpack.items ?? [],
-            leftBehind(this.session.view.state, this.session.selfId),
-            this.selfPlayer()?.belt.items ?? [],
-          );
-          // Run vorbei: Lager und (nach Erfolg) Rucksack in den Spielstand,
-          // kein laufender Run mehr.
-          saveActive(null);
-          const coop = !this.session.canPause;
-          const transport = this.session.release();
-          this.released = true;
-          this.scene.start("GameOver", {
-            score: event.score,
-            zone: event.zone,
-            outcome: event.outcome,
-            character: this.character,
-            // Ob solo oder im Koop gespielt wurde, weiss nur die Sitzung -
-            // und sie ist gleich weg. Deshalb wird die Antwort jetzt
-            // mitgegeben statt spaeter erfragt.
-            coop,
-            // Im Koop die offene Verbindung: Der naechste Run findet im
-            // selben Raum statt (Etappe 7).
-            transport: transport ?? undefined,
-            /*
-             * Beute abrechnen, SOLANGE DER ZUSTAND NOCH DA IST.
-             *
-             * Gleich wird die Szene abgeraeumt und mit ihr die Sitzung. Wer
-             * das dem Ergebnisbildschirm ueberliesse, muesste ihm die ganze
-             * Item-Liste mitgeben - und die Regel "Wipe leert, Erfolg
-             * behaelt" stuende dann dort, statt an der einen Stelle in
-             * `storage/carried.ts`.
-             */
-            loot,
-          });
-        });
-      }
-    }
-
-    this.juice?.handle(events);
-    playEventSounds(events);
-  }
-
-  /**
-   * Gebiet geschafft: Rucksaecke und Leben in den Run uebernehmen und zurueck
-   * auf die Karte. Die Verbindung bleibt offen (`release`) - im Koop geht es
-   * im selben Raum weiter.
-   */
-  private backToMap(): void {
-    const run = this.run;
-    if (!run) return;
-    const state = this.session.view.state;
-    completeNode(
-      run,
-      state.players.map((player) => ({
-        id: player.id,
-        health: player.health,
-        down: player.down,
-        // Rucksack und Guertel zusammen (Guertelstuecke markiert).
-        backpack: packCarried(player.backpack, player.belt),
-        size: { width: player.backpack.width, height: player.backpack.height },
-      })),
-      (id) => state.players.find((player) => player.id === id)?.maxHealth ?? 1,
-    );
-    this.scene.stop("Hud");
-    const transport = this.session.release();
-    this.released = true;
-    this.scene.start("Map", {
-      run,
-      character: this.character,
-      transport: transport ?? undefined,
-      message: `Tag ${run.day} geschafft – ${state.score} Punkte. Wohin als Nächstes?`,
-    });
-  }
-
-  /**
-   * Reisst die Verbindung ab, ist die Runde vorbei - Host-Migration lohnt sich
-   * fuer ein Spiel unter Freunden nicht (Briefing, Abschnitt 6).
-   */
-  private checkConnection(): void {
-    if (this.finished || !this.session.connectionLost) {
-      return;
-    }
-
-    this.finished = true;
-    this.hudModel.connectionMessage = this.session.connectionLost;
-    this.time.delayedCall(2600, () => {
-      this.scene.stop("Hud");
-      this.scene.start("Title");
-    });
-  }
-
-  private selfPlayer(): PlayerState | undefined {
-    return this.session.view.state.players.find((entry) => entry.id === this.session.selfId);
-  }
-
-  /**
-   * Ziellinie mit Reichweitenanzeige.
-   *
-   * Sie zeigt zweierlei: wohin geschossen wird und wie weit die Waffe reicht -
-   * damit niemand ins Leere feuert. Wer nur haelt, ohne zu ziehen, sieht die
-   * Linie zum Gegner, den die Simulation automatisch anvisiert.
-   */
-  private drawAim(player: PlayerState, input: InputState): void {
-    this.aimPainter.clear();
-    if (player.down || !this.hud) {
-      return;
-    }
-
-    const aiming = this.hud.inputManager.aiming;
-    if (aiming) {
-      this.drawAbilityAim(player, input, aiming);
-      return;
-    }
-
-    // Kein Knopf wird ausgerichtet: die gewohnte Ziellinie des Basisangriffs,
-    // solange gefeuert wird. Sie zeigt auf den Gegner, den die Simulation
-    // automatisch anvisiert - der Basisangriff zielt nicht mehr von Hand.
-    if (!input.fire) {
-      return;
-    }
-
-    const position = this.session.view.renderPlayerPosition(player.id);
-    // Reichweite der AUSGERUESTETEN Waffe (oder der Faust) - dieselbe Zahl,
-    // mit der die Simulation rechnet.
-    const range = attackRange(player);
-    const direction = this.aimDirection(player, input, autoAimReach(player));
-    if (!direction) {
-      return;
-    }
-
-    const end = { x: position.x + direction.x * range, y: position.y + direction.y * range };
-
-    this.aimPainter.line(position, end, 3, COLORS.playerBullet, 0.45);
-    this.aimPainter.circle(end, 12, 2, COLORS.playerBullet, 0.8);
-  }
-
-  /**
-   * Zielanzeige fuer Faehigkeit und Super.
-   *
-   * GRUNDREGEL: Hier wird NICHTS geschaetzt. Jede Zahl kommt aus derselben
-   * Stelle, mit der die Simulation rechnet - `ABILITIES` beziehungsweise
-   * `SUPERS` in `balance.ts`. Eine Anzeige, die eine andere Reichweite zeigt
-   * als die, die wirkt, waere schlimmer als gar keine: Man wuerde ihr glauben
-   * und danebenzielen.
-   */
-  private drawAbilityAim(
-    player: PlayerState,
-    input: InputState,
-    which: "ability" | "super",
-  ): void {
-    const position = this.session.view.renderPlayerPosition(player.id);
-    const direction = input.aim ?? player.facing;
-    const strength = Math.max(0.35, this.hud?.inputManager.aimStrength ?? 1);
-
-    if (which === "super") {
-      this.drawSuperAim(player, position, direction);
-      return;
-    }
-
-    const ability = ABILITIES[player.character];
-
-    // Die Heilung des Tanks wirkt auf ihn selbst - es gibt keine Richtung, in
-    // die man sie schicken koennte. Ein Zielstrahl waere hier eine Linie, der
-    // man folgen wuerde, obwohl sie nichts bedeutet.
-    if (ability.aimStyle === "self") {
-      return;
-    }
-
-    const reach = ability.range * (ability.aimStyle === "circle" ? strength : 1);
-    const end = { x: position.x + direction.x * reach, y: position.y + direction.y * reach };
-
-    this.aimPainter.line(position, end, 3, COLORS.superReady, 0.5);
-
-    if (player.character === "scout") {
-      // Splittergranate: der Kreis ist der echte Schadensradius.
-      this.aimPainter.circle(end, ABILITIES.scout.blastRadius, 2, COLORS.superReady, 0.9);
-      return;
-    }
-
-    // Sniper: Laehmschuss - gerade Linie bis zur vollen Reichweite.
-    this.aimPainter.circle(end, 14, 2, COLORS.superReady, 0.9);
-  }
-
-  /** Zielanzeige des Supers, ebenfalls mit den echten Werten. */
-  private drawSuperAim(player: PlayerState, position: Vec2, direction: Vec2): void {
-    if (player.character === "tank") {
-      // Bodenstampfer wirkt rund um den Spieler, nicht in eine Richtung.
-      this.aimPainter.circle(position, SUPERS.tank.radius, 3, COLORS.superReady, 0.9);
-      return;
-    }
-
-    if (player.character === "sniper") {
-      /*
-       * Aufklaerungsschuss: Linie bis zur vollen Reichweite, am Ende der
-       * Kreis, der dort aufgedeckt WUERDE. Trifft das Geschoss vorher einen
-       * Gegner oder eine Wand, liegt der Kreis entsprechend frueher - die
-       * Anzeige zeigt den weitesten Fall, mit dem echten Radius.
-       */
-      const recon = SUPERS.sniper;
-      const end = {
-        x: position.x + direction.x * recon.range,
-        y: position.y + direction.y * recon.range,
-      };
-      this.aimPainter.line(position, end, 4, COLORS.superReady, 0.55);
-      this.aimPainter.circle(end, recon.revealRadius, 2, COLORS.marked, 0.8);
-      return;
-    }
-
-    const reach = SUPERS.scout.speed * SUPERS.scout.duration;
-    const end = { x: position.x + direction.x * reach, y: position.y + direction.y * reach };
-
-    this.aimPainter.line(position, end, 4, COLORS.superReady, 0.55);
-    this.aimPainter.circle(end, 16, 2, COLORS.superReady, 0.9);
-  }
-
-  /** Gezogene Richtung, sonst die Richtung zum automatisch gewaehlten Ziel. */
-  private aimDirection(player: PlayerState, input: InputState, reach: number): Vec2 | null {
-    if (input.aim) {
-      return input.aim;
-    }
-
-    // Dieselbe Reichweite wie die Simulation (`combat.ts`) - sonst zeigte die
-    // Linie auf einen Gegner, auf den gar nicht geschossen wird.
-    const target = nearestEnemy(
-      this.session.view.state,
-      player.position,
-      reach,
-    );
-    if (!target) {
-      return null;
-    }
-
-    const dx = target.position.x - player.position.x;
-    const dy = target.position.y - player.position.y;
-    const distance = Math.hypot(dx, dy);
-    return distance > 1e-6 ? { x: dx / distance, y: dy / distance } : null;
-  }
-
-  /** Liegt ein Weltpunkt sichtbar im Bild (mit etwas Rand)? */
-  private isOnScreen(position: Vec2): boolean {
-    if (this.world3d) {
-      return this.world3d.isOnScreen(position);
-    }
-    const view = this.cameras.main.worldView;
-    return (
-      position.x > view.x + 60 &&
-      position.x < view.right - 60 &&
-      position.y > view.y + 60 &&
-      position.y < view.bottom - 60
-    );
-  }
-
-  /**
-   * Eine Richtung am Boden (Winkel in der Simulation) als Richtung auf dem
-   * Bildschirm. In 2D dasselbe; in 3D gedreht und gestaucht wie die Kamera -
-   * sonst zeigte der Kompass am Rand schraeg an der Zone vorbei.
-   */
-  private screenAngle(groundAngle: number): number {
-    if (!this.world3d) {
-      return groundAngle;
-    }
-    const screen = groundToScreen(
-      { x: Math.cos(groundAngle), y: Math.sin(groundAngle) },
-      this.world3d.orientation,
-    );
-    return Math.atan2(screen.y, screen.x);
-  }
-
-  /** Fuellt das Objekt, das die HudScene liest. */
-  private updateHudModel(player: PlayerState): void {
-    const state = this.session.view.state;
-    // Die Faust braucht keine Munition (Nachladezeit 0): Ring immer voll.
-    const reloadTime = reloadTimeOf(player);
-
-    this.hudModel.characterName = CHARACTERS[player.character].name;
-    this.hudModel.health = player.health;
-    this.hudModel.maxHealth = player.maxHealth;
-    this.hudModel.ammo = player.reloadTimers.map((timer) =>
-      timer <= 0 || reloadTime <= 0 ? 1 : 1 - timer / reloadTime,
-    );
-    this.hudModel.attackLabel = attackLabel(player);
-    this.hudModel.superCharge = player.superCharge;
-    this.hudModel.abilityCooldown = player.abilityCooldown;
-    this.hudModel.abilityCooldownMax = ABILITIES[player.character].cooldown;
-    this.hudModel.abilityLabel = ABILITIES[player.character].short;
-    this.hudModel.zone = state.zone;
-    this.hudModel.nodeTimer = state.nodeTimer ?? null;
-    this.hudModel.horde = state.horde === true;
-    if (this.run && !this.hudModel.placeName) {
-      const node = currentNode(this.run);
-      this.hudModel.placeName = placeName(node, this.run.map.depth, this.run.seed);
-      // Beim Betreten: wo man ist und was hier gilt - ein Satz, dann weg.
-      const region = regionOfLayer(node.layer, this.run.map.depth);
-      this.hudModel.flash = `${this.hudModel.placeName} · ${region.name}\nFinde den Ausgang am Ende der Strasse`;
-      this.hudModel.flashUntil = this.time.now + 4000;
-    }
-    this.hudModel.deepestZone = state.deepestZone;
-    this.hudModel.inSafeZone =
-      safeRadiusOf(state) > 0 &&
-      distanceFromStart(state, player.position) <= safeRadiusOf(state);
-    this.hudModel.extraction = state.extractionIndex < 0 ? -1 : extractionFraction(state);
-    /*
-     * Der Kompass zeigt auf etwas AUSSERHALB des Bildes. Liegt die Mitte der
-     * Zone schon im Sichtfeld, sieht man den Teppich selbst - ein Pfeil am
-     * Rand laege dann mitten darauf und verdeckte genau das, worauf er zeigt.
-     * So im Emulator gesehen, deshalb diese Pruefung.
-     */
-    const nearest = nearestKnownExtraction(state, player.position);
-    this.hudModel.extractionCompass =
-      nearest && !this.isOnScreen(nearest.position)
-        ? { angle: this.screenAngle(nearest.angle), distance: nearest.distance }
-        : null;
-    this.fillMinimap(state, player);
-    this.hudModel.carriedItems = player.backpack.items.length;
-    // Rucksack und Guertel (markiert) - das Fenster und die Guertel-Knoepfe lesen beides.
-    this.hudModel.backpack = packCarried(player.backpack, player.belt);
-    this.hudModel.backpackSize = { width: player.backpack.width, height: player.backpack.height };
-    this.hudModel.score = state.score;
-    this.hudModel.phase = state.phase;
-    this.hudModel.runTime = state.runTime;
-    this.hudModel.enemiesLeft = state.enemies.length + this.session.view.pendingCount;
-    this.hudModel.down = player.down;
-    this.hudModel.reviveProgress = player.reviveProgress / PLAYER.reviveTime;
-    this.hudModel.mates = state.players
-      .filter((entry) => entry.id !== player.id)
-      .map((entry) => ({
-        name: entry.name,
-        healthFraction: entry.health / entry.maxHealth,
-        down: entry.down,
-      }));
-  }
-
-  /**
-   * Fuellt das Modell der Uebersichtskarte.
-   *
-   * Jedes Bild neu, aber IN DIE VORHANDENEN ARRAYS statt in neue: Bei 60
-   * Bildern je Sekunde waeren neue Listen sonst Muell, den der Browser
-   * dauernd wegraeumen muss - und zwar genau dann, wenn es gerade eng wird.
-   *
-   * Gefiltert wird hier und nicht in der Karte: Was die Karte zeigen DARF,
-   * entscheidet der Weltzustand (`discovered`), und diese Entscheidung soll
-   * nicht in der Darstellung noch einmal getroffen werden.
-   */
-  private fillMinimap(state: WorldState, player: PlayerState): void {
-    const map = this.hudModel.minimap;
-    map.worldSize = state.bounds.width;
-    // Der Startpunkt ist die Weltmitte - dieselbe Rechnung wie in
-    // `distanceFromStart`, aus der auch die Distanzzonen entstehen. Eine
-    // zweite Quelle dafuer waere eine zweite Wahrheit.
-    map.startX = state.bounds.width / 2;
-    map.startY = state.bounds.height / 2;
-    map.safeRadius = safeRadiusOf(state);
-    map.selfX = player.position.x;
-    map.selfY = player.position.y;
-
-    map.mates.length = 0;
-    for (const mate of state.players) {
-      if (mate.id !== player.id) {
-        map.mates.push({ x: mate.position.x, y: mate.position.y, down: mate.down });
-      }
-    }
-
-    map.extractions.length = 0;
-    for (const zone of state.extractions) {
-      if (zone.discovered) {
-        map.extractions.push({ x: zone.position.x, y: zone.position.y });
-      }
-    }
-
-    map.encounters.length = 0;
-    for (const spot of state.encounters) {
-      if (spot.discovered) {
-        map.encounters.push({
-          x: spot.position.x,
-          y: spot.position.y,
-          isFinal: spot.isFinal,
-          cleared: spot.status === "cleared",
-        });
-      }
-    }
-
-    // Vom Aufklaerungsschuss aufgedeckte Gegner (Etappe 10). Nur die: Eine
-    // Karte mit ALLEN Gegnern nahme dem Erkunden seinen Sinn.
-    map.revealed.length = 0;
-    for (const enemy of state.enemies) {
-      if (enemy.marked > 0) {
-        map.revealed.push({ x: enemy.position.x, y: enemy.position.y });
-      }
-    }
-  }
-
-}
-
-/**
- * Richtung und Entfernung zum naechsten schon entdeckten Ausstieg.
- *
- * NUR ENTDECKTE ZAEHLEN. Wuerde der Kompass auf alle sechs zeigen, waere die
- * Karte vom ersten Moment an geloest - man liefe die Pfeile ab, statt zu
- * erkunden. So ist er das, was er sein soll: ein Gedaechtnis fuer das, was man
- * schon gesehen hat, und kein Spickzettel.
- *
- * Steht hier in der Szene und nicht in `systems/`, weil es reine Anzeige ist:
- * Die Simulation trifft daraus keine Entscheidung.
- */
-function nearestKnownExtraction(
-  state: WorldState,
-  from: Vec2,
-): { angle: number; distance: number; position: Vec2 } | null {
-  let best: { angle: number; distance: number; position: Vec2 } | null = null;
-
-  for (const zone of state.extractions) {
-    if (!zone.discovered) {
-      continue;
-    }
-    const dx = zone.position.x - from.x;
-    const dy = zone.position.y - from.y;
-    const distance = Math.hypot(dx, dy);
-    if (!best || distance < best.distance) {
-      best = { angle: Math.atan2(dy, dx), distance, position: zone.position };
-    }
-  }
-
-  return best;
 }
