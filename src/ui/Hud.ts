@@ -7,7 +7,6 @@
  */
 
 import Phaser from "phaser";
-import { MATERIAL_TILE, SHEET_KEY } from "../config/assets";
 import { PALETTE, SAFE, VIEWPORT } from "../config/constants";
 import { UI } from "../config/ui";
 import { xpNeeded } from "../game/player";
@@ -18,7 +17,7 @@ const DEPTH = 9500;
 function label(scene: Phaser.Scene, size: number, color: string = PALETTE.hudText): Phaser.GameObjects.Text {
   return scene.add
     .text(0, 0, "", { fontFamily: UI.font, fontSize: `${size}px`, color, fontStyle: "bold" })
-    .setShadow(1, 2, PALETTE.hudShadow, 2)
+    .setStroke("#14101c", 4)
     .setDepth(DEPTH + 1);
 }
 
@@ -39,7 +38,7 @@ export class Hud {
     this.waveText = label(scene, 18, "#f6ead2").setOrigin(0.5, 0);
     this.timeText = label(scene, 34).setOrigin(0.5, 0);
     this.goldText = label(scene, 22, PALETTE.gold).setOrigin(1, 0);
-    this.goldIcon = scene.add.image(0, 0, SHEET_KEY, MATERIAL_TILE).setScale(2).setDepth(DEPTH + 1);
+    this.goldIcon = scene.add.image(0, 0, "gem").setDisplaySize(24, 24).setDepth(DEPTH + 1);
     for (let i = 0; i < 3; i += 1) {
       this.mateTexts.push(label(scene, 13));
     }
@@ -65,15 +64,18 @@ export class Hud {
       // Leben: breiter Balken links oben.
       const width = 230;
       const hpFraction = Phaser.Math.Clamp(self.hp / self.stats.maxHp, 0, 1);
-      g.fillStyle(0x22140f, 0.85).fillRoundedRect(left, 10, width, 24, 6);
-      g.fillStyle(hpFraction > 0.3 ? 0x7fb069 : 0xe4572e, 1).fillRoundedRect(left + 3, 13, (width - 6) * hpFraction, 18, 4);
+      g.fillStyle(0x14101c, 1).fillRoundedRect(left - 2, 8, width + 4, 28, 8);
+      g.fillStyle(0x4a3a5e, 1).fillRoundedRect(left + 2, 12, width - 4, 20, 5);
+      g.fillStyle(hpFraction > 0.3 ? 0x7fd35a : 0xff5a3c, 1).fillRoundedRect(left + 2, 12, Math.max(0, (width - 4) * hpFraction), 20, 5);
+      g.fillStyle(0xffffff, 0.3).fillRoundedRect(left + 6, 14, Math.max(0, (width - 12) * hpFraction), 5, 2);
       this.hpText.setText(`${Math.ceil(Math.max(0, self.hp))} / ${Math.round(self.stats.maxHp)}`);
       this.hpText.setPosition(left + width / 2 - this.hpText.width / 2, 12);
 
       // Erfahrung: dünner Balken darunter.
       const xpFraction = Phaser.Math.Clamp(self.xp / xpNeeded(self.level), 0, 1);
-      g.fillStyle(0x22140f, 0.85).fillRoundedRect(left, 38, width, 10, 4);
-      g.fillStyle(0x6aa0c9, 1).fillRoundedRect(left + 2, 40, (width - 4) * xpFraction, 6, 3);
+      g.fillStyle(0x14101c, 1).fillRoundedRect(left - 2, 38, width + 4, 14, 5);
+      g.fillStyle(0x4a3a5e, 1).fillRoundedRect(left + 1, 41, width - 2, 8, 3);
+      g.fillStyle(0x59c8ff, 1).fillRoundedRect(left + 1, 41, Math.max(0, (width - 2) * xpFraction), 8, 3);
       this.levelText.setText(`Lv ${self.level}`);
       this.levelText.setPosition(left + width + 8, 30);
 
@@ -98,8 +100,8 @@ export class Hud {
       }
       const y = 56 + index * 20;
       const fraction = mate.alive ? Phaser.Math.Clamp(mate.hp / mate.stats.maxHp, 0, 1) : 0;
-      g.fillStyle(0x22140f, 0.85).fillRoundedRect(left, y + 2, 80, 10, 3);
-      g.fillStyle(mate.alive ? 0x7fb069 : 0x555555, 1).fillRoundedRect(left + 2, y + 4, 76 * fraction, 6, 2);
+      g.fillStyle(0x14101c, 1).fillRoundedRect(left - 1, y + 1, 82, 12, 4);
+      g.fillStyle(mate.alive ? 0x7fd35a : 0x555555, 1).fillRoundedRect(left + 1, y + 3, 78 * fraction, 8, 3);
       text.setVisible(true);
       text.setText(mate.name);
       text.setPosition(left + 88, y - 1);

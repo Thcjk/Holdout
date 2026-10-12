@@ -81,3 +81,12 @@ export function itemIconKey(id: string): string {
 /** Musik: ruhig im Menue, treibend im Gefecht. */
 export const MUSIC_MENU = `${import.meta.env.BASE_URL}assets/audio/menu.ogg`;
 export const MUSIC_WAVE = `${import.meta.env.BASE_URL}assets/audio/wave.ogg`;
+
+/** Texturen, die beim Start gemalt werden (`ui/comic.ts`): Figuren mit dickem Umriss, Arena. */
+export const arenaKey = "arena";
+export function characterKey(id: CharacterId): string {
+  return `ch-${id}`;
+}
+export function enemyKey(type: EnemyType): string {
+  return `en-${type}`;
+}

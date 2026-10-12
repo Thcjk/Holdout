@@ -6,7 +6,7 @@
  */
 
 import Phaser from "phaser";
-import { CHARACTER_TILES, SHEET_KEY, weaponIconKey } from "../config/assets";
+import { characterKey, weaponIconKey } from "../config/assets";
 import { SAFE, VIEWPORT } from "../config/constants";
 import { UI } from "../config/ui";
 import { CHARACTERS, CHARACTER_IDS } from "../game/data/characters";
@@ -73,7 +73,7 @@ export class SelectScene extends Phaser.Scene {
     const def = CHARACTERS[id];
     woodPanel(this, x, y, CARD_W, CARD_H);
     insetPanel(this, x, y - 20, CARD_W - 28, 104);
-    this.add.sprite(x, y - 20, SHEET_KEY, CHARACTER_TILES[id]).setScale(5);
+    this.add.image(x, y - 20, characterKey(id)).setScale(1.3);
     menuText(this, x, y + 56, def.name, 22, UI.text.body, true);
     menuText(this, x, y + 78, `${def.slots} Waffenplätze`, 14, UI.text.muted);
 

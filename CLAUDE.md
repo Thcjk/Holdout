@@ -56,6 +56,10 @@ Umbau auf Branch `brotato-umbau` fertig und lauffähig, **noch nicht auf `main`*
   (Atlas, `ui/UiNineSlice`), Blaster-Vorschaubilder als Waffensymbole. Symbole für Gegenstände,
   Nahkampfwaffen, Spawn-Kreuz und Schatten werden in `ui/icons.ts` gezeichnet –
   **nach dem Zeichnen `refresh()` auf der Canvas-Textur**, sonst bleibt sie leer.
+- **Comic-Look:** `ui/comic.ts` malt beim Start (BootScene) alle Texturen: `ch-<id>`/`en-<typ>` (Figuren mit
+  dicker schwarzer Kontur), `arena` (Steinwand, Sandboden, Rasterpunkte, Risse), `bg-game`, `bullet`, `gem`, `logo`.
+  Schlüssel über `config/assets.ts` (`characterKey`, `enemyKey`, `arenaKey`). Gegner wackeln/quetschen sich,
+  Comic-Wörter („BAM!“, „KRIT!“) in `GameScene.comic()`. Menühintergrund: `menuStyle.paintBackground`.
 - `setReloadSafe(true)` nur im Titel und im Ergebnis (Selbst-Update der PWA nur dort).
 
 ## Entwickeln und prüfen
@@ -75,6 +79,7 @@ Adress-Zusätze: `?desktop`, `?debug=lokal|werte|netz|all`, `?seed=N` (nur solo)
 - Arena ist ein einfarbiger Sandboden ohne Hindernisse; Dekoration, Bildschirm-Treffer-Feedback,
   Musik-Lautstärke-Regeln feinschleifen.
 - Kein Speichern von Fortschritt; kein Charakter-Freischalten.
+- App-Icons/Favicon (`public/icons`, `favicon.svg`) sind noch im alten Stil – an den Comic-Look anpassen.
 - Bundle ~1,6 MB (Phaser komplett).
 
 ## Deployment

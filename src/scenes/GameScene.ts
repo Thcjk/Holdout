@@ -12,7 +12,7 @@
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import type { SoundName } from "../audio/AudioEngine";
-import { BULLET_TILE, CHARACTER_TILES, ENEMY_TILES, FLOOR_TILES, MATERIAL_TILE, SHEET_KEY, weaponIconKey } from "../config/assets";
+import { arenaKey, characterKey, enemyKey, weaponIconKey } from "../config/assets";
 import { COLORS, PALETTE, SAFE, VIEWPORT } from "../config/constants";
 import { UI } from "../config/ui";
 import { ARENA } from "../game/constants";
@@ -23,6 +23,7 @@ import { setReloadSafe } from "../platform/update";
 import { Button } from "../ui/Button";
 import { FloatingStick } from "../ui/FloatingStick";
 import { Hud } from "../ui/Hud";
+import { ARENA_WALL } from "../ui/comic";
 import { menuText, woodPanel } from "../ui/menuStyle";
 import { ShopPanel } from "../ui/ShopPanel";
 import type { PlayMode } from "../app";
@@ -36,6 +37,8 @@ interface Destroyable {
 
 interface EnemyView extends Destroyable {
   sprite: Phaser.GameObjects.Sprite;
+  base: number;
+  born: number;
   x: number;
   y: number;
 }
@@ -48,6 +51,8 @@ interface PlayerView extends Destroyable {
   weaponSignature: string;
   x: number;
   y: number;
+  lastX: number;
+  lastY: number;
 }
 
 interface ShotView extends Destroyable {
@@ -90,6 +95,7 @@ export class GameScene extends Phaser.Scene {
   private lastPhase: string | null = null;
   private lastSound = new Map<string, number>();
   private floaters = 0;
+  private lastWord = 0;
   private onVisibility = (): void => {};
 
   constructor() {
@@ -110,6 +116,7 @@ export class GameScene extends Phaser.Scene {
     this.lastPhase = null;
     this.lastSound = new Map();
     this.floaters = 0;
+    this.lastWord = 0;
     this.pauseObjects = [];
     this.lostObjects = [];
   }
@@ -182,17 +189,12 @@ export class GameScene extends Phaser.Scene {
   // --- Aufbau -------------------------------------------------------------
 
   private buildArena(): void {
-    const floor = this.add
-      .tileSprite(this.originX, this.originY, ARENA.width, ARENA.height, SHEET_KEY, FLOOR_TILES[0] ?? 0)
-      .setOrigin(0)
-      .setDepth(0);
-    floor.setTileScale(3, 3);
+    this.add.image(VIEWPORT.width / 2, VIEWPORT.height / 2, "bg-game").setDepth(-100);
     this.add
-      .rectangle(this.originX - 4, this.originY - 4, ARENA.width + 8, ARENA.height + 8)
+      .image(this.originX - ARENA_WALL, this.originY - ARENA_WALL, arenaKey)
       .setOrigin(0)
-      .setStrokeStyle(8, 0x2a1f14)
-      .setFillStyle(0, 0)
-      .setDepth(1);
+      .setDisplaySize(ARENA.width + ARENA_WALL * 2, ARENA.height + ARENA_WALL * 2)
+      .setDepth(0);
   }
 
   private overlayBox(
@@ -450,9 +452,12 @@ export class GameScene extends Phaser.Scene {
 
   private makeEnemy(enemy: Enemy): EnemyView {
     const def = ENEMIES[enemy.type];
-    const sprite = this.add.sprite(0, 0, SHEET_KEY, ENEMY_TILES[enemy.type]).setScale(def.radius / 6);
+    const base = def.radius / 24;
+    const sprite = this.add.sprite(0, 0, enemyKey(enemy.type)).setScale(0);
     const view: EnemyView = {
       sprite,
+      base,
+      born: this.time.now,
       x: this.originX + enemy.x,
       y: this.originY + enemy.y,
       destroy: () => sprite.destroy(),
@@ -466,29 +471,41 @@ export class GameScene extends Phaser.Scene {
     const targetY = this.originY + enemy.y;
     view.x += (targetX - view.x) * k;
     view.y += (targetY - view.y) * k;
-    view.sprite.setPosition(view.x, view.y).setDepth(100 + view.y);
+    const now = this.time.now;
+    // Aufploppen beim Erscheinen, danach wackelt der Gegner im Takt seiner Schritte.
+    const pop = Phaser.Math.Easing.Back.Out(Math.min(1, (now - view.born) / 220));
+    const phase = now / 105 + enemy.id * 1.7;
+    const windup = enemy.mode === "windup";
+    const squash = Math.sin(phase) * (windup ? 0.14 : 0.07);
+    view.sprite
+      .setPosition(view.x, view.y - Math.abs(Math.sin(phase)) * 2)
+      .setDepth(100 + view.y)
+      .setScale(view.base * pop * (1 - squash), view.base * pop * (1 + squash))
+      .setAngle(Math.sin(phase) * (windup ? 14 : 6));
     if (Math.abs(enemy.dirX) > 0.05) {
       view.sprite.setFlipX(enemy.dirX < 0);
     }
     if (enemy.flash > 0) {
       view.sprite.setTintFill(0xffffff);
+    } else if (windup) {
+      view.sprite.setTint(0xff9a9a);
     } else {
       view.sprite.clearTint();
     }
-    // Windet sich ein Angriff an (Sturmlaeufer, Boss), pulsiert der Gegner.
-    view.sprite.setAlpha(enemy.mode === "windup" ? 0.7 : 1);
 
     if (enemy.hp < enemy.maxHp) {
       const r = ENEMIES[enemy.type].radius;
-      const width = Math.max(18, r * 2);
+      const width = Math.max(20, r * 2);
       const fraction = Phaser.Math.Clamp(enemy.hp / enemy.maxHp, 0, 1);
-      this.bars.fillStyle(0x22140f, 0.8).fillRect(view.x - width / 2, view.y - r - 9, width, 4);
-      this.bars.fillStyle(COLORS.hpEnemy, 1).fillRect(view.x - width / 2, view.y - r - 9, width * fraction, 4);
+      const bx = view.x - width / 2;
+      const by = view.y - r - 12;
+      this.bars.fillStyle(0x14101c, 1).fillRoundedRect(bx - 2, by - 2, width + 4, 8, 3);
+      this.bars.fillStyle(COLORS.hpEnemy, 1).fillRoundedRect(bx, by, width * fraction, 4, 2);
     }
   }
 
   private makePlayer(player: PlayerState): PlayerView {
-    const sprite = this.add.sprite(0, 0, SHEET_KEY, CHARACTER_TILES[player.character]).setScale(2);
+    const sprite = this.add.sprite(0, 0, characterKey(player.character)).setScale(0.5);
     const shadow = this.add.image(0, 0, "shadow").setDisplaySize(34, 16).setAlpha(0.9);
     const name = this.add
       .text(0, 0, this.session.isMultiplayer ? player.name : "", {
@@ -508,6 +525,8 @@ export class GameScene extends Phaser.Scene {
       weaponSignature: "",
       x: this.originX + player.x,
       y: this.originY + player.y,
+      lastX: this.originX + player.x,
+      lastY: this.originY + player.y,
       destroy: () => {
         sprite.destroy();
         shadow.destroy();
@@ -534,13 +553,18 @@ export class GameScene extends Phaser.Scene {
     }
 
     const depth = 100 + view.y;
-    view.sprite.setPosition(view.x, view.y).setDepth(depth);
+    // Laeuft die Figur, huepft sie leicht und wippt - wie in einem Zeichentrickfilm.
+    const moving = Math.abs(view.x - view.lastX) + Math.abs(view.y - view.lastY) > 0.25;
+    view.lastX = view.x;
+    view.lastY = view.y;
+    const bob = moving && player.alive ? Math.abs(Math.sin(time / 75)) * 3.5 : 0;
+    view.sprite.setPosition(view.x, view.y - bob).setDepth(depth);
     view.shadow.setPosition(view.x, view.y + 11).setDepth(depth - 1);
     view.sprite.setFlipX(Math.cos(player.facing) < 0);
-    view.sprite.setAngle(player.alive ? 0 : 90);
+    view.sprite.setAngle(!player.alive ? 90 : moving ? Math.sin(time / 75) * 7 : 0);
     const blink = player.iframes > 0 && Math.floor(time / 70) % 2 === 0;
     view.sprite.setAlpha(!player.alive ? 0.45 : blink ? 0.5 : 1);
-    view.name.setPosition(view.x, view.y - 30).setVisible(player.alive);
+    view.name.setPosition(view.x, view.y - 32).setVisible(player.alive);
 
     // Waffen kreisen um die Figur.
     const signature = player.weapons.map((weapon) => weapon.id).join(",");
@@ -562,15 +586,16 @@ export class GameScene extends Phaser.Scene {
 
     if (player.alive) {
       const fraction = Phaser.Math.Clamp(player.hp / player.stats.maxHp, 0, 1);
-      this.bars.fillStyle(0x22140f, 0.8).fillRect(view.x - 16, view.y - 24, 32, 4);
-      this.bars.fillStyle(COLORS.hpPlayer, 1).fillRect(view.x - 16, view.y - 24, 32 * fraction, 4);
+      this.bars.fillStyle(0x14101c, 1).fillRoundedRect(view.x - 19, view.y - 29, 38, 9, 3);
+      this.bars.fillStyle(COLORS.hpPlayer, 1).fillRoundedRect(view.x - 17, view.y - 27, 34 * fraction, 5, 2);
     }
   }
 
   private makeShot(shot: Projectile): ShotView {
+    const size = Math.max(11, shot.radius * 2.8);
     const image = this.add
-      .image(0, 0, SHEET_KEY, BULLET_TILE)
-      .setScale(Math.max(1, shot.radius / 4))
+      .image(0, 0, "bullet")
+      .setDisplaySize(size, size)
       .setTint(shot.friendly ? COLORS.playerBullet : COLORS.enemyBullet)
       .setDepth(5000);
     return { image, x: this.originX + shot.x, y: this.originY + shot.y, destroy: () => image.destroy() };
@@ -581,13 +606,13 @@ export class GameScene extends Phaser.Scene {
     const targetY = this.originY + shot.y;
     view.x += (targetX - view.x) * k;
     view.y += (targetY - view.y) * k;
-    view.image.setPosition(view.x, view.y).setRotation(Math.atan2(shot.vy, shot.vx));
+    view.image.setPosition(view.x, view.y);
   }
 
   private makePickup(pickup: Pickup): Phaser.GameObjects.Image {
     return this.add
-      .image(this.originX + pickup.x, this.originY + pickup.y, SHEET_KEY, MATERIAL_TILE)
-      .setScale(1.6)
+      .image(this.originX + pickup.x, this.originY + pickup.y, "gem")
+      .setDisplaySize(17, 17)
       .setDepth(3);
   }
 
@@ -627,6 +652,10 @@ export class GameScene extends Phaser.Scene {
       case "hit":
         if (event.enemy) {
           this.floater(event.x, event.y - 10, String(Math.round(event.dmg)), event.crit ? PALETTE.gold : "#ffffff", event.crit ? 22 : 15);
+          if (event.crit && this.time.now - this.lastWord > 140) {
+            this.lastWord = this.time.now;
+            this.comic(event.x, event.y - 8, "KRIT!", PALETTE.gold);
+          }
           this.playSound("hit", 55);
         } else {
           this.floater(event.x, event.y - 18, `-${Math.round(event.dmg)}`, PALETTE.danger, 20);
@@ -636,6 +665,9 @@ export class GameScene extends Phaser.Scene {
         break;
       case "kill":
         this.burst(event.x, event.y, event.big ? 12 : 5, event.big ? 0xffd166 : 0xcfe8a0);
+        if (event.big) {
+          this.comic(event.x, event.y, ["BAM!", "POW!", "ZACK!", "WUMM!"][Math.floor(Math.random() * 4)] ?? "BAM!", "#ff7a5c");
+        }
         this.playSound("enemyDied", 45);
         break;
       case "shot":
@@ -726,17 +758,51 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Ein Comic-Wort ("BAM!") springt auf, wackelt und verschwindet. */
+  private comic(x: number, y: number, word: string, color: string): void {
+    if (this.floaters > 30) {
+      return;
+    }
+    this.floaters += 1;
+    const text = this.add
+      .text(this.originX + x, this.originY + y - 16, word, {
+        fontFamily: UI.font,
+        fontSize: "30px",
+        color,
+        fontStyle: "italic 900",
+        stroke: "#14101c",
+        strokeThickness: 7,
+      })
+      .setOrigin(0.5)
+      .setDepth(9100)
+      .setAngle(Phaser.Math.Between(-14, 14))
+      .setScale(0.3);
+    this.tweens.add({ targets: text, scale: 1.15, duration: 120, ease: "Back.Out" });
+    this.tweens.add({
+      targets: text,
+      y: text.y - 22,
+      alpha: 0,
+      delay: 300,
+      duration: 380,
+      onComplete: () => {
+        text.destroy();
+        this.floaters -= 1;
+      },
+    });
+  }
+
   private burst(x: number, y: number, count: number, color: number): void {
     for (let i = 0; i < count; i += 1) {
       const angle = (i / count) * Math.PI * 2 + Math.random();
-      const distance = 14 + Math.random() * 16;
-      const piece = this.add.rectangle(this.originX + x, this.originY + y, 4, 4, color).setDepth(8500);
+      const distance = 16 + Math.random() * 20;
+      const piece = this.add.star(this.originX + x, this.originY + y, 5, 2, 5, color).setStrokeStyle(1.5, 0x14101c).setDepth(8500);
       this.tweens.add({
         targets: piece,
         x: piece.x + Math.cos(angle) * distance,
         y: piece.y + Math.sin(angle) * distance,
         alpha: 0,
-        duration: 320,
+        angle: 180,
+        duration: 380,
         onComplete: () => piece.destroy(),
       });
     }

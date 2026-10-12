@@ -4,7 +4,9 @@
 
 import Phaser from "phaser";
 import { SAFE, VIEWPORT } from "../config/constants";
+import { characterKey } from "../config/assets";
 import { UI } from "../config/ui";
+import { CHARACTER_IDS } from "../game/data/characters";
 import { audio } from "../audio/AudioEngine";
 import { Button } from "../ui/Button";
 import { menuBackground, menuText } from "../ui/menuStyle";
@@ -26,8 +28,23 @@ export class TitleScene extends Phaser.Scene {
     });
     audio.setMusic("menu");
 
-    menuText(this, cx, 96, "HOLDOUT", 76, UI.text.accent, true).setShadow(3, 5, UI.text.shadow, 6);
-    menuText(this, cx, 156, "Überlebe 20 Wellen. Kauf klug ein.", 22, UI.text.body);
+    const logo = this.add.image(cx, 118, "logo").setDisplaySize(500, 178).setAngle(-1.5);
+    this.tweens.add({ targets: logo, angle: 1.5, scale: logo.scale * 1.035, duration: 1700, yoyo: true, repeat: -1, ease: "Sine.InOut" });
+
+    // Die Helden hopsen unten im Takt.
+    CHARACTER_IDS.forEach((id, index) => {
+      const x = cx + (index - (CHARACTER_IDS.length - 1) / 2) * 74;
+      const figure = this.add.image(x, 492, characterKey(id)).setScale(0.8);
+      this.tweens.add({
+        targets: figure,
+        y: figure.y - 14,
+        duration: 340,
+        yoyo: true,
+        repeat: -1,
+        delay: index * 90,
+        ease: "Quad.Out",
+      });
+    });
 
     const choose = (mode: PlayMode): void => {
       audio.unlock();
