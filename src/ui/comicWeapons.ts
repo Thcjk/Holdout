@@ -30,7 +30,7 @@ export const WEAPON_STYLE: WeaponStyle = {
   bodyDark: NOIR.steel0,
   accent: NOIR.amber,
   grip: "#4a3426",
-  metal: "#a3adbd",
+  metal: "#b9c4bc",
   round: 2,
   line: 4.5,
   burst: false,
@@ -47,7 +47,7 @@ function box(ctx: Ctx, s: WeaponStyle, x: number, y: number, w: number, h: numbe
     ctx.clip();
     ctx.fillStyle = dark;
     ctx.fillRect(x - 2, y + h * 0.62, w + 4, h);
-    ctx.fillStyle = "rgba(233,228,212,0.35)";
+    ctx.fillStyle = "rgba(240,228,200,0.35)";
     ctx.fillRect(x + 2, y + 2, w - 4, Math.max(1.5, h * 0.1));
     ctx.restore();
   }

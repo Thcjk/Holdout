@@ -9,7 +9,7 @@
  * QR-Bibliothek nicht im Handy-Bundle landet, wo sie niemand braucht.
  */
 
-const BACKGROUND = "#0a0910";
+const BACKGROUND = "#1d1c19";
 const TEXT = "#dce8f7";
 const DIM = "#8ea6c4";
 const ACCENT = "#ffd166";

@@ -5,7 +5,7 @@
 
 import { createComicTextures } from "../../src/ui/comic";
 
-const INK = "#0a0910";
+const INK = "#1d1c19";
 const captured = new Map<string, HTMLCanvasElement>();
 const scene = {
   textures: {
@@ -27,13 +27,13 @@ function make(width: number, height: number): [HTMLCanvasElement, CanvasRenderin
 
 function background(ctx: CanvasRenderingContext2D, width: number, height: number, cy: number): void {
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, "#222838");
-  gradient.addColorStop(1, "#0a0910");
+  gradient.addColorStop(0, "#4b7a80");
+  gradient.addColorStop(1, "#1d1c19");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
   const reach = Math.hypot(width, height);
   const rays = 24;
-  ctx.fillStyle = "rgba(233,228,212,0.05)";
+  ctx.fillStyle = "rgba(240,228,200,0.05)";
   for (let i = 0; i < rays; i += 2) {
     const a0 = (i / rays) * Math.PI * 2;
     const a1 = ((i + 1) / rays) * Math.PI * 2;
@@ -45,7 +45,7 @@ function background(ctx: CanvasRenderingContext2D, width: number, height: number
     ctx.fill();
   }
   const step = Math.max(14, Math.min(width, height) / 22);
-  ctx.fillStyle = "rgba(196,38,46,0.2)";
+  ctx.fillStyle = "rgba(181,83,47,0.2)";
   for (let y = step / 2; y < height; y += step) {
     for (let x = step / 2 + (Math.floor(y / step) % 2) * (step / 2); x < width; x += step) {
       const radius = (y / height) * step * 0.24;
@@ -101,9 +101,9 @@ function motif(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: numb
   ctx.lineWidth = size * 0.05 * scale;
   ctx.strokeStyle = INK;
   ctx.stroke();
-  ctx.fillStyle = "#c4262e";
+  ctx.fillStyle = "#b5532f";
   ctx.fill();
-  ctx.fillStyle = "#7c1219";
+  ctx.fillStyle = "#7d3519";
   ctx.beginPath();
   ctx.moveTo(-R * 1.0, R * 0.2);
   ctx.lineTo(-R * 0.8, R * 0.48);
@@ -127,9 +127,9 @@ function motif(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: numb
   ctx.lineWidth = s * 0.09;
   ctx.stroke();
   const fill = ctx.createLinearGradient(0, cy - s * 0.36, 0, cy + s * 0.36);
-  fill.addColorStop(0, "#e9e4d4");
-  fill.addColorStop(0.55, "#e9e4d4");
-  fill.addColorStop(0.56, "#b9b19b");
+  fill.addColorStop(0, "#f0e4c8");
+  fill.addColorStop(0.55, "#f0e4c8");
+  fill.addColorStop(0.56, "#cdbf9b");
   fill.addColorStop(1, "#8d866f");
   ctx.fillStyle = fill;
   ctx.fill();

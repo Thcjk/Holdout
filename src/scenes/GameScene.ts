@@ -129,7 +129,7 @@ export class GameScene extends Phaser.Scene {
 
     this.buildArena();
     this.bars = this.add.graphics().setDepth(8000);
-    this.selfRing = this.add.ellipse(0, 0, 34, 16).setStrokeStyle(2, 0xe8a317, 0.9).setDepth(2);
+    this.selfRing = this.add.ellipse(0, 0, 34, 16).setStrokeStyle(2, 0xdba636, 0.9).setDepth(2);
     this.hud = new Hud(this);
     this.shop = new ShopPanel(this, (command) => this.session.send(command));
 
@@ -664,7 +664,7 @@ export class GameScene extends Phaser.Scene {
         }
         break;
       case "kill":
-        this.burst(event.x, event.y, event.big ? 12 : 5, event.big ? 0xe8a317 : 0xb9b19b);
+        this.burst(event.x, event.y, event.big ? 12 : 5, event.big ? 0xdba636 : 0xcdbf9b);
         if (event.big) {
           this.comic(event.x, event.y, ["BAM!", "POW!", "ZACK!", "WUMM!"][Math.floor(Math.random() * 4)] ?? "BAM!", "#ff4a3a");
         }

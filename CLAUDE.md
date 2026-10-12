@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout** (v3.4.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
+**Holdout** (v3.5.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
 Online-Koop (1–4). Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android-APK über
 Capacitor. Der frühere Koop-Arena-Shooter (v2.5.0, Brawl-Stars-artig, mit 3D) wurde auf dem
 Branch `brotato-umbau` komplett ersetzt; sein Stand liegt auf `main` bis zum Merge, seine
@@ -56,14 +56,15 @@ Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
   werden nicht mehr angezeigt; `UiNineSlice` und `CHARACTER_TILES` sind Altlast). Symbole für Gegenstände,
   Spawn-Kreuz und Schatten werden in `ui/icons.ts` gezeichnet –
   **nach dem Zeichnen `refresh()` auf der Canvas-Textur**, sonst bleibt sie leer.
-- **Look (düster, Graphic-Novel; vorher kindlicher Bonbon-Comic – dem Nutzer zu kindlich):** Palette in `ui/noir.ts`
-  (fast schwarze Tinte, Stahlgrau, Knochenweiß, Blutrot und Bernstein als einzige Akzente). `ui/comicFigures.ts`
-  zeichnet 6 Helden und 7 Gegner (78×78, schauen nach rechts, `ch-<id>`/`en-<typ>`, kantig, harte Zweiton-Schatten,
-  leuchtende Schlitzaugen). `ui/comicWeapons.ts`: 7 Waffensymbole (dunkler Stahl, Bernstein; `weapon-<id>`).
-  `ui/ComicBox.ts`: Tafeln, Papier-Einlagen, Knöpfe (`BOX.panel|inset|primary|secondary`). `ui/comic.ts` malt Arena
-  (Beton, Warnstreifen, Blutflecken, Risse), `bg-game`, `bullet`, `gem`, `logo`. Menühintergrund: `menuStyle.paintBackground`
-  (zerstörte Skyline). Schlüssel über `config/assets.ts`. Gegner wackeln/quetschen sich, Comic-Wörter („BAM!“, „KRIT!“)
-  in `GameScene.comic()`.
+- **Look (Märchenbuch-Poster, Vorbild: Pinterest-Bild „Out of Line“ vom Nutzer; davor Bonbon-Comic und düsterer
+  Graphic-Novel – beides verworfen):** handgemalt, gedämpft, warm. Palette in `ui/noir.ts` (Name stammt aus der
+  düsteren Fassung: `ink` dunkle Tinte, `steel*` Teal-Töne, `bone` Creme, `blood` Rost, `amber` Senfgelb).
+  Helden (`ui/comicFigures.ts`): kleine Wanderer mit Kapuze/Schal und einem großen Auge. Gegner: dunkle Schattenwesen
+  mit hellen Augen, Elite/Boss mit Dornenring. Dünne Konturen, flache Farben, dunklerer Streifen unten.
+  `ui/comicWeapons.ts`: 7 Waffensymbole (Teal-Stahl, Holz, Senfgelb). `ui/ComicBox.ts`: Teal-Tafeln, Creme-Papier,
+  Rost-/Teal-Knöpfe (`BOX.*`). `ui/comic.ts`: Arena (Salbei-Wiese mit Korn, Nebelflecken, Gras, Hecken-Rand), `bg-game`,
+  `bullet`, `gem`, `logo`. Menühintergrund: `menuStyle.paintBackground` (Nebelberge, Turm, Tannen). Schlüssel über
+  `config/assets.ts`. Gegner wackeln/quetschen sich, Comic-Wörter („BAM!“, „KRIT!“) in `GameScene.comic()`.
 - `setReloadSafe(true)` nur im Titel und im Ergebnis (Selbst-Update der PWA nur dort).
 
 ## Entwickeln und prüfen
@@ -88,7 +89,7 @@ Adress-Zusätze: `?desktop`, `?debug=lokal|werte|netz|all`, `?seed=N` (nur solo)
   Musik-Lautstärke-Regeln feinschleifen.
 - Kein Speichern von Fortschritt; kein Charakter-Freischalten.
 - App-Icon, Favicon und Android-Splash kommen aus `node tools/generate-brand.mjs` (zeichnet mit denselben Funktionen wie
-  das Spiel; Playwright aus `/opt/npm-tools`). Danach `npm run build` und für Android neu bauen. Farben: `#12131c`/`#0a0910`.
+  das Spiel; Playwright aus `/opt/npm-tools`). Danach `npm run build` und für Android neu bauen. Farben: Teal `#4b7a80`, Tinte `#1d1c19`.
 - Bundle ~1,6 MB (Phaser komplett).
 
 ## Deployment

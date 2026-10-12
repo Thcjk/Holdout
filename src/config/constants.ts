@@ -105,25 +105,25 @@ export function fitViewportToScreen(screenWidth: number, screenHeight: number): 
 
 /** Textfarben als "#rrggbb", fuer Phaser-Texte. */
 export const PALETTE = {
-  hudText: "#e9e4d4",
+  hudText: "#f0e4c8",
   hudShadow: "#00000066",
   danger: "#ff4a3a",
-  success: "#8fbf3f",
-  gold: "#e8a317",
+  success: "#8da64f",
+  gold: "#dba636",
 } as const;
 
 /** Farben der Spielwelt. Lesbarkeit auf kleinem Bildschirm geht vor Schoenheit. */
 export const COLORS = {
-  background: 0x0a0910,
+  background: 0x1d1c19,
   floor: 0xc9a46a,
   wall: 0x46536b,
   wallEdge: 0x2a1f14,
-  hpBack: 0x0a0910,
-  hpPlayer: 0x3fb7b0,
-  hpEnemy: 0xc4262e,
+  hpBack: 0x1d1c19,
+  hpPlayer: 0x4f9aa0,
+  hpEnemy: 0xb5532f,
   danger: 0xff4a3a,
-  material: 0xe8a317,
+  material: 0xdba636,
   playerBullet: 0xffe9a0,
   enemyBullet: 0xff4a3a,
-  marker: 0xc4262e,
+  marker: 0xb5532f,
 } as const;

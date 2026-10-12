@@ -97,7 +97,7 @@ export function createIcons(scene: Phaser.Scene): void {
   // Das Kreuz, das vor einem Gegner am Boden erscheint.
   const marker = createCanvas(scene, "marker");
   if (marker) {
-    marker.strokeStyle = "#c4262e";
+    marker.strokeStyle = "#b5532f";
     marker.lineWidth = 9;
     marker.lineCap = "round";
     marker.beginPath();

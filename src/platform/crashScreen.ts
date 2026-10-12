@@ -16,7 +16,7 @@
  * der sie selbst verhindert hätte.
  */
 
-const BACKGROUND = "#0a0910";
+const BACKGROUND = "#1d1c19";
 const TEXT = "#dce8f7";
 const ACCENT = "#e4572e";
 

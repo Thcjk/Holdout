@@ -1,27 +1,27 @@
 /**
- * Die Farbpalette des Spiels: duester, hart, wenig Farbe.
+ * Die Farbpalette des Spiels: handgemalt, gedaempft, warm - wie ein Maerchenbuch-Poster.
  *
- * Fast schwarze Tinte, kuehles Stahlgrau, Knochenweiss fuer Text und Licht,
- * Blutrot und Bernstein als einzige kraeftige Akzente. Alles Gezeichnete
+ * Dunkle Tinte, Teal und Salbei, Creme fuer Papier und Text,
+ * Rost und Senfgelb als Akzente. (Die Namen stammen aus der duesteren Fassung.) Alles Gezeichnete
  * (Figuren, Waffen, Oberflaeche, Logo) nimmt die Farben von hier.
  */
 
 export const NOIR = {
-  ink: "#0a0910",
-  night: "#12131c",
-  steel0: "#1b1f2b",
-  steel1: "#2a3040",
-  steel2: "#3d4658",
-  steel3: "#5b667c",
-  bone: "#e9e4d4",
-  boneDark: "#b9b19b",
-  blood: "#c4262e",
-  bloodDark: "#7c1219",
-  amber: "#e8a317",
-  amberDark: "#a56a0c",
-  teal: "#3fb7b0",
-  toxic: "#8fbf3f",
-  violet: "#7a4fd0",
+  ink: "#1d1c19",
+  night: "#242a2b",
+  steel0: "#2c3a3c",
+  steel1: "#3e5558",
+  steel2: "#587a7c",
+  steel3: "#7f9c98",
+  bone: "#f0e4c8",
+  boneDark: "#cdbf9b",
+  blood: "#b5532f",
+  bloodDark: "#7d3519",
+  amber: "#dba636",
+  amberDark: "#a87a1c",
+  teal: "#4f9aa0",
+  toxic: "#8da64f",
+  violet: "#6a5f8f",
 } as const;
 
 /** Dieselben Farben als Zahlen fuer Phasers Graphics. */

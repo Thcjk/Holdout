@@ -42,96 +42,126 @@ export function menuBackground(scene: Phaser.Scene): Phaser.GameObjects.Image {
 }
 
 function paintBackground(context: CanvasRenderingContext2D): void {
-  const gradient = context.createLinearGradient(0, 0, 0, BACKGROUND_HEIGHT);
-  gradient.addColorStop(0, "#222838");
-  gradient.addColorStop(1, "#0a0910");
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
-
-  // Strahlen wie auf einem Heftchen-Titelbild: hell und dunkel im Wechsel.
-  const cx = BACKGROUND_WIDTH / 2;
-  const cy = BACKGROUND_HEIGHT * 0.4;
-  const rays = 28;
-  context.fillStyle = "rgba(233,228,212,0.04)";
-  for (let i = 0; i < rays; i += 2) {
-    const a0 = (i / rays) * Math.PI * 2;
-    const a1 = ((i + 1) / rays) * Math.PI * 2;
-    context.beginPath();
-    context.moveTo(cx, cy);
-    context.lineTo(cx + Math.cos(a0) * 2400, cy + Math.sin(a0) * 2400);
-    context.lineTo(cx + Math.cos(a1) * 2400, cy + Math.sin(a1) * 2400);
-    context.closePath();
-    context.fill();
-  }
-
-  // Rote Rasterpunkte, zum unteren Rand hin groesser.
-  context.fillStyle = "rgba(196,38,46,0.14)";
-  for (let y = 10; y < BACKGROUND_HEIGHT; y += 18) {
-    for (let x = 10 + (Math.floor(y / 18) % 2) * 9; x < BACKGROUND_WIDTH; x += 18) {
-      const radius = (y / BACKGROUND_HEIGHT) * 4.2;
-      if (radius > 0.6) {
-        context.beginPath();
-        context.arc(x, y, radius, 0, Math.PI * 2);
-        context.fill();
-      }
-    }
-  }
-
-  // Zwei Reihen zerstoerter Haeuser als Silhouette, einzelne Fenster leuchten.
-  let state = 1234;
+  let state = 4321;
   const random = (): number => {
     state = (state * 1664525 + 1013904223) >>> 0;
     return state / 4294967296;
   };
-  const row = (baseY: number, color: string, minHeight: number, spread: number, windows: boolean): void => {
-    let x = -20;
-    while (x < BACKGROUND_WIDTH + 40) {
-      const height = minHeight + random() * spread;
-      const width = 34 + random() * 46;
-      context.fillStyle = color;
-      context.beginPath();
-      context.moveTo(x, baseY);
-      context.lineTo(x, baseY - height);
-      // abgebrochene, schraege Dachkante
-      context.lineTo(x + width * (0.4 + random() * 0.3), baseY - height - random() * 16);
-      context.lineTo(x + width, baseY - height + random() * 10);
-      context.lineTo(x + width, baseY);
-      context.closePath();
-      context.fill();
-      if (windows) {
-        for (let wy = baseY - height + 12; wy < baseY - 12; wy += 16) {
-          for (let wx = x + 6; wx < x + width - 8; wx += 12) {
-            if (random() < 0.12) {
-              context.fillStyle = "rgba(232,163,23,0.7)";
-              context.fillRect(wx, wy, 5, 7);
-            }
-          }
-        }
-      }
-      x += width + random() * 6;
-    }
-    context.fillStyle = color;
-    context.fillRect(0, baseY, BACKGROUND_WIDTH, BACKGROUND_HEIGHT - baseY);
-  };
-  row(BACKGROUND_HEIGHT - 26, "#161a26", 60, 70, true);
-  row(BACKGROUND_HEIGHT - 4, "#07060b", 30, 40, false);
+  const W = BACKGROUND_WIDTH;
+  const H = BACKGROUND_HEIGHT;
 
-  // Weicher Schatten an den Raendern lenkt den Blick in die Mitte.
-  const vignette = context.createRadialGradient(
-    BACKGROUND_WIDTH / 2,
-    BACKGROUND_HEIGHT * 0.45,
-    BACKGROUND_HEIGHT * 0.35,
-    BACKGROUND_WIDTH / 2,
-    BACKGROUND_HEIGHT * 0.45,
-    BACKGROUND_WIDTH * 0.62,
-  );
+  // Daemmerhimmel
+  const sky = context.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, "#4b7a80");
+  sky.addColorStop(0.55, "#5f8c8c");
+  sky.addColorStop(1, "#243638");
+  context.fillStyle = sky;
+  context.fillRect(0, 0, W, H);
+
+  // Heller Schein hinter dem Titel
+  const halo = context.createRadialGradient(W / 2, H * 0.28, 10, W / 2, H * 0.28, 330);
+  halo.addColorStop(0, "rgba(240,228,200,0.5)");
+  halo.addColorStop(1, "rgba(240,228,200,0)");
+  context.fillStyle = halo;
+  context.fillRect(0, 0, W, H);
+
+  // Berge in Schichten, hinten hell und neblig, vorn dunkel
+  const ridge = (base: number, color: string, amp: number, step: number): void => {
+    context.fillStyle = color;
+    context.beginPath();
+    context.moveTo(0, H);
+    let x = 0;
+    let y = base;
+    while (x <= W + step) {
+      y = base - random() * amp;
+      context.lineTo(x, y);
+      x += step * (0.6 + random() * 0.8);
+    }
+    context.lineTo(W, H);
+    context.closePath();
+    context.fill();
+  };
+  ridge(H * 0.62, "#7aa09b", 90, 70);
+  // Nebelband
+  const mist = context.createLinearGradient(0, H * 0.5, 0, H * 0.72);
+  mist.addColorStop(0, "rgba(240,228,200,0)");
+  mist.addColorStop(1, "rgba(240,228,200,0.35)");
+  context.fillStyle = mist;
+  context.fillRect(0, H * 0.5, W, H * 0.22);
+  ridge(H * 0.74, "#4f7d7e", 80, 60);
+
+  // Turm auf dem Berg rechts, mit Dornenring
+  const tx = W * 0.5 + 360;
+  context.fillStyle = "#1f2f31";
+  context.beginPath();
+  context.moveTo(tx - 46, H * 0.8);
+  context.lineTo(tx - 22, H * 0.52);
+  context.lineTo(tx - 14, H * 0.52);
+  context.lineTo(tx - 8, H * 0.4);
+  context.lineTo(tx, H * 0.3);
+  context.lineTo(tx + 8, H * 0.4);
+  context.lineTo(tx + 14, H * 0.52);
+  context.lineTo(tx + 22, H * 0.52);
+  context.lineTo(tx + 46, H * 0.8);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = "#1f2f31";
+  context.lineWidth = 3;
+  context.beginPath();
+  context.ellipse(tx, H * 0.27, 44, 12, -0.1, 0, Math.PI * 2);
+  context.stroke();
+
+  ridge(H * 0.84, "#2f4d50", 70, 50);
+
+  // Voegel
+  context.strokeStyle = "rgba(240,228,200,0.8)";
+  context.lineWidth = 2;
+  for (const [bx, by] of [[W * 0.5 - 330, 90], [W * 0.5 - 290, 70], [W * 0.5 - 360, 60], [W * 0.5 + 240, 110]] as const) {
+    context.beginPath();
+    context.moveTo(bx - 8, by);
+    context.quadraticCurveTo(bx - 3, by - 6, bx, by);
+    context.quadraticCurveTo(bx + 3, by - 6, bx + 8, by);
+    context.stroke();
+  }
+
+  // Dunkle Tannen im Vordergrund
+  for (let x = -10; x < W + 20; x += 18 + random() * 22) {
+    const h = 50 + random() * 90;
+    const w = h * 0.5;
+    context.fillStyle = random() < 0.5 ? "#16201f" : "#1d2a2b";
+    context.beginPath();
+    context.moveTo(x, H - h);
+    context.lineTo(x + w * 0.4, H - h * 0.6);
+    context.lineTo(x + w * 0.2, H - h * 0.6);
+    context.lineTo(x + w * 0.5, H - h * 0.28);
+    context.lineTo(x + w * 0.26, H - h * 0.28);
+    context.lineTo(x + w * 0.56, H);
+    context.lineTo(x - w * 0.56, H);
+    context.lineTo(x - w * 0.26, H - h * 0.28);
+    context.lineTo(x - w * 0.5, H - h * 0.28);
+    context.lineTo(x - w * 0.2, H - h * 0.6);
+    context.lineTo(x - w * 0.4, H - h * 0.6);
+    context.closePath();
+    context.fill();
+  }
+  context.fillStyle = "#16201f";
+  context.fillRect(0, H - 14, W, 14);
+
+  // Papierkorn
+  for (let i = 0; i < 9000; i += 1) {
+    context.fillStyle = random() < 0.5 ? "rgba(29,28,25,0.07)" : "rgba(255,248,225,0.08)";
+    context.fillRect(random() * W, random() * H, 1 + random() * 1.5, 1 + random() * 1.5);
+  }
+
+  // Weicher Schatten an den Raendern
+  const vignette = context.createRadialGradient(W / 2, H * 0.45, H * 0.4, W / 2, H * 0.45, W * 0.62);
   vignette.addColorStop(0, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.55)");
+  vignette.addColorStop(1, "rgba(15,22,23,0.5)");
   context.fillStyle = vignette;
-  context.fillRect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
+  context.fillRect(0, 0, W, H);
 }
 
-/** Eine Comic-Tafel (Mittelpunkt, Groesse). */
+/** Eine Tafel (Mittelpunkt, Groesse). */
 export function woodPanel(scene: Phaser.Scene, x: number, y: number, width: number, height: number): ComicBox {
   return new ComicBox(scene, BOX.panel, x, y, width, height);
 }
@@ -163,7 +193,7 @@ export function menuText(
     .setOrigin(0.5);
   if (!onLight) {
     // Helle Schrift bekommt den dicken Comic-Rand; dunkle Schrift steht auf hellen Einlagen.
-    label.setStroke("#0a0910", Math.max(3, Math.round(size / 5)));
+    label.setStroke("#1d1c19", Math.max(3, Math.round(size / 5)));
   }
   return label;
 }
