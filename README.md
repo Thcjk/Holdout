@@ -25,7 +25,7 @@ auf und baue dir einen Build. Sechs Charaktere brechen jeweils eine Regel.
 | Material | Gegner lassen Material fallen, es wird eingesammelt und ist die Währung im Shop |
 | Shop | Nach jeder Welle: vier Angebote (Waffen und Gegenstände), halten, neu würfeln, Waffen verkaufen oder verschmelzen, Werte ansehen |
 | Level-Ups | Jedes Level bringt eine Auswahl aus vier Verbesserungen |
-| Charaktere | Kartoffel, Raufbold, Jäger, Panzer, Glückspilz, Schatten – mit eigenen Regeln und Startwaffen |
+| Charaktere | Söldner, Raufbold, Jäger, Panzer, Glückspilz, Schatten – mit eigenen Regeln und Startwaffen |
 | Koop | Host rechnet für alle, Raumcode über WebRTC (PeerJS); der Shop wartet, bis alle „Weiter“ gedrückt haben |
 
 ## Entwickeln

@@ -43,24 +43,46 @@ export function menuBackground(scene: Phaser.Scene): Phaser.GameObjects.Image {
 
 function paintBackground(context: CanvasRenderingContext2D): void {
   const gradient = context.createLinearGradient(0, 0, 0, BACKGROUND_HEIGHT);
-  gradient.addColorStop(0, "#39402c");
-  gradient.addColorStop(0.55, "#2c2a1f");
-  gradient.addColorStop(1, "#1f1b14");
+  gradient.addColorStop(0, "#3a2670");
+  gradient.addColorStop(1, "#1b1233");
   context.fillStyle = gradient;
   context.fillRect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
 
-  // Koernung - fester Startwert, damit es bei jedem Start gleich aussieht.
+  // Strahlen wie auf einem Comic-Titelbild: hell und dunkel im Wechsel.
+  const cx = BACKGROUND_WIDTH / 2;
+  const cy = BACKGROUND_HEIGHT * 0.38;
+  const rays = 28;
+  context.fillStyle = "rgba(255,255,255,0.055)";
+  for (let i = 0; i < rays; i += 2) {
+    const a0 = (i / rays) * Math.PI * 2;
+    const a1 = ((i + 1) / rays) * Math.PI * 2;
+    context.beginPath();
+    context.moveTo(cx, cy);
+    context.lineTo(cx + Math.cos(a0) * 2400, cy + Math.sin(a0) * 2400);
+    context.lineTo(cx + Math.cos(a1) * 2400, cy + Math.sin(a1) * 2400);
+    context.closePath();
+    context.fill();
+  }
+
+  // Rasterpunkte, zum unteren Rand hin groesser.
+  context.fillStyle = "rgba(255,120,200,0.10)";
+  for (let y = 10; y < BACKGROUND_HEIGHT; y += 18) {
+    for (let x = 10 + (Math.floor(y / 18) % 2) * 9; x < BACKGROUND_WIDTH; x += 18) {
+      const radius = (y / BACKGROUND_HEIGHT) * 4.2;
+      if (radius > 0.6) {
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+      }
+    }
+  }
+
+  // Zwei Reihen Zacken-Silhouetten am unteren Rand (Stadt/Wald in Violett).
   let state = 1234;
   const random = (): number => {
     state = (state * 1664525 + 1013904223) >>> 0;
     return state / 4294967296;
   };
-  for (let i = 0; i < 2600; i += 1) {
-    context.fillStyle = random() < 0.5 ? "rgba(255,240,200,0.05)" : "rgba(0,0,0,0.12)";
-    context.fillRect(Math.floor(random() * BACKGROUND_WIDTH), Math.floor(random() * BACKGROUND_HEIGHT), 2, 2);
-  }
-
-  // Zwei Reihen Tannen-Silhouetten, die hintere heller (Dunst).
   const row = (baseY: number, color: string, minHeight: number, spread: number): void => {
     context.fillStyle = color;
     let x = -20;
@@ -77,8 +99,8 @@ function paintBackground(context: CanvasRenderingContext2D): void {
     }
     context.fillRect(0, baseY, BACKGROUND_WIDTH, BACKGROUND_HEIGHT - baseY);
   };
-  row(BACKGROUND_HEIGHT - 26, "#2a3324", 40, 46);
-  row(BACKGROUND_HEIGHT - 4, "#1a2016", 28, 34);
+  row(BACKGROUND_HEIGHT - 26, "#2b1d52", 40, 46);
+  row(BACKGROUND_HEIGHT - 4, "#150e29", 28, 34);
 
   // Weicher Schatten an den Raendern lenkt den Blick in die Mitte.
   const vignette = context.createRadialGradient(
@@ -90,7 +112,7 @@ function paintBackground(context: CanvasRenderingContext2D): void {
     BACKGROUND_WIDTH * 0.62,
   );
   vignette.addColorStop(0, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.45)");
+  vignette.addColorStop(1, "rgba(0,0,0,0.5)");
   context.fillStyle = vignette;
   context.fillRect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
 }

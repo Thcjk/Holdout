@@ -11,7 +11,7 @@
  */
 
 import Phaser from "phaser";
-import { MATERIAL_TILE, SHEET_KEY, itemIconKey, weaponIconKey } from "../config/assets";
+import { itemIconKey, weaponIconKey } from "../config/assets";
 import { PALETTE, SAFE, VIEWPORT } from "../config/constants";
 import { UI } from "../config/ui";
 import { CHARACTERS } from "../game/data/characters";
@@ -149,7 +149,7 @@ export class ShopPanel {
 
     // Kopfzeile: Titel links, Material rechts.
     this.keep(menuText(this.scene, left + 130, 26, `Welle ${state.wave} geschafft`, 26, UI.text.title, true).setDepth(DEPTH + 3));
-    this.keep(this.scene.add.image(right - 80, 27, SHEET_KEY, MATERIAL_TILE).setScale(2.5).setDepth(DEPTH + 3));
+    this.keep(this.scene.add.image(right - 80, 27, "gem").setDisplaySize(30, 30).setDepth(DEPTH + 3));
     this.text(right - 58, 10, String(self.gold), 28, PALETTE.gold, true);
 
     if (self.pendingLevels > 0 && self.shop.upgradeChoices) {

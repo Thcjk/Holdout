@@ -6,6 +6,7 @@ import Phaser from "phaser";
 import { SHEET_KEY, SHEET_PATH, SPACING, TILE, WEAPON_ICON_FILES, weaponIconKey } from "../config/assets";
 import { UI, UI_ATLAS, UI_ATLAS_IMAGE, UI_ATLAS_XML } from "../config/ui";
 import { VIEWPORT } from "../config/constants";
+import { createComicTextures } from "../ui/comic";
 import { createIcons } from "../ui/icons";
 import { padAtlas } from "../ui/padAtlas";
 import type { WeaponId } from "../game/types";
@@ -39,6 +40,7 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     padAtlas(this.textures, UI_ATLAS);
     createIcons(this);
+    createComicTextures(this);
     this.scene.start("Title");
   }
 }

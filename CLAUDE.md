@@ -18,7 +18,7 @@ und Texte im Spiel auf Deutsch**, Code lesbar statt clever.
 
 Umbau auf Branch `brotato-umbau` fertig und lauffähig, **noch nicht auf `main`**.
 
-- Spielkern, Shop, 6 Charaktere, 7 Waffen (je 4 Stufen), 24 Gegenstände, 14 Level-Ups,
+- Spielkern, Shop, 6 Charaktere (Söldner, Raufbold, Jäger, Panzer, Glückspilz, Schatten), 7 Waffen (je 4 Stufen), 24 Gegenstände, 14 Level-Ups,
   7 Gegnertypen, 20 Wellen: fertig, 20 Tests + Bot-Balancemessung.
 - Solo, Koop (Host/Client, Lobby, Raumcode) und die ganze Oberfläche: fertig. Im Test-Browser
   durchgespielt: Titel → Charakterwahl → Gefecht → Level-Up → Shop → nächste Welle, und Koop mit
@@ -56,6 +56,10 @@ Umbau auf Branch `brotato-umbau` fertig und lauffähig, **noch nicht auf `main`*
   (Atlas, `ui/UiNineSlice`), Blaster-Vorschaubilder als Waffensymbole. Symbole für Gegenstände,
   Nahkampfwaffen, Spawn-Kreuz und Schatten werden in `ui/icons.ts` gezeichnet –
   **nach dem Zeichnen `refresh()` auf der Canvas-Textur**, sonst bleibt sie leer.
+- **Comic-Look:** `ui/comic.ts` malt beim Start (BootScene) alle Texturen: `ch-<id>`/`en-<typ>` (Figuren mit
+  dicker schwarzer Kontur), `arena` (Steinwand, Sandboden, Rasterpunkte, Risse), `bg-game`, `bullet`, `gem`, `logo`.
+  Schlüssel über `config/assets.ts` (`characterKey`, `enemyKey`, `arenaKey`). Gegner wackeln/quetschen sich,
+  Comic-Wörter („BAM!“, „KRIT!“) in `GameScene.comic()`. Menühintergrund: `menuStyle.paintBackground`.
 - `setReloadSafe(true)` nur im Titel und im Ergebnis (Selbst-Update der PWA nur dort).
 
 ## Entwickeln und prüfen
@@ -70,11 +74,16 @@ Adress-Zusätze: `?desktop`, `?debug=lokal|werte|netz|all`, `?seed=N` (nur solo)
 
 ## Offene Punkte / Ideen
 
+- Schwierigkeit 2026-10-12 angezogen (erster Testspieler hat beim ersten Versuch gewonnen): steilere Gegnerskalierung,
+  größeres Wellenbudget, Königslarven in Welle 8/12/16 (2×) und 2 beim Boss. Bot-Mittel jetzt ~5–13. Echte Spieltests nötig.
+- Kartoffel ist durch den Söldner (3 Waffenplätze, +Schaden/+Tempo) ersetzt.
+
 - Echte Spieltests: Balance (Panzer/Raufbold waren im Bot schwach), Dropmenge, Shop-Preise.
 - Nach einem Koop-Run gibt es keine Rückkehr in dieselbe Lobby – zurück ins Menü, neuer Raum.
 - Arena ist ein einfarbiger Sandboden ohne Hindernisse; Dekoration, Bildschirm-Treffer-Feedback,
   Musik-Lautstärke-Regeln feinschleifen.
 - Kein Speichern von Fortschritt; kein Charakter-Freischalten.
+- App-Icons/Favicon (`public/icons`, `favicon.svg`) sind noch im alten Stil – an den Comic-Look anpassen.
 - Bundle ~1,6 MB (Phaser komplett).
 
 ## Deployment

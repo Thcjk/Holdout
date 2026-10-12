@@ -10,7 +10,7 @@
 
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
-import { CHARACTER_TILES, SHEET_KEY, weaponIconKey } from "../config/assets";
+import { characterKey, weaponIconKey } from "../config/assets";
 import { SAFE, VIEWPORT } from "../config/constants";
 import { UI } from "../config/ui";
 import { MAX_PLAYERS } from "../game/constants";
@@ -45,7 +45,7 @@ interface LobbyData {
 
 export class LobbyScene extends Phaser.Scene {
   private mode: PlayMode = "host";
-  private character: CharacterId = "kartoffel";
+  private character: CharacterId = "soeldner";
   private weapon: WeaponId = "pistol";
 
   private lobby: Lobby | null = null;
@@ -222,7 +222,7 @@ export class LobbyScene extends Phaser.Scene {
       const def = CHARACTERS[player.character];
       this.listObjects.push(
         insetPanel(this, cx, y, rowW, 40).container,
-        this.add.sprite(cx - rowW / 2 + 28, y, SHEET_KEY, CHARACTER_TILES[player.character]).setScale(1.6),
+        this.add.image(cx - rowW / 2 + 28, y, characterKey(player.character)).setScale(0.45),
         this.add
           .text(cx - rowW / 2 + 58, y, `${player.name}${player.isHost ? "  (Host)" : ""}`, {
             fontFamily: UI.font,
