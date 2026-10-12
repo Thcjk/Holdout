@@ -2,75 +2,43 @@
  * Eine Runde spielen - egal ob allein, als Host oder als Client.
  *
  * Die Spielszene soll nicht wissen, in welchem Modus sie laeuft. Sie fragt jedes
- * Bild "hier ist meine Eingabe, gib mir den Zustand zum Zeichnen" - und ob dieser
+ * Bild "hier ist meine Bewegung, gib mir den Zustand zum Zeichnen". Ob dieser
  * Zustand lokal gerechnet oder ueber das Netz empfangen wurde, ist ihre Sache nicht.
  */
 
-import type { GameEvent, InputState, InventoryCommand, Vec2, WorldState } from "../systems/types";
-import type { Transport } from "./Transport";
+import type { Command, GameEvent, GameState, PlayerInput } from "../game/types";
 
-/** Alles, was die Darstellung braucht. `Simulation` und `ClientView` erfuellen das. */
-export interface WorldView {
-  readonly state: WorldState;
-  /**
-   * Noch nicht erschienene Gegner der laufenden Welle. Eigener Wert statt
-   * `state.pendingSpawns.length`, weil der Client die Spawnliste nicht kennt -
-   * er bekommt nur die Zahl vom Host.
-   */
-  readonly pendingCount: number;
+export interface GameView {
+  readonly state: GameState;
+  /** Was seit dem letzten Bild passiert ist (Treffer, Schuesse, ...). */
   readonly events: readonly GameEvent[];
-  readonly alpha: number;
-  renderPlayerPosition(playerId: string): Vec2;
-  renderEnemyPosition(enemyId: number, current: Vec2): Vec2;
-  renderProjectilePosition(position: Vec2, velocity: Vec2): Vec2;
 }
 
 export interface GameSession {
   readonly selfId: string;
-  readonly view: WorldView;
-
+  readonly view: GameView;
   /**
-   * Darf diese Runde angehalten werden?
-   *
-   * Nur solo. Im Koop rechnet der Host die Runde fuer alle weiter; ein Geraet,
-   * das fuer sich anhaelt, wuerde beim Weitermachen entweder minutenlang
-   * nachrechnen oder springen. Die Szene fragt das hier ab, statt selbst nach
-   * dem Modus zu schauen - sie soll weiterhin nicht wissen, ob solo, als Host
-   * oder als Client gespielt wird.
+   * Darf die Runde angehalten werden? Nur solo - im Koop rechnet der Host
+   * fuer alle weiter, ein anhaltendes Geraet wuerde springen.
    */
   readonly canPause: boolean;
+  readonly isMultiplayer: boolean;
   /** Gesetzt, sobald die Verbindung abgerissen ist - mit Text fuer den Spieler. */
   readonly connectionLost: string | null;
+  /** `false`, solange ein Client noch auf den ersten Zustand vom Host wartet. */
+  readonly isReady: boolean;
+
+  update(deltaMs: number, input: PlayerInput): void;
+
+  /** Einen Befehl aus dem Shop abschicken. */
+  send(command: Command): void;
 
   /**
-   * Ein Bild weiterdrehen.
-   *
-   * @returns true, wenn die Eingabe verarbeitet wurde und einmalige Wuensche
-   *          (Schuss, Super) geloescht werden duerfen.
+   * Wo die eigene Figur gezeichnet werden soll. Der Client rechnet seine
+   * Bewegung selbst voraus, damit sie nicht erst nach der Laufzeit zum Host
+   * und zurueck reagiert. `null` heisst: Position aus dem Zustand nehmen.
    */
-  update(deltaMs: number, input: InputState): boolean;
-
-  /**
-   * Einen Rucksack-Befehl ausfuehren, waehrend die Runde angehalten ist.
-   * Nur solo vorhanden (dort haelt der offene Rucksack an); im Koop laeuft
-   * die Runde weiter und der Befehl reist mit der naechsten Eingabe.
-   */
-  applyWhilePaused?(command: InventoryCommand): void;
-
-  /**
-   * Beendet die Sitzung, OHNE die Verbindung zu schliessen, und gibt sie
-   * heraus - `null`, wenn es keine gibt (solo).
-   *
-   * Gebraucht beim Run-Ende im Koop (Etappe 7): Vorher raeumte die Spielszene
-   * die Sitzung mit `destroy()` ab, und die schloss den Transport. Der Raum
-   * war damit zu, und fuer den naechsten Run brauchten alle einen neuen
-   * Code. Jetzt wandert die Verbindung ueber Ergebnis- und Packbildschirm
-   * zurueck in dieselbe Lobby, und der Host startet dort den naechsten Run
-   * mit neuem Seed - ueber dasselbe `start`-Paket wie beim ersten Mal.
-   *
-   * Nach `release()` ist die Sitzung tot: kein `update`, kein `destroy`.
-   */
-  release(): Transport | null;
+  selfPosition(): { x: number; y: number } | null;
 
   destroy(): void;
 }

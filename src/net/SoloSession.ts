@@ -1,53 +1,42 @@
 /**
- * Solo spielen: die Simulation laeuft direkt auf diesem Geraet.
- *
- * Das ist der einfachste Fall und gleichzeitig der Rueckfall, wenn keine
- * Verbindung zustande kommt - der Solo-Modus geht immer.
+ * Allein spielen: Die Simulation laeuft direkt auf diesem Geraet.
  */
 
-import { Simulation } from "../systems/Simulation";
-import type { PlayerSetup, WorldPlace } from "../systems/world";
-import type { InputState, InventoryCommand } from "../systems/types";
-import type { GameSession, WorldView } from "./GameSession";
-import { FORCED_PLACE, FORCED_SEED } from "../platform/debugFlags";
+import { Simulation } from "../game/Simulation";
+import type { Command, GameEvent, PlayerInput, PlayerSetup } from "../game/types";
+import type { GameSession, GameView } from "./GameSession";
 
 export class SoloSession implements GameSession {
   readonly selfId: string;
-  readonly connectionLost = null;
-  /** Solo laeuft die Simulation auf diesem Geraet - Anhalten stoert niemanden. */
   readonly canPause = true;
+  readonly isMultiplayer = false;
+  readonly connectionLost = null;
+  readonly isReady = true;
+
   private readonly simulation: Simulation;
-  private readonly inputs = new Map<string, InputState>();
+  private events: GameEvent[] = [];
 
-  constructor(
-    setup: PlayerSetup,
-    seed = FORCED_SEED ?? Date.now() & 0x7fffffff,
-    /** Gebiet aus der Kartenansicht; ohne Angabe per Adresse waehlbar. */
-    place: WorldPlace = FORCED_PLACE,
-  ) {
+  constructor(setup: PlayerSetup, seed: number) {
     this.selfId = setup.id;
-    this.simulation = new Simulation([setup], seed, place);
+    this.simulation = new Simulation([setup], seed);
   }
 
-  get view(): WorldView {
-    return this.simulation;
+  get view(): GameView {
+    return { state: this.simulation.state, events: this.events };
   }
 
-  update(deltaMs: number, input: InputState): boolean {
-    this.inputs.set(this.selfId, input);
-    return this.simulation.advance(deltaMs, this.inputs) > 0;
+  update(deltaMs: number, input: PlayerInput): void {
+    this.simulation.advance(deltaMs, new Map([[this.selfId, input]]));
+    this.events = this.simulation.events;
   }
 
-  /** Rucksack-Befehl waehrend der Pause - siehe `Simulation.applyInventoryNow`. */
-  applyWhilePaused(command: InventoryCommand): void {
-    this.simulation.applyInventoryNow(this.selfId, command);
+  send(command: Command): void {
+    this.simulation.command(this.selfId, command);
   }
 
-  release(): null {
+  selfPosition(): null {
     return null;
   }
 
-  destroy(): void {
-    // Nichts freizugeben - die Simulation ist reiner Speicher.
-  }
+  destroy(): void {}
 }

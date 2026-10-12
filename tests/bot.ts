@@ -1,163 +1,265 @@
 /**
- * Der Bot fuer die Balancing-Messungen.
+ * Ein einfacher Bot, der eine ganze Runde spielt: ausweichen, einkaufen, weiter.
  *
- * Er ist absichtlich mittelmaessig: Er nutzt keine Deckung, keine Buesche und
- * weicht einzelnen Projektilen nicht aus. Seine Zahlen sind eine Untergrenze,
- * kein Zielwert.
- *
- * Eine Sache muss er aber koennen, sonst misst er Unsinn: **auf seine eigene
- * Reichweite achten.** Ein frueherer Bot hielt pauschal 300 Pixel Abstand zu
- * allen Gegnern - der Tank reicht aber nur 250. Er floh damit staendig aus
- * seiner eigenen Reichweite heraus und schoss minutenlang ins Leere; eine Welle
- * dauerte dann fuenf Minuten statt dreissig Sekunden. Das sah nach einem
- * kaputten Charakter aus, war aber ein kaputter Bot.
- *
- * Deshalb haelt er jetzt einen Abstand, der zu seiner Waffe passt: nah genug
- * zum Treffen, weit genug, um nicht im Nahkampf zu stehen.
+ * Er ist KEIN guter Spieler - er kennt nur Abstand halten und eine feste
+ * Einkaufsliste. Gerade deshalb taugt er als Messlatte: Schafft schon dieser
+ * Bot die ersten Wellen, sind sie nicht zu hart; schafft er alle zwanzig ohne
+ * Muehe, ist das Spiel zu leicht.
  */
 
-import { attackRange } from "../src/systems/weapons";
-import { nearestEnemy } from "../src/systems/targeting";
-import type { InputState, Vec2, WorldState } from "../src/systems/types";
-import { makeInput } from "./helpers";
+import { ARENA } from "../src/game/constants";
+import { CHARACTERS } from "../src/game/data/characters";
+import { ENEMIES } from "../src/game/data/enemies";
+import { ITEMS } from "../src/game/data/items";
+import { WEAPONS } from "../src/game/data/weapons";
+import type { WeaponId } from "../src/game/types";
+import { UPGRADES } from "../src/game/data/upgrades";
+import { Simulation } from "../src/game/Simulation";
+import { canTakeWeapon, rerollCost } from "../src/game/shop";
+import type { CharacterId, PlayerInput, PlayerState } from "../src/game/types";
 
-/**
- * Abstand zur Aussenmauer, den der Bot haelt.
- *
- * Er laeuft nach AUSSEN, weil dort seit Phase 8 der Fortschritt liegt - aber
- * nicht bis an die Mauer. Dort gaebe es kein Ausweichen mehr, und gemessen
- * wuerde dann das Sterben an einer Wand statt an der Schwierigkeit.
- */
-const BORDER_KEEPOUT = 700;
+/** Wie wertvoll ein Wert fuer den Bot ist. Grob: Schaden und Tempo zuerst, dann Leben. */
+const STAT_WEIGHT: Record<string, number> = {
+  damage: 1.2,
+  melee: 3,
+  ranged: 3,
+  attackSpeed: 1.0,
+  crit: 0.5,
+  range: 0.05,
+  maxHp: 0.45,
+  regen: 1.5,
+  armor: 1.8,
+  dodge: 0.7,
+  speed: 0.25,
+  lifesteal: 0.6,
+  harvesting: 0.9,
+  luck: 0.1,
+};
 
-/**
- * Ein Bot mit Gedaechtnis.
- *
- * Gebraucht wird genau eine Erinnerung: wann er zuletzt etwas getroffen hat.
- * Trifft er laenger nichts, obwohl Gegner leben, steht etwas zwischen ihm und
- * ihnen - meistens eine Wand. Dann geht er direkt drauf zu, statt seinen
- * Wunschabstand zu halten. Genau das macht ein Mensch auch; ohne diese Regel
- * standen sich Bot und Gegner minutenlang durch eine Deckung hindurch
- * gegenueber, und eine Welle dauerte 290 statt 15 Sekunden.
- *
- * Je Durchlauf einen eigenen Bot erzeugen - sonst schleppt der naechste
- * Durchlauf die Erinnerung des vorherigen mit.
- */
-export function createBot(): (state: WorldState) => Map<string, InputState> {
-  let lastHitTick = 0;
-  return (state) => botInput(state, () => lastHitTick, (t) => (lastHitTick = t));
+/** Wie nah der Bot an Gegner heranmuss: Nahkaempfer suchen die Naehe, Schuetzen meiden sie. */
+function preferredDistance(player: PlayerState): number {
+  let reach = 0;
+  for (const weapon of player.weapons) {
+    const def = WEAPONS[weapon.id];
+    reach = Math.max(reach, def.kind === "melee" ? def.range * 0.7 : def.range * 0.8);
+  }
+  return reach;
 }
 
-/** Nach so vielen Sekunden ohne Treffer geht der Bot stur nach vorne. */
-const BLOCKED_SECONDS = 3;
+export function steer(sim: Simulation, player: PlayerState): PlayerInput {
+  let fx = 0;
+  let fy = 0;
+  const preferred = preferredDistance(player);
+  const closeCombat = preferred < 160;
 
-function botInput(
-  state: WorldState,
-  getLastHitTick: () => number,
-  setLastHitTick: (tick: number) => void,
-): Map<string, InputState> {
-  // Die Ereignisse des vorherigen Ticks liegen noch an.
-  for (const event of state.events) {
-    if (event.type === "hit") {
-      setLastHitTick(state.tick);
+  if (closeCombat) {
+    // Zum naechsten Gegner, aber nicht in die Mitte der Meute: an der Kante des Schwarms bleiben.
+    let nearest: { x: number; y: number } | null = null;
+    let nearestDistance = Infinity;
+    for (const enemy of sim.state.enemies) {
+      const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = enemy;
+      }
+    }
+    if (nearest && nearestDistance > preferred) {
+      fx += ((nearest.x - player.x) / nearestDistance) * 0.35;
+      fy += ((nearest.y - player.y) / nearestDistance) * 0.35;
+    }
+  }
+
+  for (const enemy of sim.state.enemies) {
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy);
+    const radius = ENEMIES[enemy.type].radius;
+    if (distance < (closeCombat ? 90 : 230)) {
+      const weight = 1 / Math.max(25, distance - radius) ** 1.4;
+      fx += (dx / (distance || 1)) * weight * (closeCombat ? 500 : 900);
+      fy += (dy / (distance || 1)) * weight * (closeCombat ? 500 : 900);
+    }
+  }
+  for (const shot of sim.state.shots) {
+    if (shot.friendly) {
+      continue;
+    }
+    const dx = player.x - shot.x;
+    const dy = player.y - shot.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 120) {
+      fx += (dx / (distance || 1)) * (1 / Math.max(20, distance)) * 12;
+      fy += (dy / (distance || 1)) * (1 / Math.max(20, distance)) * 12;
+    }
+  }
+
+  // Raender abstossen, damit der Bot sich nicht in eine Ecke druecken laesst.
+  const margin = 70;
+  fx += Math.max(0, margin - player.x) / margin - Math.max(0, player.x - (ARENA.width - margin)) / margin;
+  fy += Math.max(0, margin - player.y) / margin - Math.max(0, player.y - (ARENA.height - margin)) / margin;
+
+  // Ohne Gefahr zum naechsten Material.
+  if (Math.hypot(fx, fy) < 0.15) {
+    let best: { x: number; y: number } | null = null;
+    let bestDistance = Infinity;
+    for (const pickup of sim.state.pickups) {
+      const distance = Math.hypot(pickup.x - player.x, pickup.y - player.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = pickup;
+      }
+    }
+    if (best) {
+      return { mx: (best.x - player.x) / bestDistance, my: (best.y - player.y) / bestDistance };
+    }
+  }
+
+  const length = Math.hypot(fx, fy);
+  return length > 0.001 ? { mx: fx / length, my: fy / length } : { mx: 0, my: 0 };
+}
+
+function scoreItem(player: PlayerState, index: number): number {
+  const item = ITEMS[index];
+  if (!item) {
+    return 0;
+  }
+  const hasMelee = player.weapons.some((weapon) => WEAPONS[weapon.id].kind === "melee");
+  const hasRanged = player.weapons.some((weapon) => WEAPONS[weapon.id].kind === "ranged");
+  let score = 0;
+  for (const [key, value] of Object.entries(item.mods)) {
+    let weight = STAT_WEIGHT[key] ?? 0;
+    if (key === "melee" && !hasMelee) {
+      weight = 0;
+    }
+    if (key === "ranged" && !hasRanged) {
+      weight = 0;
+    }
+    score += weight * value;
+  }
+  return score / item.price;
+}
+
+function shopTurn(sim: Simulation, player: PlayerState): void {
+  // Level-Ups: bevorzugt Schaden und Tempo.
+  const preference = ["damage", "speedAtk", "melee", "ranged", "armor", "hp", "crit", "steal", "regen", "dodge"];
+  let guard = 0;
+  while (player.pendingLevels > 0 && guard < 80) {
+    guard += 1;
+    const choices = player.shop.upgradeChoices ?? [];
+    let pick = 0;
+    let bestRank = Infinity;
+    choices.forEach((id, index) => {
+      const rank = preference.indexOf(id);
+      const effective = rank < 0 ? 99 : rank;
+      if (effective < bestRank) {
+        bestRank = effective;
+        pick = index;
+      }
+    });
+    if (!sim.command(player.id, { k: "upgrade", pick })) {
       break;
     }
   }
+  void UPGRADES;
 
-  const player = state.players[0];
-  if (!player) {
-    return new Map();
-  }
+  for (let round = 0; round < 6; round += 1) {
+    let bought = false;
+    const wave = sim.state.wave;
+    const options = player.shop.offers
+      .map((offer, slot) => ({ offer, slot }))
+      .filter((entry) => entry.offer !== null && entry.offer.price <= player.gold)
+      .map(({ offer, slot }) => {
+        if (!offer) {
+          return { slot, score: -1 };
+        }
+        if (offer.kind === "weapon") {
+          const id = offer.id as WeaponId;
+          if (!canTakeWeapon(player, id, offer.tier)) {
+            return { slot, score: -1 };
+          }
+          const def = WEAPONS[id];
+          const dps = (def.damage[offer.tier - 1] ?? 1) * def.count / (def.cooldown[offer.tier - 1] ?? 1);
+          const wantMore = player.weapons.length < CHARACTERS[player.character].slots ? 1.6 : 1;
+          return { slot, score: (dps / offer.price) * 1.4 * wantMore };
+        }
+        const index = ITEMS.findIndex((item) => item.id === offer.id);
+        return { slot, score: scoreItem(player, index) * 6 };
+      })
+      .sort((a, b) => b.score - a.score);
 
-  const range = attackRange(player);
-  // Wunschabstand: knapp innerhalb der Reichweite der ausgeruesteten Waffe.
-  // Mit dem Gewehr (800) bleibt er weit weg, mit der Faust muss er ran.
-  const wanted = range * 0.7;
-  const tooClose = range * 0.45;
-
-  const target = nearestEnemy(state, player.position, 4000);
-  let aim: Vec2 | null = null;
-  let distance = Infinity;
-
-  if (target) {
-    const dx = target.position.x - player.position.x;
-    const dy = target.position.y - player.position.y;
-    distance = Math.hypot(dx, dy) || 1;
-    aim = { x: dx / distance, y: dy / distance };
-  }
-
-  // Laenger nichts getroffen, obwohl Gegner da sind? Dann steht etwas im Weg.
-  const ticksBlocked = state.tick - getLastHitTick();
-  const blocked = state.enemies.length > 0 && ticksBlocked > BLOCKED_SECONDS * 30;
-
-  let moveX = 0;
-  let moveY = 0;
-
-  if (aim && blocked) {
-    // Direkt drauf zu, ohne Ruecksicht auf den Wunschabstand - nur so kommt er
-    // um die Deckung herum, hinter der alle stehen.
-    moveX = aim.x;
-    moveY = aim.y;
-  } else if (aim && distance > wanted) {
-    // Zu weit weg: ran, sonst treffen die eigenen Schuesse nie.
-    moveX = aim.x;
-    moveY = aim.y;
-  } else if (aim && distance < tooClose && target !== null && target.contactDamage > 0) {
-    // Zu nah an etwas, das durch Beruehrung wehtut: ein Stueck zurueck.
-    //
-    // Nur bei Beruehrungsschaden. Vor einem Schuetzen zurueckzuweichen bringt
-    // nichts - er schiesst ja - und der Bot lief sich damit in einer Arenaecke
-    // fest: Er drueckte 290 Sekunden lang gegen die Wand, waehrend der Schuetze
-    // ausser Schussbahn stand. Das sah nach einem zaehen Charakter aus, war aber
-    // ein Bot, der sich selbst in die Ecke manoevrierte.
-    moveX = -aim.x;
-    moveY = -aim.y;
-  } else if (aim) {
-    // Im guten Abstand: seitlich ausweichen statt stehenzubleiben.
-    moveX = -aim.y;
-    moveY = aim.x;
-  }
-
-  // Von allem wegdruecken, was direkt am Koerper klebt - Beruehrungsschaden tut
-  // am meisten weh. Der Radius haengt an der eigenen Reichweite, nicht an einer
-  // festen Zahl.
-  const panic = Math.min(160, range * 0.5);
-  for (const enemy of state.enemies) {
-    const dx = player.position.x - enemy.position.x;
-    const dy = player.position.y - enemy.position.y;
-    const d = Math.hypot(dx, dy) || 1;
-    if (d < panic) {
-      const weight = ((panic - d) / panic) * 1.5;
-      moveX += (dx / d) * weight;
-      moveY += (dy / d) * weight;
+    const best = options[0];
+    if (best && best.score > 0 && sim.command(player.id, { k: "buy", slot: best.slot })) {
+      bought = true;
+    }
+    if (!bought) {
+      if (player.gold >= rerollCost(player, wave) * 3 && player.shop.rerolls < 3) {
+        sim.command(player.id, { k: "reroll" });
+        continue;
+      }
+      break;
     }
   }
+  // Doppelte Waffen verschmelzen - aber nur, wenn der Platz knapp wird.
+  if (player.weapons.length >= CHARACTERS[player.character].slots - 1) {
+    for (let i = 0; i < player.weapons.length; i += 1) {
+      if (sim.command(player.id, { k: "merge", index: i })) {
+        i = -1;
+      }
+    }
+  }
+  sim.command(player.id, { k: "ready", value: true });
+}
 
-  /*
-   * Sanft nach aussen - das ist die groesste Aenderung am Bot seit Phase 8.
-   *
-   * Frueher zog es ihn zur Arenamitte, damit er sich nicht in einer Ecke
-   * verkriecht. In einer offenen Welt waere das genau falsch: Er bliebe fuer
-   * immer in Zone 0 stehen, und die Messung saegte, das Spiel sei leicht -
-   * obwohl er nie irgendwo war, wo es schwer wird.
-   *
-   * Vor der Aussenmauer dreht der Zug um, sonst drueckt er dort nur noch
-   * dagegen.
-   */
-  const center: Vec2 = { x: state.bounds.width / 2, y: state.bounds.height / 2 };
-  const outX = player.position.x - center.x;
-  const outY = player.position.y - center.y;
-  const radius = Math.hypot(outX, outY) || 1;
-  const maxRadius = state.bounds.width / 2 - BORDER_KEEPOUT;
-  const direction = radius < maxRadius ? 1 : -1;
+export interface BotResult {
+  /** Hoechste Welle, die erreicht wurde. */
+  wave: number;
+  won: boolean;
+  kills: number;
+  weapons: string;
+}
 
-  moveX += (outX / radius) * 0.6 * direction;
-  moveY += (outY / radius) * 0.6 * direction;
+export function playBot(options: {
+  seed: number;
+  character: CharacterId;
+  startWeapon: WeaponId;
+  /** Spielerzahl, alle vom Bot gesteuert. */
+  players?: number;
+  maxSeconds?: number;
+}): BotResult {
+  const count = options.players ?? 1;
+  const setups = Array.from({ length: count }, (_, index) => ({
+    id: `p${index}`,
+    name: `Bot ${index}`,
+    character: options.character,
+    startWeapon: options.startWeapon,
+  }));
+  const sim = new Simulation(setups, options.seed);
+  const limit = (options.maxSeconds ?? 2400) * 60;
 
-  const length = Math.hypot(moveX, moveY);
-  const move = length > 0.05 ? { x: moveX / length, y: moveY / length } : { x: 0, y: 0 };
+  for (let tick = 0; tick < limit; tick += 1) {
+    const phase = sim.state.phase;
+    if (phase === "won" || phase === "lost") {
+      break;
+    }
+    if (phase === "shop") {
+      for (const player of sim.state.players) {
+        shopTurn(sim, player);
+      }
+    }
+    const inputs = new Map<string, PlayerInput>();
+    for (const player of sim.state.players) {
+      if (player.alive) {
+        inputs.set(player.id, steer(sim, player));
+      }
+    }
+    sim.step(inputs);
+  }
 
-  return new Map([
-    [player.id, makeInput(move, { aim, fire: true, useSuper: player.superCharge >= 100 })],
-  ]);
+  const first = sim.state.players[0];
+  return {
+    wave: sim.state.wave,
+    won: sim.state.phase === "won",
+    kills: sim.state.players.reduce((sum, player) => sum + player.kills, 0),
+    weapons: first ? first.weapons.map((weapon) => `${weapon.id}${weapon.tier}`).join(",") : "",
+  };
 }

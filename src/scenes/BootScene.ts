@@ -1,16 +1,14 @@
 /**
- * Erste Szene. "Scene" ist in Phaser ein abgeschlossener Abschnitt des Spiels -
- * Menue, Spiel, Game Over sind je eine eigene Szene mit eigenem `create()` und `update()`.
- *
- * Hier werden das Kenney-Sheet und das UI-Paket geladen und anschliessend
- * ins Menue gewechselt.
+ * Laedt alle Grafiken und zeichnet die fehlenden Symbole, dann geht es zum Titel.
  */
 
 import Phaser from "phaser";
-import { SHEET_KEY, SHEET_PATH, SPACING, TILE } from "../config/assets";
-import { COLORS } from "../config/constants";
-import { UI_ATLAS, UI_ATLAS_IMAGE, UI_ATLAS_XML } from "../config/ui";
+import { SHEET_KEY, SHEET_PATH, SPACING, TILE, WEAPON_ICON_FILES, weaponIconKey } from "../config/assets";
+import { UI, UI_ATLAS, UI_ATLAS_IMAGE, UI_ATLAS_XML } from "../config/ui";
+import { VIEWPORT } from "../config/constants";
+import { createIcons } from "../ui/icons";
 import { padAtlas } from "../ui/padAtlas";
+import type { WeaponId } from "../game/types";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -18,36 +16,29 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.cameras.main.setBackgroundColor(COLORS.background);
+    const text = this.add
+      .text(VIEWPORT.width / 2, VIEWPORT.height / 2, "Lädt …", {
+        fontFamily: UI.font,
+        fontSize: "24px",
+        color: "#f6ead2",
+      })
+      .setOrigin(0.5);
+    this.load.on("progress", (value: number) => text.setText(`Lädt … ${Math.round(value * 100)} %`));
 
-    /*
-     * Das Pixel-Art-Sheet von Kenney.
-     *
-     * `spritesheet` und nicht `atlas`/`atlasXML`: Das Paket bringt keine Datei
-     * mit Koordinaten mit, dafuer ein gleichmaessiges Raster. Die Masse stehen
-     * in `config/assets.ts` und sind dort nachgerechnet.
-     */
     this.load.spritesheet(SHEET_KEY, SHEET_PATH, {
       frameWidth: TILE,
       frameHeight: TILE,
       spacing: SPACING,
     });
-
-    /*
-     * Das UI-Paket (Knoepfe, Panels, Balken). Hier gibt es eine
-     * Koordinatendatei, also `atlasXML` - Einzelheiten in `config/ui.ts`.
-     */
     this.load.atlasXML(UI_ATLAS, UI_ATLAS_IMAGE, UI_ATLAS_XML);
+    for (const [id, file] of Object.entries(WEAPON_ICON_FILES)) {
+      this.load.image(weaponIconKey(id as WeaponId), `${import.meta.env.BASE_URL}${file}`);
+    }
   }
 
   create(): void {
-    // Teile des UI-Pakets mit Abstand neu auslegen - sonst blutet beim
-    // Strecken der Nachbar hinein (Begruendung in `ui/padAtlas.ts`).
     padAtlas(this.textures, UI_ATLAS);
-
-    // Bis Etappe 5 wurde hier ein zweiter, selbst GEZEICHNETER Atlas gebaut
-    // (Projektile, Funken, Punkte). Seitdem kommt alles aus dem Sheet - auch
-    // Geschosse und Partikel (`BULLET_TILE`, `PARTICLE_TILES`).
+    createIcons(this);
     this.scene.start("Title");
   }
 }

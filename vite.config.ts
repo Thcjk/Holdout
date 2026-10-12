@@ -27,7 +27,7 @@ export default defineConfig({
       manifest: {
         name: "Holdout",
         short_name: "Holdout",
-        description: "Holdout: Haltet gemeinsam gegen immer stärkere Wellen durch.",
+        description: "Holdout: Brotato-artiger Wellen-Shooter mit Shop und Online-Koop.",
         lang: "de",
         start_url: base,
         scope: base,
@@ -62,8 +62,8 @@ export default defineConfig({
         /*
          * Das hochgeladene Kenney-Paket liegt komplett unter `public/` -
          * Vorschaubilder, 51 SVG-Haeute, UI-Paket, Sci-Fi-RTS-Grafiken. Das
-         * Spiel benutzt davon (noch) nichts direkt: Die Haeute sind als kleine
-         * PNGs unter `models/skins/` umgewandelt. Ohne diese Liste luede jedes
+         * Spiel benutzt davon nur das Tilesheet, das UI-Spritesheet und die
+         * Blaster-Vorschaubilder. Ohne diese Liste luede jedes
          * Handy bei der Installation 6,9 MB statt rund 2, fuer nichts.
          * Wer spaeter etwas davon im Spiel benutzt, nimmt es hier heraus.
          *
