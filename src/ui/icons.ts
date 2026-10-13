@@ -1,7 +1,7 @@
 /**
  * Symbole, die beim Start gezeichnet werden, weil das Grafikpaket sie nicht hat.
  *
- * Gegenstaende bekommen ein Papier-Medaillon mit einer Tusche-Zeichnung, die
+ * Gegenstaende bekommen ein goldenes Medaillon mit einem Bild, die
  * zeigt, was er vor allem tut: Schwert = Schaden, Schild = Ruestung, Herz =
  * Leben, Blitz = Tempo, Kleeblatt = Glueck ... So erkennt man im Shop ohne zu lesen,
  * was man vor sich hat.
@@ -14,7 +14,7 @@ import type { StatKey } from "../game/types";
 
 const ICON_SIZE = 64;
 
-/** Farbe des Medaillons nach dem wichtigsten Wert - gedaempft wie die Plakatfarben. */
+/** Farbe des Medaillons nach dem wichtigsten Wert - kraeftige Maerchenfarben. */
 const STAT_COLORS: Record<StatKey, string> = {
   damage: "#b5532f",
   melee: "#9c4426",
@@ -33,7 +33,7 @@ const STAT_COLORS: Record<StatKey, string> = {
   ability: "#6a5f8f",
 };
 
-const INK = "#1d1c19";
+const INK = "#2b2320";
 const CREAM = "#f1e5c9";
 
 type Ctx = CanvasRenderingContext2D;
@@ -48,7 +48,7 @@ function inked(context: Ctx, fill: string, width = 2.6): void {
   context.stroke();
 }
 
-/** Ein Tusche-Bild je Wert, in der Mitte eines 64er-Feldes. */
+/** Ein Ein Bild je Wert, in der Mitte eines 64er-Feldes. */
 function drawGlyph(context: Ctx, stat: StatKey, accent: string): void {
   context.save();
   context.translate(32, 32);
@@ -223,7 +223,7 @@ function drawGlyph(context: Ctx, stat: StatKey, accent: string): void {
         context.ellipse(0, y, 15, 6, 0, 0, Math.PI * 2);
         inked(context, accent, 2);
       }
-      context.font = `bold 11px ${'"Londrina Solid", sans-serif'}`;
+      context.font = `bold 11px "Lilita One", sans-serif`;
       context.textAlign = "center";
       context.textBaseline = "middle";
       context.fillStyle = INK;
@@ -260,19 +260,17 @@ function drawItemIcon(scene: Phaser.Scene, id: string, stat: StatKey | undefined
     return;
   }
   const accent = stat ? STAT_COLORS[stat] : "#888888";
-  // Papier-Medaillon mit Tuscherand, das Bild in der Mitte.
+  // Medaillon: goldener Ring, Pergament innen, das Bild in der Mitte.
   context.beginPath();
-  context.arc(32, 33, 28, 0, Math.PI * 2);
-  context.fillStyle = "rgba(29,28,25,0.25)";
+  context.arc(32, 34, 28, 0, Math.PI * 2);
+  context.fillStyle = "rgba(43,35,32,0.3)";
   context.fill();
   context.beginPath();
   context.arc(32, 31, 28, 0, Math.PI * 2);
-  inked(context, "#efe1bf", 2.6);
+  inked(context, "#f0b23e", 3);
   context.beginPath();
-  context.arc(32, 31, 23, 0, Math.PI * 2);
-  context.lineWidth = 1;
-  context.strokeStyle = "rgba(29,28,25,0.35)";
-  context.stroke();
+  context.arc(32, 31, 22.5, 0, Math.PI * 2);
+  inked(context, "#f4e4c1", 2.2);
   drawGlyph(context, stat ?? "damage", accent);
   refreshTexture(scene, itemIconKey(id));
 }
@@ -285,18 +283,30 @@ export function createIcons(scene: Phaser.Scene): void {
     drawItemIcon(scene, item.id, main);
   }
 
-  // Das Kreuz, das vor einem Gegner am Boden erscheint.
+  // Der Runenkreis, der vor einem Monster am Boden aufleuchtet - hier kommt es aus der Tiefe.
   const marker = createCanvas(scene, "marker");
   if (marker) {
-    marker.strokeStyle = "#b5532f";
-    marker.lineWidth = 9;
     marker.lineCap = "round";
+    marker.strokeStyle = "#2b2320";
+    marker.lineWidth = 7;
     marker.beginPath();
-    marker.moveTo(14, 14);
-    marker.lineTo(50, 50);
-    marker.moveTo(50, 14);
-    marker.lineTo(14, 50);
+    marker.arc(32, 32, 24, 0, Math.PI * 2);
     marker.stroke();
+    marker.strokeStyle = "#b46ae0";
+    marker.lineWidth = 4;
+    marker.stroke();
+    marker.lineWidth = 3;
+    for (let i = 0; i < 6; i += 1) {
+      const a = (i / 6) * Math.PI * 2;
+      marker.beginPath();
+      marker.moveTo(32 + Math.cos(a) * 12, 32 + Math.sin(a) * 12);
+      marker.lineTo(32 + Math.cos(a + 0.5) * 19, 32 + Math.sin(a + 0.5) * 19);
+      marker.stroke();
+    }
+    marker.fillStyle = "#d9a0ff";
+    marker.beginPath();
+    marker.arc(32, 32, 5, 0, Math.PI * 2);
+    marker.fill();
     refreshTexture(scene, "marker");
   }
 

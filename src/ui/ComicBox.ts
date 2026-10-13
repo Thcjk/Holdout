@@ -1,41 +1,41 @@
 /**
- * Eine gezeichnete Flaeche im Poster-Stil: Papierblaetter, Einlagen und Knoepfe.
+ * Tafeln, Einlagen und Knoepfe im Chibi-Fantasy-Stil.
  *
- * Statt glatter Rechtecke mit Glanzstreifen: Papier mit einem leicht
- * wackelnden Tuscherand, der zweimal nachgezogen ist (wie eine Skizze), und
- * ein weicher Schatten darunter. Knoepfe sind Stempel in Rost oder
- * Papierschilder mit Tuscherand.
+ * - Tafel: Pergament in einem Holzrahmen mit goldenen Nieten in den Ecken.
+ * - Einlage: etwas dunkleres Pergament mit feiner Kontur.
+ * - Hauptknopf: Gold, oben heller, unten dunkler - wie ein Edelmetall-Schild.
+ * - Nebenknopf: Schieferblau.
+ * Alles mit dicker dunkler Kontur und einem weichen Schatten darunter.
  */
 
 import Phaser from "phaser";
-import { INK, PAPER, PAPER_DARK, RUST, wobblyRect } from "./paper";
+import { GOLD, INK, PAPER, PAPER_DARK, WOOD, WOOD_DARK } from "./paper";
+
+export type BoxKind = "panel" | "inset" | "primary" | "secondary";
 
 export interface BoxStyle {
-  fill: number;
-  /** Dicke des Tuscherands. */
-  border: number;
+  kind: BoxKind;
+  radius: number;
   /** Versatz des Schattens nach unten; 0 = keiner. */
   shadow: number;
-  radius: number;
-  /** Zweite, duennere Linie daneben - sieht skizziert aus. */
-  sketch: boolean;
 }
 
 export const BOX = {
-  /** Ein Papierblatt. */
-  panel: { fill: PAPER, border: 2.4, shadow: 5, radius: 5, sketch: true } satisfies BoxStyle,
-  /** Etwas dunkleres Papier fuer eingelegte Felder. */
-  inset: { fill: PAPER_DARK, border: 1.6, shadow: 0, radius: 4, sketch: false } satisfies BoxStyle,
-  /** Hauptknopf: ein Stempel in Rost. */
-  primary: { fill: RUST, border: 2.4, shadow: 3, radius: 7, sketch: true } satisfies BoxStyle,
-  /** Nebenknopf: ein Papierschild. */
-  secondary: { fill: PAPER, border: 2.2, shadow: 3, radius: 7, sketch: true } satisfies BoxStyle,
+  panel: { kind: "panel", radius: 12, shadow: 6 } satisfies BoxStyle,
+  inset: { kind: "inset", radius: 8, shadow: 0 } satisfies BoxStyle,
+  primary: { kind: "primary", radius: 12, shadow: 4 } satisfies BoxStyle,
+  secondary: { kind: "secondary", radius: 12, shadow: 4 } satisfies BoxStyle,
 } as const;
+
+/** Farben der Knoepfe: oben, Mitte, unten. */
+const BUTTON_COLORS: Record<"primary" | "secondary", [number, number, number]> = {
+  primary: [0xffd877, GOLD, 0xc9851f],
+  secondary: [0x8aa0b8, 0x5d7590, 0x3f5268],
+};
 
 export class ComicBox {
   readonly container: Phaser.GameObjects.Container;
   private readonly graphics: Phaser.GameObjects.Graphics;
-  private readonly seed = Math.floor(Math.random() * 1e9);
   private pressed = false;
 
   /** @param x, y  Mittelpunkt (wie bei `add.rectangle`). */
@@ -52,7 +52,7 @@ export class ComicBox {
     this.draw();
   }
 
-  /** Gedrueckt: Das Schild sinkt auf seinen Schatten. */
+  /** Gedrueckt: Der Knopf sinkt auf seinen Schatten. */
   setPressed(pressed: boolean): this {
     if (pressed !== this.pressed) {
       this.pressed = pressed;
@@ -97,23 +97,68 @@ export class ComicBox {
     const { style } = this;
     const w = this.width;
     const h = this.height;
-    const dy = this.pressed ? Math.min(2, style.shadow) : 0;
-    const left = -w / 2;
-    const top = -h / 2 + dy;
+    const dy = this.pressed ? Math.min(3, style.shadow) : 0;
+    const x = -w / 2;
+    const y = -h / 2 + dy;
+    const r = Math.min(style.radius, w / 2, h / 2);
 
     g.clear();
     if (style.shadow > 0 && !this.pressed) {
-      g.fillStyle(INK, 0.22);
-      g.fillPoints(wobblyRect(left + 2, top + style.shadow, w, h, style.radius, this.seed + 7, 1.2), true);
+      g.fillStyle(INK, 0.35).fillRoundedRect(x, y + style.shadow, w, h, r);
     }
-    const outline = wobblyRect(left, top, w, h, style.radius, this.seed, 1.2);
-    g.fillStyle(style.fill, 1);
-    g.fillPoints(outline, true);
-    g.lineStyle(style.border, INK, 1);
-    g.strokePoints(outline, true);
-    if (style.sketch) {
-      g.lineStyle(Math.max(1, style.border * 0.45), INK, 0.55);
-      g.strokePoints(wobblyRect(left + 1.5, top - 1, w - 2, h + 1, style.radius, this.seed + 3, 1.8), true);
+    // Aeussere Kontur
+    g.fillStyle(INK, 1).fillRoundedRect(x, y, w, h, r);
+
+    switch (style.kind) {
+      case "panel": {
+        const b = 3;
+        const frame = Math.min(9, Math.max(5, Math.min(w, h) * 0.06));
+        g.fillStyle(WOOD, 1).fillRoundedRect(x + b, y + b, w - 2 * b, h - 2 * b, Math.max(2, r - b));
+        // Holzmaserung: ein paar dunklere Linien im Rahmen
+        g.lineStyle(1.2, WOOD_DARK, 0.6);
+        g.lineBetween(x + r, y + b + 2, x + w - r, y + b + 2);
+        g.lineBetween(x + r, y + h - b - 3, x + w - r, y + h - b - 3);
+        const ix = x + b + frame;
+        const iy = y + b + frame;
+        const iw = w - 2 * (b + frame);
+        const ih = h - 2 * (b + frame);
+        g.fillStyle(INK, 1).fillRoundedRect(ix - 2, iy - 2, iw + 4, ih + 4, Math.max(2, r - frame));
+        g.fillStyle(PAPER, 1).fillRoundedRect(ix, iy, iw, ih, Math.max(2, r - frame - 2));
+        // innerer Schatten oben
+        g.fillStyle(WOOD_DARK, 0.12).fillRect(ix + 4, iy + 1, iw - 8, 4);
+        // goldene Nieten in den Ecken
+        if (w > 60 && h > 60) {
+          for (const [cx, cy] of [
+            [x + b + frame / 2, y + b + frame / 2],
+            [x + w - b - frame / 2, y + b + frame / 2],
+            [x + b + frame / 2, y + h - b - frame / 2],
+            [x + w - b - frame / 2, y + h - b - frame / 2],
+          ] as const) {
+            g.fillStyle(INK, 1).fillCircle(cx, cy, frame / 2 + 1.5);
+            g.fillStyle(GOLD, 1).fillCircle(cx, cy, frame / 2);
+            g.fillStyle(0xffffff, 0.5).fillCircle(cx - 1, cy - 1, frame / 5);
+          }
+        }
+        break;
+      }
+      case "inset": {
+        const b = 2;
+        g.fillStyle(PAPER_DARK, 1).fillRoundedRect(x + b, y + b, w - 2 * b, h - 2 * b, Math.max(2, r - b));
+        g.fillStyle(WOOD_DARK, 0.18).fillRoundedRect(x + b, y + b, w - 2 * b, 5, { tl: r - b, tr: r - b, bl: 0, br: 0 });
+        break;
+      }
+      case "primary":
+      case "secondary": {
+        const [top, mid, bottom] = BUTTON_COLORS[style.kind];
+        const b = 3;
+        const iw = w - 2 * b;
+        const ih = h - 2 * b;
+        const ir = Math.max(2, r - b);
+        g.fillStyle(bottom, 1).fillRoundedRect(x + b, y + b, iw, ih, ir);
+        g.fillStyle(mid, 1).fillRoundedRect(x + b, y + b, iw, ih * 0.78, ir);
+        g.fillStyle(top, 1).fillRoundedRect(x + b + 3, y + b + 2, iw - 6, Math.max(3, ih * 0.22), Math.min(ir, ih * 0.11));
+        break;
+      }
     }
   }
 }

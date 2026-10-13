@@ -18,35 +18,35 @@ export interface AbilityDef {
 }
 
 export const ABILITIES: Record<CharacterId, AbilityDef> = {
-  soeldner: {
-    name: "Granate",
-    description: "Wirft eine Granate auf den nächsten Gegner – sie explodiert in großem Umkreis.",
+  ritter: {
+    name: "Schildwall",
+    description: "Hebt den Schild: 3 Sekunden unverwundbar, heilt 20 % Leben, stößt nahe Gegner zurück.",
+    cooldown: 12,
+  },
+  magierin: {
+    name: "Feuerball",
+    description: "Schleudert einen Feuerball auf den nächsten Gegner – er explodiert in großem Umkreis.",
     cooldown: 7,
   },
-  raufbold: {
-    name: "Stampfer",
-    description: "Schlägt auf den Boden: Schaden ringsum, Gegner fliegen weg und sind kurz betäubt.",
-    cooldown: 6,
+  schurke: {
+    name: "Schattenschritt",
+    description: "Springt ein Stück in Laufrichtung, unverwundbar und mit Schaden an allem auf dem Weg.",
+    cooldown: 4.5,
   },
-  jaeger: {
+  elfe: {
     name: "Pfeilhagel",
     description: "Schießt 18 Pfeile in alle Richtungen, jeder durchschlägt mehrere Gegner.",
     cooldown: 8,
   },
-  panzer: {
-    name: "Bollwerk",
-    description: "3 Sekunden unverwundbar, heilt 20 % Leben und schleudert nahe Gegner zurück.",
-    cooldown: 12,
+  zwerg: {
+    name: "Erdbeben",
+    description: "Schlägt den Hammer in den Boden: Schaden ringsum, Gegner fliegen weg und sind betäubt.",
+    cooldown: 6,
   },
-  glueckspilz: {
-    name: "Glückssträhne",
-    description: "Zieht alles Material heran. 5 Sekunden lang +40 % Krit.",
+  zauberer: {
+    name: "Arkaner Sog",
+    description: "Zieht alles Gold heran. 5 Sekunden lang +40 % Krit.",
     cooldown: 11,
-  },
-  schatten: {
-    name: "Schattenschritt",
-    description: "Springt ein Stück in Laufrichtung, unverwundbar und mit Schaden an allem auf dem Weg.",
-    cooldown: 4.5,
   },
 };
 

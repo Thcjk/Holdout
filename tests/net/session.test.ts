@@ -7,8 +7,8 @@ import { decodeState, encodeState } from "../../src/net/protocol";
 import { MemoryTransport } from "../memoryTransport";
 
 const SETUPS: PlayerSetup[] = [
-  { id: "host", name: "Host", character: "soeldner", startWeapon: "pistol" },
-  { id: "guest", name: "Gast", character: "jaeger", startWeapon: "sniper" },
+  { id: "host", name: "Host", character: "magierin", startWeapon: "pistol" },
+  { id: "guest", name: "Gast", character: "elfe", startWeapon: "sniper" },
 ];
 const IDLE: PlayerInput = { mx: 0, my: 0 };
 

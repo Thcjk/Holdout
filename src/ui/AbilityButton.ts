@@ -1,7 +1,7 @@
 /**
  * Der Knopf fuer die Faehigkeit, rechts unten im Gefecht.
  *
- * Ein rundes Papierschild mit dem Gesicht des Helden. Solange die Faehigkeit
+ * Ein rundes Pergamentschild mit dem Gesicht des Helden. Solange die Faehigkeit
  * sich auflaedt, liegt ein dunkler Tortenschnitt darueber, der kleiner wird,
  * und die Restsekunden stehen in der Mitte. Ist sie bereit, pulsiert der Knopf.
  *
@@ -15,7 +15,7 @@ import { SAFE, VIEWPORT } from "../config/constants";
 import { ABILITIES } from "../game/data/abilities";
 import type { CharacterId } from "../game/types";
 import { figureScale } from "./comicFigures";
-import { FONT_HAND, FONT_TITLE, INK, PAPER, RUST, wobblyRect } from "./paper";
+import { FONT_TITLE, GOLD, INK, PAPER, wobblyRect } from "./paper";
 
 const RADIUS = 44;
 const DEPTH = 9400;
@@ -43,14 +43,15 @@ export class AbilityButton {
     this.face = scene.add.image(0, 4, characterKey(character)).setScale(figureScale(0.95));
     this.shade = scene.add.graphics();
     this.seconds = scene.add
-      .text(0, 2, "", { fontFamily: FONT_TITLE, fontSize: "34px", color: "#f1e5c9" })
-      .setOrigin(0.5);
+      .text(0, 2, "", { fontFamily: FONT_TITLE, fontSize: "34px", color: "#f4e4c1" })
+      .setOrigin(0.5)
+      .setStroke("#2b2320", 5);
     this.label = scene.add
       .text(0, RADIUS + 12, ABILITIES[character].name, {
-        fontFamily: FONT_HAND,
+        fontFamily: FONT_TITLE,
         fontSize: "16px",
-        color: "#1d1c19",
-        backgroundColor: "#f1e5c9cc",
+        color: "#2b2320",
+        backgroundColor: "#f4e4c1dd",
         padding: { x: 5, y: 1 },
       })
       .setOrigin(0.5);
@@ -106,13 +107,13 @@ export class AbilityButton {
     this.hit.destroy();
   }
 
-  /** Papierscheibe mit Tuscherand; bereit = Rost-Ring aussen. */
+  /** Pergamentscheibe mit dunklem Rand; bereit = goldener Ring aussen. */
   private drawBase(ready: boolean): void {
     const g = this.base;
     g.clear();
     g.fillStyle(INK, 0.25).fillCircle(2, 5, RADIUS);
     if (ready) {
-      g.fillStyle(RUST, 1).fillCircle(0, 0, RADIUS + 6);
+      g.fillStyle(GOLD, 1).fillCircle(0, 0, RADIUS + 6);
       g.lineStyle(2.4, INK, 1).strokeCircle(0, 0, RADIUS + 6);
     }
     const ring = wobblyRect(-RADIUS, -RADIUS, RADIUS * 2, RADIUS * 2, RADIUS, 77, 1);

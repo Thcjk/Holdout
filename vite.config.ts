@@ -36,8 +36,8 @@ export default defineConfig({
         id: "koop-arena-shooter",
         categories: ["games"],
         orientation: "landscape",
-        background_color: "#f1e5c9",
-        theme_color: "#f1e5c9",
+        background_color: "#3f4d63",
+        theme_color: "#3f4d63",
         icons: [
           { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" },

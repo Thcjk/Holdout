@@ -1,29 +1,30 @@
 /**
- * Die gemalten Texturen des Spiels: Arena, Hintergrund, Geschoss, Material,
- * Logo, Klippe fuers Titelbild und Herz fuer die Lebensanzeige.
+ * Die gemalten Texturen der Welt: Burghof (Arena), Hintergrund, Geschosse,
+ * Goldmuenze, Herz und das Wappen-Logo.
  *
- * Poster-Stil: Alles liegt auf Creme-Papier mit Korn. Die Arena ist eine
- * gemalte Lichtung mit Weg, Steinkreis und Blumen, deren Rand unregelmaessig
- * ist und in Tusche umrandet - ringsum stehen Baeume, Felsen und Ruinen wie
- * auf einer illustrierten Karte. Alles wird einmal auf Leinwaende gemalt
- * (feste Startwerte, damit es bei jedem Start gleich aussieht).
- * Figuren stehen in `comicFigures.ts`, Waffen in `comicWeapons.ts`.
+ * Die Welt: "Die Feste Holdout" - eine Burg im schieferblauen Grauland. Die
+ * Helden verteidigen den Burghof gegen Monsterwellen, die durch das Tor in der
+ * Burgmauer hereinbrechen. Der Hof selbst wird in `arena.ts` gemalt.
+ *
+ * Alles wird einmal auf Leinwaende gemalt (feste Startwerte, damit es bei
+ * jedem Start gleich aussieht). Figuren: `comicFigures.ts`, Waffen: `comicWeapons.ts`.
  */
 
 import type Phaser from "phaser";
 import { arenaKey } from "../config/assets";
 import { ARENA } from "../game/constants";
-import { createFigureTextures, inkify } from "./comicFigures";
+import { ARENA_WALL, arenaGrain, paintArena } from "./arena";
+import { createFigureTextures } from "./comicFigures";
 import { createWeaponTextures } from "./comicWeapons";
-import { NOIR } from "./noir";
-import { FONT_HAND, FONT_TITLE, grain, inkLine, seeded } from "./paper";
+import { LOGO_HEIGHT, LOGO_WIDTH, paintLogo } from "./logo";
 
-/** So weit reicht das Arenabild ueber die Spielflaeche hinaus (fuer Baeume und Felsen). */
-export const ARENA_WALL = 44;
+export { ARENA_WALL };
 
 type Ctx = CanvasRenderingContext2D;
 
-const INK = "#1d1c19";
+const INK = "#2b2320";
+const GOLD = "#f0b23e";
+const GOLD_DARK = "#c9851f";
 
 function canvasOf(width: number, height: number): { canvas: HTMLCanvasElement; context: Ctx } | null {
   const canvas = document.createElement("canvas");
@@ -40,327 +41,33 @@ function addTexture(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement)
   scene.textures.addCanvas(key, canvas)?.setFilter(1);
 }
 
-// --- Gezeichnete Kleinteile fuer Landschaften -------------------------------------
-
-/** Ein Laubbaum: Stamm und runde Krone aus drei Blobs, Tusche-Rand. */
-function leafTree(context: Ctx, x: number, y: number, h: number, random: () => number, color = "#5d7d43"): void {
-  const crownR = h * 0.32;
-  context.fillStyle = "#4a3426";
-  context.strokeStyle = INK;
-  context.lineWidth = 1.6;
-  context.beginPath();
-  context.moveTo(x - h * 0.04, y);
-  context.lineTo(x - h * 0.03, y - h * 0.45);
-  context.lineTo(x + h * 0.03, y - h * 0.45);
-  context.lineTo(x + h * 0.05, y);
-  context.closePath();
-  context.fill();
-  context.stroke();
-  const blobs: [number, number, number][] = [
-    [x - crownR * 0.55, y - h * 0.55, crownR * 0.8],
-    [x + crownR * 0.55, y - h * 0.58, crownR * 0.78],
-    [x, y - h * 0.75, crownR],
-  ];
-  context.beginPath();
-  for (const [bx, by, r] of blobs) {
-    context.moveTo(bx + r, by);
-    context.arc(bx, by, r, 0, Math.PI * 2);
-  }
-  context.fillStyle = color;
-  context.fill();
-  context.lineWidth = 1.8;
-  context.stroke();
-  // dunklere Unterseite der Krone
-  context.save();
-  context.clip();
-  context.fillStyle = "rgba(29,28,25,0.22)";
-  context.fillRect(x - h, y - h * 0.62, h * 2, h);
-  context.restore();
-  // ein paar Blatt-Striche
-  for (let i = 0; i < 4; i += 1) {
-    const bx = x + (random() - 0.5) * crownR * 1.4;
-    const by = y - h * 0.7 + (random() - 0.5) * crownR;
-    inkLine(context, [[bx, by], [bx + 3, by - 2]], 1, random, "rgba(29,28,25,0.5)");
-  }
+/** Form fuellen, Schatten unten rechts, Kontur - wie bei den Figuren. */
+function cel(c: Ctx, build: () => void, base: string, dark: string, d = 3, line = 2.4): void {
+  c.beginPath();
+  build();
+  c.fillStyle = dark;
+  c.fill();
+  c.save();
+  c.beginPath();
+  build();
+  c.clip();
+  c.translate(-d, -d);
+  c.beginPath();
+  build();
+  c.fillStyle = base;
+  c.fill();
+  c.restore();
+  c.beginPath();
+  build();
+  c.lineJoin = "round";
+  c.lineWidth = line;
+  c.strokeStyle = INK;
+  c.stroke();
 }
 
-/** Eine Tanne: geschichtete Dreiecke mit Tusche-Rand. */
-function pineTree(context: Ctx, x: number, y: number, h: number, color = "#3e5a4a"): void {
-  const w = h * 0.42;
-  context.beginPath();
-  context.moveTo(x, y - h);
-  for (const [dy, dx] of [[0.35, 0.55], [0.38, 0.32], [0.65, 0.8], [0.68, 0.5], [0.95, 1]] as const) {
-    context.lineTo(x + w * dx, y - h + h * dy);
-  }
-  context.lineTo(x + w * 0.12, y - h * 0.05);
-  context.lineTo(x + w * 0.12, y);
-  context.lineTo(x - w * 0.12, y);
-  context.lineTo(x - w * 0.12, y - h * 0.05);
-  for (const [dy, dx] of [[0.95, 1], [0.68, 0.5], [0.65, 0.8], [0.38, 0.32], [0.35, 0.55]] as const) {
-    context.lineTo(x - w * dx, y - h + h * dy);
-  }
-  context.closePath();
-  context.fillStyle = color;
-  context.fill();
-  context.lineWidth = 1.7;
-  context.strokeStyle = INK;
-  context.stroke();
-  context.save();
-  context.clip();
-  context.fillStyle = "rgba(29,28,25,0.25)";
-  context.fillRect(x, y - h, w, h);
-  context.restore();
-}
+// --- Burghof ---------------------------------------------------------------------
 
-/** Ein Felsbrocken. */
-function rock(context: Ctx, x: number, y: number, r: number, random: () => number): void {
-  const points: [number, number][] = [];
-  for (let i = 0; i < 7; i += 1) {
-    const a = Math.PI + (i / 6) * Math.PI;
-    const rr = r * (0.75 + random() * 0.35);
-    points.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.75]);
-  }
-  context.beginPath();
-  points.forEach(([px, py], index) => (index === 0 ? context.moveTo(px, py) : context.lineTo(px, py)));
-  context.closePath();
-  context.fillStyle = "#8d9688";
-  context.fill();
-  context.lineWidth = 1.6;
-  context.strokeStyle = INK;
-  context.stroke();
-  context.save();
-  context.clip();
-  context.fillStyle = "rgba(29,28,25,0.25)";
-  context.fillRect(x, y - r, r * 2, r * 2);
-  context.restore();
-}
-
-/** Eine zerbrochene Saeule aus Stein. */
-function pillar(context: Ctx, x: number, y: number, h: number, random: () => number): void {
-  const w = h * 0.34;
-  context.beginPath();
-  context.moveTo(x - w / 2, y);
-  context.lineTo(x - w / 2, y - h * 0.8);
-  context.lineTo(x - w * 0.1, y - h);
-  context.lineTo(x + w * 0.15, y - h * 0.86);
-  context.lineTo(x + w / 2, y - h * 0.92);
-  context.lineTo(x + w / 2, y);
-  context.closePath();
-  context.fillStyle = "#c2bba3";
-  context.fill();
-  context.lineWidth = 1.6;
-  context.strokeStyle = INK;
-  context.stroke();
-  context.save();
-  context.clip();
-  context.fillStyle = "rgba(29,28,25,0.22)";
-  context.fillRect(x + w * 0.1, y - h, w, h);
-  context.restore();
-  for (let i = 1; i < 3; i += 1) {
-    inkLine(context, [[x - w / 2, y - (h * i) / 3], [x + w / 2, y - (h * i) / 3]], 1, random, "rgba(29,28,25,0.55)");
-  }
-  // Moos
-  context.fillStyle = "#6e8f3a";
-  context.beginPath();
-  context.ellipse(x - w * 0.1, y - h * 0.8, w * 0.35, 2.5, 0, 0, Math.PI * 2);
-  context.fill();
-}
-
-// --- Arena ---------------------------------------------------------------------
-
-/** Unregelmaessiger Rand der Lichtung: ein Rechteck, dessen Kante sanft wellt. */
-function clearingPath(context: Ctx, x: number, y: number, w: number, h: number, random: () => number): void {
-  const points: [number, number][] = [];
-  const bump = (): number => 4 + random() * 7;
-  const step = 22;
-  for (let px = x; px < x + w; px += step) {
-    points.push([px, y - bump()]);
-  }
-  for (let py = y; py < y + h; py += step) {
-    points.push([x + w + bump(), py]);
-  }
-  for (let px = x + w; px > x; px -= step) {
-    points.push([px, y + h + bump()]);
-  }
-  for (let py = y + h; py > y; py -= step) {
-    points.push([x - bump(), py]);
-  }
-  context.beginPath();
-  points.forEach(([px, py], index) => {
-    const [nx, ny] = points[(index + 1) % points.length] as [number, number];
-    if (index === 0) {
-      context.moveTo((px + nx) / 2, (py + ny) / 2);
-    } else {
-      context.quadraticCurveTo(px, py, (px + nx) / 2, (py + ny) / 2);
-    }
-  });
-  const [fx, fy] = points[0] as [number, number];
-  const [sx, sy] = points[1] as [number, number];
-  context.quadraticCurveTo(fx, fy, (fx + sx) / 2, (fy + sy) / 2);
-  context.closePath();
-}
-
-function paintArena(context: Ctx): void {
-  const wall = ARENA_WALL;
-  const width = ARENA.width + wall * 2;
-  const height = ARENA.height + wall * 2;
-  const random = seeded(77);
-  const x0 = wall;
-  const y0 = wall;
-  const w = ARENA.width;
-  const h = ARENA.height;
-
-  // Lichtung: gemalte Wiese, nur innerhalb des welligen Rands.
-  context.save();
-  clearingPath(context, x0, y0, w, h, seeded(9));
-  context.save();
-  context.clip();
-  context.fillStyle = "#b5ba8f";
-  context.fillRect(0, 0, width, height);
-  // Pinselflecken in Salbei und Oliv
-  for (let i = 0; i < 70; i += 1) {
-    const px = x0 + random() * w;
-    const py = y0 + random() * h;
-    const tone = random();
-    context.fillStyle =
-      tone < 0.35 ? "rgba(205,206,165,0.55)" : tone < 0.7 ? "rgba(146,160,112,0.45)" : "rgba(122,140,96,0.35)";
-    context.beginPath();
-    context.ellipse(px, py, 30 + random() * 70, 14 + random() * 30, random() * 3, 0, Math.PI * 2);
-    context.fill();
-  }
-  // Ein heller Trampelpfad quer durch die Lichtung.
-  context.strokeStyle = "#d9c9a0";
-  context.lineCap = "round";
-  context.lineWidth = 34;
-  context.beginPath();
-  context.moveTo(x0 - 20, y0 + h * 0.72);
-  context.bezierCurveTo(x0 + w * 0.25, y0 + h * 0.5, x0 + w * 0.42, y0 + h * 0.62, x0 + w * 0.5, y0 + h * 0.5);
-  context.bezierCurveTo(x0 + w * 0.6, y0 + h * 0.36, x0 + w * 0.78, y0 + h * 0.3, x0 + w + 20, y0 + h * 0.36);
-  context.stroke();
-  context.strokeStyle = "rgba(160,132,90,0.35)";
-  context.lineWidth = 2;
-  context.setLineDash([3, 9]);
-  context.stroke();
-  context.setLineDash([]);
-  // Lichtung mit altem Steinkreis in der Mitte.
-  const cx = x0 + w / 2;
-  const cy = y0 + h / 2;
-  context.fillStyle = "#cfc7a2";
-  context.beginPath();
-  context.ellipse(cx, cy, 110, 66, 0, 0, Math.PI * 2);
-  context.fill();
-  context.strokeStyle = "rgba(29,28,25,0.35)";
-  context.lineWidth = 1.4;
-  context.stroke();
-  for (let i = 0; i < 16; i += 1) {
-    if (i % 5 === 3) {
-      continue;
-    }
-    const a = (i / 16) * Math.PI * 2;
-    const sx = cx + Math.cos(a) * 96;
-    const sy = cy + Math.sin(a) * 56;
-    context.fillStyle = "#a9a690";
-    context.beginPath();
-    context.ellipse(sx, sy, 8, 5, a, 0, Math.PI * 2);
-    context.fill();
-    context.strokeStyle = INK;
-    context.lineWidth = 1.3;
-    context.stroke();
-  }
-  // Grasstriche in Tusche und Gruen
-  for (let i = 0; i < 260; i += 1) {
-    const px = x0 + random() * w;
-    const py = y0 + 6 + random() * (h - 6);
-    const color = random() < 0.3 ? "rgba(29,28,25,0.55)" : random() < 0.6 ? "#6f8a4a" : "#56703a";
-    for (let k = -1; k <= 1; k += 1) {
-      inkLine(context, [[px + k * 2, py], [px + k * 3.4, py - 4 - random() * 4]], 1.2, random, color);
-    }
-  }
-  // Blumen
-  for (let i = 0; i < 46; i += 1) {
-    const px = x0 + 8 + random() * (w - 16);
-    const py = y0 + 8 + random() * (h - 16);
-    context.fillStyle = random() < 0.4 ? NOIR.amber : random() < 0.6 ? NOIR.blood : NOIR.bone;
-    context.beginPath();
-    context.arc(px, py, 2.4, 0, Math.PI * 2);
-    context.fill();
-    context.strokeStyle = INK;
-    context.lineWidth = 0.8;
-    context.stroke();
-  }
-  // Kieselsteine
-  for (let i = 0; i < 30; i += 1) {
-    rock(context, x0 + 10 + random() * (w - 20), y0 + 12 + random() * (h - 20), 3 + random() * 4, random);
-  }
-  // Dunklere Kante innen: die Lichtung liegt etwas tiefer als der Wald.
-  context.lineWidth = 26;
-  context.strokeStyle = "rgba(60,72,48,0.28)";
-  clearingPath(context, x0, y0, w, h, seeded(9));
-  context.stroke();
-  grain(context, width, height, 0.5, random);
-  context.restore();
-  // Tusche-Rand der Lichtung
-  clearingPath(context, x0, y0, w, h, seeded(9));
-  context.lineWidth = 2.6;
-  context.strokeStyle = INK;
-  context.stroke();
-  context.restore();
-
-  // Ringsum: Baeume hinter dem oberen Rand, Baeume an den Seiten, Felsen und Ruinen.
-  const back: (() => void)[] = [];
-  for (let px = -6; px < width + 10; px += 14 + random() * 16) {
-    const hgt = 22 + random() * 12;
-    const kind = random();
-    back.push(() =>
-      kind < 0.5
-        ? pineTree(context, px, y0 + 4, hgt, random() < 0.5 ? "#3e5a4a" : "#4d6c50")
-        : leafTree(context, px, y0 + 6, hgt, random, random() < 0.5 ? "#6b8a4a" : "#5d7d43"),
-    );
-  }
-  for (const draw of back) {
-    draw();
-  }
-  for (const side of [0, 1]) {
-    for (let py = y0 + 34; py < y0 + h + 30; py += 26 + random() * 22) {
-      const px = side === 0 ? x0 - 18 - random() * 14 : x0 + w + 18 + random() * 14;
-      if (random() < 0.6) {
-        pineTree(context, px, py, 26 + random() * 14, random() < 0.5 ? "#3e5a4a" : "#4d6c50");
-      } else {
-        leafTree(context, px, py, 28 + random() * 12, random, random() < 0.5 ? "#6b8a4a" : "#5d7d43");
-      }
-    }
-  }
-  // unten nur niedriges Zeug, damit nichts die Spielflaeche verdeckt
-  for (let px = 10; px < width; px += 30 + random() * 40) {
-    if (random() < 0.5) {
-      rock(context, px, y0 + h + 22 + random() * 10, 7 + random() * 6, random);
-    } else {
-      context.fillStyle = "#56703a";
-      context.beginPath();
-      context.ellipse(px, y0 + h + 24, 12 + random() * 8, 7, 0, 0, Math.PI * 2);
-      context.fill();
-      context.lineWidth = 1.5;
-      context.strokeStyle = INK;
-      context.stroke();
-    }
-  }
-  // Ruinen in den Ecken
-  pillar(context, x0 - 22, y0 + h + 12, 34, random);
-  pillar(context, x0 + w + 24, y0 + h + 14, 28, random);
-  pillar(context, x0 + w + 10, y0 + 22, 22, random);
-
-  // Nebelfetzen am Rand
-  for (let i = 0; i < 12; i += 1) {
-    const px = random() * width;
-    const py = random() < 0.5 ? y0 + random() * 26 : y0 + h - random() * 26;
-    const fog = context.createRadialGradient(px, py, 0, px, py, 70);
-    fog.addColorStop(0, "rgba(241,229,201,0.35)");
-    fog.addColorStop(1, "rgba(241,229,201,0)");
-    context.fillStyle = fog;
-    context.fillRect(px - 70, py - 70, 140, 140);
-  }
-}
-
+/** Kopfsteinpflaster: Reihen unregelmaessiger, gerundeter Steine. */
 function createArena(scene: Phaser.Scene): void {
   const scale = 2;
   const wall = ARENA_WALL;
@@ -370,10 +77,11 @@ function createArena(scene: Phaser.Scene): void {
   }
   target.context.scale(scale, scale);
   paintArena(target.context);
+  arenaGrain(target.context, target.canvas.width, target.canvas.height);
   addTexture(scene, arenaKey, target.canvas);
 }
 
-/** Papier hinter der Arena, mit blassen Bergen am oberen Rand. */
+/** Hinter der Arena: Schieferblau mit dunkleren Raendern. */
 function createGameBackground(scene: Phaser.Scene): void {
   const width = 1600;
   const height = 540;
@@ -382,34 +90,17 @@ function createGameBackground(scene: Phaser.Scene): void {
     return;
   }
   const { context } = target;
-  const random = seeded(31);
-  context.fillStyle = "#f1e5c9";
+  const gradient = context.createRadialGradient(width / 2, height / 2, 100, width / 2, height / 2, width * 0.6);
+  gradient.addColorStop(0, "#56667a");
+  gradient.addColorStop(1, "#38434f");
+  context.fillStyle = gradient;
   context.fillRect(0, 0, width, height);
-  for (const [base, color, amp] of [[90, "rgba(158,176,164,0.35)", 60], [110, "rgba(122,150,140,0.3)", 40]] as const) {
-    context.fillStyle = color;
-    context.beginPath();
-    context.moveTo(0, 0);
-    context.lineTo(0, base);
-    for (let x = 0; x <= width; x += 50) {
-      context.lineTo(x, base - random() * amp);
-    }
-    context.lineTo(width, 0);
-    context.closePath();
-    context.fill();
-  }
-  // Untere Kante etwas dunkler, wie gealtertes Papier.
-  const age = context.createRadialGradient(width / 2, height / 2, height * 0.4, width / 2, height / 2, width * 0.6);
-  age.addColorStop(0, "rgba(120,90,50,0)");
-  age.addColorStop(1, "rgba(120,90,50,0.22)");
-  context.fillStyle = age;
-  context.fillRect(0, 0, width, height);
-  grain(context, width, height, 0.35, random);
   addTexture(scene, "bg-game", target.canvas);
 }
 
 // --- Kleinteile ------------------------------------------------------------------
 
-/** Das Geschoss: heller Kern mit Tusche-Rand (wird im Spiel eingefaerbt). */
+/** Gegnergeschoss: lila Zauberkugel (wird im Spiel eingefaerbt). */
 function createBullet(scene: Phaser.Scene): void {
   const target = canvasOf(32, 32);
   if (!target) {
@@ -422,14 +113,19 @@ function createBullet(scene: Phaser.Scene): void {
   context.fill();
   context.fillStyle = "#ffffff";
   context.beginPath();
-  context.arc(16, 16, 9.5, 0, Math.PI * 2);
+  context.arc(16, 16, 10, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = "rgba(255,255,255,0.8)";
+  context.beginPath();
+  context.arc(12, 12, 3, 0, Math.PI * 2);
   context.fill();
   addTexture(scene, "bullet", target.canvas);
 }
 
 /**
- * Geschosse nach Aussehen (`Projectile.look`): 1 Bolzen, 2 Rakete, 3 Flamme,
- * 4 Blitzfunke, 5 Eissplitter, 6 Granate. Alle zeigen nach rechts.
+ * Geschosse nach Aussehen (`Projectile.look`): 1 Pfeil, 2 Feuerkugel, 3 Flamme,
+ * 4 Blitzfunke, 5 Eissplitter, 6 grosser Feuerball, 7 Dolch, 8 Funke.
+ * Alle zeigen nach rechts.
  */
 function createShotLooks(scene: Phaser.Scene): void {
   const make = (key: string, w: number, h: number, draw: (c: Ctx) => void): void => {
@@ -439,125 +135,135 @@ function createShotLooks(scene: Phaser.Scene): void {
       addTexture(scene, key, target.canvas);
     }
   };
-  const inked = (c: Ctx, fill: string, width = 2): void => {
-    c.fillStyle = fill;
-    c.fill();
-    c.lineWidth = width;
-    c.lineJoin = "round";
-    c.strokeStyle = INK;
-    c.stroke();
+  const glow = (c: Ctx, x: number, y: number, r: number, color: string): void => {
+    const g = c.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, color);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = g;
+    c.fillRect(x - r, y - r, r * 2, r * 2);
   };
-  make("shot-1", 44, 14, (c) => {
+  make("shot-1", 46, 14, (c) => {
+    c.lineCap = "round";
+    c.strokeStyle = INK;
+    c.lineWidth = 4;
     c.beginPath();
-    c.rect(4, 5, 30, 4);
-    inked(c, "#c9a66b", 1.6);
-    c.beginPath();
-    c.moveTo(32, 2);
-    c.lineTo(42, 7);
-    c.lineTo(32, 12);
-    c.closePath();
-    inked(c, "#c9c6b4", 1.6);
-    c.beginPath();
-    c.moveTo(2, 2);
-    c.lineTo(10, 7);
-    c.lineTo(2, 12);
-    c.closePath();
-    inked(c, "#b5532f", 1.4);
+    c.moveTo(4, 7);
+    c.lineTo(36, 7);
+    c.stroke();
+    c.strokeStyle = "#c9a66b";
+    c.lineWidth = 2;
+    c.stroke();
+    cel(c, () => {
+      c.moveTo(34, 2);
+      c.lineTo(44, 7);
+      c.lineTo(34, 12);
+      c.closePath();
+    }, "#dfe5ea", "#a8b1bc", 1, 1.6);
+    cel(c, () => {
+      c.moveTo(2, 2);
+      c.lineTo(10, 7);
+      c.lineTo(2, 12);
+      c.closePath();
+    }, "#d94a3a", "#a8322a", 1, 1.4);
   });
-  make("shot-2", 40, 20, (c) => {
+  make("shot-2", 30, 30, (c) => {
+    glow(c, 15, 15, 15, "rgba(255,150,60,0.8)");
+    cel(c, () => c.arc(15, 15, 8, 0, Math.PI * 2), "#ff8a3a", "#d9542a", 1.6, 2);
+    c.fillStyle = "#ffe27a";
     c.beginPath();
-    c.moveTo(2, 10);
-    c.lineTo(10, 3);
-    c.lineTo(10, 17);
-    c.closePath();
-    inked(c, "#f6d36b", 1.2);
-    c.beginPath();
-    c.roundRect(9, 5, 22, 10, 4);
-    inked(c, "#587a7c");
-    c.beginPath();
-    c.moveTo(30, 5);
-    c.lineTo(38, 10);
-    c.lineTo(30, 15);
-    c.closePath();
-    inked(c, "#b5532f");
+    c.arc(13, 13, 3.4, 0, Math.PI * 2);
+    c.fill();
   });
   make("shot-3", 28, 28, (c) => {
     const g = c.createRadialGradient(14, 14, 1, 14, 14, 13);
-    g.addColorStop(0, "rgba(246,211,107,1)");
-    g.addColorStop(0.5, "rgba(232,134,42,0.9)");
-    g.addColorStop(1, "rgba(181,83,47,0)");
+    g.addColorStop(0, "rgba(255,226,122,1)");
+    g.addColorStop(0.5, "rgba(255,140,50,0.9)");
+    g.addColorStop(1, "rgba(217,74,58,0)");
     c.fillStyle = g;
     c.fillRect(0, 0, 28, 28);
   });
-  make("shot-4", 24, 24, (c) => {
-    c.beginPath();
-    for (let i = 0; i < 8; i += 1) {
-      const a = (i / 8) * Math.PI * 2;
-      const r = i % 2 === 0 ? 11 : 4;
-      c.lineTo(12 + Math.cos(a) * r, 12 + Math.sin(a) * r);
-    }
-    c.closePath();
-    inked(c, "#dff4fa", 1.4);
+  make("shot-4", 26, 26, (c) => {
+    glow(c, 13, 13, 13, "rgba(160,220,255,0.8)");
+    cel(c, () => {
+      for (let i = 0; i < 8; i += 1) {
+        const a = (i / 8) * Math.PI * 2;
+        const r = i % 2 === 0 ? 10 : 4;
+        c.lineTo(13 + Math.cos(a) * r, 13 + Math.sin(a) * r);
+      }
+      c.closePath();
+    }, "#e8f7ff", "#9fdcff", 1, 1.6);
   });
-  make("shot-5", 26, 16, (c) => {
-    c.beginPath();
-    c.moveTo(2, 8);
-    c.lineTo(14, 2);
-    c.lineTo(24, 8);
-    c.lineTo(14, 14);
-    c.closePath();
-    inked(c, "#bfe4f0", 1.6);
+  make("shot-5", 28, 18, (c) => {
+    cel(c, () => {
+      c.moveTo(2, 9);
+      c.lineTo(15, 2);
+      c.lineTo(26, 9);
+      c.lineTo(15, 16);
+      c.closePath();
+    }, "#d8f2ff", "#8fcbe8", 1.4, 2);
   });
-  make("shot-6", 26, 26, (c) => {
+  make("shot-6", 40, 40, (c) => {
+    glow(c, 20, 20, 20, "rgba(255,120,50,0.85)");
+    cel(c, () => c.arc(20, 20, 11, 0, Math.PI * 2), "#ff7a3a", "#d0442a", 2, 2.4);
+    c.fillStyle = "#ffe27a";
     c.beginPath();
-    c.arc(12, 14, 9, 0, Math.PI * 2);
-    inked(c, "#4a5652", 2);
-    c.beginPath();
-    c.moveTo(16, 6);
-    c.lineTo(21, 2);
-    c.lineWidth = 2;
-    c.strokeStyle = "#6b4228";
-    c.stroke();
-    c.fillStyle = "#f6d36b";
-    c.beginPath();
-    c.arc(22, 2.5, 2.4, 0, Math.PI * 2);
+    c.arc(17, 17, 5, 0, Math.PI * 2);
     c.fill();
+  });
+  make("shot-7", 36, 16, (c) => {
+    cel(c, () => {
+      c.moveTo(12, 3);
+      c.lineTo(30, 6);
+      c.lineTo(35, 8);
+      c.lineTo(30, 10);
+      c.lineTo(12, 13);
+      c.closePath();
+    }, "#dfe5ea", "#a8b1bc", 1, 1.6);
+    cel(c, () => c.roundRect(9, 2, 4, 12, 1), GOLD, GOLD_DARK, 0.6, 1.4);
+    cel(c, () => c.roundRect(1, 5, 9, 6, 2), "#5a3f7a", "#3f2a5a", 0.6, 1.4);
+  });
+  make("shot-8", 22, 22, (c) => {
+    glow(c, 11, 11, 11, "rgba(255,200,90,0.9)");
+    cel(c, () => {
+      for (let i = 0; i < 8; i += 1) {
+        const a = (i / 8) * Math.PI * 2;
+        const r = i % 2 === 0 ? 8 : 3;
+        c.lineTo(11 + Math.cos(a) * r, 11 + Math.sin(a) * r);
+      }
+      c.closePath();
+    }, "#ffd04a", "#f09a2a", 1, 1.4);
   });
 }
 
-/** Das Material: ein Bernstein-Splitter mit Tusche-Rand. */
+/** Das Material: eine Goldmuenze mit Kronen-Praegung. */
 function createGem(scene: Phaser.Scene): void {
   const target = canvasOf(48, 48);
   if (!target) {
     return;
   }
-  const { context } = target;
-  const outline = [[24, 4], [37, 16], [33, 40], [24, 45], [15, 40], [11, 16]] as const;
-  context.lineJoin = "round";
-  context.beginPath();
-  outline.forEach(([x, y], index) => (index === 0 ? context.moveTo(x, y) : context.lineTo(x, y)));
-  context.closePath();
-  context.fillStyle = NOIR.amber;
-  context.fill();
-  context.lineWidth = 4;
-  context.strokeStyle = INK;
-  context.stroke();
-  context.fillStyle = NOIR.amberDark;
-  context.beginPath();
-  context.moveTo(24, 20);
-  context.lineTo(37, 16);
-  context.lineTo(33, 40);
-  context.lineTo(24, 45);
-  context.closePath();
-  context.fill();
-  context.fillStyle = "#f6dc98";
-  context.beginPath();
-  context.moveTo(24, 7);
-  context.lineTo(33, 16);
-  context.lineTo(24, 20);
-  context.lineTo(15, 16);
-  context.closePath();
-  context.fill();
+  const c = target.context;
+  cel(c, () => c.arc(24, 25, 18, 0, Math.PI * 2), GOLD, GOLD_DARK, 3, 3.4);
+  c.beginPath();
+  c.arc(23, 24, 12, 0, Math.PI * 2);
+  c.strokeStyle = GOLD_DARK;
+  c.lineWidth = 2;
+  c.stroke();
+  // kleine Krone
+  c.fillStyle = GOLD_DARK;
+  c.beginPath();
+  c.moveTo(16, 28);
+  c.lineTo(16, 19);
+  c.lineTo(20, 23);
+  c.lineTo(23, 17);
+  c.lineTo(26, 23);
+  c.lineTo(30, 19);
+  c.lineTo(30, 28);
+  c.closePath();
+  c.fill();
+  c.fillStyle = "rgba(255,255,255,0.7)";
+  c.beginPath();
+  c.ellipse(16, 15, 4, 2.4, -0.7, 0, Math.PI * 2);
+  c.fill();
   addTexture(scene, "gem", target.canvas);
 }
 
@@ -567,143 +273,43 @@ function createHeart(scene: Phaser.Scene): void {
   if (!target) {
     return;
   }
-  const { context } = target;
-  context.beginPath();
-  context.moveTo(24, 41);
-  context.bezierCurveTo(6, 30, 3, 18, 10, 11);
-  context.bezierCurveTo(16, 5, 23, 9, 24, 15);
-  context.bezierCurveTo(25, 9, 32, 5, 38, 11);
-  context.bezierCurveTo(45, 18, 42, 30, 24, 41);
-  context.closePath();
-  context.fillStyle = NOIR.blood;
-  context.fill();
-  context.lineWidth = 3.4;
-  context.strokeStyle = INK;
-  context.stroke();
-  context.fillStyle = "rgba(241,229,201,0.6)";
-  context.beginPath();
-  context.ellipse(15, 16, 4, 2.4, -0.7, 0, Math.PI * 2);
-  context.fill();
+  const c = target.context;
+  cel(
+    c,
+    () => {
+      c.moveTo(24, 42);
+      c.bezierCurveTo(6, 31, 3, 18, 10, 11);
+      c.bezierCurveTo(16, 5, 23, 9, 24, 15);
+      c.bezierCurveTo(25, 9, 32, 5, 38, 11);
+      c.bezierCurveTo(45, 18, 42, 31, 24, 42);
+      c.closePath();
+    },
+    "#e2483b",
+    "#b02f26",
+    3,
+    3.4,
+  );
+  c.fillStyle = "rgba(255,255,255,0.7)";
+  c.beginPath();
+  c.ellipse(15, 16, 4, 2.6, -0.7, 0, Math.PI * 2);
+  c.fill();
   addTexture(scene, "heart", target.canvas);
 }
 
 // --- Logo ------------------------------------------------------------------------
 
 /**
- * Der Schriftzug wie auf einem Buchumschlag: dicke, handgezeichnete
- * Grossbuchstaben in Tusche, leicht abgenutzt, darunter eine Zeile mit Strich.
+ * Das Wappen-Logo: ein blauer Schild mit gekreuztem Schwert und Stab dahinter,
+ * davor der Name in dicken goldenen Buchstaben, darunter ein rotes Banner
+ * "DIE LETZTE FESTE".
  */
 function createLogo(scene: Phaser.Scene): void {
-  const width = 900;
-  const height = 300;
-  const target = canvasOf(width, height);
+  const target = canvasOf(LOGO_WIDTH, LOGO_HEIGHT);
   if (!target) {
     return;
   }
-  const { context } = target;
-  const random = seeded(5);
-
-  let fontSize = 220;
-  context.font = `900 ${fontSize}px ${FONT_TITLE}`;
-  while (context.measureText("HOLDOUT").width > 820 && fontSize > 80) {
-    fontSize -= 4;
-    context.font = `900 ${fontSize}px ${FONT_TITLE}`;
-  }
-  context.textAlign = "center";
-  context.textBaseline = "alphabetic";
-  const baseline = 200;
-  context.fillStyle = INK;
-  context.fillText("HOLDOUT", width / 2, baseline);
-  // Abnutzung: kleine Stellen, an denen das Papier durchscheint.
-  context.save();
-  context.globalCompositeOperation = "destination-out";
-  for (let i = 0; i < 900; i += 1) {
-    context.fillStyle = `rgba(0,0,0,${0.3 + random() * 0.6})`;
-    const s = 1 + random() * 2.2;
-    context.fillRect(random() * width, 20 + random() * (baseline - 10), s, s);
-  }
-  context.restore();
-
-  // Unterzeile: Strich, dann Handschrift mit einem Wort in Rost.
-  context.font = `40px ${FONT_HAND}`;
-  context.textAlign = "left";
-  const first = "ÜBERLEBE ";
-  const second = "20 WELLEN";
-  const textWidth = context.measureText(first + second).width;
-  const startX = width / 2 - textWidth / 2 + 40;
-  inkLine(context, [[startX - 120, 246], [startX - 24, 244]], 4, random);
-  context.fillStyle = INK;
-  context.fillText(first, startX, 258);
-  context.fillStyle = NOIR.blood;
-  context.fillText(second, startX + context.measureText(first).width, 258);
-
+  paintLogo(target.context);
   addTexture(scene, "logo", target.canvas);
-}
-
-/** Klippe fuers Titelbild: ein Felsvorsprung mit Gras, auf dem der Held steht. */
-function createCliff(scene: Phaser.Scene): void {
-  const width = 520;
-  const height = 300;
-  const target = canvasOf(width, height);
-  if (!target) {
-    return;
-  }
-  const { context } = target;
-  const random = seeded(12);
-  context.beginPath();
-  context.moveTo(10, height);
-  context.lineTo(50, 210);
-  context.lineTo(96, 140);
-  context.lineTo(160, 100);
-  context.lineTo(300, 92);
-  context.lineTo(420, 96);
-  context.lineTo(470, 104);
-  context.lineTo(455, 140);
-  context.lineTo(420, 170);
-  context.lineTo(400, 230);
-  context.lineTo(380, height);
-  context.closePath();
-  context.fillStyle = "#56645e";
-  context.fill();
-  context.save();
-  context.clip();
-  context.fillStyle = "#3f4b47";
-  context.beginPath();
-  context.moveTo(260, height);
-  context.lineTo(330, 130);
-  context.lineTo(470, 110);
-  context.lineTo(470, height);
-  context.closePath();
-  context.fill();
-  for (let i = 0; i < 14; i += 1) {
-    const x = random() * width;
-    const y = 120 + random() * 170;
-    inkLine(context, [[x, y], [x + 14 + random() * 20, y + 6 + random() * 12]], 1.4, random, "rgba(29,28,25,0.45)");
-  }
-  context.restore();
-  // Grasdecke oben
-  context.beginPath();
-  context.moveTo(150, 112);
-  context.lineTo(156, 98);
-  for (let x = 160; x <= 470; x += 10) {
-    context.lineTo(x, 96 + (x > 420 ? (x - 420) * 0.15 : 0) - random() * 6);
-  }
-  context.lineTo(468, 114);
-  context.quadraticCurveTo(300, 116, 150, 112);
-  context.closePath();
-  context.fillStyle = "#6e8f3a";
-  context.fill();
-  for (let x = 160; x < 460; x += 8) {
-    inkLine(context, [[x, 104], [x + 2, 96 - random() * 6]], 1.2, random, "#4c6a2a");
-  }
-  // Blumen
-  for (let i = 0; i < 8; i += 1) {
-    context.fillStyle = random() < 0.5 ? NOIR.amber : NOIR.blood;
-    context.beginPath();
-    context.arc(170 + random() * 280, 102 + random() * 8, 3, 0, Math.PI * 2);
-    context.fill();
-  }
-  addTexture(scene, "title-cliff", inkify(target.canvas, "title-cliff", false, 2.6));
 }
 
 // --- Einstieg --------------------------------------------------------------------
@@ -719,5 +325,4 @@ export function createComicTextures(scene: Phaser.Scene): void {
   createGem(scene);
   createHeart(scene);
   createLogo(scene);
-  createCliff(scene);
 }

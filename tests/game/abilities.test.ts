@@ -21,7 +21,7 @@ function input(ability: number): Map<string, PlayerInput> {
 
 describe("Faehigkeiten", () => {
   it("loest nur einmal je neuem Zaehlerstand aus und laedt dann auf", () => {
-    const sim = setup("raufbold", "fist");
+    const sim = setup("zwerg", "fist");
     const player = sim.state.players[0]!;
     player.abilityCd = 0;
     sim.step(input(1));
@@ -34,7 +34,7 @@ describe("Faehigkeiten", () => {
   });
 
   it("Stampfer betaeubt und schadet allen Gegnern ringsum", () => {
-    const sim = setup("raufbold", "fist");
+    const sim = setup("zwerg", "fist");
     const player = sim.state.players[0]!;
     player.abilityCd = 0;
     const near = enemyAt(sim, "bruiser", player.x + 60, player.y);
@@ -45,8 +45,8 @@ describe("Faehigkeiten", () => {
     expect(far.hp).toBe(far.maxHp);
   });
 
-  it("Bollwerk macht den Panzer unverwundbar", () => {
-    const sim = setup("panzer", "shotgun");
+  it("Schildwall macht den Ritter unverwundbar", () => {
+    const sim = setup("ritter", "shotgun");
     const player = sim.state.players[0]!;
     player.abilityCd = 0;
     sim.step(input(1));
@@ -61,7 +61,7 @@ describe("Faehigkeiten", () => {
 
 describe("Waffen-Effekte und neue Gegner", () => {
   it("die Rakete explodiert und trifft mehrere Gegner", () => {
-    const sim = setup("soeldner", "rocket");
+    const sim = setup("magierin", "rocket");
     const player = sim.state.players[0]!;
     const a = enemyAt(sim, "bruiser", player.x + 150, player.y);
     const b = enemyAt(sim, "bruiser", player.x + 170, player.y + 30);
@@ -72,15 +72,15 @@ describe("Waffen-Effekte und neue Gegner", () => {
     expect(b.hp).toBeLessThan(b.maxHp);
   });
 
-  it("der Teiler zerfaellt beim Tod in Wuselchen", () => {
-    const sim = setup("soeldner");
+  it("die Mumie zerfaellt beim Tod in Wuselchen", () => {
+    const sim = setup("magierin");
     const splitter = enemyAt(sim, "splitter", 100, 100);
     (sim as unknown as { killEnemy: (e: Enemy, o: null) => void }).killEnemy(splitter, null);
     expect(sim.state.enemies.filter((enemy) => enemy.type === "swarmer").length).toBe(3);
   });
 
   it("der Zuender explodiert neben dem Spieler", () => {
-    const sim = setup("soeldner");
+    const sim = setup("magierin");
     const player = sim.state.players[0]!;
     player.weapons = [];
     player.iframes = 0;
@@ -94,7 +94,7 @@ describe("Waffen-Effekte und neue Gegner", () => {
   });
 
   it("Zustand mit Status und Faehigkeit uebersteht den Weg durchs Netz", () => {
-    const sim = setup("glueckspilz");
+    const sim = setup("zauberer");
     const player = sim.state.players[0]!;
     player.abilityCd = 4.2;
     const enemy = enemyAt(sim, "exploder", 300, 200);

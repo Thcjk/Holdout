@@ -32,7 +32,7 @@ export interface EnemyDef {
 export const ENEMIES: Record<EnemyType, EnemyDef> = {
   grunt: {
     type: "grunt",
-    name: "Larve",
+    name: "Goblin",
     hp: 18,
     speed: 88,
     damage: 6,
@@ -46,7 +46,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   },
   swarmer: {
     type: "swarmer",
-    name: "Wuselchen",
+    name: "Fledermaus",
     hp: 7,
     speed: 150,
     damage: 3,
@@ -60,7 +60,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   },
   charger: {
     type: "charger",
-    name: "Stürmer",
+    name: "Teufelchen",
     hp: 16,
     speed: 80,
     damage: 9,
@@ -74,7 +74,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   },
   spitter: {
     type: "spitter",
-    name: "Spucker",
+    name: "Schleim",
     hp: 16,
     speed: 70,
     damage: 5,
@@ -88,7 +88,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   },
   bruiser: {
     type: "bruiser",
-    name: "Brocken",
+    name: "Oger",
     hp: 75,
     speed: 58,
     damage: 12,
@@ -102,7 +102,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   },
   elite: {
     type: "elite",
-    name: "Königslarve",
+    name: "Skelettritter",
     hp: 320,
     speed: 76,
     damage: 15,
@@ -116,7 +116,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   },
   exploder: {
     type: "exploder",
-    name: "Zünder",
+    name: "Bombenkobold",
     hp: 14,
     speed: 118,
     damage: 4,
@@ -130,7 +130,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   },
   splitter: {
     type: "splitter",
-    name: "Teiler",
+    name: "Mumie",
     hp: 42,
     speed: 68,
     damage: 9,
@@ -144,7 +144,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   },
   boss: {
     type: "boss",
-    name: "Alien-Boss",
+    name: "Lich",
     hp: 1400,
     speed: 70,
     damage: 18,

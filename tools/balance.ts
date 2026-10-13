@@ -37,7 +37,7 @@ for (const id of CHARACTER_IDS) {
 const coop: number[] = [];
 let coopWins = 0;
 for (let seed = 1; seed <= runs; seed += 1) {
-  const result = playBot({ seed: seed * 313, character: "soeldner", startWeapon: "smg", players: 4 });
+  const result = playBot({ seed: seed * 313, character: "magierin", startWeapon: "smg", players: 4 });
   coop.push(result.wave);
   if (result.won) {
     coopWins += 1;

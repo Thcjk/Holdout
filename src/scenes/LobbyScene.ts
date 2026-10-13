@@ -46,7 +46,7 @@ interface LobbyData {
 
 export class LobbyScene extends Phaser.Scene {
   private mode: PlayMode = "host";
-  private character: CharacterId = "soeldner";
+  private character: CharacterId = "magierin";
   private weapon: WeaponId = "pistol";
 
   private lobby: Lobby | null = null;

@@ -121,7 +121,7 @@ export function openShop(player: PlayerState, wave: number, rng: Rng): void {
 /**
  * Verschmilzt die Waffe an `index` mit einer gleichen derselben Stufe zur naechsten Stufe.
  *
- * Bewusst ein eigener Befehl: Wer sechs Faeuste tragen will (der Raufbold),
+ * Bewusst ein eigener Befehl: Wer sechs Faeuste tragen will (der Zwerg),
  * soll sie nicht gegen seinen Willen verschmelzen muessen. Nur wenn kein Platz
  * mehr frei ist, verschmilzt der Kauf von selbst (siehe `buy`).
  */

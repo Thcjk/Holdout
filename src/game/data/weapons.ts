@@ -52,7 +52,7 @@ export interface WeaponDef {
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
   pistol: {
     id: "pistol",
-    name: "Pistole",
+    name: "Kurzbogen",
     kind: "ranged",
     price: 18,
     damage: [12, 18, 26, 38],
@@ -66,10 +66,11 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     scaling: 1,
     critBonus: 0,
     color: 0xfff2a8,
+    look: 1,
   },
   smg: {
     id: "smg",
-    name: "MP",
+    name: "Wurfdolche",
     kind: "ranged",
     price: 25,
     damage: [5, 7, 9, 13],
@@ -83,10 +84,11 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     scaling: 0.5,
     critBonus: 0,
     color: 0xb5532f,
+    look: 7,
   },
   shotgun: {
     id: "shotgun",
-    name: "Schrotflinte",
+    name: "Funkenfächer",
     kind: "ranged",
     price: 28,
     damage: [5, 7, 9, 13],
@@ -100,10 +102,11 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     scaling: 0.5,
     critBonus: 0,
     color: 0xffb36b,
+    look: 8,
   },
   sniper: {
     id: "sniper",
-    name: "Scharfschütze",
+    name: "Langbogen",
     kind: "ranged",
     price: 40,
     damage: [40, 60, 85, 130],
@@ -117,10 +120,11 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     scaling: 1.6,
     critBonus: 10,
     color: 0x8fe3ff,
+    look: 1,
   },
   fist: {
     id: "fist",
-    name: "Faust",
+    name: "Axt",
     kind: "melee",
     price: 14,
     damage: [12, 17, 23, 32],
@@ -137,7 +141,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   knife: {
     id: "knife",
-    name: "Messer",
+    name: "Dolch",
     kind: "melee",
     price: 22,
     damage: [14, 20, 28, 40],
@@ -154,7 +158,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   spear: {
     id: "spear",
-    name: "Speer",
+    name: "Langschwert",
     kind: "melee",
     price: 32,
     damage: [18, 26, 36, 52],
@@ -189,7 +193,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   rocket: {
     id: "rocket",
-    name: "Raketenwerfer",
+    name: "Feuerkugel",
     kind: "ranged",
     price: 42,
     damage: [26, 38, 54, 80],
@@ -208,7 +212,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   flamer: {
     id: "flamer",
-    name: "Flammenwerfer",
+    name: "Flammenstab",
     kind: "ranged",
     price: 34,
     damage: [3, 4, 6, 9],
@@ -246,7 +250,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   hammer: {
     id: "hammer",
-    name: "Hammer",
+    name: "Kriegshammer",
     kind: "melee",
     price: 36,
     damage: [22, 32, 46, 66],

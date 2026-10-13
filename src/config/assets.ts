@@ -3,7 +3,7 @@
  *
  * Grundlage ist "Topdown Shooter Pixel" von Kenney (CC0, siehe
  * `public/assets/License.txt`): ein Sheet mit 16x16-Kacheln und 1 Pixel
- * Abstand, 34 Spalten. Im Spielcode steht nur `CHARACTER_TILES.soeldner` -
+ * Abstand, 34 Spalten. Im Spielcode steht nur `CHARACTER_TILES.magierin` -
  * nie eine Nummer. Wer das Paket wechselt, aendert diese Datei und sonst nichts.
  *
  * Die Figuren auf dem Sheet schauen nach RECHTS. Spalte 28 ist die Figur ohne
@@ -30,12 +30,12 @@ export const SPRITE_BODY = 12;
 
 /** Spielfiguren: Spalte 28 (ohne Waffe), die Reihe ist die Farbe. */
 export const CHARACTER_TILES: Record<CharacterId, number> = {
-  soeldner: tile(28, 5),
-  raufbold: tile(28, 2),
-  jaeger: tile(28, 3),
-  panzer: tile(28, 10),
-  glueckspilz: tile(28, 1),
-  schatten: tile(28, 4),
+  magierin: tile(28, 5),
+  zwerg: tile(28, 2),
+  elfe: tile(28, 3),
+  ritter: tile(28, 10),
+  zauberer: tile(28, 1),
+  schurke: tile(28, 4),
 };
 
 /** Gegner: dieselbe Menschenfigur in "verwilderten" Farben, unterschieden durch Groesse. */

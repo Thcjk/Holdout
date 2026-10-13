@@ -65,7 +65,7 @@ const KNOCKBACK_DECAY = 8;
 /** Abstand zu allen Spielern, in dem kein Gegner erscheinen darf. */
 const SPAWN_SAFE_DISTANCE = 150;
 
-/** Geschoss-Aussehen der Granate (siehe `Projectile.look`). */
+/** Geschoss-Aussehen der Feuerkugel (siehe `Projectile.look`). */
 const LOOK_GRENADE = 6;
 const GRENADE_RADIUS = 110;
 
@@ -475,7 +475,7 @@ export class Simulation {
     player.facing = angle;
 
     const damage = weaponDamage(weapon.id, weapon.tier, stats);
-    const lucky = player.character === "glueckspilz" && player.buff > 0 ? 40 : 0;
+    const lucky = player.character === "zauberer" && player.buff > 0 ? 40 : 0;
     const critChance = stats.crit + def.critBonus + lucky;
 
     weapon.cd += weaponCooldown(weapon.id, weapon.tier, stats);
@@ -629,7 +629,7 @@ export class Simulation {
       return;
     }
     state.enemies.splice(index, 1);
-    // Der Teiler zerfaellt in drei Wuselchen.
+    // Die Mumie (Teiler) zerfaellt in drei Wuselchen.
     if (enemy.type === "splitter") {
       for (let i = 0; i < 3; i += 1) {
         if (state.enemies.length < MAX_ENEMIES) {
@@ -675,8 +675,8 @@ export class Simulation {
     if (!player.alive || player.iframes > 0) {
       return;
     }
-    // Bollwerk und Schattenschritt machen unverwundbar.
-    if (player.buff > 0 && (player.character === "panzer" || player.character === "schatten")) {
+    // Schildwall und Schattenschritt machen unverwundbar.
+    if (player.buff > 0 && (player.character === "ritter" || player.character === "schurke")) {
       return;
     }
     if (this.rng() * 100 < player.stats.dodge) {
@@ -1034,7 +1034,7 @@ export class Simulation {
         if (!alive) {
           continue;
         }
-        // Die Granate fliegt bis zum Zielpunkt und explodiert dort.
+        // Die Feuerkugel fliegt bis zum Zielpunkt und explodiert dort.
         if (shot.look === LOOK_GRENADE && shot.life <= TICK * 1.5) {
           this.explode(shot.x, shot.y, GRENADE_RADIUS, shot.damage, shot.crit, owner);
           continue;
@@ -1137,7 +1137,7 @@ export class Simulation {
     const power = this.abilityPower(player);
     const event = { t: "ability" as const, pid: player.id, kind: player.character, x: player.x, y: player.y, x2: player.x, y2: player.y };
     switch (player.character) {
-      case "soeldner": {
+      case "magierin": {
         const target = this.nearestEnemy(player.x, player.y, 460);
         const tx = target ? target.x : clamp(player.x + Math.cos(player.facing) * 200, 10, ARENA.width - 10);
         const ty = target ? target.y : clamp(player.y + Math.sin(player.facing) * 200, 10, ARENA.height - 10);
@@ -1164,7 +1164,7 @@ export class Simulation {
         event.y2 = ty;
         break;
       }
-      case "raufbold": {
+      case "zwerg": {
         for (const enemy of [...this.state.enemies]) {
           if (Math.hypot(enemy.x - player.x, enemy.y - player.y) < 135 + ENEMIES[enemy.type].radius) {
             enemy.stun = Math.max(enemy.stun, 1.2);
@@ -1173,7 +1173,7 @@ export class Simulation {
         }
         break;
       }
-      case "jaeger": {
+      case "elfe": {
         for (let i = 0; i < 18; i += 1) {
           const angle = (i / 18) * Math.PI * 2;
           this.state.shots.push({
@@ -1196,7 +1196,7 @@ export class Simulation {
         }
         break;
       }
-      case "panzer": {
+      case "ritter": {
         player.buff = 3;
         player.hp = Math.min(player.stats.maxHp, player.hp + player.stats.maxHp * 0.2);
         for (const enemy of this.state.enemies) {
@@ -1211,14 +1211,14 @@ export class Simulation {
         }
         break;
       }
-      case "glueckspilz": {
+      case "zauberer": {
         player.buff = 5;
         for (const pickup of this.state.pickups) {
           pickup.magnet = true;
         }
         break;
       }
-      case "schatten": {
+      case "schurke": {
         const angle = this.moveAngle.get(player.id) ?? player.facing;
         const startX = player.x;
         const startY = player.y;

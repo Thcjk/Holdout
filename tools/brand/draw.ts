@@ -1,12 +1,14 @@
 /**
- * Zeichnet App-Icon und Splash im Poster-Stil. Laeuft im Browser (siehe
- * `tools/generate-brand.mjs`) und benutzt dasselbe Logo und dieselben Figuren
- * wie das Spiel - das Icon ist das Gesicht des Soeldners auf Creme-Papier.
+ * Zeichnet App-Icon und Splash im Stil des Spiels. Laeuft im Browser (siehe
+ * `tools/generate-brand.mjs`) und benutzt dasselbe Logo, dieselben Figuren und
+ * dieselbe Landschaft wie das Spiel. Das Icon ist der Ritter vor schieferblauem
+ * Nachthimmel.
  */
 
 import { createComicTextures } from "../../src/ui/comic";
 import { renderHero } from "../../src/ui/comicFigures";
-import { grain, seeded } from "../../src/ui/paper";
+import { paintLandscape } from "../../src/ui/landscape";
+import { seeded } from "../../src/ui/paper";
 
 const captured = new Map<string, HTMLCanvasElement>();
 
@@ -17,55 +19,61 @@ function make(width: number, height: number): [HTMLCanvasElement, CanvasRenderin
   return [canvas, canvas.getContext("2d") as CanvasRenderingContext2D];
 }
 
-function paper(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-  ctx.fillStyle = "#f1e5c9";
+/** Schieferblauer Nachthimmel mit Sternen - Hintergrund des Icons. */
+function night(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  const sky = ctx.createRadialGradient(width / 2, height * 0.4, width * 0.1, width / 2, height * 0.5, width * 0.75);
+  sky.addColorStop(0, "#5d6d88");
+  sky.addColorStop(1, "#2e3850");
+  ctx.fillStyle = sky;
   ctx.fillRect(0, 0, width, height);
-  // Blasse Berge unten
-  const random = seeded(3);
-  for (const [base, color, amp] of [[0.78, "#d9d6bd", 0.12], [0.86, "#b8c4b0", 0.08]] as const) {
-    ctx.fillStyle = color;
+  const random = seeded(5);
+  for (let i = 0; i < 40; i += 1) {
+    ctx.fillStyle = `rgba(255,248,220,${0.3 + random() * 0.5})`;
     ctx.beginPath();
-    ctx.moveTo(0, height);
-    for (let x = 0; x <= width; x += width / 12) {
-      ctx.lineTo(x, height * base - random() * height * amp);
-    }
-    ctx.lineTo(width, height);
-    ctx.closePath();
+    ctx.arc(random() * width, random() * height * 0.6, (0.6 + random()) * (width / 192), 0, Math.PI * 2);
     ctx.fill();
   }
-  grain(ctx, width, height, 0.4, random);
-  const age = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.3, width / 2, height / 2, Math.max(width, height) * 0.75);
-  age.addColorStop(0, "rgba(120,90,50,0)");
-  age.addColorStop(1, "rgba(120,90,50,0.3)");
-  ctx.fillStyle = age;
-  ctx.fillRect(0, 0, width, height);
 }
 
-/** Icon: der Soeldner gross auf Papier. `scale` = Anteil der Kantenlaenge. */
+/** Icon: der Ritter gross, der Kopf in der Mitte. `scale` = Anteil der Kantenlaenge. */
 export function icon(size: number, scale: number, transparent: boolean): string {
   const [canvas, ctx] = make(size, size);
   if (!transparent) {
-    paper(ctx, size, size);
+    night(ctx, size, size);
   }
-  const s = size * scale * 1.18;
-  const hero = renderHero("soeldner", Math.round(s));
+  // Die Figur so gross malen, dass der Kopf (Raster 50/42) das Icon fuellt.
+  const s = size * scale * 1.55;
+  const hero = renderHero("ritter", Math.round(s));
   if (hero) {
-    // Der Kopf soll in der Mitte sitzen, also die Figur etwas nach unten schieben.
-    ctx.drawImage(hero, (size - s) / 2 - s * 0.03, (size - s) / 2 + s * 0.14, s, s);
+    const unit = (s * (1 - 12 / 208)) / 100;
+    const pad = (s * 6) / 208;
+    const x = size / 2 - (pad + 50 * unit);
+    const y = size * 0.5 - (pad + 44 * unit);
+    ctx.drawImage(hero, x, y, s, s);
   }
   return canvas.toDataURL("image/png");
 }
 
 export function splash(width: number, height: number): string {
   const [canvas, ctx] = make(width, height);
-  paper(ctx, width, height);
+  // Landschaft so skaliert, dass sie die Flaeche fuellt (wie "cover").
+  const scale = Math.max(width / 1600, height / 540);
+  ctx.save();
+  ctx.translate((width - 1600 * scale) / 2, height - 540 * scale);
+  ctx.scale(scale, scale);
+  paintLandscape(ctx, 1600, 540);
+  ctx.restore();
+  if (height > 540 * scale) {
+    ctx.fillStyle = "#2e3850";
+    ctx.fillRect(0, 0, width, height - 540 * scale);
+  }
   const logo = captured.get("logo");
   const portrait = height > width;
-  const logoW = Math.min(width * 0.86, portrait ? width * 0.86 : height * 1.5);
-  const logoH = logoW * (300 / 900);
-  const heroes = ["soeldner", "raufbold", "jaeger", "panzer", "glueckspilz", "schatten"];
-  const heroSize = Math.min(logoW / 5.2, height * 0.2);
-  const blockH = logoH + heroSize * 1.1;
+  const logoW = Math.min(width * 0.86, portrait ? width * 0.86 : height * 1.4);
+  const logoH = logoW * (360 / 900);
+  const heroes = ["ritter", "magierin", "schurke", "elfe", "zwerg", "zauberer"];
+  const heroSize = Math.min(logoW / 4.6, height * 0.24);
+  const blockH = logoH + heroSize * 1.05;
   const top = (height - blockH) / 2;
   if (logo) {
     ctx.drawImage(logo, (width - logoW) / 2, top, logoW, logoH);
@@ -73,8 +81,8 @@ export function splash(width: number, height: number): string {
   heroes.forEach((id, index) => {
     const hero = captured.get(`ch-${id}`);
     if (hero) {
-      const x = width / 2 - (heroes.length * heroSize * 0.82) / 2 + index * heroSize * 0.82 - heroSize * 0.09;
-      ctx.drawImage(hero, x, top + logoH + heroSize * 0.05, heroSize, heroSize);
+      const x = width / 2 - (heroes.length * heroSize * 0.78) / 2 + index * heroSize * 0.78 - heroSize * 0.11;
+      ctx.drawImage(hero, x, top + logoH, heroSize, heroSize);
     }
   });
   return canvas.toDataURL("image/png");
@@ -82,10 +90,7 @@ export function splash(width: number, height: number): string {
 
 /** Erst die Schriften laden, dann malen - das Logo braucht sie. */
 async function prepare(): Promise<void> {
-  await Promise.all([
-    document.fonts.load(`900 48px "Londrina Solid"`),
-    document.fonts.load(`20px "Patrick Hand SC"`),
-  ]);
+  await Promise.all([document.fonts.load(`48px "Lilita One"`), document.fonts.load(`500 20px "Fredoka"`)]);
   const scene = {
     textures: {
       exists: () => false,

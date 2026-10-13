@@ -1,5 +1,5 @@
 /**
- * Erzeugt App-Icons, Favicon-Vorlage und Splash-Bilder im Comic-Stil.
+ * Erzeugt App-Icons, Favicon-Vorlage und Splash-Bilder im Stil des Spiels.
  *
  * Aufruf (Playwright liegt in dieser Umgebung unter /opt/npm-tools):
  *   node tools/generate-brand.mjs
@@ -21,13 +21,13 @@ const bundle = await build({
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const page = await browser.newPage();
 await page.setContent("<body></body>");
-// Die Handschriften als eingebettete Dateien - die Seite hat keinen Zugriff auf die Platte.
+// Die Schriften als eingebettete Dateien - die Seite hat keinen Zugriff auf die Platte.
 const font = (file) => readFileSync(`node_modules/@fontsource/${file}`).toString("base64");
 await page.addStyleTag({
   content: `
-    @font-face { font-family: "Londrina Solid"; font-weight: 900; src: url(data:font/woff2;base64,${font("londrina-solid/files/londrina-solid-latin-900-normal.woff2")}) format("woff2"); }
-    @font-face { font-family: "Londrina Solid"; font-weight: 400; src: url(data:font/woff2;base64,${font("londrina-solid/files/londrina-solid-latin-400-normal.woff2")}) format("woff2"); }
-    @font-face { font-family: "Patrick Hand SC"; src: url(data:font/woff2;base64,${font("patrick-hand-sc/files/patrick-hand-sc-latin-400-normal.woff2")}) format("woff2"); }
+    @font-face { font-family: "Lilita One"; src: url(data:font/woff2;base64,${font("lilita-one/files/lilita-one-latin-400-normal.woff2")}) format("woff2"); }
+    @font-face { font-family: "Fredoka"; font-weight: 500; src: url(data:font/woff2;base64,${font("fredoka/files/fredoka-latin-500-normal.woff2")}) format("woff2"); }
+    @font-face { font-family: "Fredoka"; font-weight: 700; src: url(data:font/woff2;base64,${font("fredoka/files/fredoka-latin-700-normal.woff2")}) format("woff2"); }
   `,
 });
 await page.addScriptTag({ content: bundle.outputFiles[0].text });

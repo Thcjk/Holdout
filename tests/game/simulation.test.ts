@@ -5,7 +5,7 @@ import { createRng } from "../../src/game/rng";
 import { Simulation } from "../../src/game/Simulation";
 import type { PlayerInput, PlayerSetup } from "../../src/game/types";
 
-const SOLO: PlayerSetup[] = [{ id: "a", name: "A", character: "soeldner", startWeapon: "pistol" }];
+const SOLO: PlayerSetup[] = [{ id: "a", name: "A", character: "magierin", startWeapon: "pistol" }];
 const IDLE = new Map<string, PlayerInput>();
 
 function run(sim: Simulation, seconds: number, inputs: ReadonlyMap<string, PlayerInput> = IDLE): void {
@@ -122,8 +122,8 @@ describe("Simulation", () => {
 
   it("geht erst weiter, wenn alle bereit sind", () => {
     const setups: PlayerSetup[] = [
-      { id: "a", name: "A", character: "soeldner", startWeapon: "pistol" },
-      { id: "b", name: "B", character: "jaeger", startWeapon: "sniper" },
+      { id: "a", name: "A", character: "magierin", startWeapon: "pistol" },
+      { id: "b", name: "B", character: "elfe", startWeapon: "sniper" },
     ];
     const sim = new Simulation(setups, 6);
     for (let i = 0; i < 70 * 60 && sim.state.phase === "wave"; i += 1) {

@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout** (v3.7.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
+**Holdout** (v3.8.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
 Online-Koop (1–4). Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android-APK über
 Capacitor. Der frühere Koop-Arena-Shooter (v2.5.0, Brawl-Stars-artig, mit 3D) wurde auf dem
 Branch `brotato-umbau` komplett ersetzt; sein Stand liegt auf `main` bis zum Merge, seine
@@ -14,11 +14,11 @@ TURN, Pages-Basispfad – bei Problemen dort suchen).
 Zielgruppe der Erklärungen: Einsteiger in der Spieleentwicklung. **Antworten, Kommentare
 und Texte im Spiel auf Deutsch**, Code lesbar statt clever.
 
-## Stand 2026-10-12
+## Stand 2026-10-13
 
 Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
 
-- Spielkern, Shop, 6 Charaktere (Söldner, Raufbold, Jäger, Panzer, Glückspilz, Schatten) mit je einer aktiven
+- Spielkern, Shop, 6 Helden (Ritter, Feuermagierin, Schurke, Elfe, Zwerg, Zauberer) mit je einer aktiven
   Fähigkeit, 13 Waffen (je 4 Stufen), 27 Gegenstände, 15 Level-Ups, 9 Gegnertypen, 20 Wellen: fertig,
   50 Tests + Bot-Balancemessung.
 - Solo, Koop (Host/Client, Lobby, Raumcode) und die ganze Oberfläche: fertig. Im Test-Browser
@@ -50,11 +50,16 @@ Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
   `Simulation.shotHits` / `explode` / `chainLightning`. Gegner haben dafür `burn`, `slow`, `stun`; übers Netz als Bits.
 - **Fähigkeiten** (`data/abilities.ts`, `Simulation.useAbility`): eine je Held, ausgelöst über einen Zähler in
   `PlayerInput.ability` (steigt mit jedem Knopfdruck; nur ein höherer Wert als `player.abilityAck` löst aus –
-  so zündet ein doppelt angekommenes Netzpaket nicht zweimal). `player.abilityCd`, `player.buff` (Bollwerk,
-  Glückssträhne, Schattenschritt). Wert „Fähigkeit-Tempo“ (`stats.ability`) verkürzt die Abklingzeit.
+  so zündet ein doppelt angekommenes Netzpaket nicht zweimal). `player.abilityCd`, `player.buff` (Schildwall,
+  Arkaner Sog, Schattenschritt). Wert „Fähigkeit-Tempo“ (`stats.ability`) verkürzt die Abklingzeit.
   Knopf: `ui/AbilityButton.ts` (rechts unten). Effekte: `GameScene.abilityEffect`, `boom`, `zap`.
-- **Neue Gegner:** Zünder (`exploder`, bleibt neben dem Spieler stehen und explodiert), Teiler (`splitter`,
-  zerfällt in 3 Wuselchen). Elite schießt zusätzlich Fächer, Boss wechselt Ring/Fächer und ruft Zünder.
+- **IDs ≠ Namen.** Interne IDs blieben beim Umbenennen stabil (Protokoll, Tests):
+  Helden `ritter, magierin, schurke, elfe, zwerg, zauberer`. Gegner: `grunt` Goblin, `swarmer` Fledermaus,
+  `charger` Teufelchen, `spitter` Schleim, `bruiser` Oger, `elite` Skelettritter, `boss` Lich, `exploder`
+  Bombenkobold (bleibt stehen und explodiert), `splitter` Mumie (zerfällt in 3 Wuselchen). Waffen: `pistol`
+  Kurzbogen, `smg` Wurfdolche, `shotgun` Funkenfächer, `sniper` Langbogen, `fist` Axt, `knife` Dolch, `spear`
+  Langschwert, `crossbow` Armbrust, `rocket` Feuerkugel, `flamer` Flammenstab, `wand` Blitzstab, `hammer`
+  Kriegshammer, `frost` Froststab. Elite schießt zusätzlich Fächer, Boss wechselt Ring/Fächer und ruft Bombenkobolde.
 
 ## Oberfläche
 
@@ -68,25 +73,25 @@ Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
   werden nicht mehr angezeigt; `UiNineSlice` und `CHARACTER_TILES` sind Altlast). Symbole für Gegenstände,
   Spawn-Kreuz und Schatten werden in `ui/icons.ts` gezeichnet –
   **nach dem Zeichnen `refresh()` auf der Canvas-Textur**, sonst bleibt sie leer.
-- **Look: Poster auf Papier** (Vorbild: Pinterest-Bild „Out of Line“ vom Nutzer). Verworfen: Bonbon-Comic,
-  düsterer Graphic-Novel, Märchenbuch nur als Umfärbung („sieht aus wie vorher, nur andere Farben“).
-  Kennzeichen: Creme-Papier mit Korn überall, Tusche-Linien, die leicht wackeln, zwei Handschriften
-  (`ui/paper.ts`: `FONT_TITLE` Londrina Solid, `FONT_HAND` Patrick Hand SC, per `@fontsource` mitgebaut;
-  BootScene wartet mit `waitForFonts()` vor dem Malen). Phaser läuft deshalb mit `pixelArt: false`, Antialiasing an.
-  - `ui/paper.ts`: Farben, `wobblyRect` (zittriges Rechteck für Graphics), `grain`, `inkLine`.
-  - `ui/ComicBox.ts`: Papierblatt / Einlage / Rost-Stempel / Papierschild mit doppeltem Tuscherand (`BOX.*`).
-    Alle Texte dunkel (`UI.text`), keine Konturen.
-  - `ui/comicFigures.ts`: Helden (Wanderer mit Kapuze, Schal, einem großen Auge) und Gegner (Schattenwesen)
-    werden im 78er-Raster gezeichnet, auf 136 px Leinwand gemalt und mit `inkify` „gedruckt“ (Korn,
-    Schraffur, ungleicher Tusche-Umriss). Szenen rechnen Maßstäbe mit `figureScale(alterWert)` um.
-    `renderHero(id, size)` malt einen Helden groß (für das App-Icon).
-  - `ui/comicWeapons.ts` (Waffen, ebenfalls `inkify`), `ui/icons.ts` (Gegenstände: Papier-Medaillon mit
-    Tusche-Bild je Hauptwert – Schwert, Schild, Herz, Blitz, Kleeblatt …).
-  - `ui/comic.ts`: Arena als gemalte Lichtung mit welligem Tuscherand, Pfad, Steinkreis, Bäumen ringsum
-    (`ARENA_WALL` = 44, so weit ragt das Bild über die Spielfläche), Papier-Hintergrund, Logo, Herz, Klippe.
-  - `menuStyle.paintBackground`: Plakat-Landschaft (Bergschichten, dunkler Berg mit Burg und Dornenring, Tannen).
-  - TitleScene ist als Plakat gebaut: Schriftzug und Satz links, Held auf Klippe Mitte, Band mit Stichworten unten.
-  - HUD (`ui/Hud.ts`): Papierschilder, Herz, Balken mit Tuscherand. Kein Lebensbalken über der Spielfigur (Nutzerwunsch);
+- **Look: Chibi-Fantasy, gemalt** (Vorlage: zwei Pinterest-Bögen des Nutzers mit Chibi-Helden und -Monstern auf
+  Schieferblau, 2026-10-13: „so gezeichnet wie die Bilder“). Welt: „Die Feste Holdout“, Burg im Grauland bei Nacht.
+  Verworfen: Bonbon-Comic, Graphic-Novel, Märchenbuch, Poster auf Papier.
+  Kennzeichen: großer Kopf, große Augen mit Glanzpunkt (Monster: weiße Augen ohne Pupille, oben schräg), offene
+  Münder mit Zähnen, dunkelbraune Kontur `#2a201b`, eine Schattenstufe unten rechts, feines Korn, gedeckte Farben.
+  Schriften (`ui/paper.ts`): `FONT_TITLE` Lilita One, `FONT_HAND` Fredoka (500/700), per `@fontsource`;
+  BootScene wartet mit `waitForFonts()`. Phaser mit `pixelArt: false`, Antialiasing an.
+  - `ui/figures/kit.ts`: Zeichenkasten (SVG-Pfadtext `P("M …")`, `part` = Fläche mit Schatten/Licht/Kontur,
+    `tube` = Arm/Bein, `eyes`, `mouth`, `fist`, `claw`, `boot`, `belt`, `grainOver`). 100er-Raster, Füße bei y=96.
+  - `ui/figures/heroes.ts`, `ui/figures/monsters.ts`: die Figuren. `ui/comicFigures.ts` malt sie auf 208-px-Texturen
+    (`inkify` = gleichmäßiger Außenumriss). `figureScale(s)`: s=1 → Figur ~78 px. Spieler im Spiel 0.8, Gegner `radius/15`.
+    `renderHero` / `renderMonster` für Icon und Splash.
+  - `ui/comicWeapons.ts`: Waffen mit demselben Kit. `ui/icons.ts`: Gegenstände (Goldmedaillon mit Bild je Hauptwert).
+  - `ui/arena.ts`: Burghof (Steinplatten, Moos, Gras, Pfützen, Platz mit Wappen, Burgmauer mit Tor, Bannern,
+    Fackeln, Mauerkronen mit Efeu, Brüstung mit Fässern). `ARENA_WALL` = 44.
+  - `ui/landscape.ts`: Menü-Landschaft (Nacht, Mond, Wolken, Berge, Wald, Burg auf Hügel, Wiese, Glühwürmchen),
+    gemalt in 1,5-facher Auflösung. `ui/logo.ts`: Wappenschild mit Krone, Schwert+Stab, Gold-Schriftzug, rotes Band.
+  - `ui/ComicBox.ts`: `BOX.panel` (Holzrahmen + Pergament), `inset`, `primary` (Gold), `secondary` (Schieferblau).
+  - HUD (`ui/Hud.ts`): Holztafeln, Herz, Balken. Kein Lebensbalken über der Spielfigur (Nutzerwunsch);
     Waffen schweben neben der Figur und zeigen in Schussrichtung (`GameScene.applyPlayer`).
 - `setReloadSafe(true)` nur im Titel und im Ergebnis (Selbst-Update der PWA nur dort).
 
@@ -104,16 +109,15 @@ Adress-Zusätze: `?desktop`, `?debug=lokal|werte|netz|all`, `?seed=N` (nur solo)
 
 - Schwierigkeit 2026-10-12 zweimal angezogen (Nutzer: „darf schwerer werden“): Leben `1+0.2w+0.055w²`, Schaden
   +14 %/Welle, Budget `7+5.2·Welle`, Königslarven in 8/12/14/16/18 (ab 16 doppelt), Boss 1400 Leben.
-  Bot (mit Fähigkeit): Mittel ~5–14, Söldner erreicht oft Welle 20, scheitert meist am Boss. Panzer im Bot weiterhin schwach.
-- Kartoffel ist durch den Söldner (3 Waffenplätze, +Schaden/+Tempo) ersetzt.
-
-- Echte Spieltests: Balance (Panzer/Raufbold waren im Bot schwach), Dropmenge, Shop-Preise.
+  Bot (mit Fähigkeit): Mittel ~5–14, Magierin erreicht oft Welle 20, scheitert meist am Boss. Ritter im Bot weiterhin schwach.
+- Echte Spieltests: Balance (Ritter/Zwerg waren im Bot schwach), Dropmenge, Shop-Preise.
 - Nach einem Koop-Run gibt es keine Rückkehr in dieselbe Lobby – zurück ins Menü, neuer Raum.
 - Arena hat keine Hindernisse (nur Dekoration); Bildschirm-Treffer-Feedback, Musik-Lautstärke feinschleifen.
-- `noir.ts`-Namen (`blood`, `bone` …) stammen aus der düsteren Fassung, Werte sind die Plakatfarben.
+- `noir.ts`-Namen (`blood`, `bone` …) und `paper.ts` (`wobblyRect`, `PAPER`) stammen aus älteren Fassungen.
 - Kein Speichern von Fortschritt; kein Charakter-Freischalten.
 - App-Icon, Favicon und Android-Splash kommen aus `node tools/generate-brand.mjs` (zeichnet mit denselben Funktionen wie
-  das Spiel; Playwright aus `/opt/npm-tools`). Danach `npm run build` und für Android neu bauen. Icon = Söldner-Gesicht auf Papier. Farben: Papier `#f1e5c9`, Tinte `#1d1c19`, Rost `#b5532f`.
+  das Spiel; Playwright aus `/opt/npm-tools`). Danach `npm run build` und für Android neu bauen. Icon = Ritter vor Nachthimmel,
+  Splash = Landschaft + Logo + alle Helden. Farben: Schiefer `#3f4d63` (Theme, Manifest, Android), Gold `#f0b23e`, Kontur `#2a201b`.
 - Bundle ~1,6 MB (Phaser komplett).
 
 ## Deployment
@@ -121,4 +125,3 @@ Adress-Zusätze: `?desktop`, `?debug=lokal|werte|netz|all`, `?seed=N` (nur solo)
 Push auf `main` → `deploy-pages.yml` (Basispfad aus Repo-Namen, **nie fest eintragen**) →
 https://thcjk.github.io/Holdout/. Tag `v*` → Android-APK. Vor Release `versionCode` in
 `android/app/build.gradle` hochzählen. Einmalig: Settings → Pages → Source: GitHub Actions.
-Vor dem Merge von `brotato-umbau` auf `main`: Solo und Koop einmal auf echtem Handy probieren.

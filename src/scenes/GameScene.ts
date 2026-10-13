@@ -463,7 +463,8 @@ export class GameScene extends Phaser.Scene {
 
   private makeEnemy(enemy: Enemy): EnemyView {
     const def = ENEMIES[enemy.type];
-    const base = figureScale(def.radius / 19);
+    // Die Bilder sind etwas groesser als der Trefferkreis - so wirken die Figuren kraeftiger.
+    const base = figureScale(def.radius / 15);
     const sprite = this.add.sprite(0, 0, enemyKey(enemy.type)).setScale(0);
     const view: EnemyView = {
       sprite,
@@ -523,8 +524,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private makePlayer(player: PlayerState): PlayerView {
-    const sprite = this.add.sprite(0, 0, characterKey(player.character)).setScale(figureScale(0.6));
-    const shadow = this.add.image(0, 0, "shadow").setDisplaySize(34, 16).setAlpha(0.9);
+    const sprite = this.add.sprite(0, 0, characterKey(player.character)).setScale(figureScale(0.8));
+    const shadow = this.add.image(0, 0, "shadow").setDisplaySize(38, 15).setAlpha(0.9);
     const name = this.add
       .text(0, 0, this.session.isMultiplayer ? player.name : "", {
         fontFamily: FONT_HAND,
@@ -577,12 +578,12 @@ export class GameScene extends Phaser.Scene {
     view.lastY = view.y;
     const bob = moving && player.alive ? Math.abs(Math.sin(time / 75)) * 3.5 : 0;
     view.sprite.setPosition(view.x, view.y - bob).setDepth(depth);
-    view.shadow.setPosition(view.x, view.y + 11).setDepth(depth - 1);
+    view.shadow.setPosition(view.x, view.y + 27).setDepth(depth - 1);
     view.sprite.setFlipX(Math.cos(player.facing) < 0);
     view.sprite.setAngle(!player.alive ? 90 : moving ? Math.sin(time / 75) * 7 : 0);
     const blink = player.iframes > 0 && Math.floor(time / 70) % 2 === 0;
     view.sprite.setAlpha(!player.alive ? 0.45 : blink ? 0.5 : 1);
-    view.name.setPosition(view.x, view.y - 32).setVisible(player.alive);
+    view.name.setPosition(view.x, view.y - 34).setVisible(player.alive);
 
     // Waffen kreisen um die Figur.
     const signature = player.weapons.map((weapon) => weapon.id).join(",");
@@ -602,16 +603,16 @@ export class GameScene extends Phaser.Scene {
       const spread = count > 1 ? (index / (count - 1) - 0.5) * Math.min(2.6, 0.75 * (count - 1)) : 0;
       const around = aim + spread;
       image
-        .setPosition(view.x + Math.cos(around) * 24, view.y + 4 + Math.sin(around) * 18)
+        .setPosition(view.x + Math.cos(around) * 28, view.y + 6 + Math.sin(around) * 18)
         // Das Symbol ist um ~22 Grad nach oben gekippt gezeichnet - das gleicht die Drehung aus.
         .setRotation(left ? aim - Math.PI - 0.38 : aim + 0.38)
         .setFlipX(left)
         .setDepth(Math.sin(around) < 0 ? depth - 1 : depth + 1)
         .setVisible(player.alive);
     });
-    // Laufende Faehigkeit sichtbar machen: Schild beim Bollwerk, Goldschimmer bei der Gluecksstraehne.
-    if (player.alive && player.buff > 0 && (player.character === "panzer" || player.character === "glueckspilz")) {
-      const color = player.character === "panzer" ? 0x9fb8b3 : 0xdba636;
+    // Laufende Faehigkeit sichtbar machen: Schild beim Schildwall (Ritter), Schimmer beim Arkanen Sog (Zauberer).
+    if (player.alive && player.buff > 0 && (player.character === "ritter" || player.character === "zauberer")) {
+      const color = player.character === "ritter" ? 0x9fb8b3 : 0xdba636;
       this.bars.fillStyle(color, 0.22).fillCircle(view.x, view.y, 28);
       this.bars.lineStyle(3, 0x1d1c19, 0.8).strokeCircle(view.x, view.y, 28 + Math.sin(time / 90) * 1.5);
     }
@@ -870,7 +871,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: arc, alpha: 0, duration: 170, onComplete: () => arc.destroy() });
   }
 
-  /** Explosion: Tuschering, der aufgeht, darunter ein heller Fleck und Splitter. */
+  /** Explosion: dunkler Ring, der aufgeht, darunter ein heller Fleck und Splitter. */
   private boom(x: number, y: number, r: number, enemy: boolean): void {
     const cx = this.originX + x;
     const cy = this.originY + y;
@@ -909,21 +910,21 @@ export class GameScene extends Phaser.Scene {
     const cx = this.originX + event.x;
     const cy = this.originY + event.y;
     const words: Record<string, string> = {
-      soeldner: "WURF!",
-      raufbold: "STAMPF!",
-      jaeger: "HAGEL!",
-      panzer: "BOLLWERK!",
-      glueckspilz: "GLÜCK!",
-      schatten: "WUSCH!",
+      magierin: "FEUER!",
+      zwerg: "BEBEN!",
+      elfe: "HAGEL!",
+      ritter: "SCHILDWALL!",
+      zauberer: "ARKAN!",
+      schurke: "WUSCH!",
     };
-    this.comic(event.x, event.y - 30, words[event.kind] ?? "!", "#b5532f");
+    this.comic(event.x, event.y - 30, words[event.kind] ?? "!", "#c4392f");
     switch (event.kind) {
-      case "raufbold":
-      case "panzer": {
-        const radius = event.kind === "raufbold" ? 135 : 120;
+      case "zwerg":
+      case "ritter": {
+        const radius = event.kind === "zwerg" ? 135 : 120;
         const ring = this.add.circle(cx, cy, radius).setStrokeStyle(6, 0x1d1c19, 0.8).setDepth(8560).setScale(0.2);
         const fill = this.add
-          .circle(cx, cy, radius, event.kind === "raufbold" ? 0xdba636 : 0x9fb8b3, 0.35)
+          .circle(cx, cy, radius, event.kind === "zwerg" ? 0xdba636 : 0x9fb8b3, 0.35)
           .setDepth(8550)
           .setScale(0.2);
         this.tweens.add({ targets: [ring, fill], scale: 1, alpha: 0, duration: 380, ease: "Quad.Out", onComplete: () => {
@@ -933,7 +934,7 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.shake(140, 0.006);
         break;
       }
-      case "schatten": {
+      case "schurke": {
         const g = this.add.graphics().setDepth(8540);
         g.lineStyle(16, 0x2c3a3c, 0.5);
         g.lineBetween(cx, cy, this.originX + event.x2, this.originY + event.y2);
@@ -942,12 +943,12 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({ targets: g, alpha: 0, duration: 320, onComplete: () => g.destroy() });
         break;
       }
-      case "glueckspilz": {
+      case "zauberer": {
         this.burst(event.x, event.y, 14, 0xdba636);
         break;
       }
-      case "jaeger":
-      case "soeldner":
+      case "elfe":
+      case "magierin":
       default:
         break;
     }

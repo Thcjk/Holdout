@@ -1,20 +1,28 @@
 /**
- * Grundlagen des Poster-Stils: Schriften, Papier- und Tuschefarben, zittrige Linien.
+ * Grundlagen des Looks: Schriften, Farben, Linien.
  *
- * Alles im Spiel soll aussehen wie von Hand auf Papier gezeichnet: keine
- * perfekten Rechtecke, sondern leicht wackelnde Tuschelinien, Creme-Papier mit
- * Korn und zwei Handschriften (eine fuer Titel, eine fuer Text).
+ * Stil: Chibi-Fantasy wie in einem Bilderbuch-Rollenspiel - dicke dunkle
+ * Konturen, flache Farben mit einer Schattenstufe, Pergament mit Holzrahmen
+ * und goldene Knoepfe auf schieferblauem Grund.
+ * (Der Dateiname stammt aus der Papier-Fassung davor.)
  */
 
-/** Ueberschriften: dicke, handgezeichnete Grossbuchstaben (Londrina Solid, OFL-Lizenz). */
-export const FONT_TITLE = '"Londrina Solid", "Arial Black", system-ui, sans-serif';
-/** Fliesstext und Knoepfe: Handschrift in Kapitaelchen (Patrick Hand SC, OFL-Lizenz). */
-export const FONT_HAND = '"Patrick Hand SC", "Comic Sans MS", system-ui, sans-serif';
+/** Ueberschriften, Zahlen, Knoepfe: runde, dicke Buchstaben (Lilita One, OFL-Lizenz). */
+export const FONT_TITLE = '"Lilita One", "Arial Black", system-ui, sans-serif';
+/** Fliesstext: freundliche runde Schrift (Fredoka, OFL-Lizenz). */
+export const FONT_HAND = '"Fredoka", "Trebuchet MS", system-ui, sans-serif';
 
-export const INK = 0x1d1c19;
-export const PAPER = 0xf1e5c9;
-export const PAPER_DARK = 0xe1d0a8;
-export const RUST = 0xb5532f;
+/** Die Kontur: sehr dunkles Braun statt Schwarz - wirkt weicher, wie gezeichnet. */
+export const INK = 0x2b2320;
+/** Pergament fuer Tafeln und Einlagen. */
+export const PAPER = 0xf4e4c1;
+export const PAPER_DARK = 0xe2cc9c;
+/** Rot fuer Leben und Gefahr. (Name aus der Papier-Fassung.) */
+export const RUST = 0xd9473b;
+export const GOLD = 0xf0b23e;
+export const WOOD = 0x8a5a33;
+export const WOOD_DARK = 0x5e3b22;
+export const SLATE = 0x4d5b6b;
 
 /** Wartet, bis beide Schriften geladen sind (hoechstens drei Sekunden). */
 export async function waitForFonts(): Promise<void> {
@@ -22,9 +30,9 @@ export async function waitForFonts(): Promise<void> {
     return;
   }
   const load = Promise.all([
-    document.fonts.load(`900 48px "Londrina Solid"`),
-    document.fonts.load(`400 48px "Londrina Solid"`),
-    document.fonts.load(`20px "Patrick Hand SC"`),
+    document.fonts.load(`48px "Lilita One"`),
+    document.fonts.load(`500 20px "Fredoka"`),
+    document.fonts.load(`700 20px "Fredoka"`),
   ]);
   const timeout = new Promise((resolve) => window.setTimeout(resolve, 3000));
   await Promise.race([load.catch(() => undefined), timeout]);
@@ -60,11 +68,13 @@ export function wobblyRect(
   seed: number,
   jitter = 1.4,
 ): Point[] {
-  const random = seeded(seed);
+  // Im Chibi-Look sind die Kanten sauber: Startwert und Zittern bleiben nur fuer die Schnittstelle.
+  void seed;
+  void jitter;
   const r = Math.min(radius, w / 2, h / 2);
   const points: Point[] = [];
   const push = (px: number, py: number): void => {
-    points.push({ x: px + (random() - 0.5) * jitter * 2, y: py + (random() - 0.5) * jitter * 2 });
+    points.push({ x: px, y: py });
   };
   const edge = (x0: number, y0: number, x1: number, y1: number): void => {
     const length = Math.hypot(x1 - x0, y1 - y0);
@@ -74,8 +84,8 @@ export function wobblyRect(
     }
   };
   const corner = (cx: number, cy: number, from: number): void => {
-    for (let i = 0; i < 4; i += 1) {
-      const a = from + (i / 4) * (Math.PI / 2);
+    for (let i = 0; i < 6; i += 1) {
+      const a = from + (i / 6) * (Math.PI / 2);
       push(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
     }
   };
@@ -106,7 +116,7 @@ export function grain(
   }
 }
 
-/** Eine Tuschelinie, die wie von Hand gezogen leicht wackelt. */
+/** Eine dunkle Linie (frueher: wackelnde Tuschelinie). */
 export function inkLine(
   context: CanvasRenderingContext2D,
   points: readonly (readonly [number, number])[],

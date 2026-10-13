@@ -44,7 +44,7 @@ export class ShopPanel {
     private readonly send: (command: Command) => void,
   ) {
     this.background = menuBackground(scene).setDepth(DEPTH);
-    this.dim = scene.add.rectangle(0, 0, 2000, 1200, 0xf1e5c9, 0.35).setOrigin(0).setDepth(DEPTH);
+    this.dim = scene.add.rectangle(0, 0, 2000, 1200, 0x2b2320, 0.25).setOrigin(0).setDepth(DEPTH);
     this.setVisible(false);
   }
 
@@ -117,7 +117,7 @@ export class ShopPanel {
       })
       .setOrigin(originX, 0)
       .setDepth(DEPTH + 3)
-      .setShadow(1, 2, UI.text.shadow, 2);
+      .setStroke("#f4e4c1", 3);
     return this.keep(text);
   }
 

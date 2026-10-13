@@ -1,8 +1,8 @@
 /**
  * Die Anzeige im Gefecht: Leben, Erfahrung, Welle, Zeit, Material.
  *
- * Wie auf dem Papier gezeichnet: ein Herz neben einem Balken mit wackelndem
- * Tuscherand, die Zeit in grosser Handschrift. Gezeichnet wird mit einer
+ * Holztafeln mit Pergament: ein Herz neben dem Lebensbalken, die Zeit in
+ * grosser Schrift. Gezeichnet wird mit einer
  * einzigen Graphics-Ebene und ein paar Texten, die jedes Bild neu gesetzt werden.
  */
 
@@ -20,7 +20,7 @@ function label(scene: Phaser.Scene, size: number, color: string = PALETTE.hudTex
   return scene.add.text(0, 0, "", { fontFamily: font, fontSize: `${size}px`, color }).setDepth(DEPTH + 1);
 }
 
-/** Ein Balken mit wackelndem Tuscherand; der Rand haengt am Startwert und bleibt ruhig. */
+/** Ein Balken mit dunklem Rand und abgerundeten Enden. */
 function inkBar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, fraction: number, color: number, seed: number): void {
   const frame = wobblyRect(x, y, w, h, h / 2, seed, 0.9);
   g.fillStyle(PAPER_DARK, 1).fillPoints(frame, true);
@@ -45,21 +45,21 @@ export class Hud {
   private readonly goldText: Phaser.GameObjects.Text;
   private readonly goldIcon: Phaser.GameObjects.Image;
   private readonly mateTexts: Phaser.GameObjects.Text[] = [];
-  /** Papierschilder unter den Anzeigen - damit sie sich von den Baeumen am Rand abheben. */
+  /** Holztafeln unter den Anzeigen - damit sie sich von der Burgmauer abheben. */
   private readonly plaques: ComicBox[];
 
   constructor(scene: Phaser.Scene) {
     this.plaques = [
       new ComicBox(scene, BOX.panel, 0, 0, 316, 52).setDepth(DEPTH - 1),
-      new ComicBox(scene, BOX.panel, 0, 0, 92, 58).setDepth(DEPTH - 1),
+      new ComicBox(scene, BOX.panel, 0, 0, 100, 66).setDepth(DEPTH - 1),
       new ComicBox(scene, BOX.panel, 0, 0, 96, 40).setDepth(DEPTH - 1),
     ];
     this.graphics = scene.add.graphics().setDepth(DEPTH);
     this.heart = scene.add.image(0, 0, "heart").setDisplaySize(30, 30).setDepth(DEPTH + 1);
     this.hpText = label(scene, 17).setOrigin(0.5, 0.5);
     this.levelText = label(scene, 16, "#3a6a6e");
-    this.waveText = label(scene, 17).setOrigin(0.5, 0);
-    this.timeText = label(scene, 38, PALETTE.hudText, FONT_TITLE).setOrigin(0.5, 0);
+    this.waveText = label(scene, 14).setOrigin(0.5, 0);
+    this.timeText = label(scene, 34, PALETTE.hudText, FONT_TITLE).setOrigin(0.5, 0);
     this.goldText = label(scene, 26, "#7a5a14", FONT_TITLE).setOrigin(1, 0);
     this.goldIcon = scene.add.image(0, 0, "gem").setDisplaySize(26, 26).setDepth(DEPTH + 1);
     for (let i = 0; i < 3; i += 1) {
@@ -88,7 +88,7 @@ export class Hud {
     const centerX = VIEWPORT.width / 2;
     const [hpPlaque, timePlaque, goldPlaque] = this.plaques as [ComicBox, ComicBox, ComicBox];
     hpPlaque.setPosition(left + 150, 29);
-    timePlaque.setPosition(centerX, 30);
+    timePlaque.setPosition(centerX, 35);
     goldPlaque.setPosition(right - 34, 25);
 
     if (self) {
@@ -111,9 +111,9 @@ export class Hud {
     }
 
     this.waveText.setText(`WELLE ${state.wave}`);
-    this.waveText.setPosition(centerX, 2);
+    this.waveText.setPosition(centerX, 8);
     this.timeText.setText(String(Math.max(0, Math.ceil(state.timeLeft))));
-    this.timeText.setPosition(centerX, 16);
+    this.timeText.setPosition(centerX, 24);
     this.timeText.setColor(state.timeLeft <= 5 ? PALETTE.danger : PALETTE.hudText);
 
     // Mitspieler: kleine Zeilen unter dem eigenen Balken.

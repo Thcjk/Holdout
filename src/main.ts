@@ -11,9 +11,9 @@ installCrashScreen(__APP_VERSION__);
 
 import Phaser from "phaser";
 // Die beiden Handschriften werden mitgebaut, damit sie auch ohne Internet da sind.
-import "@fontsource/londrina-solid/400.css";
-import "@fontsource/londrina-solid/900.css";
-import "@fontsource/patrick-hand-sc/400.css";
+import "@fontsource/lilita-one/400.css";
+import "@fontsource/fredoka/500.css";
+import "@fontsource/fredoka/700.css";
 import { isSupportedDevice } from "./platform/device";
 import { showDesktopNotice } from "./platform/DesktopNotice";
 // Nur importiert, damit der Empfaenger fuer `beforeinstallprompt` frueh genug

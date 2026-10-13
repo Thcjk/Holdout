@@ -1,5 +1,5 @@
 /**
- * Ein Knopf im Poster-Stil: Rost-Stempel oder Papierschild mit Handschrift.
+ * Ein Knopf im Fantasy-Stil: goldenes Schild (Haupt) oder schieferblaues (Neben).
  *
  * Phaser bringt keine fertigen Bedienelemente mit - das ist Absicht, denn ein
  * Spiel braucht selten Standardknoepfe. Fuer die Menues reicht diese kleine
@@ -17,7 +17,7 @@
 
 import Phaser from "phaser";
 import { BOX, ComicBox } from "./ComicBox";
-import { FONT_HAND } from "./paper";
+import { FONT_TITLE } from "./paper";
 
 export interface ButtonOptions {
   width?: number;
@@ -52,10 +52,13 @@ export class Button {
 
     const variant = options.variant ?? "primary";
     this.label = scene.add.text(x, y, text, {
-      fontFamily: FONT_HAND,
-      fontSize: `${(options.fontSize ?? 22) + 2}px`,
-      color: variant === "primary" ? "#f6ecd4" : "#1d1c19",
+      fontFamily: FONT_TITLE,
+      fontSize: `${(options.fontSize ?? 22) + 1}px`,
+      color: variant === "primary" ? "#3a2410" : "#f4e4c1",
     });
+    if (variant === "secondary") {
+      this.label.setShadow(0, 2, "#2b2320", 0, false, true);
+    }
     this.label.setOrigin(0.5, 0.52);
 
     // Unsichtbar, aber beruehrbar (Deckkraft 0 blockt die Eingabe nicht).

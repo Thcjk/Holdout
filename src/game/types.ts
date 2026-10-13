@@ -48,7 +48,7 @@ export type WeaponId =
   | "hammer"
   | "frost";
 
-export type CharacterId = "soeldner" | "raufbold" | "jaeger" | "panzer" | "glueckspilz" | "schatten";
+export type CharacterId = "magierin" | "zwerg" | "elfe" | "ritter" | "zauberer" | "schurke";
 
 export type EnemyType =
   | "grunt"
@@ -128,7 +128,7 @@ export interface PlayerState {
   regenCarry: number;
   /** Restzeit, bis die Faehigkeit wieder bereit ist (Sekunden). */
   abilityCd: number;
-  /** Restzeit einer laufenden Wirkung der Faehigkeit (Bollwerk, Gluecksstraehne, Schattenschritt). */
+  /** Restzeit einer laufenden Wirkung der Faehigkeit (Schildwall, Arkaner Sog, Schattenschritt). */
   buff: number;
   /** Zaehler der zuletzt ausgefuehrten Faehigkeit-Anfrage (gegen doppeltes Ausloesen im Netz). */
   abilityAck: number;
@@ -183,7 +183,7 @@ export interface Projectile {
   hit: number[];
   /** Waffe, von der das Geschoss kommt - fuer Explosion, Brand, Kette, Frost. Leer bei Gegnern. */
   weapon: WeaponId | "";
-  /** Art fuer die Darstellung: 0 Kugel, 1 Bolzen, 2 Rakete, 3 Flamme, 4 Blitz, 5 Eis, 6 Granate. */
+  /** Art fuer die Darstellung: 0 Kugel, 1 Pfeil, 2 Feuerkugel, 3 Flamme, 4 Blitz, 5 Eis, 6 grosser Feuerball, 7 Dolch, 8 Funke. */
   look: number;
 }
 
