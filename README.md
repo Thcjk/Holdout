@@ -10,7 +10,7 @@ um Schrott zu holen – aber die Festung wartet nicht. Fürs Handy, Pixel-Art.
 ## Stand
 
 Das Spiel wird in sechs Baustufen neu gebaut (der frühere Brotato-artige
-Wellen-Shooter liegt in der Git-Geschichte, letzter Stand `v3.9.2`).
+Wellen-Shooter liegt in der Git-Geschichte, Tag `alt-3.9.2`).
 
 | Baustufe | Inhalt | Stand |
 | --- | --- | --- |

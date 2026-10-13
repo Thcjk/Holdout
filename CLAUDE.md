@@ -12,7 +12,7 @@ Capacitor.
 
 Der Nutzer wollte das Spiel **komplett neu** (2026-10-13: „nicht das Vorhandene überarbeiten“).
 Das frühere Spiel (Brotato-artiger Wellen-Shooter mit Shop, Helden, Schmiede, Koop) liegt in
-der Git-Geschichte, letzter Stand Tag/Commit `v3.9.2` auf `main` vor dem Umbau. Ältere Lehren
+der Git-Geschichte, letzter Stand als Tag `alt-3.9.2` (Commit dd50b6b). Ältere Lehren
 (Safe-Area, Service Worker, TURN, Pages-Basispfad) stehen in `docs/archiv/`.
 
 Zielgruppe der Erklärungen: Einsteiger in der Spieleentwicklung. **Antworten, Kommentare und
