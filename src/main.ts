@@ -35,6 +35,8 @@ import { BootScene } from "./scenes/BootScene";
 import { GameScene } from "./scenes/GameScene";
 import { LobbyScene } from "./scenes/LobbyScene";
 import { ResultScene } from "./scenes/ResultScene";
+import { ForgeScene } from "./scenes/ForgeScene";
+import { AchievementsScene } from "./scenes/AchievementsScene";
 import { SelectScene } from "./scenes/SelectScene";
 import { TitleScene } from "./scenes/TitleScene";
 
@@ -79,7 +81,7 @@ function buildConfig(): Phaser.Types.Core.GameConfig {
     },
     // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser
     // keine eigene Physik-Engine.
-    scene: [BootScene, TitleScene, SelectScene, LobbyScene, GameScene, ResultScene],
+    scene: [BootScene, TitleScene, SelectScene, LobbyScene, GameScene, ResultScene, ForgeScene, AchievementsScene],
   };
 }
 

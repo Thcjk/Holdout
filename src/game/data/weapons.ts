@@ -285,6 +285,23 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     look: 5,
     slow: 2,
   },
+  twin: {
+    id: "twin",
+    name: "Doppelschwert",
+    kind: "melee",
+    price: 26,
+    damage: [9, 13, 18, 26],
+    cooldown: [0.4, 0.36, 0.33, 0.29],
+    range: 100,
+    count: 2,
+    spread: 70,
+    pierce: [0, 0, 0, 0],
+    speed: 0,
+    knockback: 45,
+    scaling: 1.1,
+    critBonus: 6,
+    color: 0xdde6ee,
+  },
 };
 
 export const WEAPON_IDS = Object.keys(WEAPONS) as WeaponId[];

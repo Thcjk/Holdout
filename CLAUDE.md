@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout** (v3.8.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
+**Holdout** (v3.9.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
 Online-Koop (1–4). Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android-APK über
 Capacitor. Der frühere Koop-Arena-Shooter (v2.5.0, Brawl-Stars-artig, mit 3D) wurde auf dem
 Branch `brotato-umbau` komplett ersetzt; sein Stand liegt auf `main` bis zum Merge, seine
@@ -19,8 +19,9 @@ und Texte im Spiel auf Deutsch**, Code lesbar statt clever.
 Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
 
 - Spielkern, Shop, 6 Helden (Ritter, Feuermagierin, Schurke, Elfe, Zwerg, Zauberer) mit je einer aktiven
-  Fähigkeit, 13 Waffen (je 4 Stufen), 27 Gegenstände, 15 Level-Ups, 9 Gegnertypen, 20 Wellen: fertig,
-  50 Tests + Bot-Balancemessung.
+  Fähigkeit, 14 Waffen (je 4 Stufen), 27 Gegenstände, 15 Level-Ups, 9 Gegnertypen, 20 Wellen: fertig,
+  57 Tests + Bot-Balancemessung.
+- **Fortschritt (v3.9.0, Nutzerwunsch „Grinding, Upgrades erarbeiten, Erfolge“):** siehe Abschnitt unten.
 - Solo, Koop (Host/Client, Lobby, Raumcode) und die ganze Oberfläche: fertig. Im Test-Browser
   durchgespielt: Titel → Charakterwahl → Gefecht → Level-Up → Shop → nächste Welle, und Koop mit
   zwei Tabs (`?debug=lokal`): beide Spieler sichtbar, Bewegung kommt an.
@@ -60,6 +61,26 @@ Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
   Kurzbogen, `smg` Wurfdolche, `shotgun` Funkenfächer, `sniper` Langbogen, `fist` Axt, `knife` Dolch, `spear`
   Langschwert, `crossbow` Armbrust, `rocket` Feuerkugel, `flamer` Flammenstab, `wand` Blitzstab, `hammer`
   Kriegshammer, `frost` Froststab. Elite schießt zusätzlich Fächer, Boss wechselt Ring/Fächer und ruft Bombenkobolde.
+
+## Fortschritt über Läufe (`src/meta/`)
+
+- `profile.ts`: Spielstand in `localStorage` (`holdout.profile`, jeder Zugriff in try/catch; `parseProfile`
+  repariert alte/kaputte Stände). Kristalle, Schmiede-Stufen, freie Helden, Erfolge, Summen, Bestwerte, `lastHero`.
+- `forge.ts`: **Schmiede** – 12 Dauer-Verbesserungen (Werte-Boni + „Kriegskasse“ = Startgold), Preis je Stufe
+  `baseCost·growth^Stufe`, gesamt ~3700 Kristalle. `forgeBonus(levels)` → `{mods, startGold}`.
+- `goals.ts`: `crystalsForRun` (geschaffte Wellen `3w + w²/3`, Monster/20, Sieg +60), `HERO_UNLOCKS`
+  (nur Ritter frei; Elfe Welle 5, Zwerg 600 Monster, Magierin Welle 8, Schurke 3000 Gold, Zauberer Welle 12),
+  20 `ACHIEVEMENTS` mit Kristall-Belohnung, `applyRun`, `buyForge`, `settle` (prüft Freischaltungen + Erfolge), `startBonus`.
+- Boni sind Teil des Spielers: `PlayerSetup.bonus/startGold` → `PlayerState.bonus` → `computeStats(…, bonus)`.
+  Im Koop bringt jeder seine eigenen mit (Lobby `hello`/`NetPlayerInfo`), übers Netz als `WirePlayer.bn`;
+  `PlayerState.earned` (gesammeltes Gold) als `ge`.
+- `GameScene.finish` trägt den Lauf ein (auch beim Aufgeben ab Welle 2), `ResultScene` zeigt Kristalle,
+  neue Erfolge und Helden. Szenen `Forge` (Schmiede) und `Achievements` (Erfolge), Knöpfe im Titel, Kristalle oben rechts.
+  Gesperrte Helden: Silhouette + Schloss in Titel und Auswahl.
+- Ritter = Starter: 6 Plätze, Start mit Langschwert, Doppelschwert (`twin`, neu), Axt oder Kurzbogen.
+- Balance (2026-10-13, Nutzer „noch schwerer“): Leben `1+0.2w+0.1w²`, Schaden +22 %/Welle, Budget `8+6·Welle`,
+  Skelettritter in 8/10 (1), 12/14/16 (2), 18 (3), Lich 2600 Leben. Bot: leere Schmiede Mittel ~8–10, kein Sieg;
+  halbe Schmiede oft Welle 20; volle Schmiede gewinnt meist. `npm run balance -- 5 [leer|halb|voll]`.
 
 ## Oberfläche
 
@@ -107,14 +128,11 @@ Adress-Zusätze: `?desktop`, `?debug=lokal|werte|netz|all`, `?seed=N` (nur solo)
 
 ## Offene Punkte / Ideen
 
-- Schwierigkeit 2026-10-12 zweimal angezogen (Nutzer: „darf schwerer werden“): Leben `1+0.2w+0.055w²`, Schaden
-  +14 %/Welle, Budget `7+5.2·Welle`, Königslarven in 8/12/14/16/18 (ab 16 doppelt), Boss 1400 Leben.
-  Bot (mit Fähigkeit): Mittel ~5–14, Magierin erreicht oft Welle 20, scheitert meist am Boss. Ritter im Bot weiterhin schwach.
 - Echte Spieltests: Balance (Ritter/Zwerg waren im Bot schwach), Dropmenge, Shop-Preise.
 - Nach einem Koop-Run gibt es keine Rückkehr in dieselbe Lobby – zurück ins Menü, neuer Raum.
 - Arena hat keine Hindernisse (nur Dekoration); Bildschirm-Treffer-Feedback, Musik-Lautstärke feinschleifen.
 - `noir.ts`-Namen (`blood`, `bone` …) und `paper.ts` (`wobblyRect`, `PAPER`) stammen aus älteren Fassungen.
-- Kein Speichern von Fortschritt; kein Charakter-Freischalten.
+- Fortschritt liegt nur im Browser/der App des Geräts (kein Konto, keine Übertragung zwischen Geräten).
 - App-Icon, Favicon und Android-Splash kommen aus `node tools/generate-brand.mjs` (zeichnet mit denselben Funktionen wie
   das Spiel; Playwright aus `/opt/npm-tools`). Danach `npm run build` und für Android neu bauen. Icon = Ritter vor Nachthimmel,
   Splash = Landschaft + Logo + alle Helden. Farben: Schiefer `#3f4d63` (Theme, Manifest, Android), Gold `#f0b23e`, Kontur `#2a201b`.

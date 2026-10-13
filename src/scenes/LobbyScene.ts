@@ -16,6 +16,8 @@ import { SAFE, VIEWPORT } from "../config/constants";
 import { UI } from "../config/ui";
 import { MAX_PLAYERS } from "../game/constants";
 import { CHARACTERS } from "../game/data/characters";
+import { startBonus } from "../meta/goals";
+import { loadProfile } from "../meta/profile";
 import { Simulation } from "../game/Simulation";
 import type { PlayerSetup, CharacterId, WeaponId } from "../game/types";
 import { ClientSession } from "../net/ClientSession";
@@ -160,7 +162,7 @@ export class LobbyScene extends Phaser.Scene {
     this.codeText.setText(transport.isHost ? transport.roomCode : "");
     this.status.setText(transport.isHost ? "Gib den Code weiter. Mitspieler tippen ihn unter „Koop: Beitreten“ ein." : "Verbunden. Warte auf den Start …");
 
-    const lobby = new Lobby(transport, { name: playerName(), character: this.character, weapon: this.weapon });
+    const lobby = new Lobby(transport, { name: playerName(), character: this.character, weapon: this.weapon, ...startBonus(loadProfile()) });
     this.lobby = lobby;
     lobby.onError((message) => {
       this.status.setText(message);

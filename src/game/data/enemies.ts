@@ -145,7 +145,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
   boss: {
     type: "boss",
     name: "Lich",
-    hp: 1400,
+    hp: 2600,
     speed: 70,
     damage: 18,
     radius: 34,
@@ -169,11 +169,11 @@ export function waveLength(wave: number): number {
 /** Lebenspunkte-Faktor der Gegner in dieser Welle. */
 export function hpScale(wave: number): number {
   const w = wave - 1;
-  return 1 + 0.2 * w + 0.055 * w * w;
+  return 1 + 0.2 * w + 0.1 * w * w;
 }
 
 export function damageScale(wave: number): number {
-  return 1 + 0.14 * (wave - 1);
+  return 1 + 0.22 * (wave - 1);
 }
 
 export function speedScale(wave: number): number {
@@ -248,7 +248,7 @@ function groupSize(type: EnemyType, rng: () => number): number {
  */
 export function planWave(wave: number, players: number, rng: () => number): SpawnPlan[] {
   const length = waveLength(wave);
-  let budget = (7 + 5.2 * wave) * (length / 30) * playerCountScale(players);
+  let budget = (8 + 6 * wave) * (length / 30) * playerCountScale(players);
   const types = (Object.keys(ENEMIES) as EnemyType[]).filter((type) => weightOf(type, wave) > 0);
   const total = types.reduce((sum, type) => sum + weightOf(type, wave), 0);
 
@@ -272,8 +272,10 @@ export function planWave(wave: number, players: number, rng: () => number): Spaw
   }
 
   // Zwischengegner stehen fest am Anfang der Welle.
-  if (wave === 8 || wave === 12 || wave === 14 || wave === 16 || wave === 18) {
-    plan.push({ at: 2, type: "elite", count: wave >= 16 ? 2 : 1 });
+  const elites: Partial<Record<number, number>> = { 8: 1, 10: 1, 12: 2, 14: 2, 16: 2, 18: 3 };
+  const eliteCount = elites[wave] ?? 0;
+  if (eliteCount > 0) {
+    plan.push({ at: 2, type: "elite", count: eliteCount });
   }
   if (wave === FINAL_WAVE) {
     plan.push({ at: 2, type: "boss", count: 1 });

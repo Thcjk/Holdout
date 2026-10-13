@@ -16,6 +16,7 @@ import { ARENA } from "../game/constants";
 import { ARENA_WALL, arenaGrain, paintArena } from "./arena";
 import { createFigureTextures } from "./comicFigures";
 import { createWeaponTextures } from "./comicWeapons";
+import { fill, gloss, line, LINE, P, part } from "./figures/kit";
 import { LOGO_HEIGHT, LOGO_WIDTH, paintLogo } from "./logo";
 
 export { ARENA_WALL };
@@ -312,6 +313,56 @@ function createLogo(scene: Phaser.Scene): void {
   addTexture(scene, "logo", target.canvas);
 }
 
+/** Kristall: die Waehrung der Schmiede (blauer, geschliffener Edelstein). */
+function createCrystal(scene: Phaser.Scene): void {
+  const target = canvasOf(64, 64);
+  if (!target) {
+    return;
+  }
+  const c = target.context;
+  c.scale(0.64, 0.64);
+  const glow = c.createRadialGradient(50, 52, 4, 50, 52, 48);
+  glow.addColorStop(0, "rgba(140,210,255,0.5)");
+  glow.addColorStop(1, "rgba(140,210,255,0)");
+  c.fillStyle = glow;
+  c.fillRect(0, 0, 100, 100);
+  const outer = P("M 30 22 L 70 22 L 88 42 L 50 88 L 12 42 Z");
+  part(c, outer, { base: "#6fc3f2", shade: "#3f86c4", dx: -6, dy: 0, line: 4.5 });
+  fill(c, P("M 30 22 L 40 42 L 12 42 Z"), "#a9e0ff");
+  fill(c, P("M 40 42 L 60 42 L 50 88 Z"), "#58a8de");
+  fill(c, P("M 60 42 L 88 42 L 50 88 Z"), "#3f86c4");
+  fill(c, P("M 40 42 L 50 22 L 60 42 Z"), "#c4ecff");
+  line(c, "M 12 42 L 88 42 M 30 22 L 40 42 L 50 22 L 60 42 L 70 22 M 40 42 L 50 88 L 60 42", 2.4);
+  outline(c, outer, 4.5);
+  gloss(c, 34, 30, 5, 2.4, 0.9, -0.4);
+  addTexture(scene, "crystal", target.canvas);
+}
+
+/** Vorhaengeschloss fuer gesperrte Helden. */
+function createLock(scene: Phaser.Scene): void {
+  const target = canvasOf(64, 64);
+  if (!target) {
+    return;
+  }
+  const c = target.context;
+  c.scale(0.64, 0.64);
+  const shackle = P("M 30 48 L 30 32 Q 30 12 50 12 Q 70 12 70 32 L 70 48 L 60 48 L 60 32 Q 60 22 50 22 Q 40 22 40 32 L 40 48 Z");
+  part(c, shackle, { base: "#b9c0c8", shade: "#7d858f", dx: -2, dy: 0, line: 4.5 });
+  const body = new Path2D();
+  body.roundRect(20, 44, 60, 46, 9);
+  part(c, body, { base: "#f0b23e", shade: "#c27f1d", dx: -6, dy: -4, line: 4.5, hi: [34, 54, 20], light: 0.4 });
+  fill(c, P("M 50 58 m -6 0 a 6 6 0 1 0 12 0 a 6 6 0 1 0 -12 0 Z"), LINE);
+  fill(c, P("M 47 62 L 53 62 L 55 78 L 45 78 Z"), LINE);
+  addTexture(scene, "lock", target.canvas);
+}
+
+function outline(c: Ctx, shape: Path2D, width: number): void {
+  c.lineWidth = width;
+  c.lineJoin = "round";
+  c.strokeStyle = LINE;
+  c.stroke(shape);
+}
+
 // --- Einstieg --------------------------------------------------------------------
 
 /** Malt alle Texturen. Mehrfach aufrufen ist harmlos. */
@@ -325,4 +376,6 @@ export function createComicTextures(scene: Phaser.Scene): void {
   createGem(scene);
   createHeart(scene);
   createLogo(scene);
+  createCrystal(scene);
+  createLock(scene);
 }

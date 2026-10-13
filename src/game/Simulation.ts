@@ -241,6 +241,7 @@ export class Simulation {
       const bonus = Math.round(player.stats.harvesting);
       if (bonus > 0) {
         player.gold += bonus;
+        player.earned += bonus;
         grantXp(player, bonus);
       }
     }
@@ -1243,6 +1244,7 @@ export class Simulation {
 
   private collect(player: PlayerState, value: number, announce: boolean): void {
     player.gold += value;
+    player.earned += value;
     if (grantXp(player, value) > 0) {
       this.events.push({ t: "levelUp", pid: player.id });
     }

@@ -1,9 +1,10 @@
 /**
  * Der Titelbildschirm: Abenddaemmerung vor der Feste Holdout.
  *
- * Links das Wappen-Logo und darunter die drei Wege ins Spiel, rechts im
- * Hintergrund die Burg (gemalt in `menuStyle`). Unten auf der Wiese stehen alle
- * sechs Helden in einer Reihe und wippen ungeduldig - wie auf einem Gruppenbild.
+ * Links das Wappen-Logo, darunter die drei Wege ins Spiel und Schmiede/Erfolge,
+ * rechts im Hintergrund die Burg (`landscape.ts`), oben rechts die Kristalle.
+ * Unten auf der Wiese stehen alle sechs Helden in einer Reihe und wippen - noch
+ * gesperrte als dunkle Silhouette.
  */
 
 import Phaser from "phaser";
@@ -13,7 +14,9 @@ import { SAFE, VIEWPORT } from "../config/constants";
 import { CHARACTER_IDS } from "../game/data/characters";
 import { Button } from "../ui/Button";
 import { figureScale } from "../ui/comicFigures";
-import { menuBackground } from "../ui/menuStyle";
+import { menuBackground, woodPanel } from "../ui/menuStyle";
+import { isUnlocked } from "../meta/goals";
+import { loadProfile } from "../meta/profile";
 import { FONT_HAND } from "../ui/paper";
 import type { PlayMode } from "../app";
 
@@ -57,6 +60,16 @@ export class TitleScene extends Phaser.Scene {
       fontSize: 21,
       variant: "secondary",
     });
+    // Fortschritt: Schmiede (Kristalle ausgeben) und Erfolge
+    new Button(this, column - 76, 402, "Schmiede", () => this.scene.start("Forge"), { width: 148, height: 48, fontSize: 20 });
+    new Button(this, column + 76, 402, "Erfolge", () => this.scene.start("Achievements"), { width: 148, height: 48, fontSize: 20 });
+
+    // Kristalle oben rechts, neben dem Ton-Knopf
+    woodPanel(this, right - 220, 32, 130, 44);
+    this.add.image(right - 266, 32, "crystal").setDisplaySize(28, 28);
+    this.add
+      .text(right - 166, 33, String(loadProfile().crystals), { fontFamily: FONT_HAND, fontSize: "22px", color: "#2f6fa8", fontStyle: "bold" })
+      .setOrigin(1, 0.5);
 
     const mute = new Button(
       this,
@@ -84,6 +97,10 @@ export class TitleScene extends Phaser.Scene {
         .image(x, VIEWPORT.height - 14, characterKey(id))
         .setOrigin(0.5, 0.93)
         .setScale(figureScale(1.2));
+      if (!isUnlocked(loadProfile(), id)) {
+        // Noch gesperrt: als dunkle Silhouette - neugierig machen.
+        hero.setTint(0x2e3850).setAlpha(0.9);
+      }
       this.tweens.add({
         targets: hero,
         y: hero.y - 7,

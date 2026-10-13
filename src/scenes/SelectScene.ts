@@ -1,8 +1,10 @@
 /**
  * Charakter und Startwaffe waehlen.
  *
- * Links die sechs Charaktere, rechts Beschreibung, Werte und die Waffen, mit
+ * Links die sechs Helden, rechts Beschreibung, Werte und die Waffen, mit
  * denen er beginnen darf. Danach geht es solo direkt los, im Koop in die Lobby.
+ * Am Anfang ist nur der Ritter frei; die anderen schaltet man durch Ziele frei
+ * (`meta/goals.ts`). Gesperrte Helden zeigen ein Schloss und ihre Bedingung.
  */
 
 import Phaser from "phaser";
@@ -20,6 +22,8 @@ import { describeMods } from "../ui/describe";
 import { insetPanel, menuBackground, menuText, woodPanel } from "../ui/menuStyle";
 import { SoloSession } from "../net/SoloSession";
 import { playerName } from "../app";
+import { HERO_UNLOCKS, isUnlocked, startBonus } from "../meta/goals";
+import { loadProfile, saveProfile } from "../meta/profile";
 import type { PlayMode } from "../app";
 
 const CARD_W = 156;
@@ -40,8 +44,9 @@ export class SelectScene extends Phaser.Scene {
 
   init(data: { mode?: PlayMode }): void {
     this.mode = data.mode ?? "solo";
-    this.character = "magierin";
-    this.weapon = CHARACTERS.magierin.starts[0] ?? "pistol";
+    const profile = loadProfile();
+    this.character = isUnlocked(profile, profile.lastHero) ? profile.lastHero : "ritter";
+    this.weapon = CHARACTERS[this.character].starts[0] ?? "pistol";
     this.dynamic = [];
     this.buttons = [];
     this.frames = new Map();
@@ -73,11 +78,17 @@ export class SelectScene extends Phaser.Scene {
 
   private buildCard(id: CharacterId, x: number, y: number): void {
     const def = CHARACTERS[id];
+    const open = isUnlocked(loadProfile(), id);
     woodPanel(this, x, y, CARD_W, CARD_H);
     insetPanel(this, x, y - 20, CARD_W - 28, 104);
-    this.add.image(x, y - 20, characterKey(id)).setScale(figureScale(1.3));
+    const figure = this.add.image(x, y - 20, characterKey(id)).setScale(figureScale(1.3));
     menuText(this, x, y + 56, def.name, 22, UI.text.body, true);
-    menuText(this, x, y + 78, `${def.slots} Waffenplätze`, 14, UI.text.muted);
+    menuText(this, x, y + 78, open ? `${def.slots} Waffenplätze` : "Gesperrt", 14, UI.text.muted);
+    if (!open) {
+      // Gesperrt: Figur als dunkle Silhouette, davor ein Schloss.
+      figure.setTint(0x2e3850).setAlpha(0.85);
+      this.add.image(x + 34, y + 8, "lock").setDisplaySize(40, 40);
+    }
 
     const frame = this.add.rectangle(x, y, CARD_W - 2, CARD_H - 2).setStrokeStyle(4, 0xb5532f).setFillStyle(0, 0);
     frame.setVisible(false);
@@ -106,6 +117,7 @@ export class SelectScene extends Phaser.Scene {
     }
 
     const def = CHARACTERS[this.character];
+    const open = isUnlocked(loadProfile(), this.character);
     const left = SAFE.left + 24;
     const panelX = left + 3 * CARD_W + 2 * GAP + 18;
     const panelW = VIEWPORT.width - SAFE.right - 24 - panelX;
@@ -136,7 +148,7 @@ export class SelectScene extends Phaser.Scene {
     lines.forEach((line, index) => {
       add(
         this.add
-          .text(panelX + 20 + (index % 2) * (panelW / 2 - 10), top + 108 + Math.floor(index / 2) * 22, line.text, {
+          .text(panelX + 20 + (index % 2) * (panelW / 2 - 10), top + 104 + Math.floor(index / 2) * 21, line.text, {
             fontFamily: UI.font,
             fontSize: "16px",
             color: line.good ? "#4e6b2a" : "#a8321c",
@@ -146,17 +158,18 @@ export class SelectScene extends Phaser.Scene {
       );
     });
 
-    // Faehigkeit des Helden.
+    // Faehigkeit des Helden - direkt unter den Werten (manche Helden haben drei Zeilen davon).
     const ability = ABILITIES[this.character];
+    const abilityY = top + 108 + Math.ceil(lines.length / 2) * 21;
     add(
-      this.add.text(panelX + 20, top + 158, `Fähigkeit: ${ability.name}`, {
+      this.add.text(panelX + 20, abilityY, `Fähigkeit: ${ability.name}`, {
         fontFamily: UI.font,
         fontSize: "17px",
         color: UI.text.accent,
       }),
     );
     add(
-      this.add.text(panelX + 20, top + 178, ability.description, {
+      this.add.text(panelX + 20, abilityY + 20, ability.description, {
         fontFamily: UI.font,
         fontSize: "14px",
         color: UI.text.body,
@@ -164,18 +177,28 @@ export class SelectScene extends Phaser.Scene {
       }),
     );
 
+    if (!open) {
+      // Gesperrt: statt der Startwaffen die Bedingung zum Freischalten.
+      add(this.add.image(cx, top + 236, "lock").setDisplaySize(54, 54));
+      add(menuText(this, cx, top + 290, `Freischalten: ${HERO_UNLOCKS[this.character].text}`, 18, UI.text.accent, true));
+      const locked = new Button(this, cx, top + panelH - 34, "Noch gesperrt", () => undefined, { width: panelW - 40, height: 50, fontSize: 22, variant: "secondary" });
+      locked.setEnabled(false);
+      this.buttons.push(locked);
+      return;
+    }
+
     // Startwaffen.
-    add(menuText(this, cx, top + 214, "Startwaffe", 18, UI.text.muted));
+    add(menuText(this, cx, top + 234, "Startwaffe", 17, UI.text.muted));
     const starts = def.starts;
-    const slot = 76;
+    const slot = 68;
     const rowW = starts.length * slot + (starts.length - 1) * 8;
     starts.forEach((id, index) => {
       const x = cx - rowW / 2 + slot / 2 + index * (slot + 8);
-      const y = top + 262;
+      const y = top + 278;
       const selected = id === this.weapon;
       add(insetPanel(this, x, y, slot, slot) as unknown as Phaser.GameObjects.GameObject);
-      add(this.add.image(x, y - 4, weaponIconKey(id)).setDisplaySize(52, 52));
-      add(menuText(this, x, y + 28, WEAPONS[id].name, 12, UI.text.dark, true));
+      add(this.add.image(x, y - 6, weaponIconKey(id)).setDisplaySize(48, 48));
+      add(menuText(this, x, y + 24, WEAPONS[id].name, 12, UI.text.dark, true));
       if (selected) {
         add(this.add.rectangle(x, y, slot + 2, slot + 2).setStrokeStyle(4, 0xb5532f).setFillStyle(0, 0));
       }
@@ -188,15 +211,21 @@ export class SelectScene extends Phaser.Scene {
 
     const label = this.mode === "solo" ? "Los geht's!" : "Weiter";
     this.buttons.push(
-      new Button(this, cx, top + panelH - 44, label, () => this.confirm(), { width: panelW - 40, height: 60, fontSize: 26 }),
+      new Button(this, cx, top + panelH - 34, label, () => this.confirm(), { width: panelW - 40, height: 50, fontSize: 24 }),
     );
   }
 
   private confirm(): void {
+    const profile = loadProfile();
+    if (!isUnlocked(profile, this.character)) {
+      return;
+    }
+    profile.lastHero = this.character;
+    saveProfile(profile);
     if (this.mode === "solo") {
       const seed = FORCED_SEED ?? Math.floor(Math.random() * 0x7fffffff);
       const session = new SoloSession(
-        { id: "solo", name: playerName(), character: this.character, startWeapon: this.weapon },
+        { id: "solo", name: playerName(), character: this.character, startWeapon: this.weapon, ...startBonus(profile) },
         seed,
       );
       this.scene.start("Game", { session, character: this.character, weapon: this.weapon, mode: this.mode });

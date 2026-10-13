@@ -11,6 +11,8 @@
 
 import Phaser from "phaser";
 import { figureScale } from "../ui/comicFigures";
+import { applyRun } from "../meta/goals";
+import { loadProfile, saveProfile } from "../meta/profile";
 import { audio } from "../audio/AudioEngine";
 import type { SoundName } from "../audio/AudioEngine";
 import { arenaKey, characterKey, enemyKey, weaponIconKey } from "../config/assets";
@@ -98,6 +100,8 @@ export class GameScene extends Phaser.Scene {
   private paused = false;
   private pauseOpen = false;
   private ending = false;
+  /** Der Lauf ist schon in den Spielstand eingetragen (nur einmal pro Lauf). */
+  private recorded = false;
   private lastPhase: string | null = null;
   private lastSound = new Map<string, number>();
   private floaters = 0;
@@ -119,6 +123,7 @@ export class GameScene extends Phaser.Scene {
     this.paused = false;
     this.pauseOpen = false;
     this.ending = false;
+    this.recorded = false;
     this.lastPhase = null;
     this.lastSound = new Map();
     this.floaters = 0;
@@ -277,8 +282,18 @@ export class GameScene extends Phaser.Scene {
     audio.setMusic("wave");
   }
 
+  /**
+   * Runde aufgeben oder verlassen: zaehlt wie verloren. So gehen die bis dahin
+   * verdienten Kristalle nicht verloren, und man sieht die Auswertung.
+   */
   private leave(): void {
-    this.scene.start("Title");
+    // Wer schon in der ersten Welle aufgibt, hat noch nichts verdient (und kann so keine Laeufe sammeln).
+    if (this.recorded || this.session.view.state.wave <= 1) {
+      this.scene.start("Title");
+      return;
+    }
+    this.ending = true;
+    this.finish(false);
   }
 
   // --- Takt ---------------------------------------------------------------
@@ -352,8 +367,28 @@ export class GameScene extends Phaser.Scene {
   }
 
   private finish(won: boolean): void {
+    if (this.recorded) {
+      return;
+    }
+    this.recorded = true;
     const state = this.session.view.state;
     const self = state.players.find((player) => player.id === this.session.selfId);
+    // Den Lauf in den Spielstand eintragen: Kristalle, Bestwerte, Erfolge, Freischaltungen.
+    const profile = loadProfile();
+    const report = self
+      ? applyRun(profile, {
+          character: self.character,
+          wave: state.wave,
+          won,
+          kills: self.kills,
+          gold: self.earned,
+          level: self.level,
+          maxTier: self.weapons.reduce((best, weapon) => Math.max(best, weapon.tier), 0),
+          weaponCount: self.weapons.length,
+          coop: this.session.isMultiplayer,
+        })
+      : null;
+    saveProfile(profile);
     this.scene.start("Result", {
       won,
       wave: state.wave,
@@ -362,6 +397,7 @@ export class GameScene extends Phaser.Scene {
       items: self ? self.items.reduce((sum, count) => sum + count, 0) : 0,
       name: self?.name ?? "",
       mode: this.mode,
+      report,
     });
   }
 

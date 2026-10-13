@@ -16,7 +16,7 @@ import type { WeaponId } from "../src/game/types";
 import { UPGRADES } from "../src/game/data/upgrades";
 import { Simulation } from "../src/game/Simulation";
 import { canTakeWeapon, rerollCost } from "../src/game/shop";
-import type { CharacterId, PlayerInput, PlayerState } from "../src/game/types";
+import type { CharacterId, PlayerInput, PlayerState, StatMods } from "../src/game/types";
 
 /** Wie wertvoll ein Wert fuer den Bot ist. Grob: Schaden und Tempo zuerst, dann Leben. */
 const STAT_WEIGHT: Record<string, number> = {
@@ -225,6 +225,9 @@ export function playBot(options: {
   /** Spielerzahl, alle vom Bot gesteuert. */
   players?: number;
   maxSeconds?: number;
+  /** Schmiede-Boni und Startgold (wie ein Spieler mit Fortschritt). */
+  bonus?: StatMods;
+  startGold?: number;
 }): BotResult {
   const count = options.players ?? 1;
   const setups = Array.from({ length: count }, (_, index) => ({
@@ -232,6 +235,8 @@ export function playBot(options: {
     name: `Bot ${index}`,
     character: options.character,
     startWeapon: options.startWeapon,
+    bonus: options.bonus ?? {},
+    startGold: options.startGold ?? 0,
   }));
   const sim = new Simulation(setups, options.seed);
   const limit = (options.maxSeconds ?? 2400) * 60;

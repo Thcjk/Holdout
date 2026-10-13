@@ -10,6 +10,7 @@
 import type Phaser from "phaser";
 import { itemIconKey } from "../config/assets";
 import { ITEMS } from "../game/data/items";
+import { FORGE } from "../meta/forge";
 import type { StatKey } from "../game/types";
 
 const ICON_SIZE = 64;
@@ -254,8 +255,13 @@ function refreshTexture(scene: Phaser.Scene, key: string): void {
   (scene.textures.get(key) as Phaser.Textures.CanvasTexture).refresh();
 }
 
-function drawItemIcon(scene: Phaser.Scene, id: string, stat: StatKey | undefined): void {
-  const context = createCanvas(scene, itemIconKey(id));
+/** Textur-Name des Symbols einer Schmiede-Stufe. */
+export function forgeIconKey(id: string): string {
+  return `forge-${id}`;
+}
+
+function drawItemIcon(scene: Phaser.Scene, id: string, stat: StatKey | undefined, key = itemIconKey(id)): void {
+  const context = createCanvas(scene, key);
   if (!context) {
     return;
   }
@@ -272,7 +278,7 @@ function drawItemIcon(scene: Phaser.Scene, id: string, stat: StatKey | undefined
   context.arc(32, 31, 22.5, 0, Math.PI * 2);
   inked(context, "#f4e4c1", 2.2);
   drawGlyph(context, stat ?? "damage", accent);
-  refreshTexture(scene, itemIconKey(id));
+  refreshTexture(scene, key);
 }
 
 /** Zeichnet alle fehlenden Symbole. Mehrfach aufrufen ist harmlos. */
@@ -281,6 +287,10 @@ export function createIcons(scene: Phaser.Scene): void {
     const first = (Object.keys(item.mods) as StatKey[])[0];
     const main = (Object.keys(item.mods) as StatKey[]).find((key) => (item.mods[key] ?? 0) > 0) ?? first;
     drawItemIcon(scene, item.id, main);
+  }
+  // Die Schmiede nutzt dieselben Medaillons; die Kriegskasse zeigt Muenzen.
+  for (const def of FORGE) {
+    drawItemIcon(scene, def.id, def.stat ?? "harvesting", forgeIconKey(def.id));
   }
 
   // Der Runenkreis, der vor einem Monster am Boden aufleuchtet - hier kommt es aus der Tiefe.

@@ -15,7 +15,7 @@ export function xpNeeded(level: number): number {
 }
 
 export function recomputeStats(player: PlayerState): void {
-  player.stats = computeStats(player.character, player.items, player.upgrades);
+  player.stats = computeStats(player.character, player.items, player.upgrades, player.bonus);
 }
 
 /** Startpositionen nebeneinander in der Mitte, damit sich niemand im Koop stapelt. */
@@ -40,7 +40,7 @@ export function createPlayer(setup: PlayerSetup, index: number, total: number): 
     weapons: [{ id: setup.startWeapon, tier: 1, cd: 0.3 }],
     items: ITEMS.map(() => 0),
     upgrades: UPGRADES.map(() => 0),
-    gold: 0,
+    gold: Math.max(0, setup.startGold ?? 0),
     xp: 0,
     level: 0,
     pendingLevels: 0,
@@ -53,11 +53,13 @@ export function createPlayer(setup: PlayerSetup, index: number, total: number): 
     ready: false,
     lastCmd: 0,
     kills: 0,
-    stats: computeStats(setup.character, [], []),
+    stats: computeStats(setup.character, [], [], setup.bonus ?? {}),
     regenCarry: 0,
     abilityCd: 3,
     buff: 0,
     abilityAck: 0,
+    bonus: { ...(setup.bonus ?? {}) },
+    earned: 0,
   };
   player.hp = player.stats.maxHp;
   return player;

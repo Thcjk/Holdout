@@ -207,6 +207,18 @@ function drawShape(ctx: Ctx, id: WeaponId): void {
       gloss(ctx, 48, 16, 4, 1.6, 0.6, 0);
       break;
     }
+    case "twin": {
+      // Doppelschwert: zwei kurze Klingen ueber Kreuz
+      for (const [angle, grip] of [[-0.42, ["#8a3a2a", "#5e2418"]], [0.42, ["#3f5f9e", "#2b4374"]]] as const) {
+        ctx.save();
+        ctx.translate(50, 50);
+        ctx.rotate(angle);
+        ctx.translate(-50, -50);
+        sword(ctx, 42, 50, 40, 11, grip, 22);
+        ctx.restore();
+      }
+      break;
+    }
     case "frost": {
       // Froststab: heller Stab, Eiskristall mit Zacken
       staff(ctx, 10, 84, 58, 36, ["#9fb8c8", "#6f8a9c"]);
@@ -247,6 +259,7 @@ export const WEAPON_ORDER: readonly WeaponId[] = [
   "wand",
   "hammer",
   "frost",
+  "twin",
 ];
 
 /** Malt alle Waffensymbole als Texturen. Mehrfach aufrufen ist harmlos. */

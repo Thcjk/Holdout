@@ -27,11 +27,11 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
   ritter: {
     id: "ritter",
     name: "Ritter",
-    description: "Schwer gerüstet und zäh, aber langsam und nur vier Waffenplätze.",
-    mods: { maxHp: 60, armor: 6, regen: 2, speed: -4 },
-    slots: 4,
+    description: "Der Held der ersten Stunde: führt Schwert, Doppelschwert, Axt und Bogen. Solide gerüstet.",
+    mods: { maxHp: 15, armor: 3, regen: 1 },
+    slots: 6,
     allowed: ALL_WEAPONS,
-    starts: ["spear", "knife", "crossbow"],
+    starts: ["spear", "twin", "fist", "pistol"],
     color: 0x8a96a6,
   },
   magierin: {

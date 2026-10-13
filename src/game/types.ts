@@ -46,7 +46,8 @@ export type WeaponId =
   | "flamer"
   | "wand"
   | "hammer"
-  | "frost";
+  | "frost"
+  | "twin";
 
 export type CharacterId = "magierin" | "zwerg" | "elfe" | "ritter" | "zauberer" | "schurke";
 
@@ -132,6 +133,10 @@ export interface PlayerState {
   buff: number;
   /** Zaehler der zuletzt ausgefuehrten Faehigkeit-Anfrage (gegen doppeltes Ausloesen im Netz). */
   abilityAck: number;
+  /** Dauerhafte Boni aus der Schmiede (bringt jeder Spieler selbst mit). */
+  bonus: StatMods;
+  /** Insgesamt in diesem Lauf eingesammeltes Gold (fuer Erfolge). */
+  earned: number;
 }
 
 export type EnemyMode = "move" | "windup" | "dash" | "recover";
@@ -263,4 +268,8 @@ export interface PlayerSetup {
   name: string;
   character: CharacterId;
   startWeapon: WeaponId;
+  /** Dauerhafte Boni aus der Schmiede. */
+  bonus?: StatMods;
+  /** Gold, mit dem der Spieler startet (Schmiede: Kriegskasse). */
+  startGold?: number;
 }

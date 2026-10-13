@@ -10,7 +10,7 @@
  */
 
 import { MAX_PLAYERS } from "../game/constants";
-import type { CharacterId, PlayerSetup, WeaponId } from "../game/types";
+import type { CharacterId, PlayerSetup, StatMods, WeaponId } from "../game/types";
 import { toSetups } from "./protocol";
 import type { NetMessage, NetPlayerInfo } from "./protocol";
 import type { Transport } from "./Transport";
@@ -23,6 +23,9 @@ export interface LobbyIdentity {
   name: string;
   character: CharacterId;
   weapon: WeaponId;
+  /** Schmiede-Boni und Startgold - jeder Spieler bringt seine eigenen mit. */
+  bonus: StatMods;
+  startGold: number;
 }
 
 export class Lobby {
@@ -52,6 +55,8 @@ export class Lobby {
           character: identity.character,
           startWeapon: identity.weapon,
           isHost: true,
+          bonus: identity.bonus,
+          startGold: identity.startGold,
         },
       ];
       this.timers.push(
@@ -67,6 +72,8 @@ export class Lobby {
             name: identity.name,
             character: identity.character,
             weapon: identity.weapon,
+            bonus: identity.bonus,
+            gold: identity.startGold,
           });
         }
       };
@@ -173,6 +180,8 @@ export class Lobby {
             character: message.character,
             startWeapon: message.weapon,
             isHost: false,
+            bonus: message.bonus ?? {},
+            startGold: message.gold ?? 0,
           },
         ];
         this.transport.broadcast({ t: "lobby", players: this.players });

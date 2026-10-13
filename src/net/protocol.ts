@@ -33,6 +33,7 @@ import type {
   PlayerSetup,
   PlayerState,
   Projectile,
+  StatMods,
   WeaponId,
 } from "../game/types";
 
@@ -48,6 +49,9 @@ export interface NetPlayerInfo {
   character: CharacterId;
   startWeapon: WeaponId;
   isHost: boolean;
+  /** Schmiede-Boni und Startgold dieses Spielers. */
+  bonus?: StatMods;
+  startGold?: number;
 }
 
 /** Ein Befehl mit Nummer, damit der Host ihn nicht doppelt ausfuehrt. */
@@ -88,6 +92,9 @@ export interface WirePlayer {
   /** Abklingzeit der Faehigkeit und Restzeit ihrer Wirkung. */
   ac: number;
   bf: number;
+  /** Schmiede-Boni (der Client rechnet damit die Werte aus) und gesammeltes Gold. */
+  bn?: StatMods;
+  ge?: number;
 }
 
 export interface WireState {
@@ -104,7 +111,7 @@ export interface WireState {
 }
 
 export type NetMessage =
-  | { t: "hello"; name: string; character: CharacterId; weapon: WeaponId }
+  | { t: "hello"; name: string; character: CharacterId; weapon: WeaponId; bonus?: StatMods; gold?: number }
   | { t: "lobby"; players: NetPlayerInfo[] }
   | { t: "start"; seed: number; players: NetPlayerInfo[] }
   | { t: "ready" }
@@ -150,6 +157,8 @@ function encodePlayer(player: PlayerState): WirePlayer {
     k: player.kills,
     ac: round1(player.abilityCd),
     bf: round1(player.buff),
+    bn: player.bonus,
+    ge: player.earned,
   };
 }
 
@@ -209,11 +218,13 @@ function decodePlayer(wire: WirePlayer): PlayerState {
     ready: wire.rd === 1,
     lastCmd: wire.lc,
     kills: wire.k,
-    stats: computeStats(wire.ch, wire.it, wire.up),
+    stats: computeStats(wire.ch, wire.it, wire.up, wire.bn ?? {}),
     regenCarry: 0,
     abilityCd: wire.ac ?? 0,
     buff: wire.bf ?? 0,
     abilityAck: 0,
+    bonus: wire.bn ?? {},
+    earned: wire.ge ?? 0,
   };
   return player;
 }
@@ -283,5 +294,7 @@ export function toSetups(players: readonly NetPlayerInfo[]): PlayerSetup[] {
     name: player.name,
     character: player.character,
     startWeapon: player.startWeapon,
+    bonus: player.bonus ?? {},
+    startGold: player.startGold ?? 0,
   }));
 }

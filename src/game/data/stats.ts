@@ -1,8 +1,8 @@
 /**
  * Die Werte eines Spielers und wie sie berechnet werden.
  *
- * Eine einzige Funktion (`computeStats`) rechnet aus Charakter, Gegenstaenden
- * und Level-Ups die fertigen Werte aus. Host UND Client rufen sie auf - der
+ * Eine einzige Funktion (`computeStats`) rechnet aus Charakter, Schmiede-Boni,
+ * Gegenstaenden und Level-Ups die fertigen Werte aus. Host UND Client rufen sie auf - der
  * Client muss deshalb nur die Anzahlen kennen, nicht die fertigen Werte.
  */
 
@@ -81,9 +81,11 @@ export function computeStats(
   character: CharacterId,
   items: readonly number[],
   upgrades: readonly number[],
+  bonus: StatMods = {},
 ): Stats {
   const stats: Stats = { ...BASE_STATS };
   addMods(stats, CHARACTERS[character].mods, 1);
+  addMods(stats, bonus, 1);
   ITEMS.forEach((item, index) => addMods(stats, item.mods, items[index] ?? 0));
   UPGRADES.forEach((upgrade, index) => addMods(stats, upgrade.mods, upgrades[index] ?? 0));
 
