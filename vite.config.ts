@@ -23,11 +23,11 @@ export default defineConfig({
     VitePWA({
       // Eine neue Version wird im Hintergrund geladen und beim naechsten Start aktiv.
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "icons/*.png"],
+      includeAssets: ["icons/*.png"],
       manifest: {
         name: "Holdout",
         short_name: "Holdout",
-        description: "Holdout: Brotato-artiger Wellen-Shooter mit Shop und Online-Koop.",
+        description: "Holdout – Die Wanderfestung: Mechs verteidigen eine laufende Festung gegen die goldene Armee.",
         lang: "de",
         start_url: base,
         scope: base,
@@ -36,8 +36,8 @@ export default defineConfig({
         id: "koop-arena-shooter",
         categories: ["games"],
         orientation: "landscape",
-        background_color: "#3f4d63",
-        theme_color: "#3f4d63",
+        background_color: "#15101a",
+        theme_color: "#15101a",
         icons: [
           { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" },
@@ -58,36 +58,9 @@ export default defineConfig({
         // Phaser ist gross - die Voreinstellung von 2 MB wuerde es vom
         // Offline-Zwischenspeicher ausschliessen.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
-        globPatterns: ["**/*.{js,css,html,svg,png,ogg,m4a,json,glb,xml,woff2}"],
-        /*
-         * Das hochgeladene Kenney-Paket liegt komplett unter `public/` -
-         * Vorschaubilder, 51 SVG-Haeute, UI-Paket, Sci-Fi-RTS-Grafiken. Das
-         * Spiel benutzt davon nur das Tilesheet, das UI-Spritesheet und die
-         * Blaster-Vorschaubilder. Ohne diese Liste luede jedes
-         * Handy bei der Installation 6,9 MB statt rund 2, fuer nichts.
-         * Wer spaeter etwas davon im Spiel benutzt, nimmt es hier heraus.
-         *
-         * Seit dem UI-Paket gebraucht und deshalb NICHT mehr auf der Liste:
-         * `Spritesheet/` (ein Bild plus Koordinatendatei, `config/ui.ts`). Die
-         * Einzelbilder derselben Grafiken unter `PNG/` bleiben draussen.
-         */
-        globIgnores: [
-          "Skins/**",
-          "PNG/**",
-          "Vector/**",
-          "Source/**",
-          "Animals/**",
-          "Textures/**",
-          "assets/Unit/**",
-          "assets/Structure/**",
-          "assets/Environment/**",
-          "assets/Tile/**",
-          "assets/scifi*",
-          // Vorschaubilder und Einzel-SVGs direkt in public/ (Blaster Kit,
-          // Tiere). favicon.svg kommt trotzdem mit - ueber `includeAssets`.
-          "*.png",
-          "*.svg",
-        ],
+        // Alle Bilder malt das Spiel selbst; als Dateien kommen nur Code, Schriften,
+        // Musik und die App-Symbole mit.
+        globPatterns: ["**/*.{js,css,html,svg,png,ogg,m4a,json,woff2}"],
         /*
          * ================================================================
          * DER FEHLER, DER DIE MUSIK ZWEIMAL "NICHT GETAUSCHT" AUSSEHEN LIESS

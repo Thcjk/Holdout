@@ -1,44 +1,22 @@
 /**
- * Eine Runde spielen - egal ob allein, als Host oder als Client.
+ * Eine Runde spielen - die Spielszene soll nicht wissen, ob allein oder im Koop.
  *
- * Die Spielszene soll nicht wissen, in welchem Modus sie laeuft. Sie fragt jedes
- * Bild "hier ist meine Bewegung, gib mir den Zustand zum Zeichnen". Ob dieser
- * Zustand lokal gerechnet oder ueber das Netz empfangen wurde, ist ihre Sache nicht.
+ * Sie gibt jedes Bild die Eingabe ab und bekommt Zustand und Ereignisse zurueck.
+ * Ob der Zustand lokal gerechnet oder uebers Netz empfangen wurde, ist nicht ihre
+ * Sache. (Koop kommt in einer spaeteren Etappe; dann gibt es eine zweite Sitzung.)
  */
 
 import type { Command, GameEvent, GameState, PlayerInput } from "../game/types";
 
-export interface GameView {
-  readonly state: GameState;
-  /** Was seit dem letzten Bild passiert ist (Treffer, Schuesse, ...). */
-  readonly events: readonly GameEvent[];
-}
-
 export interface GameSession {
   readonly selfId: string;
-  readonly view: GameView;
-  /**
-   * Darf die Runde angehalten werden? Nur solo - im Koop rechnet der Host
-   * fuer alle weiter, ein anhaltendes Geraet wuerde springen.
-   */
+  readonly state: GameState;
+  /** Was seit dem letzten Bild passiert ist. */
+  readonly events: readonly GameEvent[];
+  /** Darf angehalten werden? Nur allein. */
   readonly canPause: boolean;
-  readonly isMultiplayer: boolean;
-  /** Gesetzt, sobald die Verbindung abgerissen ist - mit Text fuer den Spieler. */
-  readonly connectionLost: string | null;
-  /** `false`, solange ein Client noch auf den ersten Zustand vom Host wartet. */
-  readonly isReady: boolean;
 
   update(deltaMs: number, input: PlayerInput): void;
-
-  /** Einen Befehl aus dem Shop abschicken. */
   send(command: Command): void;
-
-  /**
-   * Wo die eigene Figur gezeichnet werden soll. Der Client rechnet seine
-   * Bewegung selbst voraus, damit sie nicht erst nach der Laufzeit zum Host
-   * und zurueck reagiert. `null` heisst: Position aus dem Zustand nehmen.
-   */
-  selfPosition(): { x: number; y: number } | null;
-
   destroy(): void;
 }

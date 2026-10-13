@@ -1,12 +1,12 @@
 /**
  * Der schwebende Daumen-Stick: Wo der Daumen aufsetzt, entsteht der Stick.
  *
- * Brotato kennt nur Bewegung - geschossen wird von selbst. Deshalb gibt es
- * genau EINEN Stick und keine Knoepfe. Er haengt nicht an einer festen Stelle,
+ * Der Mech schiesst von selbst - man steuert nur die Bewegung. Deshalb gibt es
+ * genau EINEN Stick. Er haengt nicht an einer festen Stelle,
  * sondern erscheint dort, wo der Daumen den Bildschirm beruehrt (in der linken
  * Bildschirmhaelfte). So muss man nie hinschauen, um ihn zu treffen.
  *
- * Eine Beruehrung, die auf einem Knopf landet (Pause), startet den Stick nicht -
+ * Eine Beruehrung, die auf einem Knopf landet (Pause, Faehigkeit), startet den Stick nicht -
  * sonst liefe die Figur beim Antippen des Knopfs los.
  */
 
@@ -32,8 +32,8 @@ export class FloatingStick {
     private readonly scene: Phaser.Scene,
     private readonly region: Phaser.Geom.Rectangle,
   ) {
-    this.base = scene.add.circle(0, 0, RADIUS, 0xf1e5c9, 0.3).setStrokeStyle(3, 0x1d1c19, 0.5).setDepth(DEPTH);
-    this.knob = scene.add.circle(0, 0, 26, 0x1d1c19, 0.35).setDepth(DEPTH + 1);
+    this.base = scene.add.circle(0, 0, RADIUS, 0xefe8f6, 0.12).setStrokeStyle(3, 0xefe8f6, 0.5).setDepth(DEPTH).setScrollFactor(0);
+    this.knob = scene.add.circle(0, 0, 26, 0xefe8f6, 0.38).setDepth(DEPTH + 1).setScrollFactor(0);
     this.base.setVisible(false);
     this.knob.setVisible(false);
 

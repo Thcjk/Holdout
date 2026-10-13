@@ -1,123 +1,106 @@
 /**
- * Der Knopf fuer die Faehigkeit, rechts unten im Gefecht.
+ * Der Knopf fuer die Faehigkeit, rechts unten.
  *
- * Ein rundes Pergamentschild mit dem Gesicht des Helden. Solange die Faehigkeit
- * sich auflaedt, liegt ein dunkler Tortenschnitt darueber, der kleiner wird,
- * und die Restsekunden stehen in der Mitte. Ist sie bereit, pulsiert der Knopf.
+ * Solange sich die Faehigkeit auflaedt, liegt ein dunkler Tortenschnitt darueber
+ * und die Restsekunden stehen in der Mitte. Bereit: goldener Ring, der pulsiert.
  *
  * Der Knopf zaehlt nur Druecke (`presses`). Die Szene gibt den Zaehler mit der
- * Bewegung an die Sitzung weiter; die Simulation entscheidet, ob ausgeloest wird.
+ * Bewegung an die Sitzung; die Simulation entscheidet, ob ausgeloest wird.
  */
 
 import Phaser from "phaser";
-import { characterKey } from "../config/assets";
 import { SAFE, VIEWPORT } from "../config/constants";
-import { ABILITIES } from "../game/data/abilities";
-import type { CharacterId } from "../game/types";
-import { figureScale } from "./comicFigures";
-import { FONT_TITLE, GOLD, INK, PAPER, wobblyRect } from "./paper";
+import { CREW } from "../game/data/crew";
+import type { PlayerState } from "../game/types";
+import { crewKey } from "./pixel/textures";
+import { C, FONT_BODY, FONT_TITLE, T } from "./theme";
+import { DEPTH } from "./world/view";
 
-const RADIUS = 44;
-const DEPTH = 9400;
+const RADIUS = 42;
 
 export class AbilityButton {
   presses = 0;
-  private readonly base: Phaser.GameObjects.Graphics;
-  private readonly shade: Phaser.GameObjects.Graphics;
+  private readonly ring: Phaser.GameObjects.Graphics;
   private readonly face: Phaser.GameObjects.Image;
   private readonly label: Phaser.GameObjects.Text;
   private readonly seconds: Phaser.GameObjects.Text;
   private readonly hit: Phaser.GameObjects.Arc;
-  private readonly container: Phaser.GameObjects.Container;
-  private wasReady = false;
-  private visible = true;
+  private time = 0;
 
   constructor(
-    private readonly scene: Phaser.Scene,
-    character: CharacterId,
+    scene: Phaser.Scene,
+    private readonly crew: PlayerState["crew"],
   ) {
-    const x = VIEWPORT.width - SAFE.right - RADIUS - 22;
-    const y = VIEWPORT.height - SAFE.bottom - RADIUS - 26;
-    this.base = scene.add.graphics();
-    this.drawBase(false);
-    this.face = scene.add.image(0, 4, characterKey(character)).setScale(figureScale(0.95));
-    this.shade = scene.add.graphics();
-    this.seconds = scene.add
-      .text(0, 2, "", { fontFamily: FONT_TITLE, fontSize: "34px", color: "#f4e4c1" })
-      .setOrigin(0.5)
-      .setStroke("#2b2320", 5);
+    this.ring = scene.add.graphics().setScrollFactor(0).setDepth(DEPTH.hud);
+    this.face = scene.add
+      .image(0, 0, crewKey(crew))
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 1)
+      .setScale(0.9);
     this.label = scene.add
-      .text(0, RADIUS + 12, ABILITIES[character].name, {
-        fontFamily: FONT_TITLE,
-        fontSize: "16px",
-        color: "#2b2320",
-        backgroundColor: "#f4e4c1dd",
-        padding: { x: 5, y: 1 },
+      .text(0, 0, CREW[crew].ability.name.toUpperCase(), {
+        fontFamily: FONT_BODY,
+        fontSize: "12px",
+        color: T.light,
+        fontStyle: "bold",
       })
-      .setOrigin(0.5);
-    this.container = scene.add
-      .container(x, y, [this.base, this.face, this.shade, this.seconds, this.label])
-      .setDepth(DEPTH);
-
-    this.hit = scene.add.circle(x, y, RADIUS + 10, 0x000000, 0).setDepth(DEPTH + 1).setInteractive({ useHandCursor: true });
+      .setOrigin(0.5)
+      .setStroke(T.outline, 3)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 2);
+    this.seconds = scene.add
+      .text(0, 0, "", { fontFamily: FONT_TITLE, fontSize: "34px", color: T.light })
+      .setOrigin(0.5)
+      .setStroke(T.outline, 5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 3);
+    this.hit = scene.add
+      .circle(0, 0, RADIUS + 6, 0x000000, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 4)
+      .setInteractive();
     this.hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
       this.presses += 1;
-      this.scene.tweens.add({ targets: this.container, scale: 0.9, duration: 70, yoyo: true });
     });
+    this.layout();
   }
 
-  setVisible(visible: boolean): void {
-    this.visible = visible;
-    this.container.setVisible(visible);
-    this.hit.setVisible(visible);
-    if (visible) {
-      this.hit.setInteractive();
-    } else {
-      this.hit.disableInteractive();
-    }
+  layout(): void {
+    const x = VIEWPORT.width - SAFE.right - RADIUS - 22;
+    const y = VIEWPORT.height - SAFE.bottom - RADIUS - 30;
+    this.face.setPosition(x, y + 2);
+    this.label.setPosition(x, y + RADIUS + 14);
+    this.seconds.setPosition(x, y);
+    this.hit.setPosition(x, y);
   }
 
-  /** Jedes Bild: Restzeit zeigen. `total` ist die volle Abklingzeit. */
-  update(cooldown: number, total: number, alive: boolean): void {
-    if (!this.visible) {
-      return;
+  update(self: PlayerState | undefined, deltaMs: number): void {
+    this.time += deltaMs / 1000;
+    const x = this.hit.x;
+    const y = this.hit.y;
+    const g = this.ring;
+    g.clear();
+    const cooldown = CREW[this.crew].ability.cooldown;
+    const left = self ? self.abilityCd : cooldown;
+    const ready = !!self && self.alive && left <= 0;
+    const pulse = ready ? 2 + Math.sin(this.time * 6) * 2 : 0;
+    g.fillStyle(C.outline, 1).fillCircle(x, y, RADIUS + 4 + pulse);
+    g.fillStyle(ready ? C.gold : C.bronzeDark, 1).fillCircle(x, y, RADIUS + pulse);
+    g.fillStyle(C.stone, 1).fillCircle(x, y, RADIUS - 6);
+    if (!ready && left > 0) {
+      const share = left / cooldown;
+      g.fillStyle(C.outline, 0.6);
+      g.slice(x, y, RADIUS - 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * share, false).fillPath();
     }
-    const ready = cooldown <= 0.05 && alive;
-    this.shade.clear();
-    if (!ready) {
-      const fraction = Phaser.Math.Clamp(cooldown / Math.max(0.1, total), 0, 1);
-      this.shade.fillStyle(INK, 0.6);
-      this.shade.slice(0, 0, RADIUS - 3, -Math.PI / 2, -Math.PI / 2 + fraction * Math.PI * 2, false);
-      this.shade.fillPath();
-      this.seconds.setText(alive ? String(Math.ceil(cooldown)) : "");
-    } else {
-      this.seconds.setText("");
-    }
-    if (ready !== this.wasReady) {
-      this.wasReady = ready;
-      this.drawBase(ready);
-      if (ready) {
-        this.scene.tweens.add({ targets: this.container, scale: 1.12, duration: 140, yoyo: true, ease: "Quad.Out" });
-      }
-    }
+    this.seconds.setText(!ready && left > 0 ? `${Math.ceil(left)}` : "");
+    this.face.setAlpha(ready ? 1 : 0.55);
   }
 
   destroy(): void {
-    this.container.destroy();
+    this.ring.destroy();
+    this.face.destroy();
+    this.label.destroy();
+    this.seconds.destroy();
     this.hit.destroy();
-  }
-
-  /** Pergamentscheibe mit dunklem Rand; bereit = goldener Ring aussen. */
-  private drawBase(ready: boolean): void {
-    const g = this.base;
-    g.clear();
-    g.fillStyle(INK, 0.25).fillCircle(2, 5, RADIUS);
-    if (ready) {
-      g.fillStyle(GOLD, 1).fillCircle(0, 0, RADIUS + 6);
-      g.lineStyle(2.4, INK, 1).strokeCircle(0, 0, RADIUS + 6);
-    }
-    const ring = wobblyRect(-RADIUS, -RADIUS, RADIUS * 2, RADIUS * 2, RADIUS, 77, 1);
-    g.fillStyle(PAPER, 1).fillPoints(ring, true);
-    g.lineStyle(2.6, INK, 1).strokePoints(ring, true);
   }
 }

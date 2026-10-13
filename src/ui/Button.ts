@@ -1,15 +1,13 @@
 /**
- * Ein Knopf im Zeitriss-Look: Goldplatte (Haupt) oder dunkle Mech-Technik (Neben).
+ * Ein Knopf: Goldplatte (Haupt) oder dunkle Mech-Technik (Neben).
  *
  * Phaser bringt keine fertigen Bedienelemente mit - das ist Absicht, denn ein
  * Spiel braucht selten Standardknoepfe. Fuer die Menues reicht diese kleine
  * Klasse, und sie haelt die Trefferflaeche grosszuegig genug fuer Daumen.
  *
- * Bis zum UI-Paket war der Knopf ein gezeichnetes Rechteck. Jetzt ist er eine
- * Neunerteilung des Paket-Knopfs (`ui/UiNineSlice.ts`), damit er in jeder
- * Groesse gleich aussieht - von 80 x 30 im HUD bis 300 x 56 in der Lobby.
- * Beim Druecken wechselt er auf die gedrueckte Fassung (ohne Lippe) und die
- * Schrift rutscht mit: Man SIEHT, dass der Daumen getroffen hat.
+ * Gezeichnet wird er von `ComicBox` in jeder Groesse gleich scharf. Beim
+ * Druecken sinkt er auf seinen Schatten und die Schrift rutscht mit: Man SIEHT,
+ * dass der Daumen getroffen hat.
  *
  * Die Beruehrung faengt ein unsichtbares Rechteck in genau Knopfgroesse ab -
  * so bleibt die Trefferflaeche unabhaengig davon, wie das Bild aussieht.
@@ -134,6 +132,13 @@ export class Button {
     this.image.destroy();
     this.label.destroy();
     this.hitArea.destroy();
+  }
+
+  /** 0 = klebt am Bildschirm, auch wenn die Kamera mit der Festung mitlaeuft. */
+  setScrollFactor(factor: number): void {
+    this.image.container.setScrollFactor(factor);
+    this.label.setScrollFactor(factor);
+    this.hitArea.setScrollFactor(factor);
   }
 
   setDepth(depth: number): void {

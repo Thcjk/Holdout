@@ -15,8 +15,19 @@
  * Alle schauen nach rechts (dorthin laeuft die Festung). Fuesse unten.
  */
 
-import { bone, helmet, ribs, skull } from "./enemies";
-import { BONE, BRONZE, CREST, CREST_RED, FIRE, GOLD, LEATHER, OUTLINE, STEEL, WOOD } from "./palette";
+import { bone, helmet, ribs, skull } from "./skeleton";
+import {
+  BONE,
+  BRONZE,
+  CREST,
+  CREST_RED,
+  FIRE,
+  GOLD,
+  LEATHER,
+  OUTLINE,
+  STEEL,
+  WOOD,
+} from "./palette";
 import { ellipse, Pix, poly, rect, thick, union, type Mask, type Ramp } from "./pix";
 
 export type ArmyId =
@@ -78,7 +89,26 @@ function stripes(p: Pix, mask: Mask, color: string, every = 3): void {
 
 /** Nemes-Kopftuch (gold mit dunklen Streifen) ueber einem Schaedel bei (cx, cy). */
 function nemes(p: Pix, cx: number, cy: number): void {
-  const cloth = poly(cx - 8, cy + 9, cx - 8, cy - 3, cx - 4, cy - 7, cx + 4, cy - 7, cx + 7, cy - 4, cx + 7, cy - 2, cx - 1, cy - 3, cx - 4, cy, cx - 4, cy + 9);
+  const cloth = poly(
+    cx - 8,
+    cy + 9,
+    cx - 8,
+    cy - 3,
+    cx - 4,
+    cy - 7,
+    cx + 4,
+    cy - 7,
+    cx + 7,
+    cy - 4,
+    cx + 7,
+    cy - 2,
+    cx - 1,
+    cy - 3,
+    cx - 4,
+    cy,
+    cx - 4,
+    cy + 9,
+  );
   p.shape(cloth, GOLD, { shade: 1 });
   stripes(p, cloth, BRONZE[0], 3);
   p.shape(rect(cx - 5, cy - 4, 12, 2), GOLD, { shade: 0 });
@@ -110,7 +140,9 @@ function laeufer(p: Pix): void {
   // Vorderer Arm mit Sichelschwert
   bone(p, 30, 21, 35, 25);
   p.shape(thick(35, 26, 37, 22, 2), LEATHER, { shade: 0 });
-  p.shape(poly(37, 22, 38, 15, 42, 11, 46, 12, 46, 15, 43, 14, 40, 17, 39, 22), BRONZE, { shade: 1 });
+  p.shape(poly(37, 22, 38, 15, 42, 11, 46, 12, 46, 15, 43, 14, 40, 17, 39, 22), BRONZE, {
+    shade: 1,
+  });
 }
 
 // --- Enterer -------------------------------------------------------------------------------
@@ -168,7 +200,16 @@ function phalanx(p: Pix): void {
   p.ring(union(rect(29, 18, 10, 25), ellipse(34, 18, 5, 2.5)), GOLD[1]);
   // Sonnenscheibe als Wappen
   p.shape(ellipse(34, 29, 3.5, 3.5), BRONZE, { shade: 1 });
-  for (const [dx, dy] of [[0, -6], [0, 6], [-5, 0], [5, 0], [-4, -4], [4, 4], [-4, 4], [4, -4]] as const) {
+  for (const [dx, dy] of [
+    [0, -6],
+    [0, 6],
+    [-5, 0],
+    [5, 0],
+    [-4, -4],
+    [4, 4],
+    [-4, 4],
+    [4, -4],
+  ] as const) {
     p.px(34 + dx, 29 + dy, BRONZE[1]);
   }
 }
@@ -182,7 +223,12 @@ function skarabaeus(p: Pix): void {
   p.line(12, 15, 3, 8, MEMBRANE[1]);
   p.line(20, 15, 29, 8, MEMBRANE[1]);
   // Beinchen
-  for (const [x0, y0, x1, y1] of [[11, 21, 7, 25], [12, 24, 8, 29], [21, 21, 25, 25], [20, 24, 24, 29]] as const) {
+  for (const [x0, y0, x1, y1] of [
+    [11, 21, 7, 25],
+    [12, 24, 8, 29],
+    [21, 21, 25, 25],
+    [20, 24, 24, 29],
+  ] as const) {
     p.line(x0, y0, x1, y1, BRONZE[0]);
   }
   // Panzer (zwei Deckfluegel) und Kopf
@@ -203,7 +249,13 @@ function priester(p: Pix): void {
   p.shape(ellipse(38, 9, 6, 6), GOLD, { shade: 1 });
   p.shape(ellipse(38, 9, 3, 3), FIRE, { shade: 0, edge: false });
   p.px(37, 8, "#fffbe0");
-  for (const [dx, dy] of [[0, -9], [-8, 0], [8, 0], [-6, -6], [6, -6]] as const) {
+  for (const [dx, dy] of [
+    [0, -9],
+    [-8, 0],
+    [8, 0],
+    [-6, -6],
+    [6, -6],
+  ] as const) {
     p.px(38 + dx, 9 + dy, GOLD[2]);
   }
   // Lange Robe mit Goldsaum
@@ -268,7 +320,13 @@ function streitwagen(p: Pix): void {
   p.fill(ellipse(22, 44, 7.5, 7.5), "#2a1c12");
   for (let i = 0; i < 6; i += 1) {
     const a = (i / 6) * Math.PI;
-    p.line(22 - Math.cos(a) * 7, 44 - Math.sin(a) * 7, 22 + Math.cos(a) * 7, 44 + Math.sin(a) * 7, WOOD[2]);
+    p.line(
+      22 - Math.cos(a) * 7,
+      44 - Math.sin(a) * 7,
+      22 + Math.cos(a) * 7,
+      44 + Math.sin(a) * 7,
+      WOOD[2],
+    );
   }
   p.ring(ellipse(22, 44, 10.5, 10.5), GOLD[1]);
   p.shape(ellipse(22, 44, 2.5, 2.5), GOLD, { shade: 0 });
@@ -341,7 +399,11 @@ function turm(p: Pix): void {
     p.shape(rect(x, 12, 6, 7), WOOD, { shade: 1 });
   }
   // Fenster mit Skeletten
-  for (const [x, y] of [[26, 48], [44, 48], [35, 76]] as const) {
+  for (const [x, y] of [
+    [26, 48],
+    [44, 48],
+    [35, 76],
+  ] as const) {
     p.fill(rect(x - 5, y - 6, 11, 11), "#140c08");
     skull(p, x, y, undefined, 4, 3.5);
   }
@@ -371,7 +433,10 @@ function crack(p: Pix, points: readonly number[]): void {
 
 function koloss(p: Pix): void {
   // Hinteres Bein (Schritt nach hinten)
-  p.shape(poly(40, 104, 58, 104, 52, 140, 42, 160, 26, 160, 34, 138), STATUE, { shade: 3, noise: 0.04 });
+  p.shape(poly(40, 104, 58, 104, 52, 140, 42, 160, 26, 160, 34, 138), STATUE, {
+    shade: 3,
+    noise: 0.04,
+  });
   p.shape(poly(22, 156, 46, 156, 48, 166, 18, 166), STATUE, { shade: 2 });
   // Riesiger Rundschild hinten links
   p.shape(ellipse(28, 84, 26, 30), BRONZE, { shade: 3, noise: 0.06 });
@@ -385,7 +450,10 @@ function koloss(p: Pix): void {
   }
   p.shape(rect(40, 92, 58, 7), STATUE, { shade: 1 });
   // Vorderes Bein (Schritt nach vorn)
-  p.shape(poly(72, 118, 92, 118, 100, 140, 108, 160, 90, 160, 82, 140), STATUE, { shade: 3, noise: 0.04 });
+  p.shape(poly(72, 118, 92, 118, 100, 140, 108, 160, 90, 160, 82, 140), STATUE, {
+    shade: 3,
+    noise: 0.04,
+  });
   p.shape(poly(86, 156, 114, 156, 118, 166, 84, 166), STATUE, { shade: 2 });
   crack(p, [88, 124, 92, 136, 98, 142]);
   // Rumpf: goldene Brustplatte
@@ -403,7 +471,28 @@ function koloss(p: Pix): void {
   p.shape(ellipse(70, 46, 30, 8), BRONZE, { shade: 2 });
   stripes(p, ellipse(70, 46, 30, 8), CREST_RED[1], 3);
   // Kopf mit Nemes
-  const cloth = poly(48, 54, 48, 26, 56, 14, 84, 14, 92, 26, 92, 54, 84, 54, 82, 34, 58, 34, 56, 54);
+  const cloth = poly(
+    48,
+    54,
+    48,
+    26,
+    56,
+    14,
+    84,
+    14,
+    92,
+    26,
+    92,
+    54,
+    84,
+    54,
+    82,
+    34,
+    58,
+    34,
+    56,
+    54,
+  );
   p.shape(cloth, GOLD, { shade: 2 });
   stripes(p, cloth, BRONZE[0], 4);
   p.shape(poly(58, 22, 82, 22, 82, 46, 76, 54, 64, 54, 58, 46), STATUE, { shade: 2, noise: 0.03 });

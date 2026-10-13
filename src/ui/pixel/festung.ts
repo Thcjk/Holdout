@@ -10,7 +10,7 @@
  * Module stehen auf Feldern; ihr Fusspunkt ist `tileFoot(c, r)`.
  */
 
-import { hazard } from "./buildings";
+import { hazard } from "./mech";
 import {
   CYAN,
   CYAN_DARK,
@@ -65,7 +65,13 @@ function leg(p: Pix, ax: number, ay: number, kx: number, ky: number, fx: number,
   p.shape(thick(ax, ay + 6, (ax + kx) / 2, (ay + ky) / 2 + 8, 3), STEEL, { shade: 0 });
   // Oberschenkel
   p.shape(thick(ax, ay, kx, ky, 13), HULL, { shade: 2 });
-  p.line(ax + (kx - ax) * 0.25, ay + (ky - ay) * 0.25 - 3, ax + (kx - ax) * 0.75, ay + (ky - ay) * 0.75 - 3, HULL[3]);
+  p.line(
+    ax + (kx - ax) * 0.25,
+    ay + (ky - ay) * 0.25 - 3,
+    ax + (kx - ax) * 0.75,
+    ay + (ky - ay) * 0.75 - 3,
+    HULL[3],
+  );
   // Unterschenkel, unten schmaler
   const dx = fx - kx;
   const dy = fy - ky;
@@ -74,7 +80,20 @@ function leg(p: Pix, ax: number, ay: number, kx: number, ky: number, fx: number,
   const ny = dx / len;
   const top = 6.5;
   const bottom = 3.5;
-  p.shape(poly(kx + nx * top, ky + ny * top, fx + nx * bottom, fy - 7 + ny * bottom, fx - nx * bottom, fy - 7 - ny * bottom, kx - nx * top, ky - ny * top), HULL, { shade: 2 });
+  p.shape(
+    poly(
+      kx + nx * top,
+      ky + ny * top,
+      fx + nx * bottom,
+      fy - 7 + ny * bottom,
+      fx - nx * bottom,
+      fy - 7 - ny * bottom,
+      kx - nx * top,
+      ky - ny * top,
+    ),
+    HULL,
+    { shade: 2 },
+  );
   // Warnstreifen am Schienbein
   const sx = kx + dx * 0.55;
   const sy = ky + dy * 0.55;
@@ -100,7 +119,15 @@ function legs(p: Pix, which: "back" | "mid" | "front"): void {
   leg(p, DECK_X + 4, spec.ay, spec.kx, spec.ky, spec.fx, spec.fy);
   // Rechts gespiegelt; das mittlere rechte Bein steht, dafuer ist das vordere angehoben
   const rightLift = which === "front" ? -10 : which === "mid" ? 8 : 0;
-  leg(p, FORT_W - DECK_X - 4, spec.ay, FORT_W - spec.kx, spec.ky, FORT_W - spec.fx, spec.fy + rightLift);
+  leg(
+    p,
+    FORT_W - DECK_X - 4,
+    spec.ay,
+    FORT_W - spec.kx,
+    spec.ky,
+    FORT_W - spec.fx,
+    spec.fy + rightLift,
+  );
 }
 
 function deck(p: Pix): void {
@@ -115,7 +142,11 @@ function deck(p: Pix): void {
       const tx = x0 + c * TILE_W;
       const ty = y0 + r * TILE_H;
       const grate = (c + r * 3) % 5 === 2;
-      p.shape(rect(tx + 1, ty + 1, TILE_W - 2, TILE_H - 2), PLATE, { shade: 1, edge: false, noise: 0.03 });
+      p.shape(rect(tx + 1, ty + 1, TILE_W - 2, TILE_H - 2), PLATE, {
+        shade: 1,
+        edge: false,
+        noise: 0.03,
+      });
       if (grate) {
         // Gitterrost
         for (let gx = tx + 5; gx < tx + TILE_W - 4; gx += 3) {
@@ -132,7 +163,12 @@ function deck(p: Pix): void {
     }
   }
   // Ein paar Rostflecken und Kratzer
-  for (const [x, y] of [[112, 70], [262, 132], [330, 58], [150, 150]] as const) {
+  for (const [x, y] of [
+    [112, 70],
+    [262, 132],
+    [330, 58],
+    [150, 150],
+  ] as const) {
     p.fill(ellipse(x, y, 4, 2), "#6a3a2a88");
     p.px(x + 2, y - 1, "#8a4a2a");
   }
@@ -176,7 +212,13 @@ function hull(p: Pix): void {
   p.shape(ellipse(ex, ey - 1, 9, 7), YELLOW, { shade: 1 });
   p.shape(ellipse(ex, ey - 1, 5.5, 4), HULL, { shade: 0 });
   p.shape(ellipse(ex, ey - 1, 3, 2.2), GOLD, { shade: 0, edge: false });
-  for (const [dx, dy] of [[-10, -1], [10, -1], [0, -8], [-7, -6], [7, -6]] as const) {
+  for (const [dx, dy] of [
+    [-10, -1],
+    [10, -1],
+    [0, -8],
+    [-7, -6],
+    [7, -6],
+  ] as const) {
     p.px(ex + dx, ey - 1 + dy, YELLOW[2]);
   }
   // Strickleiter haengt herunter (dort klettern die Mechs hoch)
@@ -194,7 +236,40 @@ function hull(p: Pix): void {
   p.px(x1 - 24, y1 + 2, "#fff6c0");
 }
 
-/** Die Festung ohne Module. */
+// --- Fuer das Spiel: Rumpf und Beine getrennt, damit die Beine laufen koennen ------------
+
+/** Leinwand eines einzelnen Beins (linke Seite, Blick nach links). */
+export const LEG_W = 104;
+export const LEG_H = 128;
+/** Wo in der Bein-Leinwand die Huefte sitzt. */
+export const LEG_HIP: readonly [number, number] = [90, 44];
+/** Fuss relativ zur Huefte in Ruhe (Zeichenkoordinaten). */
+export const LEG_REACH: readonly [number, number] = [-64, 76];
+
+/**
+ * Ein Bein in einer Laufstellung. `dx` schiebt den Fuss nach vorn (+) oder
+ * hinten (-), `lift` hebt ihn an. Das Knie folgt etwas mit.
+ */
+export function paintLeg(dx: number, lift: number): Pix {
+  const p = new Pix(LEG_W, LEG_H, 19);
+  const [hx, hy] = LEG_HIP;
+  const fx = hx + LEG_REACH[0] + dx;
+  const fy = hy + LEG_REACH[1] - lift;
+  leg(p, hx, hy, hx - 46 + dx * 0.4, hy - 34 - lift * 0.4, fx, fy);
+  p.outline(OUTLINE);
+  return p;
+}
+
+/** Rumpf und Deck ohne Beine (gleiche Leinwand wie `paintFortress`). */
+export function paintFortressBody(): Pix {
+  const p = new Pix(FORT_W, FORT_H, 17);
+  hull(p);
+  deck(p);
+  p.outline(OUTLINE);
+  return p;
+}
+
+/** Die Festung ohne Module, mit stehenden Beinen (fuer Bilder ausserhalb des Spiels). */
 export function paintFortress(): Pix {
   const p = new Pix(FORT_W, FORT_H, 17);
   legs(p, "back");
@@ -287,7 +362,10 @@ function harpune(p: Pix): void {
   p.shape(rect(15, 30, 9, 12), GRAY, { shade: 1 });
   // Seiltrommel
   p.shape(ellipse(10, 34, 6, 6), GRAY, { shade: 1 });
-  p.shape(ellipse(10, 34, 3.5, 3.5), [OUTLINE, "#8a6a3a", ROPE, "#f4e0b0"], { shade: 1, edge: false });
+  p.shape(ellipse(10, 34, 3.5, 3.5), [OUTLINE, "#8a6a3a", ROPE, "#f4e0b0"], {
+    shade: 1,
+    edge: false,
+  });
   // Werferrohr schraeg nach rechts oben
   p.shape(thick(8, 30, 32, 20, 7), IRON, { shade: 2 });
   p.shape(thick(26, 22.5, 30, 21, 8), GRAY, { shade: 0 });
@@ -331,7 +409,12 @@ function platte(p: Pix): void {
   for (let x = 4; x < 38; x += 6) {
     p.shape(poly(x, 22, x + 3, 13, x + 5, 22), STEEL, { shade: 0 });
   }
-  for (const [x, y] of [[5, 29], [33, 29], [5, 41], [33, 41]] as const) {
+  for (const [x, y] of [
+    [5, 29],
+    [33, 29],
+    [5, 41],
+    [33, 41],
+  ] as const) {
     p.px(x, y, STEEL[3]);
     p.px(x + 1, y + 1, STEEL[0]);
   }
@@ -340,7 +423,10 @@ function platte(p: Pix): void {
 
 function oel(p: Pix): void {
   // Feuer unter dem Kessel
-  p.shape(poly(10, 46, 14, 36, 17, 42, 20, 33, 23, 42, 26, 36, 30, 46), FIRE, { shade: 0, light: 0 });
+  p.shape(poly(10, 46, 14, 36, 17, 42, 20, 33, 23, 42, 26, 36, 30, 46), FIRE, {
+    shade: 0,
+    light: 0,
+  });
   p.shape(rect(9, 42, 4, 6), GRAY, { shade: 0 });
   p.shape(rect(27, 42, 4, 6), GRAY, { shade: 0 });
   p.shape(ellipse(20, 32, 13, 10), GRAY, { shade: 2 });
@@ -357,7 +443,10 @@ function generator(p: Pix): void {
   p.shape(rect(5, 16, 30, 5), IRON, { shade: 1 });
   for (const x of [9, 17, 25]) {
     p.shape(rect(x, 24, 6, 14), VISOR, { shade: 0 });
-    p.shape(rect(x + 1, 27, 4, 10), [OUTLINE, CYAN_DARK, CYAN, CYAN_LIGHT], { shade: 1, edge: false });
+    p.shape(rect(x + 1, 27, 4, 10), [OUTLINE, CYAN_DARK, CYAN, CYAN_LIGHT], {
+      shade: 1,
+      edge: false,
+    });
   }
   // Blitzsymbol
   p.line(20, 40, 18, 43, YELLOW[2]);
@@ -374,7 +463,11 @@ function magnet(p: Pix): void {
   hazard(p, thick(18, 13, 28, 10.5, 5), 3);
   p.line(33, 11, 33, 24, GRAY[2]);
   // Hufeisen-Magnet
-  p.shape(poly(26, 24, 40, 24, 40, 36, 36, 36, 36, 28, 30, 28, 30, 36, 26, 36), [OUTLINE, "#8e2028", "#d8383a", "#ff7a6a"], { shade: 1 });
+  p.shape(
+    poly(26, 24, 40, 24, 40, 36, 36, 36, 36, 28, 30, 28, 30, 36, 26, 36),
+    [OUTLINE, "#8e2028", "#d8383a", "#ff7a6a"],
+    { shade: 1 },
+  );
   p.shape(rect(26, 34, 4, 3), STEEL, { shade: 0 });
   p.shape(rect(36, 34, 4, 3), STEEL, { shade: 0 });
 }
@@ -406,7 +499,13 @@ function motor(p: Pix): void {
   p.fill(ellipse(70, 46, 5.5, 5.5), "#1a1e2a");
   for (let i = 0; i < 4; i += 1) {
     const a = (i / 4) * Math.PI;
-    p.line(70 - Math.cos(a) * 6, 46 - Math.sin(a) * 6, 70 + Math.cos(a) * 6, 46 + Math.sin(a) * 6, STEEL[2]);
+    p.line(
+      70 - Math.cos(a) * 6,
+      46 - Math.sin(a) * 6,
+      70 + Math.cos(a) * 6,
+      46 + Math.sin(a) * 6,
+      STEEL[2],
+    );
   }
   p.shape(ellipse(70, 46, 2, 2), YELLOW, { shade: 0 });
   p.shape(rect(6, 54, 66, 6), GRAY, { shade: 1 });
@@ -429,7 +528,13 @@ function werkstatt(p: Pix): void {
   p.shape(thick(70, 17, 52, 22, 5), IRON, { shade: 1 });
   p.shape(poly(52, 19, 46, 25, 49, 27, 53, 24), STEEL, { shade: 0 });
   // Funken
-  for (const [x, y] of [[44, 28], [42, 25], [45, 31], [40, 29], [47, 32]] as const) {
+  for (const [x, y] of [
+    [44, 28],
+    [42, 25],
+    [45, 31],
+    [40, 29],
+    [47, 32],
+  ] as const) {
     p.px(x, y, y % 2 ? YELLOW[3] : "#ffffff");
   }
 }
@@ -446,11 +551,26 @@ function herz(p: Pix): void {
     const a = (i / 12) * Math.PI * 2;
     const r0 = 15;
     const r1 = i % 2 === 0 ? 24 : 20;
-    p.shape(thick(40 + Math.cos(a) * r0, 46 + Math.sin(a) * r0, 40 + Math.cos(a) * r1, 46 + Math.sin(a) * r1, 3), GOLD, { shade: 0, edge: false });
+    p.shape(
+      thick(
+        40 + Math.cos(a) * r0,
+        46 + Math.sin(a) * r0,
+        40 + Math.cos(a) * r1,
+        46 + Math.sin(a) * r1,
+        3,
+      ),
+      GOLD,
+      { shade: 0, edge: false },
+    );
   }
   p.shape(ellipse(40, 46, 15, 15), GOLD, { shade: 3, edge: false });
   p.shape(ellipse(40, 46, 9, 9), FIRE, { shade: 2, edge: false });
-  p.shape(ellipse(38, 44, 4, 4), [FIRE[2], FIRE[3], "#fff6c0", "#ffffff"], { shade: 0, light: 0, edge: false, flat: true });
+  p.shape(ellipse(38, 44, 4, 4), [FIRE[2], FIRE[3], "#fff6c0", "#ffffff"], {
+    shade: 0,
+    light: 0,
+    edge: false,
+    flat: true,
+  });
   // Vordere Kaefigstaebe und Ringe
   for (const x of [10, 30, 50, 70]) {
     p.shape(rect(x - 2, 20, 4, 58), TEAL, { shade: 1 });

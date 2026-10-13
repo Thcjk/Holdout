@@ -1,8 +1,8 @@
 {
   "name": "holdout",
-  "version": "3.9.2",
+  "version": "4.0.0",
   "private": true,
-  "description": "Holdout – Brotato-artiger Wellen-Shooter fürs Handy mit Online-Koop (Phaser 3 + TypeScript + Vite)",
+  "description": "Holdout – Die Wanderfestung: Mechs verteidigen eine laufende Festung (Phaser 3 + TypeScript + Vite)",
   "type": "module",
   "scripts": {
     "dev": "vite",

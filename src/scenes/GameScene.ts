@@ -1,1047 +1,778 @@
 /**
- * Die Arena: zeichnet den Zustand einer Spielsitzung und gibt Bewegung zurueck.
+ * Das Spiel: Die Festung marschiert, die goldene Armee holt auf.
  *
- * Die Szene weiss nicht, ob solo, als Host oder als Client gespielt wird - sie
- * fragt die Sitzung (siehe `net/GameSession.ts`). Gerechnet wird hier nichts:
- * Positionen, Leben und Schaden kommen aus dem Zustand, Toene und Effekte aus
- * den Ereignissen.
- *
- * Zwischen den Wellen liegt der Shop als undurchsichtige Ebene darueber.
+ * Die Szene rechnet nichts selbst. Jedes Bild gibt sie Bewegung und Faehigkeit
+ * an die Sitzung, bekommt Zustand und Ereignisse zurueck und zeichnet:
+ *   - Boden und Festung (`GroundView`, `FortressView`),
+ *   - Mechs, Gegner, Geschosse, Schrott (je ein Bild pro Ding im Zustand),
+ *   - Effekte zu den Ereignissen (Staub, Funken, Knochen, Texte),
+ *   - Anzeigen, Faehigkeitsknopf, Stick, Rast-Tafel, Pause.
  */
 
 import Phaser from "phaser";
-import { enemyFigureScale, figureScale } from "../ui/comicFigures";
-import { applyRun } from "../meta/goals";
-import { loadProfile, saveProfile } from "../meta/profile";
 import { audio } from "../audio/AudioEngine";
-import type { SoundName } from "../audio/AudioEngine";
-import { arenaKey, characterKey, enemyKey, weaponIconKey } from "../config/assets";
-import { COLORS, PALETTE, SAFE, VIEWPORT } from "../config/constants";
-import { UI } from "../config/ui";
-import { ARENA } from "../game/constants";
-import { ENEMIES } from "../game/data/enemies";
-import type { Enemy, GameEvent, PlayerState, Pickup, Projectile, SpawnMarker } from "../game/types";
+import { SAFE, VIEWPORT } from "../config/constants";
+import { playerName } from "../app";
+import { DECK_H, ELEVATION, LADDER, WINCH_LANDING } from "../game/constants";
+import { BLIND_SPOT, insideRect } from "../game/fortress";
+import type {
+  EnemyState,
+  GameEvent,
+  GameState,
+  PlayerState,
+  ScrapState,
+  ShotState,
+} from "../game/types";
 import type { GameSession } from "../net/GameSession";
-import { setReloadSafe } from "../platform/update";
+import { SoloSession } from "../net/SoloSession";
+import { FORCED_SEED, SHORT_ROUTE, SHOW_VALUES } from "../platform/debugFlags";
+import { PROBE_ROUTE } from "../game/data/route";
+import { AbilityButton } from "../ui/AbilityButton";
 import { Button } from "../ui/Button";
+import { BOX, ComicBox } from "../ui/ComicBox";
 import { FloatingStick } from "../ui/FloatingStick";
 import { Hud } from "../ui/Hud";
-import { ARENA_WALL } from "../ui/pixel/world";
-import { menuText, woodPanel } from "../ui/menuStyle";
-import { ShopPanel } from "../ui/ShopPanel";
-import { AbilityButton } from "../ui/AbilityButton";
-import { abilityCooldown } from "../game/data/abilities";
-import { WEAPONS, weaponReach } from "../game/data/weapons";
-import { FONT_HAND, FONT_TITLE } from "../ui/paper";
-import type { PlayMode } from "../app";
+import { RestPanel } from "../ui/RestPanel";
+import { TEX, armyKey, crewKey, scrapKey } from "../ui/pixel/textures";
+import { FONT_BODY, FONT_TITLE, T } from "../ui/theme";
+import { FortressView } from "../ui/world/FortressView";
+import { GroundView } from "../ui/world/GroundView";
+import { DEPTH, deckDepth, depthFor, followFort } from "../ui/world/view";
 
-const ARENA_TOP = 64;
-const OVERLAY_DEPTH = 9800;
+const SELF = "ich";
 
-interface Destroyable {
-  destroy(): void;
-}
-
-interface EnemyView extends Destroyable {
-  sprite: Phaser.GameObjects.Sprite;
-  base: number;
-  born: number;
-  x: number;
-  y: number;
-}
-
-/** Pixel-Geschosse werden so viel groesser gezeigt, als sie gemalt sind. */
-const SHOT_SCALE = 2;
-
-/** So lange dauert ein Waffenschwung im Bild (Millisekunden). */
-const SWING_MS = 190;
-
-interface PlayerView extends Destroyable {
-  sprite: Phaser.GameObjects.Sprite;
+interface Body {
+  sprite: Phaser.GameObjects.Image;
   shadow: Phaser.GameObjects.Image;
-  name: Phaser.GameObjects.Text;
-  weapons: Phaser.GameObjects.Image[];
-  weaponSignature: string;
-  /** Zeitpunkt des letzten Schlags je Waffe (Nahkampf) - dann schwingt das Bild. */
-  swings: number[];
-  x: number;
-  y: number;
-  lastX: number;
-  lastY: number;
+  /** Umriss, der durch die Festung durchscheint, wenn sie den Koerper verdeckt. */
+  ghost: Phaser.GameObjects.Image;
+  flash: number;
 }
 
-interface ShotView extends Destroyable {
-  image: Phaser.GameObjects.Image;
-  x: number;
-  y: number;
-}
+/** Bodenbereich, den Rumpf und Deck von vorn verdecken (relativ zur Festung). */
+const HIDDEN = { x0: -6, y0: -ELEVATION - 4, x1: 286, y1: DECK_H - 2 };
 
-interface GameData {
-  session: GameSession;
-  mode: PlayMode;
+export interface GameResult {
+  won: boolean;
+  marches: number;
+  count: number;
+  kills: number;
+  scrap: number;
+  seconds: number;
+  hull: number;
 }
 
 export class GameScene extends Phaser.Scene {
   private session!: GameSession;
-  private mode: PlayMode = "solo";
-  private originX = 0;
-  private originY = ARENA_TOP;
-
-  private stick!: FloatingStick;
+  private ground!: GroundView;
+  private fortress!: FortressView;
   private hud!: Hud;
-  private ability: AbilityButton | null = null;
-  private shop!: ShopPanel;
-  private bars!: Phaser.GameObjects.Graphics;
-  private waitText!: Phaser.GameObjects.Text;
-  private banner!: Phaser.GameObjects.Text;
+  private ability!: AbilityButton;
+  private stick!: FloatingStick;
+  private stickRegion!: Phaser.Geom.Rectangle;
+  private rest!: RestPanel;
   private pauseButton!: Button;
-  private pauseObjects: { setVisible(visible: boolean): unknown }[] = [];
-  private lostObjects: { setVisible(visible: boolean): unknown }[] = [];
-
-  private enemies = new Map<number, EnemyView>();
-  private players = new Map<string, PlayerView>();
-  private shots = new Map<number, ShotView>();
-  private pickups = new Map<number, Phaser.GameObjects.Image>();
-  private markers: Phaser.GameObjects.Image[] = [];
-  private selfRing!: Phaser.GameObjects.Ellipse;
-
+  /** Raeumt die Pause-Tafel wieder weg. */
+  private pauseCleanup: (() => void)[] = [];
   private paused = false;
-  private pauseOpen = false;
+  private players = new Map<string, Body>();
+  private enemies = new Map<number, Body>();
+  private shots = new Map<number, Phaser.GameObjects.Image>();
+  private scrap = new Map<number, Phaser.GameObjects.Image>();
+  private ladderArrow!: Phaser.GameObjects.Image;
+  private rope!: Phaser.GameObjects.Graphics;
+  private hint!: Phaser.GameObjects.Text;
+  private banner!: Phaser.GameObjects.Text;
+  private shown = new Set<string>();
   private ending = false;
-  /** Der Lauf ist schon in den Spielstand eingetragen (nur einmal pro Lauf). */
-  private recorded = false;
-  private lastPhase: string | null = null;
-  private lastSound = new Map<string, number>();
-  private floaters = 0;
-  private lastWord = 0;
-  private onVisibility = (): void => {};
+  private lastShotSound = 0;
+  private values: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super("Game");
   }
 
-  init(data: GameData): void {
-    this.session = data.session;
-    this.mode = data.mode;
-    this.enemies = new Map();
-    this.players = new Map();
-    this.shots = new Map();
-    this.pickups = new Map();
-    this.markers = [];
-    this.paused = false;
-    this.pauseOpen = false;
-    this.ending = false;
-    this.recorded = false;
-    this.lastPhase = null;
-    this.lastSound = new Map();
-    this.floaters = 0;
-    this.lastWord = 0;
-    this.pauseObjects = [];
-    this.lostObjects = [];
-  }
-
   create(): void {
-    setReloadSafe(false);
-    this.cameras.main.setBackgroundColor(COLORS.background);
-    this.originX = Math.round((VIEWPORT.width - ARENA.width) / 2);
-    this.originY = ARENA_TOP;
+    this.players = new Map();
+    this.enemies = new Map();
+    this.shots = new Map();
+    this.scrap = new Map();
+    this.pauseCleanup = [];
+    this.shown = new Set();
+    this.paused = false;
+    this.ending = false;
 
-    this.buildArena();
-    this.bars = this.add.graphics().setDepth(8000);
-    this.selfRing = this.add.ellipse(0, 0, 34, 16).setStrokeStyle(2, 0xdba636, 0.9).setDepth(2);
-    this.hud = new Hud(this);
-    const me = this.session.view.state.players.find((player) => player.id === this.session.selfId);
-    this.ability = me ? new AbilityButton(this, me.character) : null;
-    this.shop = new ShopPanel(this, (command) => this.session.send(command));
+    const seed = FORCED_SEED ?? Math.floor(Math.random() * 1e9);
+    const route = SHORT_ROUTE
+      ? PROBE_ROUTE.map((m) => ({ ...m, length: m.length / 10 }))
+      : PROBE_ROUTE;
+    this.session = new SoloSession({ id: SELF, name: playerName(), crew: "schrauber" }, seed, {
+      route,
+    });
 
-    const stickRegion = new Phaser.Geom.Rectangle(0, 56, VIEWPORT.width * 0.62, VIEWPORT.height - 56);
-    this.stick = new FloatingStick(this, stickRegion);
+    this.ground = new GroundView(this);
+    this.fortress = new FortressView(this);
+    this.rope = this.add.graphics().setDepth(DEPTH.effects);
+    this.ladderArrow = this.add.image(0, 0, TEX.arrow).setDepth(DEPTH.effects).setVisible(false);
 
-    this.banner = this.add
-      .text(VIEWPORT.width / 2, 200, "", {
-        fontFamily: FONT_TITLE,
-        fontSize: "60px",
-        color: "#1d1c19",
-        stroke: "#f1e5c9",
-        strokeThickness: 8,
-      })
-      .setOrigin(0.5)
-      .setDepth(9300)
-      .setAlpha(0);
-
-    this.waitText = this.add
-      .text(VIEWPORT.width / 2, VIEWPORT.height / 2, "Warte auf den Host …", {
-        fontFamily: FONT_HAND,
-        fontSize: "28px",
-        color: UI.text.body,
-        backgroundColor: "#f1e5c9ee",
-        padding: { x: 18, y: 10 },
-      })
-      .setOrigin(0.5)
-      .setDepth(9900)
-      .setVisible(false);
-
-    this.pauseButton = new Button(this, VIEWPORT.width - SAFE.right - 38, 28, "II", () => this.openPause(), {
-      width: 52,
+    this.hud = new Hud(this, "schrauber");
+    this.ability = new AbilityButton(this, "schrauber");
+    this.rest = new RestPanel(
+      this,
+      () => {
+        this.session.send({ kind: "repair" });
+      },
+      () => {
+        this.session.send({ kind: "depart" });
+      },
+    );
+    this.stickRegion = new Phaser.Geom.Rectangle(
+      0,
+      84,
+      VIEWPORT.width * 0.62,
+      VIEWPORT.height - 84,
+    );
+    this.stick = new FloatingStick(this, this.stickRegion);
+    this.pauseButton = new Button(this, 0, 0, "II", () => this.setPaused(true), {
+      width: 44,
       height: 44,
-      fontSize: 20,
+      fontSize: 18,
       variant: "secondary",
     });
-    this.pauseButton.setDepth(9500);
+    this.pauseButton.setScrollFactor(0);
+    this.pauseButton.setDepth(DEPTH.hud + 5);
 
-    this.buildPauseOverlay();
-    this.buildLostOverlay();
+    this.hint = this.add
+      .text(0, 0, "", {
+        fontFamily: FONT_BODY,
+        fontSize: "16px",
+        color: T.light,
+        fontStyle: "bold",
+        align: "center",
+        wordWrap: { width: 520 },
+      })
+      .setOrigin(0.5, 1)
+      .setStroke(T.outline, 4)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 2)
+      .setAlpha(0);
+    this.banner = this.add
+      .text(0, 0, "", { fontFamily: FONT_TITLE, fontSize: "54px", color: T.gold, align: "center" })
+      .setOrigin(0.5)
+      .setStroke(T.outline, 8)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 3)
+      .setAlpha(0);
 
-    this.onVisibility = (): void => {
-      if (document.hidden && this.session.canPause && this.session.view.state.phase === "wave") {
-        this.openPause();
-      }
-    };
-    document.addEventListener("visibilitychange", this.onVisibility);
+    if (SHOW_VALUES) {
+      // Fuer automatische Tests im Browser: Zustand von aussen lesbar.
+      (window as unknown as { __holdout?: unknown }).__holdout = {
+        state: () => this.session.state,
+      };
+    }
+    this.values = SHOW_VALUES
+      ? this.add
+          .text(SAFE.left + 8, VIEWPORT.height - 18, "", {
+            fontFamily: FONT_BODY,
+            fontSize: "12px",
+            color: T.light,
+          })
+          .setScrollFactor(0)
+          .setDepth(DEPTH.hud + 9)
+          .setStroke(T.outline, 3)
+      : null;
+
+    this.layout();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      document.removeEventListener("visibilitychange", this.onVisibility);
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
       this.stick.destroy();
       this.session.destroy();
     });
-  }
 
-  // --- Aufbau -------------------------------------------------------------
-
-  private buildArena(): void {
-    this.add.image(VIEWPORT.width / 2, VIEWPORT.height / 2, "bg-game").setDepth(-100);
-    this.add
-      .image(this.originX - ARENA_WALL, this.originY - ARENA_WALL, arenaKey)
-      .setOrigin(0)
-      .setDisplaySize(ARENA.width + ARENA_WALL * 2, ARENA.height + ARENA_WALL * 2)
-      .setDepth(0);
-  }
-
-  private overlayBox(
-    title: string,
-    hint: string,
-    buttons: { label: string; onClick: () => void; primary: boolean }[],
-  ): { setVisible(visible: boolean): unknown }[] {
-    const cx = VIEWPORT.width / 2;
-    const objects: { setVisible(visible: boolean): unknown }[] = [];
-    const dim = this.add.rectangle(0, 0, 2000, 1200, 0x1d1c19, 0.45).setOrigin(0).setDepth(OVERLAY_DEPTH).setInteractive();
-    objects.push(dim);
-    objects.push(woodPanel(this, cx, 270, 440, 300).setDepth(OVERLAY_DEPTH + 1));
-    objects.push(menuText(this, cx, 156, title, 36, UI.text.title, true).setDepth(OVERLAY_DEPTH + 2));
-    const hintText = menuText(this, cx, 205, hint, 17, UI.text.muted).setDepth(OVERLAY_DEPTH + 2);
-    hintText.setWordWrapWidth(380);
-    objects.push(hintText);
-    buttons.forEach((entry, index) => {
-      const button = new Button(this, cx, 262 + index * 70, entry.label, entry.onClick, {
-        width: 320,
-        height: 56,
-        fontSize: 22,
-        variant: entry.primary ? "primary" : "secondary",
-      });
-      button.setDepth(OVERLAY_DEPTH + 3);
-      objects.push(button);
-    });
-    for (const object of objects) {
-      object.setVisible(false);
-    }
-    return objects;
-  }
-
-  private buildPauseOverlay(): void {
-    const solo = this.session.canPause;
-    this.pauseObjects = this.overlayBox(
-      solo ? "Pause" : "Menü",
-      solo ? "Die Runde wartet auf dich." : "Achtung: Die Runde läuft weiter – der Host rechnet für alle.",
-      [
-        { label: solo ? "Weiter" : "Weiter spielen", onClick: () => this.closePause(), primary: true },
-        { label: solo ? "Runde aufgeben" : "Runde verlassen", onClick: () => this.leave(), primary: false },
-      ],
-    );
-  }
-
-  private buildLostOverlay(): void {
-    this.lostObjects = this.overlayBox("Verbindung weg", "", [
-      { label: "Zurück zum Menü", onClick: () => this.leave(), primary: true },
-    ]);
-  }
-
-  private openPause(): void {
-    if (this.paused || this.ending || this.session.view.state.phase !== "wave") {
-      return;
-    }
-    this.paused = this.session.canPause;
-    this.stick.release();
-    this.stick.enabled = false;
-    for (const object of this.pauseObjects) {
-      object.setVisible(true);
-    }
-    this.pauseOpen = true;
-    if (this.paused) {
-      audio.setMusic(null);
-    }
-  }
-
-  private closePause(): void {
-    this.paused = false;
-    this.pauseOpen = false;
-    this.stick.enabled = this.session.view.state.phase === "wave";
-    for (const object of this.pauseObjects) {
-      object.setVisible(false);
-    }
     audio.setMusic("wave");
+    this.time.delayedCall(1500, () =>
+      this.showHint(
+        "start",
+        "Über die Deckkante laufen: abspringen. Unter dem Bug hängt die Strickleiter zum Hochklettern.",
+      ),
+    );
   }
 
-  /**
-   * Runde aufgeben oder verlassen: zaehlt wie verloren. So gehen die bis dahin
-   * verdienten Kristalle nicht verloren, und man sieht die Auswertung.
-   */
-  private leave(): void {
-    // Wer schon in der ersten Welle aufgibt, hat noch nichts verdient (und kann so keine Laeufe sammeln).
-    if (this.recorded || this.session.view.state.wave <= 1) {
-      this.scene.start("Title");
-      return;
-    }
-    this.ending = true;
-    this.finish(false);
+  private layout(): void {
+    this.hud.layout();
+    this.ability.layout();
+    this.rest.layout();
+    const spot = this.hud.pauseSpot();
+    this.pauseButton.setPosition(spot.x, spot.y);
+    this.stickRegion.setSize(VIEWPORT.width * 0.62, VIEWPORT.height - 84);
+    this.hint.setPosition(VIEWPORT.width / 2, VIEWPORT.height - SAFE.bottom - 28);
+    this.banner.setPosition(VIEWPORT.width / 2, VIEWPORT.height * 0.42);
   }
 
-  // --- Takt ---------------------------------------------------------------
-
-  update(time: number, delta: number): void {
-    const dt = Math.min(delta, 100);
-    const session = this.session;
-
-    if (session.connectionLost && !this.ending) {
-      this.showConnectionLost(session.connectionLost);
-      return;
+  update(_time: number, delta: number): void {
+    if (!this.paused && !this.ending) {
+      const move = this.stick.value;
+      this.session.update(delta, { mx: move.mx, my: move.my, ability: this.ability.presses });
     }
+    const state = this.session.state;
+    const self = state.players.find((p) => p.id === this.session.selfId);
+    const frameDelta = this.paused ? 0 : delta;
 
+    followFort(this.cameras.main, state.fort.x);
+    this.ground.update(this.cameras.main);
+    this.fortress.update(state.fort, frameDelta);
+    this.syncPlayers(state, frameDelta);
+    this.syncEnemies(state, frameDelta);
+    this.syncShots(state);
+    this.syncScrap(state);
+    this.drawHelpers(state, self);
     if (!this.paused) {
-      session.update(dt, { ...this.stick.value, ability: this.ability?.presses ?? 0 });
-    }
-    const view = session.view;
-    const state = view.state;
-    this.waitText.setVisible(!session.isReady);
-
-    if (!this.paused) {
-      for (const event of view.events) {
-        this.handleEvent(event, time);
+      for (const event of this.session.events) {
+        this.onEvent(event, state);
       }
     }
+    this.watchForHints(state, self);
+    this.hud.update(state, self, frameDelta);
+    this.ability.update(self, frameDelta);
+    this.rest.update(state);
+    this.pauseButton.setVisible(!this.ending);
+    this.values?.setText(
+      `${Math.round(this.game.loop.actualFps)} fps · ${state.enemies.length} Gegner · ${state.shots.length} Schüsse`,
+    );
 
-    this.handlePhase(state.phase);
-
-    const self = state.players.find((player) => player.id === session.selfId);
-    this.hud.update(state, self, session.selfId);
-    if (self && this.ability) {
-      this.ability.update(self.abilityCd, abilityCooldown(self.character, self.stats.ability), self.alive);
-    }
-    this.shop.update(state, self);
-
-    if (state.phase !== "shop") {
-      this.draw(dt, time, self);
+    if ((state.phase === "won" || state.phase === "lost") && !this.ending) {
+      this.finish(state);
     }
   }
 
-  private handlePhase(phase: string): void {
-    if (phase === this.lastPhase) {
-      return;
+  // --- Dinge im Zustand zeichnen -------------------------------------------------------------
+
+  private body(texture: string, originY: number, ghostColor: number): Body {
+    return {
+      sprite: this.add.image(0, 0, texture).setOrigin(0.5, originY),
+      shadow: this.add.image(0, 0, TEX.shadow).setDepth(DEPTH.shadow),
+      ghost: this.add
+        .image(0, 0, texture)
+        .setOrigin(0.5, originY)
+        .setTintFill(ghostColor)
+        .setAlpha(0.4)
+        .setDepth(DEPTH.effects - 1)
+        .setVisible(false),
+      flash: 0,
+    };
+  }
+
+  /** Verdeckt die Festung diesen Punkt am Boden? Dann scheint ein Umriss durch. */
+  private updateGhost(b: Body, x: number, y: number, z: number, state: GameState): void {
+    const hidden = z < ELEVATION * 0.5 && insideRect(HIDDEN, x - state.fort.x, y - state.fort.y);
+    b.ghost.setVisible(hidden && b.sprite.visible);
+    if (hidden) {
+      b.ghost
+        .setPosition(b.sprite.x, b.sprite.y)
+        .setFlipX(b.sprite.flipX)
+        .setRotation(b.sprite.rotation);
     }
-    this.lastPhase = phase;
-    if (phase === "shop") {
-      this.stick.release();
-      this.stick.enabled = false;
-      this.shop.setVisible(true);
-      this.hud.setVisible(false);
-      this.ability?.setVisible(false);
-      this.pauseButton.setVisible(false);
-      audio.setMusic("menu", 0.35);
-    } else if (phase === "wave") {
-      this.shop.setVisible(false);
-      this.hud.setVisible(true);
-      this.ability?.setVisible(true);
-      this.pauseButton.setVisible(true);
-      this.stick.enabled = !this.pauseOpen;
-      audio.setMusic("wave");
-    } else if (!this.ending) {
-      this.ending = true;
-      this.stick.release();
-      this.stick.enabled = false;
-      audio.setMusic("menu", 0.5);
-      if (phase === "lost") {
-        this.playSound("gameOver", 0);
+  }
+
+  private destroyBody(b: Body): void {
+    b.sprite.destroy();
+    b.shadow.destroy();
+    b.ghost.destroy();
+  }
+
+  private syncPlayers(state: GameState, delta: number): void {
+    const seen = new Set<string>();
+    for (const p of state.players) {
+      seen.add(p.id);
+      let b = this.players.get(p.id);
+      if (!b) {
+        b = this.body(crewKey(p.crew), 62 / 64, 0x5ef2e6);
+        this.players.set(p.id, b);
       }
-      this.time.delayedCall(1600, () => this.finish(phase === "won"));
-    }
-  }
-
-  private finish(won: boolean): void {
-    if (this.recorded) {
-      return;
-    }
-    this.recorded = true;
-    const state = this.session.view.state;
-    const self = state.players.find((player) => player.id === this.session.selfId);
-    // Den Lauf in den Spielstand eintragen: Kristalle, Bestwerte, Erfolge, Freischaltungen.
-    const profile = loadProfile();
-    const report = self
-      ? applyRun(profile, {
-          character: self.character,
-          wave: state.wave,
-          won,
-          kills: self.kills,
-          gold: self.earned,
-          level: self.level,
-          maxTier: self.weapons.reduce((best, weapon) => Math.max(best, weapon.tier), 0),
-          weaponCount: self.weapons.length,
-          coop: this.session.isMultiplayer,
-        })
-      : null;
-    saveProfile(profile);
-    this.scene.start("Result", {
-      won,
-      wave: state.wave,
-      kills: self?.kills ?? 0,
-      level: self?.level ?? 0,
-      items: self ? self.items.reduce((sum, count) => sum + count, 0) : 0,
-      name: self?.name ?? "",
-      mode: this.mode,
-      report,
-    });
-  }
-
-  private showConnectionLost(message: string): void {
-    if (this.ending) {
-      return;
-    }
-    this.ending = true;
-    this.stick.enabled = false;
-    this.stick.release();
-    for (const object of this.lostObjects) {
-      object.setVisible(true);
-    }
-    this.add
-      .text(VIEWPORT.width / 2, 205, message, {
-        fontFamily: UI.font,
-        fontSize: "17px",
-        color: UI.text.muted,
-        align: "center",
-        wordWrap: { width: 380 },
-      })
-      .setOrigin(0.5)
-      .setDepth(OVERLAY_DEPTH + 3);
-  }
-
-  // --- Zeichnen -----------------------------------------------------------
-
-  private draw(dt: number, time: number, self: PlayerState | undefined): void {
-    const state = this.session.view.state;
-    // Im Koop kommen Zustaende nur 15-mal pro Sekunde: dazwischen gleitet alles
-    // sanft zum neuen Ziel, statt zu springen. Solo wird direkt gesetzt.
-    const k = this.session.isMultiplayer ? 1 - Math.exp(-dt * 0.022) : 1;
-
-    this.bars.clear();
-
-    this.sync(
-      this.enemies,
-      state.enemies,
-      (enemy) => enemy.id,
-      (enemy) => this.makeEnemy(enemy),
-      (enemyView, enemy) => this.applyEnemy(enemyView, enemy, k),
-    );
-    this.sync(
-      this.players,
-      state.players,
-      (player) => player.id,
-      (player) => this.makePlayer(player),
-      (playerView, player) => this.applyPlayer(playerView, player, k, time),
-    );
-    this.sync(
-      this.shots,
-      state.shots,
-      (shot) => shot.id,
-      (shot) => this.makeShot(shot),
-      (shotView, shot) => this.applyShot(shotView, shot, Math.min(1, k * 1.6)),
-    );
-    this.sync(
-      this.pickups,
-      state.pickups,
-      (pickup) => pickup.id,
-      (pickup) => this.makePickup(pickup),
-      (image, pickup) => image.setPosition(this.originX + pickup.x, this.originY + pickup.y + Math.sin(time / 180 + pickup.id) * 2),
-    );
-    this.syncMarkers(state.markers, time);
-
-    const selfView = self ? this.players.get(self.id) : undefined;
-    if (selfView) {
-      this.selfRing.setVisible(true).setPosition(selfView.x, selfView.y + 11).setDepth(2);
-    } else {
-      this.selfRing.setVisible(false);
-    }
-  }
-
-  private sync<K, S, V extends Destroyable>(
-    map: Map<K, V>,
-    items: readonly S[],
-    key: (item: S) => K,
-    make: (item: S) => V,
-    apply: (view: V, item: S) => void,
-  ): void {
-    const seen = new Set<K>();
-    for (const item of items) {
-      const id = key(item);
-      seen.add(id);
-      let view = map.get(id);
-      if (!view) {
-        view = make(item);
-        map.set(id, view);
+      b.sprite.setVisible(p.alive);
+      b.shadow.setVisible(p.alive);
+      if (!p.alive) {
+        b.ghost.setVisible(false);
+        continue;
       }
-      apply(view, item);
+      const bob = p.moving && !p.transition ? Math.round(Math.abs(Math.sin(state.time * 12))) : 0;
+      b.sprite.setPosition(p.x, p.y - p.z - bob);
+      b.sprite.setFlipX(p.facing < 0);
+      b.sprite.setDepth(depthFor(p.y, p.z, state.fort.y));
+      // Schatten: auf dem Deck, wenn der Mech darueber ist, sonst am Boden.
+      const overDeck =
+        p.z > ELEVATION * 0.5 &&
+        insideRect({ x0: 0, y0: 0, x1: 280, y1: DECK_H }, p.x - state.fort.x, p.y - state.fort.y);
+      if (overDeck) {
+        b.shadow
+          .setPosition(p.x, p.y - ELEVATION)
+          .setDepth(deckDepth(p.y - state.fort.y) - 0.00005);
+      } else {
+        b.shadow.setPosition(p.x, p.y).setDepth(DEPTH.shadow);
+      }
+      b.shadow.setScale(1 - Math.min(0.4, Math.abs(p.z - (overDeck ? ELEVATION : 0)) / 120));
+      this.applyFlash(b, delta);
+      this.updateGhost(b, p.x, p.y, p.z, state);
     }
-    for (const [id, view] of map) {
+    for (const [id, b] of this.players) {
       if (!seen.has(id)) {
-        view.destroy();
-        map.delete(id);
+        this.destroyBody(b);
+        this.players.delete(id);
       }
     }
   }
 
-  private makeEnemy(enemy: Enemy): EnemyView {
-    const def = ENEMIES[enemy.type];
-    // Die Bilder sind etwas groesser als der Trefferkreis - so wirken die Figuren kraeftiger.
-    const base = enemyFigureScale(def.radius);
-    const sprite = this.add.sprite(0, 0, enemyKey(enemy.type)).setScale(0);
-    const view: EnemyView = {
-      sprite,
-      base,
-      born: this.time.now,
-      x: this.originX + enemy.x,
-      y: this.originY + enemy.y,
-      destroy: () => sprite.destroy(),
-    };
-    sprite.setPosition(view.x, view.y);
-    return view;
-  }
-
-  private applyEnemy(view: EnemyView, enemy: Enemy, k: number): void {
-    const targetX = this.originX + enemy.x;
-    const targetY = this.originY + enemy.y;
-    view.x += (targetX - view.x) * k;
-    view.y += (targetY - view.y) * k;
-    const now = this.time.now;
-    // Aufploppen beim Erscheinen, danach wackelt der Gegner im Takt seiner Schritte.
-    const pop = Phaser.Math.Easing.Back.Out(Math.min(1, (now - view.born) / 220));
-    const phase = now / 105 + enemy.id * 1.7;
-    const windup = enemy.mode === "windup";
-    const squash = Math.sin(phase) * (windup ? 0.14 : 0.07);
-    view.sprite
-      .setPosition(view.x, view.y - Math.abs(Math.sin(phase)) * 2)
-      .setDepth(100 + view.y)
-      .setScale(view.base * pop * (1 - squash), view.base * pop * (1 + squash))
-      .setAngle(Math.sin(phase) * (windup ? 14 : 6));
-    if (Math.abs(enemy.dirX) > 0.05) {
-      view.sprite.setFlipX(enemy.dirX < 0);
+  private syncEnemies(state: GameState, delta: number): void {
+    const seen = new Set<number>();
+    for (const e of state.enemies) {
+      seen.add(e.id);
+      let b = this.enemies.get(e.id);
+      if (!b) {
+        b = this.body(armyKey(e.type), 46 / 48, 0xff5a3a);
+        this.enemies.set(e.id, b);
+      }
+      this.placeEnemy(b, e, state.time);
+      this.applyFlash(b, delta);
+      this.updateGhost(b, e.x, e.y, 0, state);
     }
-    if (enemy.flash > 0) {
-      view.sprite.setTintFill(0xffffff);
-    } else if (windup) {
-      // Holt aus (Stuermer) oder zischt gleich (Zuender): rot blinken.
-      view.sprite.setTint(Math.floor(now / 80) % 2 === 0 ? 0xff7a5a : 0xffd0c0);
-    } else if (enemy.burn > 0) {
-      view.sprite.setTint(Math.floor(now / 120) % 2 === 0 ? 0xffa060 : 0xffc890);
-    } else if (enemy.slow > 0) {
-      view.sprite.setTint(0x9fd0e8);
-    } else if (enemy.stun > 0) {
-      view.sprite.setTint(0xc8c8c8);
-    } else {
-      view.sprite.clearTint();
-    }
-
-    if (enemy.hp < enemy.maxHp) {
-      const r = ENEMIES[enemy.type].radius;
-      const width = Math.max(20, r * 2);
-      const fraction = Phaser.Math.Clamp(enemy.hp / enemy.maxHp, 0, 1);
-      const bx = view.x - width / 2;
-      const by = view.y - r - 12;
-      this.bars.fillStyle(0x14101c, 1).fillRoundedRect(bx - 2, by - 2, width + 4, 8, 3);
-      this.bars.fillStyle(COLORS.hpEnemy, 1).fillRoundedRect(bx, by, width * fraction, 4, 2);
+    for (const [id, b] of this.enemies) {
+      if (!seen.has(id)) {
+        this.destroyBody(b);
+        this.enemies.delete(id);
+      }
     }
   }
 
-  private makePlayer(player: PlayerState): PlayerView {
-    const sprite = this.add.sprite(0, 0, characterKey(player.character)).setScale(figureScale(0.8));
-    const shadow = this.add.image(0, 0, "shadow").setDisplaySize(38, 15).setAlpha(0.9);
-    const name = this.add
-      .text(0, 0, this.session.isMultiplayer ? player.name : "", {
-        fontFamily: FONT_HAND,
-        fontSize: "14px",
-        color: "#1d1c19",
-        stroke: "#f1e5c9",
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(8100);
-    const view: PlayerView = {
-      sprite,
-      shadow,
-      name,
-      weapons: [],
-      weaponSignature: "",
-      swings: [],
-      x: this.originX + player.x,
-      y: this.originY + player.y,
-      lastX: this.originX + player.x,
-      lastY: this.originY + player.y,
-      destroy: () => {
-        sprite.destroy();
-        shadow.destroy();
-        name.destroy();
-        for (const image of view.weapons) {
-          image.destroy();
-        }
-      },
-    };
-    return view;
+  private placeEnemy(b: Body, e: EnemyState, time: number): void {
+    const run = Math.abs(Math.sin(time * 13 + e.id)) * 2;
+    b.sprite.setPosition(e.x, e.y - (e.attacking ? 0 : run));
+    b.sprite.setFlipX(e.facing < 0);
+    // Beim Hacken wippt er vor und zurueck.
+    b.sprite.setRotation(e.attacking ? Math.sin(time * 9 + e.id) * 0.18 : 0);
+    b.sprite.setDepth(e.y);
+    b.shadow.setPosition(e.x, e.y).setScale(0.8);
   }
 
-  private applyPlayer(view: PlayerView, player: PlayerState, k: number, time: number): void {
-    const isSelf = player.id === this.session.selfId;
-    const own = isSelf ? this.session.selfPosition() : null;
-    const targetX = this.originX + (own ? own.x : player.x);
-    const targetY = this.originY + (own ? own.y : player.y);
-    if (isSelf) {
-      view.x = targetX;
-      view.y = targetY;
-    } else {
-      view.x += (targetX - view.x) * k;
-      view.y += (targetY - view.y) * k;
+  private applyFlash(b: Body, delta: number): void {
+    if (b.flash > 0) {
+      b.flash -= delta;
+      b.sprite.setTintFill(0xffffff);
+      if (b.flash <= 0) {
+        b.sprite.clearTint();
+      }
     }
+  }
 
-    const depth = 100 + view.y;
-    // Laeuft die Figur, huepft sie leicht und wippt - wie in einem Zeichentrickfilm.
-    const moving = Math.abs(view.x - view.lastX) + Math.abs(view.y - view.lastY) > 0.25;
-    view.lastX = view.x;
-    view.lastY = view.y;
-    const bob = moving && player.alive ? Math.abs(Math.sin(time / 75)) * 3.5 : 0;
-    view.sprite.setPosition(view.x, view.y - bob).setDepth(depth);
-    view.shadow.setPosition(view.x, view.y + 27).setDepth(depth - 1);
-    view.sprite.setFlipX(Math.cos(player.facing) < 0);
-    view.sprite.setAngle(!player.alive ? 90 : moving ? Math.sin(time / 75) * 7 : 0);
-    const blink = player.iframes > 0 && Math.floor(time / 70) % 2 === 0;
-    view.sprite.setAlpha(!player.alive ? 0.45 : blink ? 0.5 : 1);
-    view.name.setPosition(view.x, view.y - 34).setVisible(player.alive);
-
-    // Waffen kreisen um die Figur.
-    const signature = player.weapons.map((weapon) => weapon.id).join(",");
-    if (signature !== view.weaponSignature) {
-      view.weaponSignature = signature;
-      for (const image of view.weapons) {
+  private syncShots(state: GameState): void {
+    const seen = new Set<number>();
+    for (const shot of state.shots) {
+      seen.add(shot.id);
+      let image = this.shots.get(shot.id);
+      if (!image) {
+        image = this.add.image(0, 0, TEX.rivet);
+        this.shots.set(shot.id, image);
+      }
+      this.placeShot(image, shot);
+    }
+    for (const [id, image] of this.shots) {
+      if (!seen.has(id)) {
         image.destroy();
+        this.shots.delete(id);
       }
-      view.weapons = player.weapons.map((weapon) => this.add.image(0, 0, weaponIconKey(weapon.id)).setDisplaySize(34, 34));
     }
-    // Die Waffen schweben links und rechts neben der Figur (nicht ueber dem Kopf)
-    // und zeigen dorthin, wohin geschossen wird.
-    const count = view.weapons.length;
-    const aim = player.facing;
-    const left = Math.cos(aim) < 0;
-    view.weapons.forEach((image, index) => {
-      const spread = count > 1 ? (index / (count - 1) - 0.5) * Math.min(2.6, 0.75 * (count - 1)) : 0;
-      let around = aim + spread;
-      let point = aim;
-      let distance = 28;
-      // Nahkampfwaffe schlaegt gerade zu: Sie fegt durch den Schlagwinkel und
-      // reicht dabei bis zur Haelfte ihrer Reichweite hinaus.
-      const weapon = player.weapons[index];
-      const since = time - (view.swings[index] ?? -1e9);
-      if (weapon && since >= 0 && since < SWING_MS) {
-        const def = WEAPONS[weapon.id];
-        const t = since / SWING_MS;
-        const half = Math.min(1.5, ((def.spread / 2) * Math.PI) / 180 + 0.25);
-        const sweep = left ? 1 : -1;
-        around = aim + sweep * half * (1 - 2 * Phaser.Math.Easing.Cubic.Out(t));
-        point = around;
-        distance = 28 + Math.max(0, weaponReach(weapon.id, player.stats) * 0.5 - 28) * Math.sin(Math.PI * t);
+  }
+
+  private placeShot(image: Phaser.GameObjects.Image, shot: ShotState): void {
+    image.setPosition(shot.x, shot.y - shot.z);
+    image.setRotation(Math.atan2(shot.vy - shot.vz, shot.vx));
+    // Hoch oben (vom Deck aus) ueber allem am Boden, sonst nach Bodenlage.
+    image.setDepth(shot.z > 40 ? deckDepth(DECK_H) + 0.01 : shot.y + 0.1);
+  }
+
+  private syncScrap(state: GameState): void {
+    const seen = new Set<number>();
+    for (const piece of state.scrap) {
+      seen.add(piece.id);
+      let image = this.scrap.get(piece.id);
+      if (!image) {
+        image = this.add.image(0, 0, scrapKey(piece.id % 3));
+        this.scrap.set(piece.id, image);
       }
-      image
-        .setPosition(view.x + Math.cos(around) * distance, view.y + 6 + Math.sin(around) * distance * 0.7)
-        // Die Waffe ist waagerecht nach rechts gemalt; nach links wird sie gespiegelt.
-        .setRotation(left ? point - Math.PI : point)
-        .setFlipX(left)
-        .setDepth(Math.sin(around) < 0 ? depth - 1 : depth + 1)
-        .setVisible(player.alive);
-    });
-    // Laufende Faehigkeit sichtbar machen: Schild beim Schildwall (Ritter), Schimmer beim Arkanen Sog (Zauberer).
-    if (player.alive && player.buff > 0 && (player.character === "ritter" || player.character === "zauberer")) {
-      const color = player.character === "ritter" ? 0x9fb8b3 : 0xdba636;
-      this.bars.fillStyle(color, 0.22).fillCircle(view.x, view.y, 28);
-      this.bars.lineStyle(3, 0x1d1c19, 0.8).strokeCircle(view.x, view.y, 28 + Math.sin(time / 90) * 1.5);
+      this.placeScrap(image, piece, state.time);
     }
-  }
-
-  private makeShot(shot: Projectile): ShotView {
-    let image: Phaser.GameObjects.Image;
-    if (shot.look > 0 && shot.friendly) {
-      // Die Pixel-Geschosse sind winzig gemalt - doppelt gross gezeigt, Pixel bleiben hart.
-      image = this.add.image(0, 0, `shot-${shot.look}`).setDepth(5000).setRotation(Math.atan2(shot.vy, shot.vx)).setScale(SHOT_SCALE);
-      if (shot.look === 3) {
-        image.setScale(SHOT_SCALE * (0.9 + Math.random() * 0.5)).setAlpha(0.9);
+    for (const [id, image] of this.scrap) {
+      if (!seen.has(id)) {
+        image.destroy();
+        this.scrap.delete(id);
       }
-    } else {
-      const size = Math.max(11, shot.radius * 2.8);
-      image = this.add
-        .image(0, 0, "bullet")
-        .setDisplaySize(size, size)
-        .setTint(shot.friendly ? COLORS.playerBullet : COLORS.enemyBullet)
-        .setDepth(5000);
-    }
-    return { image, x: this.originX + shot.x, y: this.originY + shot.y, destroy: () => image.destroy() };
-  }
-
-  private applyShot(view: ShotView, shot: Projectile, k: number): void {
-    const targetX = this.originX + shot.x;
-    const targetY = this.originY + shot.y;
-    view.x += (targetX - view.x) * k;
-    view.y += (targetY - view.y) * k;
-    view.image.setPosition(view.x, view.y);
-    if (shot.look === 6) {
-      view.image.rotation += 0.25;
     }
   }
 
-  private makePickup(pickup: Pickup): Phaser.GameObjects.Image {
-    return this.add
-      .image(this.originX + pickup.x, this.originY + pickup.y, "gem")
-      .setDisplaySize(17, 17)
-      .setDepth(3);
+  private placeScrap(image: Phaser.GameObjects.Image, piece: ScrapState, time: number): void {
+    image.setPosition(
+      piece.x,
+      piece.y - 4 - Math.round(Math.abs(Math.sin(time * 3 + piece.id))) * 2,
+    );
+    image.setDepth(piece.y);
+    // Ab und zu blitzt ein Stueck auf - so faellt Schrott auf dem Sand auf.
+    if (Math.random() < 0.012) {
+      const glint = this.add
+        .image(image.x + 3, image.y - 4, TEX.spark)
+        .setDepth(piece.y + 0.2)
+        .setScale(0.5);
+      this.tweens.add({
+        targets: glint,
+        scale: 1.3,
+        alpha: 0,
+        duration: 260,
+        onComplete: () => glint.destroy(),
+      });
+    }
   }
 
-  private syncMarkers(markers: readonly SpawnMarker[], time: number): void {
-    while (this.markers.length < markers.length) {
-      this.markers.push(this.add.image(0, 0, "marker").setDisplaySize(26, 26).setDepth(4));
+  /** Pfeil zur Strickleiter (wenn man unten ist) und das Seil der Seilwinde. */
+  private drawHelpers(state: GameState, self: PlayerState | undefined): void {
+    const f = state.fort;
+    const below = !!self && self.alive && self.layer === "ground" && !self.transition;
+    this.ladderArrow.setVisible(below && state.phase !== "won" && state.phase !== "lost");
+    if (below) {
+      const bounce = Math.abs(Math.sin(state.time * 5)) * 5;
+      this.ladderArrow.setPosition(
+        f.x + (LADDER.x0 + LADDER.x1) / 2,
+        f.y + LADDER.y1 + 14 + bounce,
+      );
     }
-    this.markers.forEach((image, index) => {
-      const marker = markers[index];
-      if (!marker) {
-        image.setVisible(false);
-        return;
+    this.rope.clear();
+    for (const p of state.players) {
+      if (p.transition?.kind === "winch") {
+        const ax = f.x + WINCH_LANDING.x;
+        const ay = f.y + WINCH_LANDING.y - ELEVATION - 18;
+        this.rope.lineStyle(3, 0x120f1e, 1).lineBetween(ax, ay, p.x, p.y - p.z - 30);
+        this.rope.lineStyle(1, 0xd8b878, 1).lineBetween(ax, ay, p.x, p.y - p.z - 30);
       }
-      image
-        .setVisible(true)
-        .setPosition(this.originX + marker.x, this.originY + marker.y)
-        .setAlpha(0.45 + 0.4 * Math.abs(Math.sin(time / 90)));
-    });
-  }
-
-  // --- Ereignisse: Toene und Effekte ----------------------------------------
-
-  /** Spielt einen Ton, aber nicht oefter als alle `gapMs` - bei 50 Treffern pro Sekunde waere das Krach. */
-  private playSound(name: SoundName, gapMs: number): void {
-    const now = this.time.now;
-    const last = this.lastSound.get(name) ?? -1e9;
-    if (now - last < gapMs) {
-      return;
     }
-    this.lastSound.set(name, now);
-    audio.play(name);
   }
 
-  private handleEvent(event: GameEvent, _time: number): void {
-    const selfId = this.session.selfId;
-    switch (event.t) {
-      case "hit":
-        if (event.enemy) {
-          this.floater(event.x, event.y - 10, String(Math.round(event.dmg)), event.crit ? "#b5532f" : "#1d1c19", event.crit ? 22 : 15);
-          if (event.crit && this.time.now - this.lastWord > 140) {
-            this.lastWord = this.time.now;
-            this.comic(event.x, event.y - 8, "KRIT!", "#b5532f");
-          }
-          this.playSound("hit", 55);
-        } else {
-          this.floater(event.x, event.y - 18, `-${Math.round(event.dmg)}`, PALETTE.danger, 20);
-          this.playSound("playerHit", 120);
-          this.cameras.main.shake(90, 0.003);
+  // --- Ereignisse ------------------------------------------------------------------------------
+
+  private onEvent(event: GameEvent, state: GameState): void {
+    switch (event.kind) {
+      case "shot": {
+        const flash = this.add
+          .image(event.x, event.y - event.z, TEX.spark)
+          .setDepth(DEPTH.effects)
+          .setScale(1.5);
+        this.tweens.add({
+          targets: flash,
+          alpha: 0,
+          scale: 0.5,
+          duration: 90,
+          onComplete: () => flash.destroy(),
+        });
+        if (this.time.now - this.lastShotSound > 110) {
+          this.lastShotSound = this.time.now;
+          audio.play("shoot");
         }
         break;
+      }
+      case "hit": {
+        const b = this.enemies.get(event.id);
+        if (b) {
+          b.flash = 70;
+        }
+        audio.play("hit");
+        break;
+      }
       case "kill":
-        this.burst(event.x, event.y, event.big ? 12 : 5, event.big ? 0xdba636 : 0xcdbf9b);
-        if (event.big) {
-          this.comic(event.x, event.y, ["BAM!", "POW!", "ZACK!", "WUMM!"][Math.floor(Math.random() * 4)] ?? "BAM!", "#1d1c19");
-        }
-        this.playSound("enemyDied", 45);
+        this.bones(event.x, event.y);
+        audio.play("enemyDied");
         break;
-      case "shot":
-        if (event.kind === "melee") {
-          const def = WEAPONS[event.w];
-          const owner = this.session.view.state.players.find((player) => player.id === event.pid);
-          // Der Bogen zeigt genau, wie weit der Schlag reicht - wie weit die Waffe also trifft.
-          const reach = owner ? weaponReach(event.w, owner.stats) : (def?.range ?? 70);
-          this.swing(event.x, event.y, event.angle, def?.spread ?? 80, reach);
-          this.startWeaponSwing(event.pid, event.w);
-          this.playSound("swing", 70);
-        } else {
-          this.playSound("shoot", 70);
-        }
+      case "stomp":
+        this.ground.addPrint(event.x, event.y);
+        this.dust(event.x, event.y, 3);
         break;
       case "pickup":
-        if (event.pid === selfId) {
-          this.playSound("pickup", 40);
+        this.floatText(`+${event.value}`, event.x, event.y - 20, "#e6eaf2", 14);
+        audio.play("pickup");
+        break;
+      case "hullHit": {
+        const spark = this.add
+          .image(event.x, event.y - 16, TEX.spark)
+          .setDepth(DEPTH.effects)
+          .setTint(0xff8a2a);
+        this.tweens.add({
+          targets: spark,
+          y: spark.y - 12,
+          alpha: 0,
+          duration: 260,
+          onComplete: () => spark.destroy(),
+        });
+        break;
+      }
+      case "playerHit": {
+        const b = this.players.get(event.id);
+        if (b) {
+          b.flash = 90;
+        }
+        if (event.id === this.session.selfId) {
+          this.cameras.main.shake(90, 0.004);
+        }
+        audio.play("playerHit");
+        break;
+      }
+      case "playerDown":
+        if (event.id === this.session.selfId) {
+          this.showBanner("MECH AUSGEFALLEN", T.bad);
+          this.showHint(
+            "down",
+            "Kein Grund zur Panik: Nach ein paar Sekunden stehst du auf dem Deck wieder auf.",
+          );
+        }
+        audio.play("playerDown");
+        break;
+      case "respawn":
+        audio.play("revive");
+        break;
+      case "jump":
+      case "climb":
+        audio.play("swing");
+        break;
+      case "winch":
+        audio.play("swing");
+        if (event.id === this.session.selfId) {
+          this.showHint(
+            "winch",
+            "Zu weit zurückgefallen: Die Seilwinde holt dich hoch. Das kostet Rumpf.",
+          );
         }
         break;
-      case "heal":
-        if (event.pid === selfId && event.amount >= 1) {
-          this.floater(event.x, event.y - 18, `+${Math.round(event.amount)}`, PALETTE.success, 18);
-          this.playSound("healed", 250);
+      case "ability": {
+        const p = state.players.find((x) => x.id === event.id);
+        if (p) {
+          const ring = this.add
+            .circle(p.x, p.y - p.z - 26, 10, 0x6cf27a, 0)
+            .setStrokeStyle(3, 0x6cf27a)
+            .setDepth(DEPTH.effects);
+          this.tweens.add({
+            targets: ring,
+            radius: 70,
+            alpha: 0,
+            duration: 420,
+            onComplete: () => ring.destroy(),
+          });
+        }
+        audio.play("superUsed");
+        break;
+      }
+      case "repair":
+        if (event.amount > 0) {
+          this.floatText(
+            `+${Math.round(event.amount)} Rumpf`,
+            state.fort.x + 140,
+            state.fort.y - ELEVATION - 10,
+            T.good,
+            18,
+          );
+          audio.play("healed");
         }
         break;
-      case "dodge":
-        this.floater(event.x, event.y - 18, "Ausgewichen", "#cfe8ff", 14);
-        break;
-      case "down":
-        this.playSound("playerDown", 200);
-        break;
-      case "revive":
-        this.playSound("revive", 200);
-        break;
-      case "waveStart":
-        this.announce(`Welle ${event.wave}`);
-        this.playSound("zoneReached", 0);
-        break;
-      case "waveEnd":
-        this.announce("Geschafft!");
-        this.playSound("superReady", 0);
-        break;
-      case "levelUp":
-        if (event.pid === selfId) {
-          this.playSound("superReady", 100);
+      case "arrived":
+        if (state.phase === "rest") {
+          this.showBanner(`${state.march.station.toUpperCase()} ERREICHT`, T.gold);
+          audio.play("zoneReached");
+          audio.setMusic("menu", 0.7);
         }
         break;
-      case "bought":
-        if (event.pid === selfId) {
-          this.playSound("pickup", 40);
-        }
+      case "depart":
+        this.showBanner(`WEITER ZUR ${state.march.station.toUpperCase()}`, T.light);
+        audio.setMusic("wave");
         break;
-      case "boom":
-        this.boom(event.x, event.y, event.r, event.enemy);
-        this.playSound("blast", 60);
+      case "won":
+        this.showBanner("GESCHAFFT!", T.gold);
+        audio.play("zoneReached");
         break;
-      case "zap":
-        this.zap(event.x1, event.y1, event.x2, event.y2);
-        break;
-      case "ability":
-        this.abilityEffect(event);
-        this.playSound("superUsed", 0);
-        break;
-      case "enemyShot":
-        this.playSound("enemyShoot", 80);
+      case "lost":
+        this.showBanner("RUMPF ZERSTÖRT", T.bad);
+        audio.play("gameOver");
         break;
     }
   }
 
-  private announce(text: string): void {
-    this.banner.setText(text).setAlpha(1).setScale(0.6);
-    this.tweens.killTweensOf(this.banner);
-    this.tweens.add({ targets: this.banner, scale: 1, duration: 180, ease: "Back.Out" });
-    this.tweens.add({ targets: this.banner, alpha: 0, delay: 900, duration: 400 });
-  }
-
-  private floater(x: number, y: number, value: string, color: string, size: number): void {
-    if (this.floaters > 36) {
-      return;
-    }
-    this.floaters += 1;
-    const text = this.add
-      .text(this.originX + x, this.originY + y, value, {
-        fontFamily: FONT_TITLE,
-        fontSize: `${size + 2}px`,
-        color,
-        stroke: "#f1e5c9",
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setDepth(9000);
-    this.tweens.add({
-      targets: text,
-      y: text.y - 26,
-      alpha: 0,
-      duration: 650,
-      ease: "Quad.Out",
-      onComplete: () => {
-        text.destroy();
-        this.floaters -= 1;
-      },
-    });
-  }
-
-  /** Ein Comic-Wort ("BAM!") springt auf, wackelt und verschwindet. */
-  private comic(x: number, y: number, word: string, color: string): void {
-    if (this.floaters > 30) {
-      return;
-    }
-    this.floaters += 1;
-    const text = this.add
-      .text(this.originX + x, this.originY + y - 16, word, {
-        fontFamily: FONT_TITLE,
-        fontSize: "34px",
-        color,
-        stroke: "#f1e5c9",
-        strokeThickness: 7,
-      })
-      .setOrigin(0.5)
-      .setDepth(9100)
-      .setAngle(Phaser.Math.Between(-14, 14))
-      .setScale(0.3);
-    this.tweens.add({ targets: text, scale: 1.15, duration: 120, ease: "Back.Out" });
-    this.tweens.add({
-      targets: text,
-      y: text.y - 22,
-      alpha: 0,
-      delay: 300,
-      duration: 380,
-      onComplete: () => {
-        text.destroy();
-        this.floaters -= 1;
-      },
-    });
-  }
-
-  private burst(x: number, y: number, count: number, color: number): void {
-    for (let i = 0; i < count; i += 1) {
-      const angle = (i / count) * Math.PI * 2 + Math.random();
-      const distance = 16 + Math.random() * 20;
-      const piece = this.add.star(this.originX + x, this.originY + y, 5, 2, 5, color).setStrokeStyle(1.5, 0x14101c).setDepth(8500);
+  private bones(x: number, y: number): void {
+    for (let i = 0; i < 5; i += 1) {
+      const shard = this.add
+        .image(x, y - 20, TEX.bone)
+        .setDepth(y + 1)
+        .setRotation(Math.random() * 3);
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 14 + Math.random() * 20;
       this.tweens.add({
-        targets: piece,
-        x: piece.x + Math.cos(angle) * distance,
-        y: piece.y + Math.sin(angle) * distance,
+        targets: shard,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance * 0.4,
+        rotation: shard.rotation + 4,
+        duration: 360,
+        ease: "Quad.Out",
+        onComplete: () =>
+          this.tweens.add({
+            targets: shard,
+            alpha: 0,
+            delay: 600,
+            duration: 400,
+            onComplete: () => shard.destroy(),
+          }),
+      });
+    }
+    this.dust(x, y, 2);
+  }
+
+  private dust(x: number, y: number, count: number): void {
+    for (let i = 0; i < count; i += 1) {
+      const puff = this.add
+        .image(x + (Math.random() - 0.5) * 16, y - 2, TEX.dust)
+        .setDepth(y + 0.5)
+        .setScale(0.6);
+      this.tweens.add({
+        targets: puff,
+        x: puff.x + (Math.random() - 0.5) * 24,
+        y: puff.y - 8 - Math.random() * 8,
+        scale: 1.4,
         alpha: 0,
-        angle: 180,
-        duration: 380,
-        onComplete: () => piece.destroy(),
+        duration: 520,
+        onComplete: () => puff.destroy(),
       });
     }
   }
 
-  /**
-   * Der Schlag als heller Halbmond: aussen genau bei der Reichweite der Waffe,
-   * so breit wie ihr Schlagwinkel. Der Hammer (360 Grad) gibt einen Ring.
-   */
-  private swing(x: number, y: number, angle: number, spread: number, reach: number): void {
-    const arc = this.add.graphics().setDepth(8600);
-    const cx = this.originX + x;
-    const cy = this.originY + y;
-    const half = Math.min(Math.PI, ((spread / 2) * Math.PI) / 180);
-    const outer = Math.max(30, reach);
-    const inner = outer * 0.62;
-    arc.fillStyle(0xf8f0dc, 0.5);
-    arc.lineStyle(2.5, 0x2a201b, 0.55);
-    arc.beginPath();
-    arc.arc(cx, cy, outer, angle - half, angle + half, false);
-    arc.arc(cx, cy, inner, angle + half, angle - half, true);
-    arc.closePath();
-    arc.fillPath();
-    arc.strokePath();
-    this.tweens.add({ targets: arc, alpha: 0, duration: 200, ease: "Quad.In", onComplete: () => arc.destroy() });
+  private floatText(text: string, x: number, y: number, color: string, size: number): void {
+    const label = this.add
+      .text(x, y, text, { fontFamily: FONT_BODY, fontSize: `${size}px`, color, fontStyle: "bold" })
+      .setOrigin(0.5)
+      .setStroke(T.outline, 4)
+      .setDepth(DEPTH.effects + 1);
+    this.tweens.add({
+      targets: label,
+      y: y - 26,
+      alpha: 0,
+      duration: 900,
+      ease: "Quad.Out",
+      onComplete: () => label.destroy(),
+    });
   }
 
-  /** Merkt sich, dass eine Nahkampfwaffe dieses Spielers gerade zuschlaegt (fuer `applyPlayer`). */
-  private startWeaponSwing(pid: string, weaponId: string): void {
-    const view = this.players.get(pid);
-    const state = this.session.view.state.players.find((player) => player.id === pid);
-    if (!view || !state) {
+  private showBanner(text: string, color: string): void {
+    this.tweens.killTweensOf(this.banner);
+    this.banner.setText(text).setColor(color).setAlpha(0).setScale(0.8);
+    this.tweens.add({ targets: this.banner, alpha: 1, scale: 1, duration: 220, ease: "Back.Out" });
+    this.tweens.add({ targets: this.banner, alpha: 0, delay: 1800, duration: 400 });
+  }
+
+  // --- Hinweise fuer Neulinge (je einmal pro Lauf) --------------------------------------------------
+
+  private showHint(key: string, text: string): void {
+    if (this.shown.has(key)) {
       return;
     }
-    // Die Waffe dieser Art, die am laengsten nicht geschlagen hat.
-    let best = -1;
-    state.weapons.forEach((weapon, index) => {
-      if (weapon.id === weaponId && (best < 0 || (view.swings[index] ?? 0) < (view.swings[best] ?? 0))) {
-        best = index;
-      }
+    this.shown.add(key);
+    this.tweens.killTweensOf(this.hint);
+    this.hint.setText(text).setAlpha(0);
+    this.tweens.add({ targets: this.hint, alpha: 1, duration: 250 });
+    this.tweens.add({ targets: this.hint, alpha: 0, delay: 6500, duration: 500 });
+  }
+
+  private watchForHints(state: GameState, self: PlayerState | undefined): void {
+    if (state.phase !== "march" || !self) {
+      return;
+    }
+    const f = state.fort;
+    if (
+      self.layer === "deck" &&
+      state.enemies.some((e) => e.attacking && insideRect(BLIND_SPOT, e.x - f.x, e.y - f.y))
+    ) {
+      this.showHint(
+        "belly",
+        "Gegner hacken unter dem Deck! Von oben trefft ihr sie nicht – spring ab und räum auf.",
+      );
+    } else if (state.scrap.length >= 3 && self.layer === "deck") {
+      this.showHint(
+        "scrap",
+        "Schrott gibt es nur am Boden – und er bleibt zurück, während die Festung weiterläuft.",
+      );
+    }
+  }
+
+  // --- Pause und Ende ----------------------------------------------------------------------------
+
+  private setPaused(paused: boolean): void {
+    if (paused === this.paused || !this.session.canPause || this.ending) {
+      return;
+    }
+    this.paused = paused;
+    this.stick.release();
+    this.stick.enabled = !paused;
+    for (const cleanup of this.pauseCleanup) {
+      cleanup();
+    }
+    this.pauseCleanup = [];
+    if (!paused) {
+      return;
+    }
+    const w = VIEWPORT.width;
+    const h = VIEWPORT.height;
+    const shade = this.add
+      .rectangle(0, 0, w, h, 0x0e0a12, 0.6)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 20)
+      .setInteractive();
+    const panel = new ComicBox(this, BOX.panel, w / 2, h / 2, 320, 220);
+    panel.container.setScrollFactor(0);
+    panel.setDepth(DEPTH.hud + 21);
+    const title = this.add
+      .text(w / 2, h / 2 - 70, "PAUSE", { fontFamily: FONT_TITLE, fontSize: "48px", color: T.gold })
+      .setOrigin(0.5)
+      .setStroke(T.outline, 7)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 22);
+    const resume = new Button(this, w / 2, h / 2 + 6, "WEITER", () => this.setPaused(false), {
+      width: 220,
+      height: 52,
+      fontSize: 22,
     });
-    if (best >= 0) {
-      view.swings[best] = this.time.now;
+    const quit = new Button(this, w / 2, h / 2 + 68, "AUFGEBEN", () => this.scene.start("Title"), {
+      width: 220,
+      height: 44,
+      fontSize: 18,
+      variant: "secondary",
+    });
+    for (const button of [resume, quit]) {
+      button.setScrollFactor(0);
+      button.setDepth(DEPTH.hud + 22);
     }
+    this.pauseCleanup = [
+      () => shade.destroy(),
+      () => panel.destroy(),
+      () => title.destroy(),
+      () => resume.destroy(),
+      () => quit.destroy(),
+    ];
   }
 
-  /** Explosion: dunkler Ring, der aufgeht, darunter ein heller Fleck und Splitter. */
-  private boom(x: number, y: number, r: number, enemy: boolean): void {
-    const cx = this.originX + x;
-    const cy = this.originY + y;
-    const flash = this.add.circle(cx, cy, r, enemy ? 0xe8862a : 0xf6d36b, 0.55).setDepth(8550).setScale(0.3);
-    const ring = this.add.circle(cx, cy, r).setStrokeStyle(4, 0x1d1c19, 0.9).setDepth(8560).setScale(0.3);
-    this.tweens.add({ targets: [flash, ring], scale: 1, duration: 180, ease: "Quad.Out" });
-    this.tweens.add({ targets: [flash, ring], alpha: 0, delay: 120, duration: 260, onComplete: () => {
-      flash.destroy();
-      ring.destroy();
-    } });
-    this.burst(x, y, 8, enemy ? 0xb5532f : 0xdba636);
-    this.cameras.main.shake(110, 0.004);
-    if (this.time.now - this.lastWord > 200) {
-      this.lastWord = this.time.now;
-      this.comic(x, y - 10, enemy ? "KAWUMM!" : "BUMM!", enemy ? "#b5532f" : "#1d1c19");
-    }
-  }
-
-  /** Blitz zwischen zwei Gegnern: gezackte Linie, die schnell verblasst. */
-  private zap(x1: number, y1: number, x2: number, y2: number): void {
-    const g = this.add.graphics().setDepth(8600);
-    const points: Phaser.Math.Vector2[] = [];
-    const steps = 6;
-    for (let i = 0; i <= steps; i += 1) {
-      const t = i / steps;
-      const jitter = i === 0 || i === steps ? 0 : (Math.random() - 0.5) * 16;
-      points.push(new Phaser.Math.Vector2(this.originX + x1 + (x2 - x1) * t + jitter, this.originY + y1 + (y2 - y1) * t + jitter));
-    }
-    g.lineStyle(5, 0x1d1c19, 0.7).strokePoints(points);
-    g.lineStyle(2.5, 0xdff4fa, 1).strokePoints(points);
-    this.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => g.destroy() });
-  }
-
-  /** Sichtbare Wirkung der Faehigkeiten - gerechnet wird in der Simulation. */
-  private abilityEffect(event: Extract<GameEvent, { t: "ability" }>): void {
-    const cx = this.originX + event.x;
-    const cy = this.originY + event.y;
-    const words: Record<string, string> = {
-      magierin: "FEUER!",
-      zwerg: "BEBEN!",
-      elfe: "HAGEL!",
-      ritter: "SCHILDWALL!",
-      zauberer: "ARKAN!",
-      schurke: "WUSCH!",
+  private finish(state: GameState): void {
+    this.ending = true;
+    this.stick.release();
+    this.stick.enabled = false;
+    const self = state.players.find((p) => p.id === this.session.selfId);
+    const result: GameResult = {
+      won: state.phase === "won",
+      marches: state.march.index + (state.phase === "won" ? 1 : 0),
+      count: state.march.count,
+      kills: state.kills,
+      scrap: self?.scrap ?? 0,
+      seconds: Math.round(state.time),
+      hull: Math.round(state.fort.hull),
     };
-    this.comic(event.x, event.y - 30, words[event.kind] ?? "!", "#c4392f");
-    switch (event.kind) {
-      case "zwerg":
-      case "ritter": {
-        const radius = event.kind === "zwerg" ? 135 : 120;
-        const ring = this.add.circle(cx, cy, radius).setStrokeStyle(6, 0x1d1c19, 0.8).setDepth(8560).setScale(0.2);
-        const fill = this.add
-          .circle(cx, cy, radius, event.kind === "zwerg" ? 0xdba636 : 0x9fb8b3, 0.35)
-          .setDepth(8550)
-          .setScale(0.2);
-        this.tweens.add({ targets: [ring, fill], scale: 1, alpha: 0, duration: 380, ease: "Quad.Out", onComplete: () => {
-          ring.destroy();
-          fill.destroy();
-        } });
-        this.cameras.main.shake(140, 0.006);
-        break;
-      }
-      case "schurke": {
-        const g = this.add.graphics().setDepth(8540);
-        g.lineStyle(16, 0x2c3a3c, 0.5);
-        g.lineBetween(cx, cy, this.originX + event.x2, this.originY + event.y2);
-        g.lineStyle(4, 0x1d1c19, 0.8);
-        g.lineBetween(cx, cy, this.originX + event.x2, this.originY + event.y2);
-        this.tweens.add({ targets: g, alpha: 0, duration: 320, onComplete: () => g.destroy() });
-        break;
-      }
-      case "zauberer": {
-        this.burst(event.x, event.y, 14, 0xdba636);
-        break;
-      }
-      case "elfe":
-      case "magierin":
-      default:
-        break;
-    }
+    this.time.delayedCall(2600, () => this.scene.start("Result", result));
   }
 }

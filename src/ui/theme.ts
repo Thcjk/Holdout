@@ -1,8 +1,8 @@
 /**
- * Der Look "Zeitriss": Schriften, Farben und kleine Hilfen fuer die Oberflaeche.
+ * Der Look der Wanderfestung: Schriften, Farben und kleine Hilfen fuer die Oberflaeche.
  *
- * Pixel-Art. Rahmen aus Bronze und dunklem Stein (die Antike), darin feine
- * leuchtende Linien in Violett und Cyan (der Zeitriss und die Technik der Mechs).
+ * Pixel-Art. Rahmen aus Bronze und dunklem Stein (die goldene Totenstadt), darin
+ * feine cyanfarbene Leuchtlinien (die Technik der Mech-Crew).
  */
 
 /** Ueberschriften, grosse Zahlen: hohe, schmale Pixelschrift (Jersey 10, OFL). */

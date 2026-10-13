@@ -10,7 +10,7 @@ import { installCrashScreen } from "./platform/crashScreen";
 installCrashScreen(__APP_VERSION__);
 
 import Phaser from "phaser";
-// Die beiden Handschriften werden mitgebaut, damit sie auch ohne Internet da sind.
+// Die beiden Pixelschriften werden mitgebaut, damit sie auch ohne Internet da sind.
 import "@fontsource/jersey-10/400.css";
 import "@fontsource/pixelify-sans/500.css";
 import "@fontsource/pixelify-sans/700.css";
@@ -34,11 +34,7 @@ import {
 } from "./config/constants";
 import { BootScene } from "./scenes/BootScene";
 import { GameScene } from "./scenes/GameScene";
-import { LobbyScene } from "./scenes/LobbyScene";
 import { ResultScene } from "./scenes/ResultScene";
-import { ForgeScene } from "./scenes/ForgeScene";
-import { AchievementsScene } from "./scenes/AchievementsScene";
-import { SelectScene } from "./scenes/SelectScene";
 import { TitleScene } from "./scenes/TitleScene";
 
 /**
@@ -74,15 +70,15 @@ function buildConfig(): Phaser.Types.Core.GameConfig {
       // Daumen fuer den Stick plus Reserve fuer Knoepfe.
       activePointers: 3,
     },
-    // Gemalter Poster-Stil: weich skalieren, nicht in harte Pixel zerfallen.
-    pixelArt: false,
+    // Pixel-Art: harte Kanten beim Vergroessern, Positionen auf ganze Pixel.
+    pixelArt: true,
     render: {
-      antialias: true,
-      roundPixels: false,
+      antialias: false,
+      roundPixels: true,
     },
     // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser
     // keine eigene Physik-Engine.
-    scene: [BootScene, TitleScene, SelectScene, LobbyScene, GameScene, ResultScene, ForgeScene, AchievementsScene],
+    scene: [BootScene, TitleScene, GameScene, ResultScene],
   };
 }
 

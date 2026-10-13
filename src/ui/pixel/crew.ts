@@ -12,8 +12,7 @@
  * Jede Figur schaut nach rechts.
  */
 
-import { hazard } from "./buildings";
-import { bolt, glowLight, mechBody, neck, seam, shine } from "./heroes";
+import { bolt, glowLight, hazard, mechBody, neck, seam, shine } from "./mech";
 import {
   BLUE,
   BLUE_DEEP,
@@ -135,7 +134,12 @@ function brecher(p: Pix): void {
   // Hydraulikkolben auf dem Ruecken
   p.shape(rect(10, 20, 5, 18), GRAY, { shade: 1 });
   p.shape(rect(11, 14, 3, 8), STEEL, { shade: 0 });
-  mechBody(p, { armor: BLUE_DEEP, trim: SKY, bulk: 3, glow: [OUTLINE, YELLOW[1], YELLOW[2], YELLOW[3]] });
+  mechBody(p, {
+    armor: BLUE_DEEP,
+    trim: SKY,
+    bulk: 3,
+    glow: [OUTLINE, YELLOW[1], YELLOW[2], YELLOW[3]],
+  });
   // Breiter, tiefer Kopf mit Hoernern
   p.shape(rect(23, 22, 18, 8), GRAY, { shade: 1 });
   p.shape(poly(37, 13, 47, 6, 49, 9, 41, 17), WHITE, { shade: 1 });
@@ -265,7 +269,10 @@ function springer(p: Pix): void {
   shine(p, 22, 12, 28, 9);
   // Energielanze schraeg nach vorn oben
   p.shape(thick(34, 60, 58, 34, 3), GRAY, { shade: 0 });
-  p.shape(poly(56, 32, 63, 25, 61, 36), [OUTLINE, CYAN_DARK, CYAN, CYAN_LIGHT], { shade: 1, edge: false });
+  p.shape(poly(56, 32, 63, 25, 61, 36), [OUTLINE, CYAN_DARK, CYAN, CYAN_LIGHT], {
+    shade: 1,
+    edge: false,
+  });
   p.px(62, 27, "#ffffff");
   glowLight(p, 46, 46, 2, 2, [OUTLINE, CYAN_DARK, CYAN, CYAN_LIGHT]);
 }

@@ -1,8 +1,6 @@
 /**
- * Kleine gemeinsame Dinge der Szenen: Spielername, Weitergabe zwischen Menues.
+ * Kleine gemeinsame Dinge der Szenen: der Spielername.
  */
-
-import type { CharacterId, WeaponId } from "./game/types";
 
 const NAME_KEY = "holdout.name";
 
@@ -19,13 +17,4 @@ export function playerName(): string {
   } catch {
     return "Spieler";
   }
-}
-
-export type PlayMode = "solo" | "host" | "join";
-
-/** Was die Charakterwahl an die naechste Szene weitergibt. */
-export interface Pick {
-  mode: PlayMode;
-  character: CharacterId;
-  weapon: WeaponId;
 }

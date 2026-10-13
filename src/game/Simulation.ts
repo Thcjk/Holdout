@@ -1,1307 +1,808 @@
 /**
- * Die Simulation: das ganze Spiel als reine Rechnung.
+ * Der Spielkern der Wanderfestung: rechnet mit festem Takt (60 Hz), kennt weder
+ * Phaser noch Netz. Eingaben rein (`advance`), Zustand und Ereignisse raus.
  *
- * Eingaben rein (Bewegung je Spieler, Befehle im Shop), Zustand raus. Kein
- * Phaser, kein Netz, keine Uhr - die Zeit kommt als Zahl von aussen. Dadurch
- * rechnet derselbe Code solo auf dem Handy und im Koop auf dem Host, und die
- * Tests spielen ganze Runden in Millisekunden durch.
- *
- * Ablauf einer Runde:
- *   Welle 1 ... Pause (Level-Ups, Shop) ... Welle 2 ... Pause ... Welle 20
- * In einer Welle laeuft die Uhr herunter, Gegner erscheinen nach Plan, Waffen
- * schiessen von selbst. Faellt die Uhr auf null, verschwinden alle Gegner, das
- * Material wird eingesammelt, und die Pause beginnt.
+ * Ablauf eines Rechenschritts:
+ *   1. Die Festung laeuft (nur im Marsch), die Beine setzen auf und stampfen.
+ *   2. Mechs bewegen sich auf dem Deck oder am Boden, springen ab, klettern hoch,
+ *      werden von der Seilwinde geholt, schiessen und sammeln Schrott.
+ *   3. Gegner erscheinen, laufen der Festung nach und hacken auf sie ein.
+ *   4. Geschosse fliegen, Schrott bleibt liegen (und bleibt zurueck).
+ *   5. Ziel erreicht? Rumpf zerstoert?
  */
 
 import {
-  ARENA,
-  MAGNET_RADIUS,
+  AHEAD,
+  BEHIND,
+  CLIMB_TIME,
+  DECK_H,
+  DECK_W,
+  EDGE_HOLD,
+  ELEVATION,
+  FORT_SPEED,
+  GROUND_BOTTOM,
+  GROUND_TOP,
+  HULL_MAX,
+  JUMP_TIME,
+  LADDER,
+  LADDER_TOP,
   MAX_ENEMIES,
-  MAX_TICKS_PER_FRAME,
-  PICKUP_RADIUS,
-  PLAYER_IFRAMES,
-  PLAYER_RADIUS,
-  PLAYER_SPEED,
-  SPAWN_MARKER_TIME,
+  REPAIR_AMOUNT,
+  REPAIR_COST,
+  RESPAWN_SPOT,
+  RESPAWN_TIME,
+  SCRAP_LOST_BEHIND,
+  SCRAP_MAGNET,
+  SCRAP_PICKUP,
+  STOMP_DAMAGE,
+  STOMP_RADIUS,
   TICK,
-  TICK_MS,
+  WINCH_COST,
+  WINCH_LANDING,
+  WINCH_TIME,
 } from "./constants";
+import { CREW, type CrewSpec } from "./data/crew";
+import { ENEMIES } from "./data/enemies";
+import { PROBE_ROUTE, type MarchSpec } from "./data/route";
 import {
-  ENEMIES,
-  FINAL_WAVE,
-  damageScale,
-  hpScale,
-  planWave,
-  playerCountHp,
-  speedScale,
-  waveLength,
-} from "./data/enemies";
-import type { SpawnPlan } from "./data/enemies";
-import { abilityCooldown } from "./data/abilities";
-import { armorFactor } from "./data/stats";
-import { WEAPONS, weaponCooldown, weaponDamage, weaponReach } from "./data/weapons";
-import { createPlayer, grantXp, startPosition } from "./player";
-import { createRng } from "./rng";
-import type { Rng } from "./rng";
-import * as shop from "./shop";
+  ATTACK_SLOTS,
+  BLIND_SPOT,
+  DECK_OBSTACLES,
+  DECK_WALK,
+  LEGS,
+  STRIDE,
+  insideRect,
+  legPhase,
+} from "./fortress";
+import { createRng, type Rng } from "./rng";
 import type {
+  Anchor,
   Command,
-  Enemy,
-  EnemyType,
+  EnemyState,
   GameEvent,
   GameState,
-  OwnedWeapon,
   PlayerInput,
   PlayerSetup,
   PlayerState,
-  Projectile,
+  Transition,
 } from "./types";
 
-const DEG = Math.PI / 180;
+const IDLE: PlayerInput = { mx: 0, my: 0 };
 
-/** Rueckstoss klingt mit dieser Rate pro Sekunde ab. */
-const KNOCKBACK_DECAY = 8;
-
-/** Abstand zu allen Spielern, in dem kein Gegner erscheinen darf. */
-const SPAWN_SAFE_DISTANCE = 150;
-
-/** Geschoss-Aussehen der Feuerkugel (siehe `Projectile.look`). */
-const LOOK_GRENADE = 6;
-const GRENADE_RADIUS = 110;
-
-/** So lange brennt ein Gegner nach einem Treffer mit dem Flammenwerfer. */
-const BURN_TIME = 3;
-/** Reichweite, in der ein Blitz zum naechsten Gegner springt. */
-const CHAIN_REACH = 150;
-
-export class Simulation {
-  readonly state: GameState;
-  /** Ereignisse des letzten `advance`-Aufrufs. */
-  events: GameEvent[] = [];
-
-  private readonly rng: Rng;
-  private nextId = 1;
-  private plan: SpawnPlan[] = [];
-  private planIndex = 0;
-  private waveClock = 0;
-  private accumulator = 0;
-  /** Letzte Laufrichtung je Spieler - fuer den Schattenschritt. */
-  private readonly moveAngle = new Map<string, number>();
-
-  constructor(setups: readonly PlayerSetup[], seed: number) {
-    this.rng = createRng(seed);
-    const players = setups.map((setup, index) => createPlayer(setup, index, setups.length));
-    this.state = {
-      phase: "wave",
-      wave: 1,
-      timeLeft: 0,
-      waveLength: 0,
-      players,
-      enemies: [],
-      shots: [],
-      pickups: [],
-      markers: [],
-      tick: 0,
-    };
-    this.startWave(1);
-  }
-
-  /**
-   * Rechnet so viele feste Schritte, wie in die vergangene Zeit passen.
-   *
-   * @returns Anzahl der Schritte
-   */
-  advance(deltaMs: number, inputs: ReadonlyMap<string, PlayerInput>): number {
-    this.events = [];
-    this.accumulator += Math.min(deltaMs, 250);
-    let ticks = 0;
-    while (this.accumulator >= TICK_MS && ticks < MAX_TICKS_PER_FRAME) {
-      this.step(inputs);
-      this.accumulator -= TICK_MS;
-      ticks += 1;
-    }
-    if (ticks >= MAX_TICKS_PER_FRAME) {
-      // Nach einem langen Haenger nicht alles nachholen wollen.
-      this.accumulator = 0;
-    }
-    return ticks;
-  }
-
-  /** Ein einzelner Schritt - die Tests rufen ihn direkt auf. */
-  step(inputs: ReadonlyMap<string, PlayerInput>): void {
-    this.state.tick += 1;
-    if (this.state.phase === "wave") {
-      this.stepWave(inputs);
-    } else if (this.state.phase === "shop") {
-      this.stepShop();
-    }
-  }
-
-  /** Ein Befehl aus der Pause. Alles ausserhalb der Pause wird ignoriert. */
-  command(playerId: string, command: Command): boolean {
-    if (this.state.phase !== "shop") {
-      return false;
-    }
-    const player = this.state.players.find((candidate) => candidate.id === playerId);
-    if (!player) {
-      return false;
-    }
-    const wave = this.state.wave;
-    switch (command.k) {
-      case "buy": {
-        const ok = shop.buy(player, command.slot);
-        if (ok) {
-          this.events.push({ t: "bought", pid: player.id });
-        }
-        return ok;
-      }
-      case "reroll":
-        return shop.reroll(player, wave, this.rng);
-      case "lock":
-        return shop.toggleLock(player, command.slot);
-      case "sell":
-        return shop.sell(player, command.index, wave);
-      case "merge":
-        return shop.merge(player, command.index);
-      case "upgrade":
-        return shop.chooseUpgrade(player, command.pick, this.rng);
-      case "ready": {
-        if (command.value && player.pendingLevels > 0) {
-          return false;
-        }
-        player.ready = command.value;
-        return true;
-      }
-      default:
-        return false;
-    }
-  }
-
-  removePlayer(id: string): void {
-    const index = this.state.players.findIndex((player) => player.id === id);
-    if (index >= 0) {
-      this.state.players.splice(index, 1);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Wellen
-  // ---------------------------------------------------------------------------
-
-  private startWave(wave: number): void {
-    const state = this.state;
-    state.phase = "wave";
-    state.wave = wave;
-    state.waveLength = waveLength(wave);
-    state.timeLeft = state.waveLength;
-    state.enemies = [];
-    state.shots = [];
-    state.pickups = [];
-    state.markers = [];
-    this.waveClock = 0;
-    this.planIndex = 0;
-    this.plan = planWave(wave, state.players.length, this.rng);
-
-    state.players.forEach((player, index) => {
-      const start = startPosition(index, state.players.length);
-      player.x = start.x;
-      player.y = start.y;
-      player.hp = player.stats.maxHp;
-      player.alive = true;
-      player.iframes = 0.6;
-      player.ready = false;
-      player.shop.upgradeChoices = null;
-      player.abilityCd = Math.min(player.abilityCd, 1.5);
-      player.buff = 0;
-      for (const weapon of player.weapons) {
-        weapon.cd = 0.3;
-      }
-    });
-    this.events.push({ t: "waveStart", wave });
-  }
-
-  private endWave(): void {
-    const state = this.state;
-    this.events.push({ t: "waveEnd", wave: state.wave });
-    state.enemies = [];
-    state.shots = [];
-    state.markers = [];
-
-    // Alles Material, das noch liegt, geht zum naechsten Spieler.
-    for (const pickup of state.pickups) {
-      const owner = this.nearestAlivePlayer(pickup.x, pickup.y);
-      if (owner) {
-        this.collect(owner, pickup.value, false);
-      }
-    }
-    state.pickups = [];
-
-    // Ernte: bringt jedem Spieler am Wellenende Material, auch wer am Boden liegt.
-    for (const player of state.players) {
-      const bonus = Math.round(player.stats.harvesting);
-      if (bonus > 0) {
-        player.gold += bonus;
-        player.earned += bonus;
-        grantXp(player, bonus);
-      }
-    }
-
-    if (state.wave >= FINAL_WAVE) {
-      state.phase = "won";
-      return;
-    }
-
-    state.phase = "shop";
-    for (const player of state.players) {
-      player.alive = true;
-      player.hp = player.stats.maxHp;
-      shop.openShop(player, state.wave, this.rng);
-    }
-  }
-
-  private stepShop(): void {
-    const players = this.state.players;
-    if (players.length === 0) {
-      return;
-    }
-    if (players.every((player) => player.ready && player.pendingLevels === 0)) {
-      this.startWave(this.state.wave + 1);
-    }
-  }
-
-  private stepWave(inputs: ReadonlyMap<string, PlayerInput>): void {
-    const state = this.state;
-    this.waveClock += TICK;
-    state.timeLeft -= TICK;
-
-    this.runSpawnPlan();
-    this.updateMarkers();
-    this.updatePlayers(inputs);
-    this.updateEnemies();
-    this.separateEnemies();
-    this.updateProjectiles();
-    this.updatePickups();
-
-    if (state.players.length > 0 && state.players.every((player) => !player.alive)) {
-      state.phase = "lost";
-      return;
-    }
-    if (state.timeLeft <= 0) {
-      this.endWave();
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Spawnen
-  // ---------------------------------------------------------------------------
-
-  private runSpawnPlan(): void {
-    while (this.planIndex < this.plan.length) {
-      const group = this.plan[this.planIndex];
-      if (!group || group.at > this.waveClock) {
-        break;
-      }
-      this.planIndex += 1;
-      this.queueGroup(group);
-    }
-  }
-
-  private queueGroup(group: SpawnPlan): void {
-    // Eine Gruppe erscheint dicht beieinander, damit Wuselchen als Schwarm kommen.
-    const center = this.spawnPosition();
-    for (let i = 0; i < group.count; i += 1) {
-      const spread = group.count > 1 ? 36 : 0;
-      const x = clamp(center.x + (this.rng() - 0.5) * spread * 2, 20, ARENA.width - 20);
-      const y = clamp(center.y + (this.rng() - 0.5) * spread * 2, 20, ARENA.height - 20);
-      this.state.markers.push({ x, y, t: SPAWN_MARKER_TIME, type: group.type });
-    }
-  }
-
-  private spawnPosition(): { x: number; y: number } {
-    let best = { x: ARENA.width / 2, y: ARENA.height / 2 };
-    let bestDistance = -1;
-    for (let attempt = 0; attempt < 14; attempt += 1) {
-      const x = 30 + this.rng() * (ARENA.width - 60);
-      const y = 30 + this.rng() * (ARENA.height - 60);
-      let nearest = Infinity;
-      for (const player of this.state.players) {
-        if (player.alive) {
-          nearest = Math.min(nearest, Math.hypot(player.x - x, player.y - y));
-        }
-      }
-      if (nearest >= SPAWN_SAFE_DISTANCE) {
-        return { x, y };
-      }
-      if (nearest > bestDistance) {
-        bestDistance = nearest;
-        best = { x, y };
-      }
-    }
-    return best;
-  }
-
-  private updateMarkers(): void {
-    const state = this.state;
-    for (const marker of state.markers) {
-      marker.t -= TICK;
-    }
-    const due = state.markers.filter((marker) => marker.t <= 0);
-    if (due.length === 0) {
-      return;
-    }
-    state.markers = state.markers.filter((marker) => marker.t > 0);
-    for (const marker of due) {
-      if (state.enemies.length < MAX_ENEMIES) {
-        this.spawnEnemy(marker.type, marker.x, marker.y);
-      }
-    }
-  }
-
-  private spawnEnemy(type: EnemyType, x: number, y: number): Enemy {
-    const def = ENEMIES[type];
-    const maxHp = Math.max(
-      1,
-      Math.round(def.hp * hpScale(this.state.wave) * playerCountHp(this.state.players.length)),
-    );
-    const enemy: Enemy = {
-      id: this.nextId++,
-      type,
-      x,
-      y,
-      hp: maxHp,
-      maxHp,
-      mode: "move",
-      timer: 1 + this.rng() * 2,
-      timer2: type === "elite" ? 4 : type === "boss" ? 3 : 1 + this.rng() * 1.5,
-      dirX: 0,
-      dirY: 0,
-      kx: 0,
-      ky: 0,
-      flash: 0,
-      burn: 0,
-      burnDps: 0,
-      slow: 0,
-      stun: 0,
-    };
-    this.state.enemies.push(enemy);
-    return enemy;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Spieler
-  // ---------------------------------------------------------------------------
-
-  private updatePlayers(inputs: ReadonlyMap<string, PlayerInput>): void {
-    for (const player of this.state.players) {
-      if (!player.alive) {
-        continue;
-      }
-      player.iframes = Math.max(0, player.iframes - TICK);
-      player.abilityCd = Math.max(0, player.abilityCd - TICK);
-      player.buff = Math.max(0, player.buff - TICK);
-
-      const input = inputs.get(player.id);
-      if (input) {
-        let mx = input.mx;
-        let my = input.my;
-        const length = Math.hypot(mx, my);
-        if (length > 1) {
-          mx /= length;
-          my /= length;
-        }
-        if (length > 0.05) {
-          const speed = PLAYER_SPEED * (1 + player.stats.speed / 100);
-          player.x = clamp(player.x + mx * speed * TICK, PLAYER_RADIUS, ARENA.width - PLAYER_RADIUS);
-          player.y = clamp(player.y + my * speed * TICK, PLAYER_RADIUS, ARENA.height - PLAYER_RADIUS);
-          player.facing = Math.atan2(my, mx);
-          this.moveAngle.set(player.id, player.facing);
-        }
-        // Faehigkeit: Der Zaehler steigt mit jedem Knopfdruck. Nur ein neuer Wert loest aus,
-        // damit ein im Netz doppelt angekommenes Paket nicht zweimal zuendet.
-        if (input.ability !== undefined && input.ability > player.abilityAck) {
-          player.abilityAck = input.ability;
-          if (player.abilityCd <= 0) {
-            this.useAbility(player);
-          }
-        }
-      }
-
-      if (player.stats.regen > 0 && player.hp < player.stats.maxHp) {
-        player.hp = Math.min(player.stats.maxHp, player.hp + player.stats.regen * 0.5 * TICK);
-      }
-
-      for (const weapon of player.weapons) {
-        weapon.cd -= TICK;
-        if (weapon.cd <= 0) {
-          this.tryFire(player, weapon);
-        }
-      }
-    }
-  }
-
-  private nearestAlivePlayer(x: number, y: number): PlayerState | null {
-    let best: PlayerState | null = null;
-    let bestDistance = Infinity;
-    for (const player of this.state.players) {
-      if (!player.alive) {
-        continue;
-      }
-      const distance = Math.hypot(player.x - x, player.y - y);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        best = player;
-      }
-    }
-    return best;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Waffen
-  // ---------------------------------------------------------------------------
-
-  private tryFire(player: PlayerState, weapon: OwnedWeapon): void {
-    const def = WEAPONS[weapon.id];
-    const stats = player.stats;
-    const reach = weaponReach(weapon.id, stats);
-
-    const target = this.nearestEnemy(player.x, player.y, reach);
-    if (!target) {
-      // Bereit, aber niemand in Reichweite: nicht ins Minus rutschen lassen,
-      // sonst feuerte die Waffe beim ersten Gegner mehrfach hintereinander.
-      weapon.cd = 0;
-      return;
-    }
-
-    const angle = Math.atan2(target.y - player.y, target.x - player.x);
-    player.facing = angle;
-
-    const damage = weaponDamage(weapon.id, weapon.tier, stats);
-    const lucky = player.character === "zauberer" && player.buff > 0 ? 40 : 0;
-    const critChance = stats.crit + def.critBonus + lucky;
-
-    weapon.cd += weaponCooldown(weapon.id, weapon.tier, stats);
-
-    if (def.kind === "ranged") {
-      this.fireRanged(player, weapon, angle, damage, critChance);
-    } else {
-      this.swing(player, weapon, angle, damage, critChance, reach);
-    }
-  }
-
-  private fireRanged(
-    player: PlayerState,
-    weapon: OwnedWeapon,
-    angle: number,
-    damage: number,
-    critChance: number,
-  ): void {
-    const def = WEAPONS[weapon.id];
-    const reach = def.range + player.stats.range;
-    for (let i = 0; i < def.count; i += 1) {
-      // Schrot faechert gleichmaessig auf, Einzelschuesse streuen zufaellig.
-      const offset =
-        def.count > 1
-          ? (i / (def.count - 1) - 0.5) * def.spread * DEG + (this.rng() - 0.5) * 4 * DEG
-          : (this.rng() - 0.5) * def.spread * DEG;
-      const crit = this.rng() * 100 < critChance;
-      const shot: Projectile = {
-        id: this.nextId++,
-        x: player.x,
-        y: player.y,
-        vx: Math.cos(angle + offset) * def.speed,
-        vy: Math.sin(angle + offset) * def.speed,
-        damage: Math.max(1, Math.round(damage * (crit ? 2 : 1))),
-        pierce: def.pierce[weapon.tier - 1] ?? 0,
-        life: (reach + 60) / def.speed,
-        friendly: true,
-        ownerId: player.id,
-        crit,
-        radius: def.look === 2 ? 6 : def.look === 3 ? 7 : 4,
-        hit: [],
-        weapon: weapon.id,
-        look: def.look ?? 0,
-      };
-      this.state.shots.push(shot);
-    }
-    this.events.push({ t: "shot", pid: player.id, kind: "ranged", x: player.x, y: player.y, angle, w: weapon.id });
-  }
-
-  private swing(
-    player: PlayerState,
-    weapon: OwnedWeapon,
-    angle: number,
-    damage: number,
-    critChance: number,
-    reach: number,
-  ): void {
-    const def = WEAPONS[weapon.id];
-    const half = (def.spread / 2) * DEG;
-    const candidates: { enemy: Enemy; distance: number }[] = [];
-    for (const enemy of this.state.enemies) {
-      const dx = enemy.x - player.x;
-      const dy = enemy.y - player.y;
-      const distance = Math.hypot(dx, dy);
-      if (distance > reach + ENEMIES[enemy.type].radius) {
-        continue;
-      }
-      const diff = Math.abs(normalizeAngle(Math.atan2(dy, dx) - angle));
-      // Je naeher ein Gegner, desto breiter darf der Winkel sein - sonst schlaegt
-      // man an einem Gegner vorbei, der direkt neben einem steht.
-      const allowed = half + Math.atan2(ENEMIES[enemy.type].radius, Math.max(1, distance));
-      if (diff <= allowed) {
-        candidates.push({ enemy, distance });
-      }
-    }
-    candidates.sort((a, b) => a.distance - b.distance);
-    for (const { enemy } of candidates.slice(0, def.count)) {
-      const crit = this.rng() * 100 < critChance;
-      if (def.stun) {
-        enemy.stun = Math.max(enemy.stun, def.stun);
-      }
-      this.damageEnemy(
-        enemy,
-        Math.max(1, Math.round(damage * (crit ? 2 : 1))),
-        crit,
-        player,
-        def.knockback,
-        player.x,
-        player.y,
-      );
-    }
-    this.events.push({ t: "shot", pid: player.id, kind: "melee", x: player.x, y: player.y, angle, w: weapon.id });
-  }
-
-  private nearestEnemy(x: number, y: number, reach: number): Enemy | null {
-    let best: Enemy | null = null;
-    let bestDistance = Infinity;
-    for (const enemy of this.state.enemies) {
-      const distance = Math.hypot(enemy.x - x, enemy.y - y) - ENEMIES[enemy.type].radius;
-      if (distance <= reach && distance < bestDistance) {
-        bestDistance = distance;
-        best = enemy;
-      }
-    }
-    return best;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Schaden
-  // ---------------------------------------------------------------------------
-
-  private damageEnemy(
-    enemy: Enemy,
-    damage: number,
-    crit: boolean,
-    owner: PlayerState | null,
-    knockback: number,
-    fromX: number,
-    fromY: number,
-  ): void {
-    if (enemy.hp <= 0) {
-      return;
-    }
-    enemy.hp -= damage;
-    enemy.flash = 0.1;
-    this.events.push({ t: "hit", x: enemy.x, y: enemy.y - 10, dmg: damage, crit, enemy: true });
-
-    const def = ENEMIES[enemy.type];
-    const dx = enemy.x - fromX;
-    const dy = enemy.y - fromY;
-    const length = Math.hypot(dx, dy) || 1;
-    enemy.kx += (dx / length) * knockback * def.knockback * 6;
-    enemy.ky += (dy / length) * knockback * def.knockback * 6;
-
-    if (owner && owner.alive && owner.stats.lifesteal > 0 && this.rng() * 100 < owner.stats.lifesteal) {
-      if (owner.hp < owner.stats.maxHp) {
-        owner.hp = Math.min(owner.stats.maxHp, owner.hp + 2);
-        this.events.push({ t: "heal", pid: owner.id, x: owner.x, y: owner.y - 14, amount: 2 });
-      }
-    }
-
-    if (enemy.hp <= 0) {
-      this.killEnemy(enemy, owner);
-    }
-  }
-
-  private killEnemy(enemy: Enemy, owner: PlayerState | null): void {
-    const state = this.state;
-    const index = state.enemies.indexOf(enemy);
-    if (index < 0) {
-      return;
-    }
-    state.enemies.splice(index, 1);
-    // Die Mumie (Teiler) zerfaellt in drei Wuselchen.
-    if (enemy.type === "splitter") {
-      for (let i = 0; i < 3; i += 1) {
-        if (state.enemies.length < MAX_ENEMIES) {
-          const angle = (i / 3) * Math.PI * 2 + this.rng();
-          const child = this.spawnEnemy(
-            "swarmer",
-            clamp(enemy.x + Math.cos(angle) * 14, 10, ARENA.width - 10),
-            clamp(enemy.y + Math.sin(angle) * 14, 10, ARENA.height - 10),
-          );
-          child.kx = Math.cos(angle) * 260;
-          child.ky = Math.sin(angle) * 260;
-        }
-      }
-    }
-    if (owner) {
-      owner.kills += 1;
-    }
-    const def = ENEMIES[enemy.type];
-    const big = enemy.type === "bruiser" || enemy.type === "elite" || enemy.type === "boss" || enemy.type === "splitter";
-    this.events.push({ t: "kill", x: enemy.x, y: enemy.y, big });
-
-    const luck = owner?.stats.luck ?? 0;
-    const chance = Math.min(1, def.dropChance + Math.max(0, luck) / 400);
-    if (this.rng() < chance) {
-      // Glueck kann den Fund verdoppeln.
-      const lucky = luck > 0 && this.rng() < luck / 250;
-      state.pickups.push({
-        id: this.nextId++,
-        x: clamp(enemy.x + (this.rng() - 0.5) * 14, 8, ARENA.width - 8),
-        y: clamp(enemy.y + (this.rng() - 0.5) * 14, 8, ARENA.height - 8),
-        value: def.drop * (lucky ? 2 : 1),
-        magnet: false,
-      });
-    }
-
-    // Faellt der Boss in der letzten Welle, ist die Runde gewonnen.
-    if (enemy.type === "boss" && state.wave >= FINAL_WAVE) {
-      this.endWave();
-    }
-  }
-
-  private hurtPlayer(player: PlayerState, raw: number): void {
-    if (!player.alive || player.iframes > 0) {
-      return;
-    }
-    // Schildwall und Schattenschritt machen unverwundbar.
-    if (player.buff > 0 && (player.character === "ritter" || player.character === "schurke")) {
-      return;
-    }
-    if (this.rng() * 100 < player.stats.dodge) {
-      player.iframes = 0.25;
-      this.events.push({ t: "dodge", pid: player.id, x: player.x, y: player.y - 16 });
-      return;
-    }
-    const damage = Math.max(1, Math.round(raw * armorFactor(player.stats.armor)));
-    player.hp -= damage;
-    player.iframes = PLAYER_IFRAMES;
-    this.events.push({ t: "hit", x: player.x, y: player.y - 16, dmg: damage, crit: false, enemy: false });
-    if (player.hp <= 0) {
-      player.hp = 0;
-      player.alive = false;
-      this.events.push({ t: "down", pid: player.id, x: player.x, y: player.y });
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Gegner
-  // ---------------------------------------------------------------------------
-
-  private updateEnemies(): void {
-    const wave = this.state.wave;
-    const dmgScale = damageScale(wave);
-    const spdScale = speedScale(wave);
-
-    // Kopie, weil Gegner waehrend der Schleife neue Gegner (Schwarm) erzeugen koennen.
-    for (const enemy of [...this.state.enemies]) {
-      if (enemy.hp <= 0 || !this.state.enemies.includes(enemy)) {
-        continue;
-      }
-      const def = ENEMIES[enemy.type];
-      enemy.flash = Math.max(0, enemy.flash - TICK);
-      enemy.slow = Math.max(0, enemy.slow - TICK);
-      enemy.stun = Math.max(0, enemy.stun - TICK);
-
-      // Brand: Schaden ueber Zeit, ohne Rueckstoss.
-      if (enemy.burn > 0) {
-        enemy.burn -= TICK;
-        enemy.hp -= enemy.burnDps * TICK;
-        if (enemy.hp <= 0) {
-          this.killEnemy(enemy, this.nearestAlivePlayer(enemy.x, enemy.y));
-          continue;
-        }
-      }
-
-      const target = this.nearestAlivePlayer(enemy.x, enemy.y);
-      if (target && enemy.stun <= 0) {
-        this.runEnemyAi(enemy, target, spdScale * (enemy.slow > 0 ? 0.5 : 1), dmgScale);
-        if (!this.state.enemies.includes(enemy)) {
-          continue;
-        }
-      }
-
-      // Rueckstoss
-      enemy.x += enemy.kx * TICK;
-      enemy.y += enemy.ky * TICK;
-      const decay = Math.exp(-KNOCKBACK_DECAY * TICK);
-      enemy.kx *= decay;
-      enemy.ky *= decay;
-
-      enemy.x = clamp(enemy.x, def.radius, ARENA.width - def.radius);
-      enemy.y = clamp(enemy.y, def.radius, ARENA.height - def.radius);
-
-      // Beruehrung
-      for (const player of this.state.players) {
-        if (!player.alive) {
-          continue;
-        }
-        const reach = def.radius + PLAYER_RADIUS - 2;
-        if (Math.hypot(player.x - enemy.x, player.y - enemy.y) < reach) {
-          this.hurtPlayer(player, def.damage * dmgScale);
-        }
-      }
-    }
-  }
-
-  private runEnemyAi(enemy: Enemy, target: PlayerState, spdScale: number, dmgScale: number): void {
-    const def = ENEMIES[enemy.type];
-    const dx = target.x - enemy.x;
-    const dy = target.y - enemy.y;
-    const distance = Math.hypot(dx, dy) || 1;
-    const nx = dx / distance;
-    const ny = dy / distance;
-    const speed = def.speed * spdScale;
-
-    switch (enemy.type) {
-      case "grunt":
-      case "swarmer":
-      case "bruiser":
-      case "splitter":
-        enemy.x += nx * speed * TICK;
-        enemy.y += ny * speed * TICK;
-        break;
-
-      case "exploder": {
-        // Rennt heran, bleibt kurz stehen und zischt - dann knallt es.
-        if (enemy.mode === "windup") {
-          enemy.timer -= TICK;
-          if (enemy.timer <= 0) {
-            this.enemyExplode(enemy, 85, def.damage * 4.5 * dmgScale);
-          }
-        } else {
-          enemy.x += nx * speed * TICK;
-          enemy.y += ny * speed * TICK;
-          if (distance < 52) {
-            enemy.mode = "windup";
-            enemy.timer = 0.55;
-          }
-        }
-        break;
-      }
-
-      case "spitter": {
-        // Haelt Abstand: zu nah -> zurueck, zu weit -> heran.
-        const wanted = 250;
-        const dir = distance > wanted + 30 ? 1 : distance < wanted - 50 ? -1 : 0;
-        enemy.x += nx * speed * TICK * dir;
-        enemy.y += ny * speed * TICK * dir;
-        enemy.timer2 -= TICK;
-        if (enemy.timer2 <= 0 && distance < 480) {
-          enemy.timer2 = 2.4;
-          this.enemyShot(enemy, nx, ny, 190, def.damage * 1.4 * dmgScale);
-        }
-        break;
-      }
-
-      case "charger":
-      case "boss":
-        this.runChargerAi(enemy, nx, ny, distance, speed);
-        if (enemy.type === "boss") {
-          enemy.timer2 -= TICK;
-          if (enemy.timer2 <= 0) {
-            enemy.timer2 = 2.6;
-            // Abwechselnd: Ring, gezielter Faecher, Ring - und dazwischen ruft er Zuender.
-            const pattern = Math.floor(this.state.tick / 60) % 3;
-            if (pattern === 1) {
-              this.fanShot(enemy, nx, ny, 5, 0.5, 230, def.damage * 0.8 * dmgScale);
-            } else {
-              this.radialBurst(enemy, 14, 170, def.damage * 0.8 * dmgScale);
-            }
-            if (this.rng() < 0.45) {
-              for (let i = 0; i < 2; i += 1) {
-                if (this.state.enemies.length < MAX_ENEMIES) {
-                  this.spawnEnemy(
-                    "exploder",
-                    clamp(enemy.x + (this.rng() - 0.5) * 120, 20, ARENA.width - 20),
-                    clamp(enemy.y + (this.rng() - 0.5) * 120, 20, ARENA.height - 20),
-                  );
-                }
-              }
-            }
-          }
-        }
-        break;
-
-      case "elite": {
-        enemy.x += nx * speed * TICK;
-        enemy.y += ny * speed * TICK;
-        // Spuckt alle drei Sekunden einen Faecher aus drei Kugeln.
-        enemy.timer -= TICK;
-        if (enemy.timer <= 0) {
-          enemy.timer = 3;
-          this.fanShot(enemy, nx, ny, 3, 0.35, 200, def.damage * 0.7 * dmgScale);
-        }
-        enemy.timer2 -= TICK;
-        if (enemy.timer2 <= 0) {
-          enemy.timer2 = 5;
-          // Die Koenigslarve ruft Nachwuchs.
-          for (let i = 0; i < 3; i += 1) {
-            if (this.state.enemies.length < MAX_ENEMIES) {
-              this.spawnEnemy(
-                "swarmer",
-                clamp(enemy.x + (this.rng() - 0.5) * 80, 20, ARENA.width - 20),
-                clamp(enemy.y + (this.rng() - 0.5) * 80, 20, ARENA.height - 20),
-              );
-            }
-          }
-        }
-        break;
-      }
-    }
-  }
-
-  /** Anlaufen, kurz ducken, losstuermen, verschnaufen - und wieder von vorn. */
-  private runChargerAi(enemy: Enemy, nx: number, ny: number, distance: number, speed: number): void {
-    switch (enemy.mode) {
-      case "move":
-        enemy.x += nx * speed * TICK;
-        enemy.y += ny * speed * TICK;
-        enemy.timer -= TICK;
-        if (distance < 280 && enemy.timer <= 0) {
-          enemy.mode = "windup";
-          enemy.timer = 0.7;
-          enemy.dirX = nx;
-          enemy.dirY = ny;
-        }
-        break;
-      case "windup":
-        enemy.timer -= TICK;
-        // Zielt bis kurz vor dem Start nach, danach ist die Richtung fest.
-        if (enemy.timer > 0.2) {
-          enemy.dirX = nx;
-          enemy.dirY = ny;
-        }
-        if (enemy.timer <= 0) {
-          enemy.mode = "dash";
-          enemy.timer = 0.6;
-        }
-        break;
-      case "dash":
-        enemy.x += enemy.dirX * speed * 4.2 * TICK;
-        enemy.y += enemy.dirY * speed * 4.2 * TICK;
-        enemy.timer -= TICK;
-        if (enemy.timer <= 0) {
-          enemy.mode = "recover";
-          enemy.timer = 0.6;
-        }
-        break;
-      case "recover":
-        enemy.timer -= TICK;
-        if (enemy.timer <= 0) {
-          enemy.mode = "move";
-          enemy.timer = 2 + this.rng() * 1.5;
-        }
-        break;
-    }
-  }
-
-  private enemyShot(enemy: Enemy, nx: number, ny: number, speed: number, damage: number): void {
-    this.state.shots.push({
-      id: this.nextId++,
-      x: enemy.x,
-      y: enemy.y,
-      vx: nx * speed,
-      vy: ny * speed,
-      damage: Math.max(1, Math.round(damage)),
-      pierce: 0,
-      life: 4,
-      friendly: false,
-      ownerId: "",
-      crit: false,
-      radius: 5,
-      hit: [],
-      weapon: "",
-      look: 0,
-    });
-    this.events.push({ t: "enemyShot", x: enemy.x, y: enemy.y });
-  }
-
-  /** Mehrere Kugeln im Faecher in Richtung (nx, ny). `spread` ist der halbe Winkel. */
-  private fanShot(enemy: Enemy, nx: number, ny: number, count: number, spread: number, speed: number, damage: number): void {
-    const base = Math.atan2(ny, nx);
-    for (let i = 0; i < count; i += 1) {
-      const angle = base + (count > 1 ? (i / (count - 1) - 0.5) * 2 * spread : 0);
-      this.enemyShot(enemy, Math.cos(angle), Math.sin(angle), speed, damage);
-    }
-  }
-
-  /** Ein Zuender explodiert: trifft alle Spieler im Umkreis, laesst nichts fallen. */
-  private enemyExplode(enemy: Enemy, radius: number, damage: number): void {
-    this.events.push({ t: "boom", x: enemy.x, y: enemy.y, r: radius, enemy: true });
-    for (const player of this.state.players) {
-      if (player.alive && Math.hypot(player.x - enemy.x, player.y - enemy.y) < radius + PLAYER_RADIUS) {
-        this.hurtPlayer(player, damage);
-      }
-    }
-    const index = this.state.enemies.indexOf(enemy);
-    if (index >= 0) {
-      this.state.enemies.splice(index, 1);
-    }
-  }
-
-  private radialBurst(enemy: Enemy, count: number, speed: number, damage: number): void {
-    const offset = this.rng() * Math.PI * 2;
-    for (let i = 0; i < count; i += 1) {
-      const angle = offset + (i / count) * Math.PI * 2;
-      this.enemyShot(enemy, Math.cos(angle), Math.sin(angle), speed, damage);
-    }
-  }
-
-  /** Schiebt ueberlappende Gegner auseinander, damit sie sich nicht zu einem Punkt stapeln. */
-  private separateEnemies(): void {
-    const enemies = this.state.enemies;
-    for (let i = 0; i < enemies.length; i += 1) {
-      const a = enemies[i];
-      if (!a) {
-        continue;
-      }
-      const ra = ENEMIES[a.type].radius;
-      for (let j = i + 1; j < enemies.length; j += 1) {
-        const b = enemies[j];
-        if (!b) {
-          continue;
-        }
-        const rb = ENEMIES[b.type].radius;
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const min = (ra + rb) * 0.85;
-        if (Math.abs(dx) > min || Math.abs(dy) > min) {
-          continue;
-        }
-        const distance = Math.hypot(dx, dy);
-        if (distance >= min) {
-          continue;
-        }
-        const push = (min - distance) * 0.5;
-        const ux = distance > 0.001 ? dx / distance : 1;
-        const uy = distance > 0.001 ? dy / distance : 0;
-        a.x -= ux * push * 0.5;
-        a.y -= uy * push * 0.5;
-        b.x += ux * push * 0.5;
-        b.y += uy * push * 0.5;
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Geschosse und Material
-  // ---------------------------------------------------------------------------
-
-  private updateProjectiles(): void {
-    const state = this.state;
-    const remaining: Projectile[] = [];
-    for (const shot of state.shots) {
-      shot.x += shot.vx * TICK;
-      shot.y += shot.vy * TICK;
-      shot.life -= TICK;
-      if (shot.look === LOOK_GRENADE && shot.life <= 0) {
-        continue;
-      }
-      if (shot.life <= 0 || shot.x < -30 || shot.x > ARENA.width + 30 || shot.y < -30 || shot.y > ARENA.height + 30) {
-        continue;
-      }
-
-      if (shot.friendly) {
-        const owner = state.players.find((player) => player.id === shot.ownerId) ?? null;
-        let alive = true;
-        for (const enemy of [...state.enemies]) {
-          if (shot.hit.includes(enemy.id)) {
-            continue;
-          }
-          const reach = ENEMIES[enemy.type].radius + shot.radius;
-          if (Math.hypot(enemy.x - shot.x, enemy.y - shot.y) < reach) {
-            shot.hit.push(enemy.id);
-            this.shotHits(shot, enemy, owner);
-            if (shot.pierce <= 0) {
-              alive = false;
-              break;
-            }
-            shot.pierce -= 1;
-          }
-        }
-        if (!alive) {
-          continue;
-        }
-        // Die Feuerkugel fliegt bis zum Zielpunkt und explodiert dort.
-        if (shot.look === LOOK_GRENADE && shot.life <= TICK * 1.5) {
-          this.explode(shot.x, shot.y, GRENADE_RADIUS, shot.damage, shot.crit, owner);
-          continue;
-        }
-      } else {
-        let hit = false;
-        for (const player of state.players) {
-          if (player.alive && Math.hypot(player.x - shot.x, player.y - shot.y) < PLAYER_RADIUS + shot.radius) {
-            this.hurtPlayer(player, shot.damage);
-            hit = true;
-            break;
-          }
-        }
-        if (hit) {
-          continue;
-        }
-      }
-      remaining.push(shot);
-    }
-    state.shots = remaining;
-  }
-
-  /** Ein Spielergeschoss trifft: Schaden plus die Besonderheit der Waffe. */
-  private shotHits(shot: Projectile, enemy: Enemy, owner: PlayerState | null): void {
-    if (shot.look === LOOK_GRENADE) {
-      this.explode(shot.x, shot.y, GRENADE_RADIUS, shot.damage, shot.crit, owner);
-      shot.life = 0;
-      return;
-    }
-    const def = shot.weapon ? WEAPONS[shot.weapon] : null;
-    if (def?.explode) {
-      this.explode(shot.x, shot.y, def.explode, shot.damage, shot.crit, owner);
-      return;
-    }
-    this.damageEnemy(enemy, shot.damage, shot.crit, owner, def?.knockback ?? 40, shot.x - shot.vx * 0.05, shot.y - shot.vy * 0.05);
-    if (!def) {
-      return;
-    }
-    if (def.burn) {
-      enemy.burn = BURN_TIME;
-      enemy.burnDps = Math.max(enemy.burnDps * 0.6, shot.damage * def.burn * 3);
-    }
-    if (def.slow) {
-      enemy.slow = Math.max(enemy.slow, def.slow);
-    }
-    if (def.chain) {
-      const tier = owner?.weapons.find((weapon) => weapon.id === shot.weapon)?.tier ?? 1;
-      this.chainLightning(enemy, Math.round(shot.damage * 0.7), def.chain + tier - 1, owner, shot.hit);
-    }
-  }
-
-  /** Der Blitz springt von Gegner zu Gegner, jedes Mal zum naechsten noch nicht getroffenen. */
-  private chainLightning(from: Enemy, damage: number, jumps: number, owner: PlayerState | null, hit: number[]): void {
-    let current = { x: from.x, y: from.y };
-    for (let i = 0; i < jumps; i += 1) {
-      let best: Enemy | null = null;
-      let bestDistance = CHAIN_REACH;
-      for (const enemy of this.state.enemies) {
-        if (hit.includes(enemy.id)) {
-          continue;
-        }
-        const distance = Math.hypot(enemy.x - current.x, enemy.y - current.y);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          best = enemy;
-        }
-      }
-      if (!best) {
-        return;
-      }
-      hit.push(best.id);
-      this.events.push({ t: "zap", x1: current.x, y1: current.y, x2: best.x, y2: best.y });
-      current = { x: best.x, y: best.y };
-      this.damageEnemy(best, damage, false, owner, 10, current.x, current.y);
-    }
-  }
-
-  /** Explosion: voller Schaden in der Mitte, alle Gegner im Umkreis werden getroffen. */
-  private explode(x: number, y: number, radius: number, damage: number, crit: boolean, owner: PlayerState | null): void {
-    this.events.push({ t: "boom", x, y, r: radius, enemy: false });
-    for (const enemy of [...this.state.enemies]) {
-      const distance = Math.hypot(enemy.x - x, enemy.y - y);
-      if (distance < radius + ENEMIES[enemy.type].radius) {
-        this.damageEnemy(enemy, Math.max(1, Math.round(damage * (distance < radius * 0.4 ? 1 : 0.6))), crit, owner, 70, x, y);
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Faehigkeiten
-  // ---------------------------------------------------------------------------
-
-  /** Grundstaerke einer Faehigkeit: waechst mit der Welle und dem Schadenswert. */
-  private abilityPower(player: PlayerState): number {
-    return (12 + this.state.wave * 3.5) * (1 + player.stats.damage / 100);
-  }
-
-  private useAbility(player: PlayerState): void {
-    player.abilityCd = abilityCooldown(player.character, player.stats.ability);
-    const power = this.abilityPower(player);
-    const event = { t: "ability" as const, pid: player.id, kind: player.character, x: player.x, y: player.y, x2: player.x, y2: player.y };
-    switch (player.character) {
-      case "magierin": {
-        const target = this.nearestEnemy(player.x, player.y, 460);
-        const tx = target ? target.x : clamp(player.x + Math.cos(player.facing) * 200, 10, ARENA.width - 10);
-        const ty = target ? target.y : clamp(player.y + Math.sin(player.facing) * 200, 10, ARENA.height - 10);
-        const distance = Math.max(30, Math.hypot(tx - player.x, ty - player.y));
-        const speed = 520;
-        this.state.shots.push({
-          id: this.nextId++,
-          x: player.x,
-          y: player.y,
-          vx: ((tx - player.x) / distance) * speed,
-          vy: ((ty - player.y) / distance) * speed,
-          damage: Math.round(power * 1.5),
-          pierce: 0,
-          life: distance / speed,
-          friendly: true,
-          ownerId: player.id,
-          crit: false,
-          radius: 7,
-          hit: [],
-          weapon: "",
-          look: LOOK_GRENADE,
-        });
-        event.x2 = tx;
-        event.y2 = ty;
-        break;
-      }
-      case "zwerg": {
-        for (const enemy of [...this.state.enemies]) {
-          if (Math.hypot(enemy.x - player.x, enemy.y - player.y) < 135 + ENEMIES[enemy.type].radius) {
-            enemy.stun = Math.max(enemy.stun, 1.2);
-            this.damageEnemy(enemy, Math.round(power * 1.1), false, player, 230, player.x, player.y);
-          }
-        }
-        break;
-      }
-      case "elfe": {
-        for (let i = 0; i < 18; i += 1) {
-          const angle = (i / 18) * Math.PI * 2;
-          this.state.shots.push({
-            id: this.nextId++,
-            x: player.x,
-            y: player.y,
-            vx: Math.cos(angle) * 720,
-            vy: Math.sin(angle) * 720,
-            damage: Math.round(power * 0.75),
-            pierce: 3,
-            life: 0.75,
-            friendly: true,
-            ownerId: player.id,
-            crit: false,
-            radius: 5,
-            hit: [],
-            weapon: "crossbow",
-            look: 1,
-          });
-        }
-        break;
-      }
-      case "ritter": {
-        player.buff = 3;
-        player.hp = Math.min(player.stats.maxHp, player.hp + player.stats.maxHp * 0.2);
-        for (const enemy of this.state.enemies) {
-          const dx = enemy.x - player.x;
-          const dy = enemy.y - player.y;
-          const distance = Math.hypot(dx, dy) || 1;
-          if (distance < 120) {
-            const push = 260 * ENEMIES[enemy.type].knockback;
-            enemy.kx += (dx / distance) * push * 6;
-            enemy.ky += (dy / distance) * push * 6;
-          }
-        }
-        break;
-      }
-      case "zauberer": {
-        player.buff = 5;
-        for (const pickup of this.state.pickups) {
-          pickup.magnet = true;
-        }
-        break;
-      }
-      case "schurke": {
-        const angle = this.moveAngle.get(player.id) ?? player.facing;
-        const startX = player.x;
-        const startY = player.y;
-        player.x = clamp(player.x + Math.cos(angle) * 170, PLAYER_RADIUS, ARENA.width - PLAYER_RADIUS);
-        player.y = clamp(player.y + Math.sin(angle) * 170, PLAYER_RADIUS, ARENA.height - PLAYER_RADIUS);
-        player.buff = 0.6;
-        player.iframes = Math.max(player.iframes, 0.6);
-        for (const enemy of [...this.state.enemies]) {
-          if (distanceToSegment(enemy.x, enemy.y, startX, startY, player.x, player.y) < 26 + ENEMIES[enemy.type].radius) {
-            this.damageEnemy(enemy, Math.round(power * 1.4), true, player, 60, startX, startY);
-          }
-        }
-        event.x = startX;
-        event.y = startY;
-        event.x2 = player.x;
-        event.y2 = player.y;
-        break;
-      }
-    }
-    this.events.push(event);
-  }
-
-  private collect(player: PlayerState, value: number, announce: boolean): void {
-    player.gold += value;
-    player.earned += value;
-    if (grantXp(player, value) > 0) {
-      this.events.push({ t: "levelUp", pid: player.id });
-    }
-    if (announce) {
-      this.events.push({ t: "pickup", pid: player.id, x: player.x, y: player.y });
-    }
-  }
-
-  private updatePickups(): void {
-    const state = this.state;
-    if (state.pickups.length === 0) {
-      return;
-    }
-    const remaining = state.pickups.filter((pickup) => {
-      const player = this.nearestAlivePlayer(pickup.x, pickup.y);
-      if (!player) {
-        return true;
-      }
-      const dx = player.x - pickup.x;
-      const dy = player.y - pickup.y;
-      const distance = Math.hypot(dx, dy);
-      if (distance < PICKUP_RADIUS) {
-        this.collect(player, pickup.value, true);
-        return false;
-      }
-      if (pickup.magnet || distance < MAGNET_RADIUS) {
-        pickup.magnet = true;
-        const pull = 420 * TICK;
-        pickup.x += (dx / distance) * pull;
-        pickup.y += (dy / distance) * pull;
-      }
-      return true;
-    });
-    state.pickups = remaining;
-  }
+export interface SimulationOptions {
+  route?: readonly MarchSpec[];
 }
 
 function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
+  return Math.max(min, Math.min(max, value));
 }
 
-/** Abstand eines Punktes zu einer Strecke - fuer den Schattenschritt. */
-function distanceToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const length = dx * dx + dy * dy;
-  const t = length > 0 ? clamp(((px - ax) * dx + (py - ay) * dy) / length, 0, 1) : 0;
-  return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
-}
+export class Simulation {
+  readonly state: GameState;
+  /** Was im letzten `advance` passiert ist. */
+  events: GameEvent[] = [];
 
-function normalizeAngle(angle: number): number {
-  let result = angle;
-  while (result > Math.PI) {
-    result -= Math.PI * 2;
+  private accumulator = 0;
+  /** Ereignisse aus Befehlen zwischen zwei Bildern - gehen mit dem naechsten `advance` raus. */
+  private pending: GameEvent[] = [];
+  private readonly rng: Rng;
+  private readonly route: readonly MarchSpec[];
+
+  constructor(setups: readonly PlayerSetup[], seed: number, options: SimulationOptions = {}) {
+    this.rng = createRng(seed);
+    this.route = options.route ?? PROBE_ROUTE;
+    const first = this.route[0];
+    if (!first) {
+      throw new Error("Die Route braucht mindestens einen Marsch.");
+    }
+    this.state = {
+      phase: "march",
+      time: 0,
+      march: {
+        index: 0,
+        count: this.route.length,
+        station: first.station,
+        length: first.length,
+        done: 0,
+        spawnTimer: 2,
+      },
+      fort: { x: 0, y: 0, hull: HULL_MAX, hullMax: HULL_MAX, gait: 0, moving: true },
+      players: setups.map((setup, index) => this.newPlayer(setup, index)),
+      enemies: [],
+      shots: [],
+      scrap: [],
+      bank: 0,
+      kills: 0,
+      nextId: 1,
+    };
   }
-  while (result < -Math.PI) {
-    result += Math.PI * 2;
+
+  /** Rechnet `deltaMs` Millisekunden in festen Schritten weiter. */
+  advance(deltaMs: number, inputs: ReadonlyMap<string, PlayerInput>): void {
+    this.events = this.pending;
+    this.pending = [];
+    // Nach einer Pause (Tab im Hintergrund) nicht Sekunden auf einmal nachholen.
+    this.accumulator += Math.min(deltaMs, 250) / 1000;
+    while (this.accumulator >= TICK) {
+      this.tick(inputs);
+      this.accumulator -= TICK;
+    }
   }
-  return result;
+
+  /** Befehle aus der Rast: reparieren, weiterziehen. */
+  command(_playerId: string, command: Command): void {
+    const s = this.state;
+    if (s.phase !== "rest") {
+      return;
+    }
+    if (command.kind === "repair") {
+      if (s.bank >= REPAIR_COST && s.fort.hull < s.fort.hullMax) {
+        s.bank -= REPAIR_COST;
+        const before = s.fort.hull;
+        s.fort.hull = Math.min(s.fort.hullMax, s.fort.hull + REPAIR_AMOUNT);
+        this.pending.push({ kind: "repair", amount: s.fort.hull - before });
+      }
+      return;
+    }
+    const index = s.march.index + 1;
+    const spec = this.route[index];
+    if (!spec) {
+      return;
+    }
+    s.march = {
+      index,
+      count: this.route.length,
+      station: spec.station,
+      length: spec.length,
+      done: 0,
+      spawnTimer: 2.5,
+    };
+    s.phase = "march";
+    this.pending.push({ kind: "depart", index });
+  }
+
+  // --- Ein Rechenschritt ---------------------------------------------------------------------
+
+  private tick(inputs: ReadonlyMap<string, PlayerInput>): void {
+    const s = this.state;
+    if (s.phase === "won" || s.phase === "lost") {
+      return;
+    }
+    s.time += TICK;
+    const marching = s.phase === "march";
+    const fortDx = marching ? FORT_SPEED * TICK : 0;
+    s.fort.moving = marching;
+    if (marching) {
+      const before = s.fort.gait;
+      s.fort.x += fortDx;
+      s.fort.gait += TICK;
+      s.march.done += fortDx;
+      this.stomp(before, s.fort.gait);
+    }
+    for (const player of s.players) {
+      this.updatePlayer(player, inputs.get(player.id) ?? IDLE, fortDx);
+    }
+    if (marching) {
+      this.spawn();
+    }
+    this.updateEnemies(fortDx);
+    this.updateShots();
+    if (marching) {
+      const lostAt = s.fort.x - SCRAP_LOST_BEHIND;
+      s.scrap = s.scrap.filter((piece) => piece.x > lostAt);
+    }
+    this.checkProgress();
+  }
+
+  // --- Festung -------------------------------------------------------------------------------
+
+  /** Setzt ein Fuss auf, trifft er alles, was darunter steht. */
+  private stomp(before: number, after: number): void {
+    const f = this.state.fort;
+    for (const leg of LEGS) {
+      if (legPhase(after, leg) < legPhase(before, leg)) {
+        const x = f.x + leg.footX + STRIDE / 2;
+        const y = f.y + leg.footY;
+        this.events.push({ kind: "stomp", x, y });
+        for (const enemy of this.state.enemies) {
+          if (enemy.hp > 0 && Math.hypot(enemy.x - x, enemy.y - y) < STOMP_RADIUS) {
+            this.damageEnemy(enemy, STOMP_DAMAGE, x, y, null);
+          }
+        }
+      }
+    }
+  }
+
+  private damageHull(amount: number, x: number, y: number): void {
+    this.state.fort.hull = Math.max(0, this.state.fort.hull - amount);
+    this.events.push({ kind: "hullHit", x, y, amount });
+  }
+
+  // --- Mechs ---------------------------------------------------------------------------------
+
+  private newPlayer(setup: PlayerSetup, index: number): PlayerState {
+    const spec = CREW[setup.crew];
+    return {
+      id: setup.id,
+      name: setup.name,
+      crew: setup.crew,
+      layer: "deck",
+      x: RESPAWN_SPOT.x - 40 + index * 28,
+      y: RESPAWN_SPOT.y,
+      z: ELEVATION,
+      facing: -1,
+      moving: false,
+      hp: spec.hp,
+      hpMax: spec.hp,
+      alive: true,
+      respawn: 0,
+      transition: null,
+      edgeTime: 0,
+      cooldown: 0.5,
+      abilityCd: 0,
+      abilityAck: 0,
+      kills: 0,
+      scrap: 0,
+    };
+  }
+
+  private updatePlayer(p: PlayerState, input: PlayerInput, fortDx: number): void {
+    const spec = CREW[p.crew];
+    // Den Faehigkeits-Zaehler immer quittieren, auch wenn gerade nichts geht -
+    // sonst loeste ein alter Druck spaeter ueberraschend aus.
+    if (input.ability !== undefined && input.ability > p.abilityAck) {
+      p.abilityAck = input.ability;
+      if (p.alive && p.abilityCd <= 0) {
+        this.useAbility(p, spec);
+      }
+    }
+    p.abilityCd = Math.max(0, p.abilityCd - TICK);
+
+    if (!p.alive) {
+      p.respawn -= TICK;
+      if (p.respawn <= 0) {
+        this.respawn(p);
+      }
+      return;
+    }
+    if (p.transition) {
+      this.advanceTransition(p, p.transition);
+      return;
+    }
+
+    const length = Math.hypot(input.mx, input.my);
+    const scale = length > 1 ? 1 / length : 1;
+    const mx = input.mx * scale;
+    const my = input.my * scale;
+    p.moving = length > 0.05;
+    if (Math.abs(mx) > 0.1) {
+      p.facing = mx > 0 ? 1 : -1;
+    }
+    const step = spec.speed * TICK;
+    if (p.layer === "deck") {
+      p.x += fortDx;
+      this.moveOnDeck(p, mx, my, step);
+    } else {
+      this.moveOnGround(p, mx, my, step);
+    }
+    if (p.transition) {
+      return;
+    }
+    this.shoot(p, spec);
+    if (p.layer === "ground") {
+      this.collectScrap(p);
+    }
+  }
+
+  private blockedOnDeck(x: number, y: number): boolean {
+    return DECK_OBSTACLES.some((r) => insideRect(r, x, y));
+  }
+
+  private moveOnDeck(p: PlayerState, mx: number, my: number, step: number): void {
+    const f = this.state.fort;
+    let lx = p.x - f.x;
+    let ly = p.y - f.y;
+    // Achsen getrennt: So gleitet man an Aufbauten entlang, statt haengen zu bleiben.
+    const nx = lx + mx * step;
+    if (!this.blockedOnDeck(nx, ly)) {
+      lx = nx;
+    }
+    const ny = ly + my * step;
+    if (!this.blockedOnDeck(lx, ny)) {
+      ly = ny;
+    }
+    lx = clamp(lx, DECK_WALK.x0, DECK_WALK.x1);
+    ly = clamp(ly, DECK_WALK.y0, DECK_WALK.y1);
+    p.x = f.x + lx;
+    p.y = f.y + ly;
+
+    // Gegen eine Kante druecken (hinten ist ein Gelaender): kurz halten, dann abspringen.
+    let edge: "left" | "right" | "front" | null = null;
+    if (lx <= DECK_WALK.x0 + 0.5 && mx < -0.4) {
+      edge = "left";
+    } else if (lx >= DECK_WALK.x1 - 0.5 && mx > 0.4) {
+      edge = "right";
+    } else if (ly >= DECK_WALK.y1 - 0.5 && my > 0.4) {
+      edge = "front";
+    }
+    if (!edge) {
+      p.edgeTime = 0;
+      return;
+    }
+    p.edgeTime += TICK;
+    if (p.edgeTime >= EDGE_HOLD) {
+      this.jumpOff(p, edge, lx, ly);
+    }
+  }
+
+  private jumpOff(p: PlayerState, edge: "left" | "right" | "front", lx: number, ly: number): void {
+    const f = this.state.fort;
+    let x = f.x + lx;
+    let y = f.y + ly;
+    if (edge === "left") {
+      x = f.x - 34;
+    } else if (edge === "right") {
+      x = f.x + DECK_W + 34;
+    } else {
+      y = f.y + DECK_H + 30;
+    }
+    this.startTransition(
+      p,
+      "jump",
+      JUMP_TIME,
+      { x: lx, y: ly, z: ELEVATION, onFort: true },
+      { x, y: clamp(y, GROUND_TOP, GROUND_BOTTOM), z: 0, onFort: false },
+      "ground",
+    );
+  }
+
+  private moveOnGround(p: PlayerState, mx: number, my: number, step: number): void {
+    const f = this.state.fort;
+    p.x = Math.min(p.x + mx * step, f.x + DECK_W + AHEAD);
+    p.y = clamp(p.y + my * step, GROUND_TOP, GROUND_BOTTOM);
+    if (p.x < f.x - BEHIND) {
+      // Zu weit zurueckgefallen: Die Seilwinde holt den Mech aufs Deck, das kostet Rumpf.
+      this.damageHull(WINCH_COST, p.x, p.y);
+      this.startTransition(
+        p,
+        "winch",
+        WINCH_TIME,
+        { x: p.x, y: p.y, z: 0, onFort: false },
+        { x: WINCH_LANDING.x, y: WINCH_LANDING.y, z: ELEVATION, onFort: true },
+        "deck",
+      );
+      return;
+    }
+    const lx = p.x - f.x;
+    const ly = p.y - f.y;
+    // An der Strickleiter: hochklettern (ausser man laeuft gerade von ihr weg nach vorn).
+    if (lx >= LADDER.x0 && lx <= LADDER.x1 && ly >= LADDER.y0 && ly <= LADDER.y1 && my < 0.3) {
+      this.startTransition(
+        p,
+        "climb",
+        CLIMB_TIME,
+        { x: lx, y: ly, z: 0, onFort: true },
+        { x: LADDER_TOP.x, y: LADDER_TOP.y, z: ELEVATION, onFort: true },
+        "deck",
+      );
+    }
+  }
+
+  private startTransition(
+    p: PlayerState,
+    kind: Transition["kind"],
+    duration: number,
+    from: Anchor,
+    to: Anchor,
+    toLayer: PlayerState["layer"],
+  ): void {
+    p.transition = { kind, t: 0, duration, from, to, toLayer };
+    p.edgeTime = 0;
+    p.moving = false;
+    this.events.push({ kind, id: p.id });
+  }
+
+  private resolve(anchor: Anchor): { x: number; y: number; z: number } {
+    if (!anchor.onFort) {
+      return anchor;
+    }
+    const f = this.state.fort;
+    return { x: f.x + anchor.x, y: f.y + anchor.y, z: anchor.z };
+  }
+
+  private advanceTransition(p: PlayerState, tr: Transition): void {
+    tr.t += TICK;
+    const u = Math.min(1, tr.t / tr.duration);
+    const a = this.resolve(tr.from);
+    const b = this.resolve(tr.to);
+    p.x = a.x + (b.x - a.x) * u;
+    p.y = a.y + (b.y - a.y) * u;
+    const arc = tr.kind === "jump" ? 18 : tr.kind === "winch" ? 46 : 0;
+    p.z = a.z + (b.z - a.z) * u + Math.sin(u * Math.PI) * arc;
+    if (b.x !== a.x) {
+      p.facing = b.x > a.x ? 1 : -1;
+    }
+    if (u >= 1) {
+      p.layer = tr.toLayer;
+      p.z = b.z;
+      p.transition = null;
+    }
+  }
+
+  private shoot(p: PlayerState, spec: CrewSpec): void {
+    p.cooldown -= TICK;
+    if (p.cooldown > 0) {
+      return;
+    }
+    const weapon = spec.weapon;
+    const target = this.findTarget(p, weapon.range);
+    if (!target) {
+      p.cooldown = 0;
+      return;
+    }
+    p.cooldown = weapon.cooldown;
+    const dx = target.x - p.x;
+    const dy = target.y - p.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const ux = dx / distance;
+    const uy = dy / distance;
+    const z = p.z + 26;
+    const flight = distance / weapon.speed;
+    this.state.shots.push({
+      id: this.state.nextId++,
+      owner: p.id,
+      x: p.x + ux * 12,
+      y: p.y + uy * 4,
+      z,
+      vx: ux * weapon.speed,
+      vy: uy * weapon.speed,
+      vz: (14 - z) / flight,
+      damage: weapon.damage,
+      life: flight + 0.3,
+    });
+    p.facing = ux >= 0 ? 1 : -1;
+    this.events.push({ kind: "shot", owner: p.id, x: p.x + ux * 12, y: p.y, z });
+  }
+
+  /** Naechster Gegner in Reichweite. Vom Deck aus nicht die unter dem Deck. */
+  private findTarget(p: PlayerState, range: number): EnemyState | null {
+    const f = this.state.fort;
+    let best: EnemyState | null = null;
+    let bestDistance = range;
+    for (const enemy of this.state.enemies) {
+      if (enemy.hp <= 0) {
+        continue;
+      }
+      if (p.layer === "deck" && insideRect(BLIND_SPOT, enemy.x - f.x, enemy.y - f.y)) {
+        continue;
+      }
+      const distance = Math.hypot(enemy.x - p.x, enemy.y - p.y);
+      if (distance < bestDistance) {
+        best = enemy;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
+  private collectScrap(p: PlayerState): void {
+    const s = this.state;
+    const taken = new Set<number>();
+    for (const piece of s.scrap) {
+      const dx = p.x - piece.x;
+      const dy = p.y - piece.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < SCRAP_PICKUP) {
+        taken.add(piece.id);
+        s.bank += piece.value;
+        p.scrap += piece.value;
+        this.events.push({
+          kind: "pickup",
+          player: p.id,
+          x: piece.x,
+          y: piece.y,
+          value: piece.value,
+        });
+      } else if (distance < SCRAP_MAGNET) {
+        // Magnet: Schrott fliegt die letzten Meter von selbst heran.
+        const pull = Math.min(distance, 300 * TICK);
+        piece.x += (dx / distance) * pull;
+        piece.y += (dy / distance) * pull;
+      }
+    }
+    if (taken.size > 0) {
+      s.scrap = s.scrap.filter((piece) => !taken.has(piece.id));
+    }
+  }
+
+  private useAbility(p: PlayerState, spec: CrewSpec): void {
+    const ability = spec.ability;
+    p.abilityCd = ability.cooldown;
+    this.events.push({ kind: "ability", id: p.id });
+    const f = this.state.fort;
+    if (ability.hull) {
+      const before = f.hull;
+      f.hull = Math.min(f.hullMax, f.hull + ability.hull);
+      this.events.push({ kind: "repair", amount: f.hull - before });
+    }
+    if (ability.heal) {
+      p.hp = Math.min(p.hpMax, p.hp + ability.heal);
+    }
+  }
+
+  private hurtPlayer(p: PlayerState, amount: number): void {
+    if (!p.alive || p.transition) {
+      return;
+    }
+    p.hp -= amount;
+    this.events.push({ kind: "playerHit", id: p.id });
+    if (p.hp <= 0) {
+      p.hp = 0;
+      p.alive = false;
+      p.respawn = RESPAWN_TIME;
+      p.moving = false;
+      this.events.push({ kind: "playerDown", id: p.id });
+    }
+  }
+
+  private respawn(p: PlayerState): void {
+    const f = this.state.fort;
+    p.alive = true;
+    p.hp = p.hpMax;
+    p.layer = "deck";
+    p.x = f.x + RESPAWN_SPOT.x;
+    p.y = f.y + RESPAWN_SPOT.y;
+    p.z = ELEVATION;
+    p.transition = null;
+    p.edgeTime = 0;
+    this.events.push({ kind: "respawn", id: p.id });
+  }
+
+  // --- Gegner ----------------------------------------------------------------------------------
+
+  private spawn(): void {
+    const s = this.state;
+    const spec = this.route[s.march.index];
+    if (!spec) {
+      return;
+    }
+    s.march.spawnTimer -= TICK;
+    if (s.march.spawnTimer > 0) {
+      return;
+    }
+    const progress = Math.min(1, s.march.done / s.march.length);
+    const rate = spec.spawnStart + (spec.spawnEnd - spec.spawnStart) * progress;
+    if (rate <= 0) {
+      s.march.spawnTimer = 1;
+      return;
+    }
+    const group = progress > 0.4 && this.rng() < 0.35 ? 2 + (this.rng() < 0.4 ? 1 : 0) : 1;
+    // Im Mittel kommt `rate` Gegner pro Sekunde, egal ob einzeln oder in Gruppen.
+    s.march.spawnTimer = (group * (0.6 + this.rng() * 0.8)) / rate;
+    const f = s.fort;
+    let x: number;
+    let y: number;
+    if (this.rng() < 0.6) {
+      // Von hinten
+      x = f.x - BEHIND - 30;
+      y = GROUND_TOP + this.rng() * (GROUND_BOTTOM - GROUND_TOP);
+    } else {
+      // Von oben oder unten, eher aus der hinteren Haelfte
+      x = f.x - BEHIND + this.rng() * (BEHIND + 160);
+      y = this.rng() < 0.5 ? GROUND_TOP - 110 : GROUND_BOTTOM + 40;
+    }
+    for (let i = 0; i < group && s.enemies.length < MAX_ENEMIES; i += 1) {
+      this.addEnemy(x + (this.rng() - 0.5) * 30, y + (this.rng() - 0.5) * 30, spec.hp);
+    }
+  }
+
+  private addEnemy(x: number, y: number, hpFactor: number): void {
+    const spec = ENEMIES.laeufer;
+    const feet = ATTACK_SLOTS.filter((slot) => !slot.belly);
+    const belly = ATTACK_SLOTS.filter((slot) => slot.belly);
+    const pool = this.rng() < 0.4 ? feet : belly;
+    const slot = pool[Math.floor(this.rng() * pool.length)] ?? ATTACK_SLOTS[0]!;
+    const hp = Math.round(spec.hp * hpFactor);
+    this.state.enemies.push({
+      id: this.state.nextId++,
+      type: "laeufer",
+      x,
+      y,
+      hp,
+      hpMax: hp,
+      speed: spec.speed * (0.9 + this.rng() * 0.2),
+      facing: 1,
+      slotX: slot.x + (this.rng() - 0.5) * 12,
+      slotY: slot.y + (this.rng() - 0.5) * 10,
+      attacking: false,
+      attackCd: 0.5,
+      pushX: 0,
+      pushY: 0,
+    });
+  }
+
+  private updateEnemies(fortDx: number): void {
+    const s = this.state;
+    const f = s.fort;
+    for (const e of s.enemies) {
+      if (e.hp <= 0) {
+        continue;
+      }
+      const spec = ENEMIES[e.type];
+      e.attackCd = Math.max(0, e.attackCd - TICK);
+      e.x += e.pushX * TICK;
+      e.y += e.pushY * TICK;
+      e.pushX *= 0.88;
+      e.pushY *= 0.88;
+      const step = e.speed * TICK;
+
+      // Ein Mech am Boden in der Naehe? Dann auf ihn los.
+      const prey = this.nearestGroundPlayer(e.x, e.y, spec.aggro);
+      if (prey) {
+        e.attacking = false;
+        const dx = prey.x - e.x;
+        const dy = prey.y - e.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        e.facing = dx >= 0 ? 1 : -1;
+        if (distance > spec.radius + 10) {
+          e.x += (dx / distance) * step;
+          e.y += (dy / distance) * step;
+        } else if (e.attackCd <= 0) {
+          e.attackCd = spec.attackCooldown;
+          this.hurtPlayer(prey, spec.touchDamage);
+        }
+        continue;
+      }
+
+      // Sonst zur Festung: an einen Fuss oder unter den Bauch.
+      const tx = f.x + e.slotX;
+      const ty = f.y + e.slotY;
+      if (e.attacking) {
+        e.x += fortDx;
+      }
+      const dx = tx - e.x;
+      const dy = ty - e.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > 2) {
+        const move = Math.min(distance, step);
+        e.x += (dx / distance) * move;
+        e.y += (dy / distance) * move;
+        e.facing = dx >= 0 ? 1 : -1;
+      }
+      if (!e.attacking && distance < 8) {
+        e.attacking = true;
+      } else if (e.attacking && distance > 24) {
+        e.attacking = false;
+      }
+      if (e.attacking && e.attackCd <= 0) {
+        e.attackCd = spec.attackCooldown;
+        this.damageHull(spec.hullDamage, e.x, e.y);
+      }
+    }
+    // Nicht alle auf einem Haufen: sanft auseinanderschieben.
+    const list = s.enemies;
+    for (let i = 0; i < list.length; i += 1) {
+      const a = list[i]!;
+      for (let j = i + 1; j < list.length; j += 1) {
+        const b = list[j]!;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const minimum = 16;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > 0 && d2 < minimum * minimum) {
+          const d = Math.sqrt(d2);
+          const push = (minimum - d) * 0.25;
+          a.x -= (dx / d) * push;
+          a.y -= (dy / d) * push;
+          b.x += (dx / d) * push;
+          b.y += (dy / d) * push;
+        }
+      }
+    }
+    s.enemies = s.enemies.filter((e) => e.hp > 0);
+  }
+
+  private nearestGroundPlayer(x: number, y: number, range: number): PlayerState | null {
+    let best: PlayerState | null = null;
+    let bestDistance = range;
+    for (const p of this.state.players) {
+      if (!p.alive || p.layer !== "ground" || p.transition) {
+        continue;
+      }
+      const distance = Math.hypot(p.x - x, p.y - y);
+      if (distance < bestDistance) {
+        best = p;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
+  private damageEnemy(
+    e: EnemyState,
+    amount: number,
+    fromX: number,
+    fromY: number,
+    owner: string | null,
+  ): void {
+    if (e.hp <= 0) {
+      return;
+    }
+    e.hp -= amount;
+    const dx = e.x - fromX;
+    const dy = e.y - fromY;
+    const distance = Math.hypot(dx, dy) || 1;
+    e.pushX += (dx / distance) * 70;
+    e.pushY += (dy / distance) * 70;
+    this.events.push({ kind: "hit", id: e.id, x: e.x, y: e.y });
+    if (e.hp > 0) {
+      return;
+    }
+    const s = this.state;
+    s.kills += 1;
+    const killer = owner ? s.players.find((p) => p.id === owner) : undefined;
+    if (killer) {
+      killer.kills += 1;
+    }
+    s.scrap.push({ id: s.nextId++, x: e.x, y: e.y, value: ENEMIES[e.type].scrap });
+    this.events.push({ kind: "kill", x: e.x, y: e.y, type: e.type });
+  }
+
+  // --- Geschosse -------------------------------------------------------------------------------
+
+  private updateShots(): void {
+    const s = this.state;
+    const f = s.fort;
+    for (const shot of s.shots) {
+      shot.x += shot.vx * TICK;
+      shot.y += shot.vy * TICK;
+      shot.z += shot.vz * TICK;
+      shot.life -= TICK;
+      for (const e of s.enemies) {
+        if (e.hp <= 0) {
+          continue;
+        }
+        // Hoch ueber dem Deck fliegt ein Schuss ueber die Gegner darunter hinweg.
+        if (shot.z > 40 && insideRect(BLIND_SPOT, e.x - f.x, e.y - f.y)) {
+          continue;
+        }
+        if (Math.hypot(e.x - shot.x, e.y - shot.y) < ENEMIES[e.type].radius + 5) {
+          this.damageEnemy(
+            e,
+            shot.damage,
+            shot.x - shot.vx * 0.05,
+            shot.y - shot.vy * 0.05,
+            shot.owner,
+          );
+          shot.life = 0;
+          break;
+        }
+      }
+    }
+    s.shots = s.shots.filter((shot) => shot.life > 0);
+  }
+
+  // --- Fortschritt -----------------------------------------------------------------------------
+
+  private checkProgress(): void {
+    const s = this.state;
+    if (s.fort.hull <= 0) {
+      s.phase = "lost";
+      this.events.push({ kind: "lost" });
+      return;
+    }
+    if (s.phase !== "march" || s.march.done < s.march.length) {
+      return;
+    }
+    this.events.push({ kind: "arrived", index: s.march.index });
+    // Die Armee bleibt zurueck: An der Station ist Ruhe.
+    s.enemies = [];
+    s.shots = [];
+    if (s.march.index + 1 >= s.march.count) {
+      s.phase = "won";
+      this.events.push({ kind: "won" });
+    } else {
+      s.phase = "rest";
+    }
+  }
 }

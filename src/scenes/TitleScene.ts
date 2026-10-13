@@ -1,120 +1,157 @@
 /**
- * Der Titelbildschirm: Abenddaemmerung vor der Feste Holdout.
- *
- * Links das Wappen-Logo, darunter die drei Wege ins Spiel und Schmiede/Erfolge,
- * rechts im Hintergrund die Burg (`landscape.ts`), oben rechts die Kristalle.
- * Unten auf der Wiese stehen alle sechs Helden in einer Reihe und wippen - noch
- * gesperrte als dunkle Silhouette.
+ * Titelbildschirm: Die Wanderfestung stapft durch die Wueste, der Schrauber
+ * steht auf dem Deck. Darueber der Schriftzug, darunter die Knoepfe.
  */
 
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
-import { characterKey } from "../config/assets";
 import { SAFE, VIEWPORT } from "../config/constants";
-import { CHARACTER_IDS } from "../game/data/characters";
+import { ELEVATION, FORT_SPEED, RESPAWN_SPOT } from "../game/constants";
+import { setReloadSafe } from "../platform/update";
 import { Button } from "../ui/Button";
-import { figureScale } from "../ui/comicFigures";
-import { menuBackground, woodPanel } from "../ui/menuStyle";
-import { isUnlocked } from "../meta/goals";
-import { loadProfile } from "../meta/profile";
-import { FONT_HAND } from "../ui/paper";
-import type { PlayMode } from "../app";
+import { crewKey, armyKey } from "../ui/pixel/textures";
+import { FONT_BODY, FONT_TITLE, T } from "../ui/theme";
+import { FortressView } from "../ui/world/FortressView";
+import { GroundView } from "../ui/world/GroundView";
+import { deckDepth, followFort } from "../ui/world/view";
 
 export class TitleScene extends Phaser.Scene {
+  private fort = { x: 0, y: 0, gait: 0, moving: true };
+  private ground!: GroundView;
+  private fortress!: FortressView;
+  private mech!: Phaser.GameObjects.Image;
+  private chasers: Phaser.GameObjects.Image[] = [];
+
   constructor() {
     super("Title");
   }
 
   create(): void {
-    menuBackground(this);
+    setReloadSafe(true);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => setReloadSafe(false));
+    this.fort = { x: 0, y: 0, gait: 0, moving: true };
+    this.ground = new GroundView(this);
+    this.fortress = new FortressView(this);
+    this.mech = this.add
+      .image(0, 0, crewKey("schrauber"))
+      .setOrigin(0.5, 62 / 64)
+      .setFlipX(true);
+    // Hinten holt die goldene Armee auf.
+    this.chasers = [0, 1, 2, 3].map((i) =>
+      this.add
+        .image(0, 0, armyKey("laeufer"))
+        .setOrigin(0.5, 46 / 48)
+        .setData("i", i),
+    );
 
-    // Der erste Tipp schaltet den Ton frei (Browser erlauben Ton nur nach einer Beruehrung).
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {
       audio.unlock();
       audio.setMusic("menu");
     });
     audio.setMusic("menu");
 
-    const left = SAFE.left + 24;
-    const right = VIEWPORT.width - SAFE.right;
-    const column = left + 170;
-
-    // --- Logo und Knoepfe links ----------------------------------------------
-    const logo = this.add.image(column, 98, "logo").setDisplaySize(400, 160);
-    this.tweens.add({ targets: logo, y: 94, duration: 1800, yoyo: true, repeat: -1, ease: "Sine.InOut" });
-
-    const choose = (mode: PlayMode): void => {
-      audio.unlock();
-      this.scene.start("Select", { mode });
-    };
-    new Button(this, column, 222, "Solo spielen", () => choose("solo"), { width: 300, height: 58, fontSize: 26 });
-    new Button(this, column, 286, "Koop: Raum erstellen", () => choose("host"), {
-      width: 300,
-      height: 50,
-      fontSize: 21,
-      variant: "secondary",
-    });
-    new Button(this, column, 344, "Koop: Beitreten", () => choose("join"), {
-      width: 300,
-      height: 50,
-      fontSize: 21,
-      variant: "secondary",
-    });
-    // Fortschritt: Schmiede (Kristalle ausgeben) und Erfolge
-    new Button(this, column - 76, 402, "Schmiede", () => this.scene.start("Forge"), { width: 148, height: 48, fontSize: 20 });
-    new Button(this, column + 76, 402, "Erfolge", () => this.scene.start("Achievements"), { width: 148, height: 48, fontSize: 20 });
-
-    // Kristalle oben rechts, neben dem Ton-Knopf
-    woodPanel(this, right - 220, 32, 130, 44);
-    this.add.image(right - 266, 32, "crystal").setDisplaySize(28, 28);
+    const w = VIEWPORT.width;
+    const title = this.add
+      .text(w / 2, SAFE.top + 46, "HOLDOUT", {
+        fontFamily: FONT_TITLE,
+        fontSize: "96px",
+        color: T.gold,
+      })
+      .setOrigin(0.5)
+      .setStroke(T.outline, 10)
+      .setShadow(0, 6, "#5e3a14", 0, true, true)
+      .setScrollFactor(0)
+      .setDepth(9000);
     this.add
-      .text(right - 166, 33, String(loadProfile().crystals), { fontFamily: FONT_HAND, fontSize: "22px", color: "#2f6fa8", fontStyle: "bold" })
-      .setOrigin(1, 0.5);
+      .text(w / 2, SAFE.top + 104, "DIE WANDERFESTUNG", {
+        fontFamily: FONT_TITLE,
+        fontSize: "36px",
+        color: T.light,
+      })
+      .setOrigin(0.5)
+      .setStroke(T.outline, 7)
+      .setScrollFactor(0)
+      .setDepth(9000);
+    this.tweens.add({
+      targets: title,
+      y: title.y - 3,
+      duration: 1600,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.InOut",
+    });
 
+    const bottom = VIEWPORT.height - SAFE.bottom;
+    const start = new Button(
+      this,
+      w / 2,
+      bottom - 92,
+      "LOSZIEHEN",
+      () => {
+        audio.unlock();
+        this.scene.start("Game");
+      },
+      { width: 280, height: 60, fontSize: 28 },
+    );
+    const koop = new Button(this, w / 2 - 74, bottom - 34, "KOOP · BALD", () => undefined, {
+      width: 140,
+      height: 42,
+      fontSize: 16,
+      variant: "secondary",
+    });
+    koop.setEnabled(false);
     const mute = new Button(
       this,
-      right - 76,
-      32,
-      audio.isMuted ? "Ton: aus" : "Ton: an",
+      w / 2 + 74,
+      bottom - 34,
+      audio.isMuted ? "TON: AUS" : "TON: AN",
       () => {
         audio.unlock();
         const muted = audio.toggleMuted();
-        mute.setText(muted ? "Ton: aus" : "Ton: an");
+        mute.setText(muted ? "TON: AUS" : "TON: AN");
         if (!muted) {
           audio.setMusic("menu");
         }
       },
-      { width: 116, height: 42, fontSize: 17, variant: "secondary" },
+      { width: 140, height: 42, fontSize: 16, variant: "secondary" },
     );
-
-    // --- Die Heldenreihe unten ---------------------------------------------------
-    const rowLeft = left + 20;
-    const rowRight = right - 30;
-    const step = (rowRight - rowLeft) / CHARACTER_IDS.length;
-    CHARACTER_IDS.forEach((id, index) => {
-      const x = rowLeft + step * (index + 0.5);
-      const hero = this.add
-        .image(x, VIEWPORT.height - 14, characterKey(id))
-        .setOrigin(0.5, 0.93)
-        .setScale(figureScale(1.2));
-      if (!isUnlocked(loadProfile(), id)) {
-        // Noch gesperrt: als dunkle Silhouette - neugierig machen.
-        hero.setTint(0x2e3850).setAlpha(0.9);
-      }
-      this.tweens.add({
-        targets: hero,
-        y: hero.y - 7,
-        duration: 420 + index * 37,
-        yoyo: true,
-        repeat: -1,
-        delay: index * 110,
-        ease: "Quad.Out",
-      });
-    });
-
+    for (const button of [start, koop, mute]) {
+      button.setScrollFactor(0);
+      button.setDepth(9000);
+    }
     this.add
-      .text(right - 10, VIEWPORT.height - 6, `v${__APP_VERSION__}`, { fontFamily: FONT_HAND, fontSize: "14px", color: "#f4e4c1" })
+      .text(
+        w - SAFE.right - 10,
+        VIEWPORT.height - SAFE.bottom - 6,
+        `v${__APP_VERSION__} · Probelauf (Baustufe 1 von 6)`,
+        {
+          fontFamily: FONT_BODY,
+          fontSize: "13px",
+          color: T.muted,
+        },
+      )
       .setOrigin(1, 1)
-      .setStroke("#2b2320", 3);
+      .setStroke(T.outline, 3)
+      .setScrollFactor(0)
+      .setDepth(9000);
+  }
+
+  update(time: number, delta: number): void {
+    const dt = Math.min(delta, 100) / 1000;
+    this.fort.x += FORT_SPEED * dt;
+    this.fort.gait += dt;
+    followFort(this.cameras.main, this.fort.x);
+    this.ground.update(this.cameras.main);
+    this.fortress.update(this.fort, delta);
+    this.mech
+      .setPosition(this.fort.x + RESPAWN_SPOT.x, this.fort.y + RESPAWN_SPOT.y - ELEVATION)
+      .setDepth(deckDepth(RESPAWN_SPOT.y));
+    for (const chaser of this.chasers) {
+      const i = chaser.getData("i") as number;
+      const bob = Math.abs(Math.sin(time / 90 + i)) * 2;
+      const x = this.fort.x - 250 + i * 46 + Math.sin(time / 900 + i) * 14;
+      const y = 150 + (i % 2) * 70 - i * 16;
+      chaser.setPosition(x, y - bob).setDepth(y);
+    }
   }
 }

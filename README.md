@@ -1,32 +1,31 @@
-# Holdout
+# Holdout – Die Wanderfestung
 
-Brotato-artiger Wellen-Shooter fürs Handy, solo oder im Online-Koop (1–4 Spieler).
-
-Du steuerst nur die Bewegung – die Waffen schießen von selbst. Überlebe 20 Wellen,
-sammle Material, kaufe zwischen den Wellen Waffen und Gegenstände, steige im Level
-auf und baue dir einen Build. Sechs Charaktere brechen jeweils eine Regel.
+Eure Basis läuft: Eine Mech-Crew flieht auf einer sechsbeinigen Festung durch die
+Wüste, die goldene Armee dicht dahinter. Ihr kämpft auf dem Deck oder springt ab,
+um Schrott zu holen – aber die Festung wartet nicht. Fürs Handy, Pixel-Art.
 
 > **Das Spiel läuft nur auf Handys und Tablets** (Querformat). Am Desktop zeigt es
 > einen QR-Code. Zum Entwickeln gibt es `?desktop` (siehe unten).
+
+## Stand
+
+Das Spiel wird in sechs Baustufen neu gebaut (der frühere Brotato-artige
+Wellen-Shooter liegt in der Git-Geschichte, letzter Stand `v3.9.2`).
+
+| Baustufe | Inhalt | Stand |
+| --- | --- | --- |
+| 1 | Laufende Festung, Deck und Boden, Strickleiter, Seilwinde, Sandläufer, Schrott, Rast | fertig |
+| 2 | Module aufs Deck bauen, aufrüsten, Nachbar-Boni | offen |
+| 3 | Gegner mit Aufgaben (Enterer, Phalanx, Käfer, Ballista, Belagerungsturm, Koloss) | offen |
+| 4 | Routenkarte mit Stationen, nachrückende Armee, Akt 1 komplett | offen |
+| 5 | Crew (6 Mechs), Teile, Werft, Altgold, Erfolge | offen |
+| 6 | Koop, Akte 2 und 3, Ton, Feinschliff | offen |
 
 ## Installieren
 
 - **Android und iPhone, ohne Store:** https://thcjk.github.io/Holdout/ auf dem Handy
   öffnen, dann „App installieren“ (Android) bzw. „Teilen → Zum Home-Bildschirm“ (iPhone).
-- **Android-APK:** unter [Releases](https://github.com/Thcjk/Holdout/releases) die
-  Datei `holdout.apk` laden (gebaut über den Workflow „Android APK“).
-
-## Spielprinzip
-
-| Teil | Inhalt |
-| --- | --- |
-| Gefecht | Arena 900 × 440, schwebender Daumenstick links, Waffen zielen und feuern automatisch |
-| Wellen | 20 Wellen, jede mit Zeitlimit; Gegner erscheinen nach einem roten Kreuz am Boden |
-| Material | Gegner lassen Material fallen, es wird eingesammelt und ist die Währung im Shop |
-| Shop | Nach jeder Welle: vier Angebote (Waffen und Gegenstände), halten, neu würfeln, Waffen verkaufen oder verschmelzen, Werte ansehen |
-| Level-Ups | Jedes Level bringt eine Auswahl aus vier Verbesserungen |
-| Charaktere | Söldner, Raufbold, Jäger, Panzer, Glückspilz, Schatten – mit eigenen Regeln und Startwaffen |
-| Koop | Host rechnet für alle, Raumcode über WebRTC (PeerJS); der Shop wartet, bis alle „Weiter“ gedrückt haben |
+- **Android-APK:** unter [Releases](https://github.com/Thcjk/Holdout/releases) (Workflow „Android APK“).
 
 ## Entwickeln
 
@@ -40,18 +39,17 @@ Nützliche Adress-Zusätze:
 | Zusatz | Wirkung |
 | --- | --- |
 | `?desktop` | Spiel auch am Desktop starten (Maus ersetzt den Daumen) |
-| `?debug=lokal` | Koop ohne Server zwischen zwei Tabs (Raum `LOCAL1`) |
-| `?debug=werte` | Bildrate und Werte einblenden |
-| `?debug=netz` | Protokoll des Verbindungsaufbaus |
-| `?seed=123` | Feste Welt-Zufallszahl (nur solo) |
+| `?debug=kurz` | Märsche nur ein Zehntel so lang (Rast und Ziel schnell sehen) |
+| `?debug=werte` | Bildrate und Gegnerzahl einblenden |
+| `?seed=123` | Feste Zufallszahl |
 
 ## Befehle
 
 | Befehl | Zweck |
 | --- | --- |
-| `npm run dev` | Entwicklungsserver (auch im WLAN erreichbar) |
-| `npm run test` | Tests: Simulation, Koop-Sitzungen, Verbindungsweg |
-| `npm run balance` | Bot spielt alle Charaktere durch und gibt aus, wie weit sie kommen |
+| `npm run dev` | Entwicklungsserver |
+| `npm run test` | Tests: Spielkern, Verbindungsweg |
+| `npm run balance -- 10 klug` | Bot spielt den Probelauf (`klug` springt ab und sammelt, `deck` bleibt oben) |
 | `npm run typecheck` / `npm run lint` | Prüfen |
 | `npm run build` | Produktionsbuild nach `dist/` |
 
@@ -59,22 +57,19 @@ Nützliche Adress-Zusätze:
 
 ```
 src/
-  game/       Spielkern ohne Phaser und ohne Netz: Simulation, Daten, Shop
-    data/     Waffen, Gegenstände, Charaktere, Gegner, Level-Ups, Werte
-  net/        Koop: Transport (PeerJS/lokal), Lobby, Host- und Client-Sitzung
-  scenes/     Boot, Titel, Charakterwahl, Lobby, Spiel, Ergebnis
-  ui/         Stick, HUD, Shop, Knöpfe, Menü-Look
+  game/       Spielkern ohne Phaser und ohne Netz: Simulation, Festung, Daten
+  net/        Sitzungen (solo) und die Verbindungsschicht für den späteren Koop
+  scenes/     Boot, Titel, Spiel, Ergebnis
+  ui/         HUD, Knöpfe, Stick, Rast-Tafel; pixel/ malt alle Bilder per Code; world/ zeichnet Boden und Festung
   platform/   Geräte-Erkennung, Sicherheitsränder, Updates
-  config/     Bildschirm, Assets, UI-Grafiken
-tests/        Simulation und Netz im Speicher, ohne Browser
-tools/        Balance-Messung, App-Icons
+tests/        Spielkern ohne Browser, Bot für die Balance
+tools/        Balance-Messung, App-Icons und Splash
 android/      Capacitor-Projekt
-docs/archiv/  Alte Dokumente des früheren Arena-Shooters
+docs/archiv/  Alte Dokumente
 ```
 
 Die Simulation (`src/game/`) läuft mit festem 60-Hz-Takt und weiß nichts von
-Phaser oder dem Netz. Solo rechnet sie lokal, im Koop auf dem Host (Zustand 15×/s
-an die Clients, Eingaben 30×/s zurück). Mehr dazu in `CLAUDE.md`.
+Phaser oder dem Netz. Mehr dazu in `CLAUDE.md`.
 
 ## Deployment
 
@@ -82,4 +77,4 @@ Push auf `main` veröffentlicht die Website über `.github/workflows/deploy-page
 (Basispfad wird aus dem Repo-Namen abgeleitet). Ein Tag `v*` baut die Android-APK.
 Einmalig nötig: **Settings → Pages → Source: GitHub Actions**.
 
-Grafik: Kenney „Topdown Shooter Pixel“, „UI Pack RPG“, „Blaster Kit“ (CC0).
+Grafik: alles per Code gemalte Pixel-Art (`src/ui/pixel/`). Schriften: Jersey 10 und Pixelify Sans (OFL).

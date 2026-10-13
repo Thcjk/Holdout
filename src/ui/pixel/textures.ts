@@ -1,115 +1,159 @@
 /**
- * Meldet alle Pixel-Bilder als Phaser-Texturen an - mit HARTEN Pixeln.
+ * Malt beim Start alle Pixel-Bilder und legt sie als Phaser-Texturen ab.
  *
- * Phaser glaettet Bilder beim Vergroessern normalerweise (das Spiel laeuft mit
- * `pixelArt: false`, damit Text weich bleibt). Pixel-Art soll aber knackig
- * bleiben: Jede Textur hier bekommt deshalb den Filter NEAREST - beim
- * Vergroessern wird aus einem Pixel ein Block, nichts verschwimmt.
+ * Alles ist Code (siehe `pix.ts`), es gibt keine Bilddateien. Gemalt wird in
+ * Originalgroesse (1 Pixel = 1 Entwurfspixel); Phaser zeigt die Texturen mit
+ * harten Kanten (`pixelArt: true` in main.ts).
  */
 
-import Phaser from "phaser";
-import { arenaKey, characterKey, enemyKey, itemIconKey, weaponIconKey } from "../../config/assets";
-import { CHARACTER_IDS } from "../../game/data/characters";
-import { ITEMS } from "../../game/data/items";
-import { WEAPON_IDS } from "../../game/data/weapons";
-import type { EnemyType, StatKey } from "../../game/types";
-import { FORGE } from "../../meta/forge";
-import { drawEnemyPixels } from "./enemies";
-import { paintHero } from "./heroes";
-import {
-  drawCoin,
-  drawCrystal,
-  drawEnemyBullet,
-  drawHeart,
-  drawLock,
-  drawRiftMarker,
-  drawShotPixels,
-  drawStatIcon,
-  drawWeaponPixels,
-} from "./items";
-import { paintLogo } from "./logo";
-import type { Pix } from "./pix";
-import { paintArenaPixels, paintMenuWorld } from "./world";
+import type Phaser from "phaser";
+import { CREW_IDS } from "../../game/data/crew";
+import { FIXED_MODULES, legPose } from "../../game/fortress";
+import { paintArmy } from "./armee";
+import { paintCrew } from "./crew";
+import { paintFortressBody, paintLeg, paintModule } from "./festung";
+import { GOLD, OUTLINE, STEEL } from "./palette";
+import { ellipse, Pix, poly, rect } from "./pix";
+import { paintDesert } from "./wueste";
 
-export const MENU_BACKGROUND_KEY = "menu-background";
-export const ENEMY_TYPES_DRAWN: readonly EnemyType[] = ["grunt", "swarmer", "charger", "spitter", "bruiser", "elite", "boss", "exploder", "splitter"];
+/** Breite des kachelnden Bodens. */
+export const GROUND_TILE_W = 1200;
+export const GROUND_TILE_H = 540;
+/** So viele Bilder hat ein Schrittzyklus eines Beins. */
+export const LEG_FRAMES = 16;
 
-/** Textur-Name des Symbols einer Schmiede-Stufe. */
-export function forgeIconKey(id: string): string {
-  return `forge-${id}`;
-}
+export const TEX = {
+  ground: "ground",
+  fortress: "fortress-body",
+  rivet: "rivet",
+  shadow: "shadow",
+  footprint: "footprint",
+  dust: "dust",
+  smoke: "smoke",
+  spark: "spark",
+  bone: "bone-shard",
+  gear: "gear",
+  glow: "glow",
+  arrow: "arrow-up",
+} as const;
 
-export function addPixelTexture(scene: Phaser.Scene, key: string, source: Pix | HTMLCanvasElement): void {
+export const crewKey = (id: string): string => `crew-${id}`;
+export const armyKey = (id: string): string => `army-${id}`;
+export const moduleKey = (id: string): string => `module-${id}`;
+export const legKey = (side: "l" | "r", frame: number): string => `leg-${side}-${frame}`;
+export const scrapKey = (kind: number): string => `scrap-${kind}`;
+
+function add(scene: Phaser.Scene, key: string, pix: Pix): void {
   if (scene.textures.exists(key)) {
-    return;
+    scene.textures.remove(key);
   }
-  const canvas = source instanceof HTMLCanvasElement ? source : source.toCanvas();
-  scene.textures.addCanvas(key, canvas)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+  scene.textures.addCanvas(key, pix.toCanvas());
 }
 
-/** Hauptwert eines Gegenstands (bestimmt sein Symbol). */
-function mainStat(mods: Partial<Record<StatKey, number>>): StatKey {
-  const keys = Object.keys(mods) as StatKey[];
-  return keys.find((key) => (mods[key] ?? 0) > 0) ?? keys[0] ?? "damage";
-}
-
-/** Weicher Schatten unter den Figuren (halbdurchsichtige Pixel-Ellipse). */
-function shadowCanvas(): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = 16;
-  canvas.height = 6;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.fillStyle = "rgba(8,6,16,0.45)";
-    ctx.fillRect(3, 0, 10, 6);
-    ctx.fillRect(1, 1, 14, 4);
-    ctx.fillRect(0, 2, 16, 2);
+function scrapPiece(kind: number): Pix {
+  const p = new Pix(12, 10, 5 + kind);
+  const steel = STEEL;
+  if (kind === 0) {
+    p.shape(poly(1, 8, 4, 2, 10, 3, 11, 8), steel, { shade: 1 });
+    p.line(3, 6, 9, 5, "#5a4a3a");
+  } else if (kind === 1) {
+    p.shape(rect(2, 3, 8, 5), ["#3a1606", "#a8481a", "#e8822e", "#ffc070"], { shade: 1 });
+    p.px(4, 5, "#2a1008");
+  } else {
+    for (let i = 0; i < 6; i += 1) {
+      const a = (i / 6) * Math.PI * 2;
+      p.px(6 + Math.cos(a) * 4, 5 + Math.sin(a) * 4, steel[2]);
+    }
+    p.shape(ellipse(6, 5, 3.4, 3.4), steel, { shade: 1 });
+    p.px(6, 5, OUTLINE);
   }
-  return canvas;
+  p.outline(OUTLINE);
+  return p;
 }
 
-/** Hintergrund hinter der Arena: tiefes Violett-Schwarz. */
-function gameBackground(): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = 4;
-  canvas.height = 4;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.fillStyle = "#120e1c";
-    ctx.fillRect(0, 0, 4, 4);
+function gear(size: number): Pix {
+  const p = new Pix(size, size, 3);
+  const c = size / 2;
+  const r = size / 2 - 1.5;
+  for (let i = 0; i < 8; i += 1) {
+    const a = (i / 8) * Math.PI * 2;
+    p.fill(ellipse(c + Math.cos(a) * r, c + Math.sin(a) * r, 1.6, 1.6), STEEL[1]);
   }
-  return canvas;
+  p.shape(ellipse(c, c, r - 0.8, r - 0.8), STEEL, { shade: 1 });
+  p.fill(ellipse(c, c, r * 0.35, r * 0.35), "#2a2636");
+  p.outline(OUTLINE);
+  return p;
 }
 
-/** Malt alle Pixel-Texturen. Mehrfach aufrufen ist harmlos. */
+/** Weicher Fleck aus Pixeln in einer Farbe (fuer Staub, Rauch, Glanz). */
+function blob(size: number, color: string, alpha: number): Pix {
+  const p = new Pix(size, size, 1);
+  const c = size / 2;
+  const hex = Math.round(alpha * 255)
+    .toString(16)
+    .padStart(2, "0");
+  p.fill(ellipse(c, c, c - 0.5, c - 0.5), color + hex);
+  return p;
+}
+
 export function createPixelTextures(scene: Phaser.Scene): void {
-  for (const id of CHARACTER_IDS) {
-    addPixelTexture(scene, characterKey(id), paintHero(id));
+  // Boden: nahtlos kachelnd, damit er unter der laufenden Festung endlos vorbeizieht.
+  add(scene, TEX.ground, paintDesert(GROUND_TILE_W, GROUND_TILE_H, { seed: 11, seamless: true }));
+  add(scene, TEX.fortress, paintFortressBody());
+
+  // Beine: je ein Bild pro Stelle im Schrittzyklus, links und rechts.
+  for (let frame = 0; frame < LEG_FRAMES; frame += 1) {
+    const { dx, lift } = legPose((frame + 0.5) / LEG_FRAMES);
+    // Links laeuft die Festung vom Bein weg (+x = Laufrichtung = vom Koerper weg nach rechts).
+    add(scene, legKey("l", frame), paintLeg(dx, lift));
+    const right = paintLeg(-dx, lift);
+    right.mirror();
+    add(scene, legKey("r", frame), right);
   }
-  for (const type of ENEMY_TYPES_DRAWN) {
-    addPixelTexture(scene, enemyKey(type), drawEnemyPixels(type));
+  for (const m of FIXED_MODULES) {
+    add(scene, moduleKey(m.id), paintModule(m.id));
   }
-  for (const id of WEAPON_IDS) {
-    addPixelTexture(scene, weaponIconKey(id), drawWeaponPixels(id));
+  for (const id of CREW_IDS) {
+    add(scene, crewKey(id), paintCrew(id));
   }
-  for (let look = 1; look <= 10; look += 1) {
-    addPixelTexture(scene, `shot-${look}`, drawShotPixels(look));
+  add(scene, armyKey("laeufer"), paintArmy("laeufer"));
+
+  // Kleinkram
+  const rivet = new Pix(7, 4, 1);
+  rivet.fill(rect(0, 0, 7, 4), OUTLINE);
+  rivet.fill(rect(1, 1, 5, 2), GOLD[2]);
+  rivet.px(5, 1, GOLD[3]);
+  add(scene, TEX.rivet, rivet);
+  const shadow = new Pix(32, 10, 1);
+  shadow.fill(ellipse(16, 5, 15.5, 4.5), "#14080c70");
+  add(scene, TEX.shadow, shadow);
+  const print = new Pix(18, 8, 1);
+  print.fill(rect(3, 1, 12, 4), "#2a141660");
+  print.fill(rect(0, 4, 3, 2), "#2a141660");
+  print.fill(rect(15, 4, 3, 2), "#2a141660");
+  print.fill(rect(8, 5, 2, 2), "#2a141660");
+  add(scene, TEX.footprint, print);
+  add(scene, TEX.dust, blob(16, "#a8806e", 0.75));
+  add(scene, TEX.smoke, blob(16, "#9a9098", 0.7));
+  add(scene, TEX.glow, blob(64, "#ffb43c", 0.35));
+  const spark = new Pix(4, 4, 1);
+  spark.fill(rect(0, 0, 4, 4), "#ffd27a");
+  spark.fill(rect(1, 1, 2, 2), "#fffbe0");
+  add(scene, TEX.spark, spark);
+  const bone = new Pix(5, 3, 1);
+  bone.fill(rect(0, 0, 5, 3), OUTLINE);
+  bone.fill(rect(1, 1, 3, 1), "#f6f1e2");
+  add(scene, TEX.bone, bone);
+  add(scene, TEX.gear, gear(18));
+  for (let kind = 0; kind < 3; kind += 1) {
+    add(scene, scrapKey(kind), scrapPiece(kind));
   }
-  addPixelTexture(scene, "bullet", drawEnemyBullet());
-  addPixelTexture(scene, "gem", drawCoin());
-  addPixelTexture(scene, "crystal", drawCrystal());
-  addPixelTexture(scene, "heart", drawHeart());
-  addPixelTexture(scene, "lock", drawLock());
-  addPixelTexture(scene, "marker", drawRiftMarker());
-  addPixelTexture(scene, "shadow", shadowCanvas());
-  for (const item of ITEMS) {
-    addPixelTexture(scene, itemIconKey(item.id), drawStatIcon(mainStat(item.mods)));
-  }
-  for (const def of FORGE) {
-    addPixelTexture(scene, forgeIconKey(def.id), drawStatIcon(def.stat ?? "harvesting"));
-  }
-  addPixelTexture(scene, arenaKey, paintArenaPixels());
-  addPixelTexture(scene, "bg-game", gameBackground());
-  addPixelTexture(scene, "logo", paintLogo());
-  addPixelTexture(scene, MENU_BACKGROUND_KEY, paintMenuWorld());
+  const arrow = new Pix(15, 12, 1);
+  arrow.shape(
+    poly(7.5, 0, 15, 8, 10, 8, 10, 12, 5, 12, 5, 8, 0, 8),
+    ["#0e2a2c", "#1f8f96", "#5ff2e0", "#d0fff8"],
+    { shade: 1, edge: false },
+  );
+  arrow.outline(OUTLINE);
+  add(scene, TEX.arrow, arrow);
 }

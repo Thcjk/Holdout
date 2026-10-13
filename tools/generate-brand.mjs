@@ -25,9 +25,7 @@ await page.setContent("<body></body>");
 const font = (file) => readFileSync(`node_modules/@fontsource/${file}`).toString("base64");
 await page.addStyleTag({
   content: `
-    @font-face { font-family: "Lilita One"; src: url(data:font/woff2;base64,${font("lilita-one/files/lilita-one-latin-400-normal.woff2")}) format("woff2"); }
-    @font-face { font-family: "Fredoka"; font-weight: 500; src: url(data:font/woff2;base64,${font("fredoka/files/fredoka-latin-500-normal.woff2")}) format("woff2"); }
-    @font-face { font-family: "Fredoka"; font-weight: 700; src: url(data:font/woff2;base64,${font("fredoka/files/fredoka-latin-700-normal.woff2")}) format("woff2"); }
+    @font-face { font-family: "Jersey 10"; src: url(data:font/woff2;base64,${font("jersey-10/files/jersey-10-latin-400-normal.woff2")}) format("woff2"); }
   `,
 });
 await page.addScriptTag({ content: bundle.outputFiles[0].text });

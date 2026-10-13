@@ -7,6 +7,7 @@
  *
  *   .../Holdout/?debug=netz          Protokoll des Koop-Verbindungsaufbaus
  *   .../Holdout/?debug=werte         Bildrate und Gegnerzahl
+ *   .../Holdout/?debug=kurz          Maersche nur ein Zehntel so lang (zum Testen)
  *   .../Holdout/?seed=4242           immer dieselbe Runde (nur solo)
  *
  * Mehrere Schalter werden mit Komma getrennt. Ohne `?debug=` ist alles aus -
@@ -34,6 +35,9 @@ function activeFlags(): Set<string> {
 // Einmal beim Laden auswerten: Die Adresse aendert sich im Spiel nicht mehr,
 // und pro Bild neu zu zerlegen waere Arbeit fuer nichts.
 const FLAGS = activeFlags();
+
+/** Kurze Maersche: Rast und Ziel schnell erreichen, zum Ausprobieren. */
+export const SHORT_ROUTE = FLAGS.has("kurz") || FLAGS.has("short");
 
 /** Zahlenanzeige: Bildrate und Gegnerzahl. */
 export const SHOW_VALUES = FLAGS.has("werte") || FLAGS.has("values") || FLAGS.has("all");

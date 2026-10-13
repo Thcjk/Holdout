@@ -1,8 +1,9 @@
 /**
- * Tafeln, Einlagen und Knoepfe im Zeitriss-Look (Pixel-Art).
+ * Tafeln, Einlagen und Knoepfe (Pixel-Art): Bronze und Stein der Wueste,
+ * feine Leuchtlinien der Mech-Technik.
  *
  * - Tafel: Rahmen aus Bronze mit abgeschraegten Ecken und Nieten, innen dunkler
- *   Stein, eine feine violette Leuchtlinie laeuft innen am Rand entlang.
+ *   Stein, eine feine cyanfarbene Leuchtlinie laeuft innen am Rand entlang.
  * - Einlage: noch dunklerer Stein mit schmalem Rand - fuer Dinge zum Lesen.
  * - Hauptknopf: Goldplatte (oben hell, unten dunkel), dunkle Schrift.
  * - Nebenknopf: Mech-Technik in dunklem Blau mit cyanfarbener Lichtkante.
@@ -133,8 +134,8 @@ export class ComicBox {
         g.fillStyle(C.outline, 1).fillPoints(chamfer(x + f - 1, y + f - 1, w - 2 * f + 2, h - 2 * f + 2, c - 2), true);
         g.fillStyle(C.stone, 1).fillPoints(chamfer(x + f, y + f, w - 2 * f, h - 2 * f, c - 2), true);
         g.fillStyle(C.stoneMid, 1).fillRect(x + f + 2, y + f, w - 2 * f - 4, 2);
-        // Violette Leuchtlinie innen
-        g.lineStyle(1, C.violet, 0.55).strokePoints(chamfer(x + f + 3, y + f + 3, w - 2 * f - 6, h - 2 * f - 6, Math.max(1, c - 3)), true, true);
+        // Feine Leuchtlinie innen (Technik der Crew)
+        g.lineStyle(1, C.cyan, 0.4).strokePoints(chamfer(x + f + 3, y + f + 3, w - 2 * f - 6, h - 2 * f - 6, Math.max(1, c - 3)), true, true);
         // Nieten in den Ecken
         if (w > 60 && h > 50) {
           for (const [nx, ny] of [
