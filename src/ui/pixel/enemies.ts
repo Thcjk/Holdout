@@ -12,7 +12,7 @@ import { oval, Pix, poly, rect, thick, union, type Ramp } from "./pix";
 export const ENEMY_SIZE = 48;
 
 /** Augenhoehle mit Gluehpunkt. */
-function socket(p: Pix, x: number, y: number, glow: string): void {
+export function socket(p: Pix, x: number, y: number, glow: string): void {
   p.px(x, y, OUT);
   p.px(x + 1, y, OUT);
   p.px(x, y + 1, OUT);
@@ -20,7 +20,7 @@ function socket(p: Pix, x: number, y: number, glow: string): void {
 }
 
 /** Schaedel mit Zahnreihe. (cx, cy) = Mitte. */
-function skull(p: Pix, cx: number, cy: number, glow = RED_EYE, rx = 6.5, ry = 6): void {
+export function skull(p: Pix, cx: number, cy: number, glow = RED_EYE, rx = 6.5, ry = 6): void {
   p.shape(oval(cx, cy, rx, ry), BONE, { shade: 1 });
   // Kiefer
   p.shape(rect(cx - rx + 2, cy + ry - 3, rx * 2 - 3, 4), BONE, { shade: 1 });
@@ -34,7 +34,7 @@ function skull(p: Pix, cx: number, cy: number, glow = RED_EYE, rx = 6.5, ry = 6)
 }
 
 /** Korinthischer Bronzehelm ueber dem Schaedel; `plume` = Helmbusch. */
-function helmet(p: Pix, cx: number, cy: number, plume: Ramp | null, big = false): void {
+export function helmet(p: Pix, cx: number, cy: number, plume: Ramp | null, big = false): void {
   if (plume) {
     if (big) {
       // Grosser, nach hinten geschwungener Busch
@@ -54,12 +54,12 @@ function helmet(p: Pix, cx: number, cy: number, plume: Ramp | null, big = false)
 }
 
 /** Knochenarm/-bein als duenner Strich. */
-function bone(p: Pix, x0: number, y0: number, x1: number, y1: number, width = 2): void {
+export function bone(p: Pix, x0: number, y0: number, x1: number, y1: number, width = 2): void {
   p.shape(thick(x0, y0, x1, y1, width), BONE, { shade: 0, light: 0 });
 }
 
 /** Rippen und Wirbelsaeule. */
-function ribs(p: Pix, cx: number, top: number, bottom: number): void {
+export function ribs(p: Pix, cx: number, top: number, bottom: number): void {
   p.shape(oval(cx, (top + bottom) / 2, 5.5, (bottom - top) / 2), BONE, { shade: 1 });
   for (let y = top + 1; y < bottom; y += 2) {
     p.line(cx - 4, y, cx + 4, y, BONE[0]);
@@ -68,7 +68,7 @@ function ribs(p: Pix, cx: number, top: number, bottom: number): void {
 }
 
 /** Runder Hoplitenschild mit Emblem. */
-function hoplon(p: Pix, cx: number, cy: number, r: number): void {
+export function hoplon(p: Pix, cx: number, cy: number, r: number): void {
   p.shape(oval(cx, cy, r, r), BRONZE, { shade: 2, noise: 0.1 });
   p.shape(oval(cx, cy, r - 2, r - 2), GOLD, { shade: 1 });
   // Lambda

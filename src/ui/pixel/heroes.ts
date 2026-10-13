@@ -35,7 +35,7 @@ export const HERO_SIZE = 64;
 
 const GLOW: Ramp = [OUTLINE, CYAN_DARK, CYAN, CYAN_LIGHT];
 
-interface Spec {
+export interface Spec {
   armor: Ramp;
   /** Zweite Panzerfarbe (Brustplatte, Schienbeine). */
   trim: Ramp;
@@ -46,25 +46,25 @@ interface Spec {
 }
 
 /** Eingravierte Plattenfuge: dunkle Linie mit hellem Pixel darunter (wirkt wie eine Kante). */
-function seam(p: Pix, x0: number, y0: number, x1: number, y1: number, ramp: Ramp): void {
+export function seam(p: Pix, x0: number, y0: number, x1: number, y1: number, ramp: Ramp): void {
   p.line(x0, y0 + 1, x1, y1 + 1, ramp[3]);
   p.line(x0, y0, x1, y1, ramp[1]);
 }
 
 /** Niete / Bolzen. */
-function bolt(p: Pix, x: number, y: number, ramp: Ramp): void {
+export function bolt(p: Pix, x: number, y: number, ramp: Ramp): void {
   p.px(x, y, ramp[3]);
   p.px(x + 1, y + 1, ramp[1]);
 }
 
-function glowLight(p: Pix, x: number, y: number, w: number, h: number, glow: Ramp): void {
+export function glowLight(p: Pix, x: number, y: number, w: number, h: number, glow: Ramp): void {
   p.shape(rect(x - 1, y - 1, w + 2, h + 2), [OUTLINE, GRAY[0], GRAY[1], GRAY[1]], { shade: 0, light: 0 });
   p.shape(rect(x, y, w, h), glow, { shade: 1, light: 0, edge: false });
   p.px(x, y, glow[3]);
 }
 
 /** Beine, Huefte, Rumpf, Schultern und Arme (der Kopf kommt danach). */
-function mechBody(p: Pix, s: Spec): void {
+export function mechBody(p: Pix, s: Spec): void {
   const a = s.armor;
   const t = s.trim;
   const j = s.joint ?? GRAY;
@@ -123,13 +123,13 @@ function mechBody(p: Pix, s: Spec): void {
 }
 
 /** Glanzstreifen oben links auf einem Helm. */
-function shine(p: Pix, x0: number, y0: number, x1: number, y1: number): void {
+export function shine(p: Pix, x0: number, y0: number, x1: number, y1: number): void {
   p.line(x0, y0, x1, y1, "#ffffff");
   p.px(x0 - 1, y0 + 2, "#e6ecff");
 }
 
 /** Hals unter dem Helm. */
-function neck(p: Pix): void {
+export function neck(p: Pix): void {
   p.shape(rect(28, 26, 8, 5), GRAY, { shade: 1 });
 }
 
