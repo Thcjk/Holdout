@@ -15,8 +15,11 @@ export interface MarchSpec {
   hp: number;
 }
 
+/** Hier beginnt jeder Lauf: am Grab, in dem die Crew das Sonnenherz gefunden hat. */
+export const START_STATION = "Grab von Aurum";
+
 export const PROBE_ROUTE: readonly MarchSpec[] = [
-  { station: "Oase", length: 1900, spawnStart: 0.6, spawnEnd: 1.6, hp: 1 },
-  { station: "Ruine", length: 2000, spawnStart: 0.85, spawnEnd: 2.05, hp: 1.35 },
-  { station: "Küste", length: 2100, spawnStart: 1.1, spawnEnd: 2.5, hp: 1.65 },
+  { station: "Oase", length: 1900, spawnStart: 0.8, spawnEnd: 2.0, hp: 1 },
+  { station: "Ruine", length: 2000, spawnStart: 1.2, spawnEnd: 2.8, hp: 1.6 },
+  { station: "Küste", length: 2100, spawnStart: 1.6, spawnEnd: 3.6, hp: 2.3 },
 ];

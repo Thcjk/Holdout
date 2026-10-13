@@ -6,14 +6,16 @@
  *   - Boden und Festung (`GroundView`, `FortressView`),
  *   - Mechs, Gegner, Geschosse, Schrott (je ein Bild pro Ding im Zustand),
  *   - Effekte zu den Ereignissen (Staub, Funken, Knochen, Texte),
+ *   - Module auf dem Deck, Granaten, Blitze, Warnungen am Bildrand,
  *   - Anzeigen, Faehigkeitsknopf, Stick, Rast-Tafel, Pause.
+ * In der Rast oeffnet "Ausbauen" die Bau-Ansicht (`BuildScene`) darueber.
  */
 
 import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import { SAFE, VIEWPORT } from "../config/constants";
 import { playerName } from "../app";
-import { DECK_H, ELEVATION, LADDER, WINCH_LANDING } from "../game/constants";
+import { DECK_H, ELEVATION, LADDER, STATION_BONUS, WINCH_LANDING } from "../game/constants";
 import { BLIND_SPOT, insideRect } from "../game/fortress";
 import type {
   EnemyState,
@@ -25,7 +27,7 @@ import type {
 } from "../game/types";
 import type { GameSession } from "../net/GameSession";
 import { SoloSession } from "../net/SoloSession";
-import { FORCED_SEED, SHORT_ROUTE, SHOW_VALUES } from "../platform/debugFlags";
+import { FORCED_SEED, RICH_START, SHORT_ROUTE, SHOW_VALUES } from "../platform/debugFlags";
 import { PROBE_ROUTE } from "../game/data/route";
 import { AbilityButton } from "../ui/AbilityButton";
 import { Button } from "../ui/Button";
@@ -37,6 +39,8 @@ import { TEX, armyKey, crewKey, scrapKey } from "../ui/pixel/textures";
 import { FONT_BODY, FONT_TITLE, T } from "../ui/theme";
 import { FortressView } from "../ui/world/FortressView";
 import { GroundView } from "../ui/world/GroundView";
+import { ModuleView } from "../ui/world/ModuleView";
+import { WarningView } from "../ui/world/WarningView";
 import { DEPTH, deckDepth, depthFor, followFort } from "../ui/world/view";
 
 const SELF = "ich";
@@ -87,6 +91,16 @@ export class GameScene extends Phaser.Scene {
   private ending = false;
   private lastShotSound = 0;
   private values: Phaser.GameObjects.Text | null = null;
+  private modules!: ModuleView;
+  private warnings!: WarningView;
+  private shells = new Map<
+    number,
+    { shell: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image }
+  >();
+  private zaps!: Phaser.GameObjects.Graphics;
+  private zapTime = 0;
+  /** Die Bau-Ansicht liegt gerade darueber. */
+  private building = false;
 
   constructor() {
     super("Game");
@@ -99,8 +113,10 @@ export class GameScene extends Phaser.Scene {
     this.scrap = new Map();
     this.pauseCleanup = [];
     this.shown = new Set();
+    this.shells = new Map();
     this.paused = false;
     this.ending = false;
+    this.building = false;
 
     const seed = FORCED_SEED ?? Math.floor(Math.random() * 1e9);
     const route = SHORT_ROUTE
@@ -108,17 +124,22 @@ export class GameScene extends Phaser.Scene {
       : PROBE_ROUTE;
     this.session = new SoloSession({ id: SELF, name: playerName(), crew: "schrauber" }, seed, {
       route,
+      startScrap: RICH_START ? 999 : undefined,
     });
 
     this.ground = new GroundView(this);
     this.fortress = new FortressView(this);
     this.rope = this.add.graphics().setDepth(DEPTH.effects);
+    this.zaps = this.add.graphics().setDepth(DEPTH.effects + 1);
+    this.modules = new ModuleView(this);
+    this.warnings = new WarningView(this);
     this.ladderArrow = this.add.image(0, 0, TEX.arrow).setDepth(DEPTH.effects).setVisible(false);
 
     this.hud = new Hud(this, "schrauber");
     this.ability = new AbilityButton(this, "schrauber");
     this.rest = new RestPanel(
       this,
+      () => this.openBuild(),
       () => {
         this.session.send({ kind: "repair" });
       },
@@ -190,13 +211,26 @@ export class GameScene extends Phaser.Scene {
       this.session.destroy();
     });
 
-    audio.setMusic("wave");
-    this.time.delayedCall(1500, () =>
-      this.showHint(
-        "start",
-        "Über die Deckkante laufen: abspringen. Unter dem Bug hängt die Strickleiter zum Hochklettern.",
-      ),
-    );
+    // Der Lauf beginnt mit einer Rast am Grab: gleich die Bau-Ansicht zeigen.
+    audio.setMusic("menu", 0.7);
+    this.time.delayedCall(350, () => this.openBuild());
+  }
+
+  /** Bau-Ansicht ueber das Spiel legen. Solange sie offen ist, ruhen Stick und Knoepfe. */
+  private openBuild(): void {
+    if (this.building || this.session.state.phase !== "rest") {
+      return;
+    }
+    this.building = true;
+    this.stick.release();
+    this.stick.enabled = false;
+    this.scene.launch("Build", {
+      session: this.session,
+      onClose: () => {
+        this.building = false;
+        this.stick.enabled = !this.paused;
+      },
+    });
   }
 
   private layout(): void {
@@ -226,7 +260,14 @@ export class GameScene extends Phaser.Scene {
     this.syncEnemies(state, frameDelta);
     this.syncShots(state);
     this.syncScrap(state);
+    this.syncShells(state);
+    this.modules.sync(state, frameDelta);
+    this.warnings.sync(state, this.cameras.main, frameDelta);
     this.drawHelpers(state, self);
+    this.zapTime -= frameDelta;
+    if (this.zapTime <= 0) {
+      this.zaps.clear();
+    }
     if (!this.paused) {
       for (const event of this.session.events) {
         this.onEvent(event, state);
@@ -235,8 +276,8 @@ export class GameScene extends Phaser.Scene {
     this.watchForHints(state, self);
     this.hud.update(state, self, frameDelta);
     this.ability.update(self, frameDelta);
-    this.rest.update(state);
-    this.pauseButton.setVisible(!this.ending);
+    this.rest.update(state, this.building);
+    this.pauseButton.setVisible(!this.ending && !this.building);
     this.values?.setText(
       `${Math.round(this.game.loop.actualFps)} fps · ${state.enemies.length} Gegner · ${state.shots.length} Schüsse`,
     );
@@ -331,6 +372,9 @@ export class GameScene extends Phaser.Scene {
       if (!b) {
         b = this.body(armyKey(e.type), 46 / 48, 0xff5a3a);
         this.enemies.set(e.id, b);
+        // Sanft einblenden - auf breiten Bildschirmen tauchen Trupps im Bild auf.
+        b.sprite.setAlpha(0);
+        this.tweens.add({ targets: b.sprite, alpha: 1, duration: 300 });
       }
       this.placeEnemy(b, e, state.time);
       this.applyFlash(b, delta);
@@ -370,7 +414,11 @@ export class GameScene extends Phaser.Scene {
       seen.add(shot.id);
       let image = this.shots.get(shot.id);
       if (!image) {
-        image = this.add.image(0, 0, TEX.rivet);
+        image = this.add.image(
+          0,
+          0,
+          shot.look === "bolt" ? TEX.bolt : shot.look === "harpoon" ? TEX.harpoon : TEX.rivet,
+        );
         this.shots.set(shot.id, image);
       }
       this.placeShot(image, shot);
@@ -428,6 +476,35 @@ export class GameScene extends Phaser.Scene {
         duration: 260,
         onComplete: () => glint.destroy(),
       });
+    }
+  }
+
+  /** Moerser-Granaten im hohen Bogen, mit Schatten am Zielort. */
+  private syncShells(state: GameState): void {
+    const seen = new Set<number>();
+    for (const shell of state.shells) {
+      seen.add(shell.id);
+      let view = this.shells.get(shell.id);
+      if (!view) {
+        view = {
+          shell: this.add.image(0, 0, TEX.shell).setDepth(DEPTH.effects),
+          shadow: this.add.image(0, 0, TEX.shadow).setDepth(DEPTH.shadow).setScale(0.4),
+        };
+        this.shells.set(shell.id, view);
+      }
+      const u = Math.min(1, shell.t / shell.duration);
+      const x = shell.x0 + (shell.x1 - shell.x0) * u;
+      const y = shell.y0 + (shell.y1 - shell.y0) * u;
+      const z = shell.z0 * (1 - u) + Math.sin(u * Math.PI) * 110;
+      view.shell.setPosition(x, y - z);
+      view.shadow.setPosition(x, y).setScale(0.3 + u * 0.5);
+    }
+    for (const [id, view] of this.shells) {
+      if (!seen.has(id)) {
+        view.shell.destroy();
+        view.shadow.destroy();
+        this.shells.delete(id);
+      }
     }
   }
 
@@ -579,7 +656,14 @@ export class GameScene extends Phaser.Scene {
         break;
       case "arrived":
         if (state.phase === "rest") {
-          this.showBanner(`${state.march.station.toUpperCase()} ERREICHT`, T.gold);
+          this.showBanner(`${state.restAt.toUpperCase()} ERREICHT`, T.gold);
+          this.floatText(
+            `+${STATION_BONUS} Schrott: Fundstücke`,
+            state.fort.x + 140,
+            state.fort.y - ELEVATION - 30,
+            "#e6eaf2",
+            16,
+          );
           audio.play("zoneReached");
           audio.setMusic("menu", 0.7);
         }
@@ -587,6 +671,42 @@ export class GameScene extends Phaser.Scene {
       case "depart":
         this.showBanner(`WEITER ZUR ${state.march.station.toUpperCase()}`, T.light);
         audio.setMusic("wave");
+        if (event.index === 0) {
+          this.time.delayedCall(2200, () =>
+            this.showHint(
+              "start",
+              "Über die Deckkante laufen: abspringen. Unter dem Bug hängt die Strickleiter zum Hochklettern.",
+            ),
+          );
+        }
+        break;
+      case "zap":
+        this.drawZap(event.points);
+        break;
+      case "boom":
+        this.explosion(event.x, event.y, event.radius);
+        break;
+      case "mortar": {
+        const m = state.modules.find((x) => x.uid === event.uid);
+        if (m) {
+          const top = ModuleView.top(state, m);
+          this.dust(top.x, top.y + 10, 2);
+        }
+        audio.play("blast");
+        break;
+      }
+      case "built":
+      case "upgraded":
+        audio.play("superReady");
+        break;
+      case "sold":
+        audio.play("swing");
+        break;
+      case "trupp":
+        this.showHint(
+          "trupp",
+          "Die Armee greift von allen Seiten an – rote Pfeile am Rand zeigen, woher der nächste Trupp kommt.",
+        );
         break;
       case "won":
         this.showBanner("GESCHAFFT!", T.gold);
@@ -597,6 +717,53 @@ export class GameScene extends Phaser.Scene {
         audio.play("gameOver");
         break;
     }
+  }
+
+  /** Blitz der Funkenspule: Zickzack-Linie von Ziel zu Ziel. */
+  private drawZap(points: [number, number, number][]): void {
+    const g = this.zaps;
+    const path = points.map(([x, y, z]) => ({ x, y: y - z }));
+    for (const [width, color] of [
+      [5, 0x120f1e],
+      [3, 0x5ef2e6],
+      [1, 0xffffff],
+    ] as const) {
+      g.lineStyle(width, color, 1);
+      g.beginPath();
+      g.moveTo(path[0]!.x, path[0]!.y);
+      for (let i = 1; i < path.length; i += 1) {
+        const a = path[i - 1]!;
+        const b = path[i]!;
+        // Ein Knick in der Mitte macht aus der Linie einen Blitz.
+        g.lineTo((a.x + b.x) / 2 + (i % 2 ? 6 : -6), (a.y + b.y) / 2 + (i % 2 ? -5 : 5));
+        g.lineTo(b.x, b.y);
+      }
+      g.strokePath();
+    }
+    this.zapTime = 110;
+    audio.play("hit");
+  }
+
+  private explosion(x: number, y: number, radius: number): void {
+    const ring = this.add.circle(x, y - 6, radius * 0.4, 0xffd27a, 0.9).setDepth(y + 0.6);
+    const core = this.add.circle(x, y - 8, radius * 0.3, 0xfffbe0, 1).setDepth(y + 0.7);
+    this.tweens.add({
+      targets: ring,
+      radius,
+      alpha: 0,
+      duration: 320,
+      ease: "Quad.Out",
+      onComplete: () => ring.destroy(),
+    });
+    this.tweens.add({
+      targets: core,
+      alpha: 0,
+      scale: 1.6,
+      duration: 200,
+      onComplete: () => core.destroy(),
+    });
+    this.dust(x, y, 4);
+    this.cameras.main.shake(80, 0.002);
   }
 
   private bones(x: number, y: number): void {

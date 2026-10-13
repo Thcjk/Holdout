@@ -124,7 +124,7 @@ export class Hud {
     const m = state.march;
     const where =
       state.phase === "rest"
-        ? `RAST · ${m.station.toUpperCase()}`
+        ? `RAST · ${state.restAt.toUpperCase()}`
         : `ETAPPE ${m.index + 1} / ${m.count} · ZUR ${m.station.toUpperCase()}`;
     this.title.setText(where);
     const hull = state.fort.hull;

@@ -8,6 +8,7 @@
 
 import type Phaser from "phaser";
 import { CREW_IDS } from "../../game/data/crew";
+import { MODULE_IDS } from "../../game/data/modules";
 import { FIXED_MODULES, legPose } from "../../game/fortress";
 import { paintArmy } from "./armee";
 import { paintCrew } from "./crew";
@@ -35,6 +36,13 @@ export const TEX = {
   gear: "gear",
   glow: "glow",
   arrow: "arrow-up",
+  bolt: "bolt",
+  harpoon: "harpoon",
+  shell: "shell",
+  puddle: "oil-puddle",
+  drop: "oil-drop",
+  pip: "level-pip",
+  warning: "warning",
 } as const;
 
 export const crewKey = (id: string): string => `crew-${id}`;
@@ -113,6 +121,9 @@ export function createPixelTextures(scene: Phaser.Scene): void {
   for (const m of FIXED_MODULES) {
     add(scene, moduleKey(m.id), paintModule(m.id));
   }
+  for (const id of MODULE_IDS) {
+    add(scene, moduleKey(id), paintModule(id));
+  }
   for (const id of CREW_IDS) {
     add(scene, crewKey(id), paintCrew(id));
   }
@@ -148,6 +159,56 @@ export function createPixelTextures(scene: Phaser.Scene): void {
   for (let kind = 0; kind < 3; kind += 1) {
     add(scene, scrapKey(kind), scrapPiece(kind));
   }
+  // Geschosse der Module
+  const bolt = new Pix(8, 4, 1);
+  bolt.fill(rect(0, 0, 8, 4), OUTLINE);
+  bolt.fill(rect(1, 1, 6, 2), "#5ff2e0");
+  bolt.fill(rect(4, 1, 3, 1), "#d0fff8");
+  add(scene, TEX.bolt, bolt);
+  const harpoon = new Pix(18, 5, 1);
+  harpoon.fill(rect(0, 1, 13, 3), OUTLINE);
+  harpoon.fill(rect(1, 2, 12, 1), "#86582c");
+  harpoon.shape(poly(12, 0, 18, 2.5, 12, 5), STEEL, { shade: 0 });
+  harpoon.outline(OUTLINE);
+  add(scene, TEX.harpoon, harpoon);
+  const shell = new Pix(7, 7, 1);
+  shell.shape(ellipse(3.5, 3.5, 3, 3), ["#14141e", "#2c2d3c", "#45475c", "#8a8da8"], {
+    shade: 1,
+    edge: false,
+  });
+  shell.px(3, 2, "#ffd27a");
+  shell.outline(OUTLINE);
+  add(scene, TEX.shell, shell);
+  const puddle = new Pix(44, 14, 1);
+  puddle.fill(ellipse(22, 7, 21, 6), "#1a101088");
+  puddle.fill(ellipse(22, 7, 17, 4), "#2a141088");
+  for (const [x, y] of [
+    [12, 6],
+    [24, 5],
+    [32, 8],
+    [18, 9],
+  ] as const) {
+    puddle.px(x, y, "#f08a28");
+    puddle.px(x + 1, y - 1, "#ffd27a");
+  }
+  add(scene, TEX.puddle, puddle);
+  const drop = new Pix(3, 5, 1);
+  drop.fill(rect(0, 0, 3, 5), "#1a1010");
+  drop.px(1, 4, "#f08a28");
+  add(scene, TEX.drop, drop);
+  const pip = new Pix(5, 5, 1);
+  pip.fill(rect(0, 0, 5, 5), OUTLINE);
+  pip.fill(rect(1, 1, 3, 3), GOLD[2]);
+  pip.px(1, 1, GOLD[3]);
+  add(scene, TEX.pip, pip);
+  // Warnung am Bildrand: roter Pfeil, zeigt nach rechts (wird gedreht)
+  const warning = new Pix(18, 18, 1);
+  warning.shape(poly(2, 1, 16, 9, 2, 17, 6, 9), ["#3c0e12", "#8e2028", "#ff4a3a", "#ffb0a0"], {
+    shade: 1,
+  });
+  warning.outline(OUTLINE);
+  add(scene, TEX.warning, warning);
+
   const arrow = new Pix(15, 12, 1);
   arrow.shape(
     poly(7.5, 0, 15, 8, 10, 8, 10, 12, 5, 12, 5, 8, 0, 8),

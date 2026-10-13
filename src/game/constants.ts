@@ -79,4 +79,23 @@ export const REPAIR_AMOUNT = 100;
 export const REPAIR_COST = 25;
 
 /** Hoechstens so viele Gegner gleichzeitig. */
-export const MAX_ENEMIES = 45;
+export const MAX_ENEMIES = 70;
+
+// --- Ausbau und Angebot --------------------------------------------------------------------------
+
+/** Schrott zum Start: reicht fuer die ersten zwei, drei Module. */
+export const START_SCRAP = 60;
+/** Fundstuecke an jeder Station. */
+export const STATION_BONUS = 15;
+/** So viele zufaellige Module bietet jede Rast an. */
+export const OFFER_SIZE = 4;
+/** Neu wuerfeln kostet erst so viel, dann jedes Mal mehr. */
+export const REROLL_COST = 5;
+export const REROLL_STEP = 3;
+
+// --- Angriffe ----------------------------------------------------------------------------------------
+
+/** So lange vorher warnt der Bildrand vor einem Trupp. */
+export const WARNING_TIME = 2.2;
+/** So weit vor dem Bug tauchen Trupps auf, die von vorn kommen. */
+export const FRONT_SPAWN = DECK_W + AHEAD + 140;

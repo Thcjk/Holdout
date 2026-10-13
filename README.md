@@ -15,7 +15,7 @@ Wellen-Shooter liegt auf dem Zweig `alt-3.9.2`).
 | Baustufe | Inhalt | Stand |
 | --- | --- | --- |
 | 1 | Laufende Festung, Deck und Boden, Strickleiter, Seilwinde, Sandläufer, Schrott, Rast | fertig |
-| 2 | Module aufs Deck bauen, aufrüsten, Nachbar-Boni | offen |
+| 2 | Module aufs Deck bauen, aufrüsten, Nachbar-Boni, zufälliges Angebot; Angriffe von allen Seiten | fertig |
 | 3 | Gegner mit Aufgaben (Enterer, Phalanx, Käfer, Ballista, Belagerungsturm, Koloss) | offen |
 | 4 | Routenkarte mit Stationen, nachrückende Armee, Akt 1 komplett | offen |
 | 5 | Crew (6 Mechs), Teile, Werft, Altgold, Erfolge | offen |
@@ -40,6 +40,7 @@ Nützliche Adress-Zusätze:
 | --- | --- |
 | `?desktop` | Spiel auch am Desktop starten (Maus ersetzt den Daumen) |
 | `?debug=kurz` | Märsche nur ein Zehntel so lang (Rast und Ziel schnell sehen) |
+| `?debug=reich` | 999 Schrott zum Start (alle Module ausprobieren) |
 | `?debug=werte` | Bildrate und Gegnerzahl einblenden |
 | `?seed=123` | Feste Zufallszahl |
 
@@ -49,7 +50,7 @@ Nützliche Adress-Zusätze:
 | --- | --- |
 | `npm run dev` | Entwicklungsserver |
 | `npm run test` | Tests: Spielkern, Verbindungsweg |
-| `npm run balance -- 10 klug` | Bot spielt den Probelauf (`klug` springt ab und sammelt, `deck` bleibt oben) |
+| `npm run balance -- 10 klug` | Bot spielt den Probelauf und baut aus (`klug` springt ab und sammelt, `deck` bleibt oben) |
 | `npm run typecheck` / `npm run lint` | Prüfen |
 | `npm run build` | Produktionsbuild nach `dist/` |
 
@@ -59,7 +60,7 @@ Nützliche Adress-Zusätze:
 src/
   game/       Spielkern ohne Phaser und ohne Netz: Simulation, Festung, Daten
   net/        Sitzungen (solo) und die Verbindungsschicht für den späteren Koop
-  scenes/     Boot, Titel, Spiel, Ergebnis
+  scenes/     Boot, Titel, Spiel, Bau-Ansicht, Ergebnis
   ui/         HUD, Knöpfe, Stick, Rast-Tafel; pixel/ malt alle Bilder per Code; world/ zeichnet Boden und Festung
   platform/   Geräte-Erkennung, Sicherheitsränder, Updates
 tests/        Spielkern ohne Browser, Bot für die Balance

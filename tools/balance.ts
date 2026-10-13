@@ -14,7 +14,7 @@ for (let seed = 1; seed <= runs; seed += 1) {
     wins += 1;
   }
   console.log(
-    `Lauf ${seed}: ${r.won ? "geschafft" : "verloren"} · Märsche ${r.marches} · Rumpf ${r.hull} · ${r.kills} besiegt · Schrott ${r.scrap} · ${r.repairs} Reparaturen · Seilwinde ${r.winches} · ${r.seconds} s`,
+    `Lauf ${seed}: ${r.won ? "geschafft" : "verloren"} · Märsche ${r.marches} · Rumpf ${r.hull} · ${r.kills} besiegt · Schrott ${r.scrap} · ${r.modules} Module · ${r.repairs} Reparaturen · Seilwinde ${r.winches} · ${r.seconds} s`,
   );
 }
 console.log(`${style}: ${wins} von ${runs} geschafft`);

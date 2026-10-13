@@ -8,6 +8,7 @@
  *   .../Holdout/?debug=netz          Protokoll des Koop-Verbindungsaufbaus
  *   .../Holdout/?debug=werte         Bildrate und Gegnerzahl
  *   .../Holdout/?debug=kurz          Maersche nur ein Zehntel so lang (zum Testen)
+ *   .../Holdout/?debug=reich         999 Schrott zum Start (Module ausprobieren)
  *   .../Holdout/?seed=4242           immer dieselbe Runde (nur solo)
  *
  * Mehrere Schalter werden mit Komma getrennt. Ohne `?debug=` ist alles aus -
@@ -38,6 +39,9 @@ const FLAGS = activeFlags();
 
 /** Kurze Maersche: Rast und Ziel schnell erreichen, zum Ausprobieren. */
 export const SHORT_ROUTE = FLAGS.has("kurz") || FLAGS.has("short");
+
+/** Viel Schrott zum Start, um alle Module auszuprobieren. */
+export const RICH_START = FLAGS.has("reich") || FLAGS.has("rich");
 
 /** Zahlenanzeige: Bildrate und Gegnerzahl. */
 export const SHOW_VALUES = FLAGS.has("werte") || FLAGS.has("values") || FLAGS.has("all");

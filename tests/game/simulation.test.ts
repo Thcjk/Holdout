@@ -21,8 +21,11 @@ import type { EnemyState, PlayerInput } from "../../src/game/types";
 const ME = "p1";
 const QUIET = [{ station: "Test", length: 100000, spawnStart: 0, spawnEnd: 0, hp: 1 }];
 
+/** Neuer Lauf, gleich losgezogen (der Lauf beginnt mit einer Rast). */
 function sim(route = QUIET): Simulation {
-  return new Simulation([{ id: ME, name: "Test", crew: "schrauber" }], 1, { route });
+  const s = new Simulation([{ id: ME, name: "Test", crew: "schrauber" }], 1, { route });
+  s.command(ME, { kind: "depart" });
+  return s;
 }
 
 /** Rechnet `seconds` Sekunden mit fester Eingabe. */
@@ -163,16 +166,17 @@ describe("Gegner, Schrott und Rumpf", () => {
   it("besiegte Gegner lassen Schrott fallen, nur am Boden sammelt man ihn ein", () => {
     const s = sim();
     const f = s.state.fort;
-    s.state.scrap.push({ id: 999, x: f.x + 60, y: f.y + 200, value: 2 });
+    s.state.scrap.push({ id: 999, x: f.x + 60, y: f.y + 200, z: 0, value: 2 });
+    const bank = s.state.bank;
     run(s, 0.5);
-    expect(s.state.bank).toBe(0);
+    expect(s.state.bank).toBe(bank);
     const p = me(s);
     p.layer = "ground";
     p.z = 0;
     p.x = s.state.scrap[0]!.x - 40;
     p.y = s.state.scrap[0]!.y;
     run(s, 0.5);
-    expect(s.state.bank).toBe(2);
+    expect(s.state.bank).toBe(bank + 2);
     expect(s.state.scrap).toHaveLength(0);
   });
 
@@ -205,11 +209,14 @@ describe("Etappen und Rast", () => {
     const s = sim(route);
     run(s, 60 / FORT_SPEED + 0.2);
     expect(s.state.phase).toBe("rest");
+    expect(s.state.restAt).toBe("A");
+    expect(s.state.march.station).toBe("B");
     const x = s.state.fort.x;
     run(s, 1);
     expect(s.state.fort.x).toBe(x);
 
     s.state.fort.hull = 500;
+    s.state.bank = 0;
     s.command(ME, { kind: "repair" });
     expect(s.state.fort.hull).toBe(500);
     s.state.bank = REPAIR_COST;
@@ -219,13 +226,14 @@ describe("Etappen und Rast", () => {
 
     s.command(ME, { kind: "depart" });
     expect(s.state.phase).toBe("march");
-    expect(s.state.march.station).toBe("B");
     run(s, 60 / FORT_SPEED + 0.2);
     expect(s.state.phase).toBe("won");
   });
 
   it("die Armee rueckt an: im echten Lauf kommen Gegner", () => {
     const s = new Simulation([{ id: ME, name: "Test", crew: "schrauber" }], 7);
+    expect(s.state.phase).toBe("rest");
+    s.command(ME, { kind: "depart" });
     run(s, 20);
     expect(s.state.enemies.length + s.state.kills).toBeGreaterThan(3);
   });

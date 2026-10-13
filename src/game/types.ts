@@ -5,6 +5,20 @@
 
 export type CrewId = "schrauber" | "kanonier" | "brecher" | "bergung" | "funkerin" | "springer";
 export type EnemyType = "laeufer";
+/** Module, die man aufs Deck bauen kann. */
+export type ModuleId =
+  | "geschuetz"
+  | "harpune"
+  | "moerser"
+  | "spule"
+  | "platte"
+  | "oel"
+  | "generator"
+  | "magnet"
+  | "motor"
+  | "werkstatt";
+/** Aus welcher Richtung ein Trupp kommt (hinten = links, vorn = rechts in Laufrichtung). */
+export type Side = "hinten" | "vorn" | "oben" | "unten";
 export type Layer = "deck" | "ground";
 /** Marsch = die Welle, Rast = Pause an einer Station. */
 export type Phase = "march" | "rest" | "won" | "lost";
@@ -93,7 +107,11 @@ export interface EnemyState {
 
 export interface ShotState {
   id: number;
+  /** Spieler-ID oder "m" + Modulnummer. */
   owner: string;
+  look: "rivet" | "bolt" | "harpoon";
+  /** Harpune: zieht den Getroffenen zu einem Fuss der Festung. */
+  pull: number;
   x: number;
   y: number;
   z: number;
@@ -108,7 +126,46 @@ export interface ScrapState {
   id: number;
   x: number;
   y: number;
+  /** Hoehe - der Schrottmagnet hebt Stuecke aufs Deck. */
+  z: number;
   value: number;
+}
+
+/** Ein gebautes Modul auf dem Deck. */
+export interface ModuleState {
+  uid: number;
+  type: ModuleId;
+  /** Linkes Feld (breite Module belegen zwei). */
+  col: number;
+  row: number;
+  level: number;
+  cooldown: number;
+  facing: 1 | -1;
+}
+
+/** Granate des Moersers im Flug. */
+export interface ShellState {
+  id: number;
+  x0: number;
+  y0: number;
+  z0: number;
+  x1: number;
+  y1: number;
+  t: number;
+  duration: number;
+  damage: number;
+  radius: number;
+}
+
+/** Ein Trupp ist im Anmarsch - am Bildrand blinkt vorher eine Warnung. */
+export interface WarningState {
+  id: number;
+  side: Side;
+  /** Lage entlang des Rands: y fuer hinten/vorn, x (Welt) fuer oben/unten. */
+  at: number;
+  /** Sekunden bis der Trupp auftaucht. */
+  eta: number;
+  count: number;
 }
 
 export interface FortState {
@@ -120,6 +177,8 @@ export interface FortState {
   /** Laufzeit der Beine (steht in der Rast still). */
   gait: number;
   moving: boolean;
+  /** Tempo als Vielfaches (Dampfmotoren machen sie schneller). */
+  speed: number;
 }
 
 export interface MarchState {
@@ -136,12 +195,22 @@ export interface MarchState {
 export interface GameState {
   phase: Phase;
   time: number;
+  /** Wo die Festung gerade rastet (in der Rast) bzw. zuletzt gerastet hat. */
+  restAt: string;
+  /** Die naechste bzw. laufende Etappe. */
   march: MarchState;
   fort: FortState;
   players: PlayerState[];
   enemies: EnemyState[];
   shots: ShotState[];
   scrap: ScrapState[];
+  modules: ModuleState[];
+  shells: ShellState[];
+  warnings: WarningState[];
+  /** Angebot der Rast: zufaellige Module, jedes einmal kaufbar. */
+  offer: ModuleId[];
+  /** Wie oft in dieser Rast schon neu gewuerfelt wurde (macht es teurer). */
+  rerolls: number;
   /** Gemeinsamer Schrott der Crew. */
   bank: number;
   kills: number;
@@ -149,7 +218,7 @@ export interface GameState {
 }
 
 export type GameEvent =
-  | { kind: "shot"; owner: string; x: number; y: number; z: number }
+  | { kind: "shot"; owner: string; x: number; y: number; z: number; look: ShotState["look"] }
   | { kind: "hit"; id: number; x: number; y: number }
   | { kind: "kill"; x: number; y: number; type: EnemyType }
   | { kind: "stomp"; x: number; y: number }
@@ -163,7 +232,19 @@ export type GameEvent =
   | { kind: "arrived"; index: number }
   | { kind: "depart"; index: number }
   | { kind: "repair"; amount: number }
+  | { kind: "built" | "upgraded" | "sold"; uid: number; type: ModuleId }
+  | { kind: "reroll" }
+  | { kind: "zap"; points: [number, number, number][] }
+  | { kind: "boom"; x: number; y: number; radius: number }
+  | { kind: "mortar"; uid: number }
+  | { kind: "trupp"; side: Side; count: number }
   | { kind: "won" | "lost" };
 
 /** Befehle aus der Rast. */
-export type Command = { kind: "repair" } | { kind: "depart" };
+export type Command =
+  | { kind: "repair" }
+  | { kind: "depart" }
+  | { kind: "build"; module: ModuleId; col: number; row: number }
+  | { kind: "upgrade"; uid: number }
+  | { kind: "sell"; uid: number }
+  | { kind: "reroll" };

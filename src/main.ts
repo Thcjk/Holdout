@@ -33,6 +33,7 @@ import {
   setSafeAreaFromScreen,
 } from "./config/constants";
 import { BootScene } from "./scenes/BootScene";
+import { BuildScene } from "./scenes/BuildScene";
 import { GameScene } from "./scenes/GameScene";
 import { ResultScene } from "./scenes/ResultScene";
 import { TitleScene } from "./scenes/TitleScene";
@@ -78,7 +79,7 @@ function buildConfig(): Phaser.Types.Core.GameConfig {
     },
     // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser
     // keine eigene Physik-Engine.
-    scene: [BootScene, TitleScene, GameScene, ResultScene],
+    scene: [BootScene, TitleScene, GameScene, BuildScene, ResultScene],
   };
 }
 
