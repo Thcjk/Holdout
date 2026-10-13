@@ -80,7 +80,7 @@ const BUTTON_PRESSED_SLICE: SliceInsets = { left: 8, right: 8, top: 6, bottom: 6
 
 export const UI = {
   /** Schriftfamilie fuer alles Gezeichnete - kein Paket, also Systemschrift. */
-  font: '"Fredoka", "Trebuchet MS", system-ui, sans-serif',
+  font: '"Pixelify Sans", "Trebuchet MS", monospace',
 
   button: {
     /**
@@ -114,12 +114,12 @@ export const UI = {
    * nicht zum In-Game").
    */
   text: {
-    title: "#2b2320",
-    body: "#3a302a",
-    muted: "#7a6a58",
-    accent: "#b5432f",
-    /** Auf Pergament. */
-    dark: "#2b2320",
+    title: "#efe8f6",
+    body: "#ddd4ea",
+    muted: "#a99cc2",
+    accent: "#f6c24c",
+    /** Auf Einlagen (dunkler Stein). */
+    dark: "#efe8f6",
     shadow: "#00000000",
   },
 

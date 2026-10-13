@@ -13,7 +13,7 @@ import { FORGE, forgeCost, FORGE_MAX_TOTAL, forgeTotal, type ForgeDef } from "..
 import { buyForge } from "../meta/goals";
 import { loadProfile, saveProfile } from "../meta/profile";
 import { Button } from "../ui/Button";
-import { forgeIconKey } from "../ui/icons";
+import { forgeIconKey } from "../ui/pixel/textures";
 import { menuBackground, menuText, woodPanel } from "../ui/menuStyle";
 
 const COLUMNS = 4;

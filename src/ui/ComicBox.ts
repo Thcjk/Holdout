@@ -1,37 +1,50 @@
 /**
- * Tafeln, Einlagen und Knoepfe im Chibi-Fantasy-Stil.
+ * Tafeln, Einlagen und Knoepfe im Zeitriss-Look (Pixel-Art).
  *
- * - Tafel: Pergament in einem Holzrahmen mit goldenen Nieten in den Ecken.
- * - Einlage: etwas dunkleres Pergament mit feiner Kontur.
- * - Hauptknopf: Gold, oben heller, unten dunkler - wie ein Edelmetall-Schild.
- * - Nebenknopf: Schieferblau.
- * Alles mit dicker dunkler Kontur und einem weichen Schatten darunter.
+ * - Tafel: Rahmen aus Bronze mit abgeschraegten Ecken und Nieten, innen dunkler
+ *   Stein, eine feine violette Leuchtlinie laeuft innen am Rand entlang.
+ * - Einlage: noch dunklerer Stein mit schmalem Rand - fuer Dinge zum Lesen.
+ * - Hauptknopf: Goldplatte (oben hell, unten dunkel), dunkle Schrift.
+ * - Nebenknopf: Mech-Technik in dunklem Blau mit cyanfarbener Lichtkante.
+ * Alle Kanten sind gerade, die Ecken schraeg abgeschnitten - wie Pixel-Art.
+ *
+ * (Der Klassenname stammt aus der Comic-Fassung.)
  */
 
 import Phaser from "phaser";
-import { GOLD, INK, PAPER, PAPER_DARK, WOOD, WOOD_DARK } from "./paper";
+import { C } from "./theme";
 
 export type BoxKind = "panel" | "inset" | "primary" | "secondary";
 
 export interface BoxStyle {
   kind: BoxKind;
-  radius: number;
+  /** Wie weit die Ecken abgeschraegt sind. */
+  corner: number;
   /** Versatz des Schattens nach unten; 0 = keiner. */
   shadow: number;
 }
 
 export const BOX = {
-  panel: { kind: "panel", radius: 12, shadow: 6 } satisfies BoxStyle,
-  inset: { kind: "inset", radius: 8, shadow: 0 } satisfies BoxStyle,
-  primary: { kind: "primary", radius: 12, shadow: 4 } satisfies BoxStyle,
-  secondary: { kind: "secondary", radius: 12, shadow: 4 } satisfies BoxStyle,
+  panel: { kind: "panel", corner: 6, shadow: 4 } satisfies BoxStyle,
+  inset: { kind: "inset", corner: 3, shadow: 0 } satisfies BoxStyle,
+  primary: { kind: "primary", corner: 5, shadow: 4 } satisfies BoxStyle,
+  secondary: { kind: "secondary", corner: 5, shadow: 4 } satisfies BoxStyle,
 } as const;
 
-/** Farben der Knoepfe: oben, Mitte, unten. */
-const BUTTON_COLORS: Record<"primary" | "secondary", [number, number, number]> = {
-  primary: [0xffd877, GOLD, 0xc9851f],
-  secondary: [0x8aa0b8, 0x5d7590, 0x3f5268],
-};
+/** Rechteck mit abgeschraegten Ecken als Punktliste. */
+function chamfer(x: number, y: number, w: number, h: number, c: number): Phaser.Math.Vector2[] {
+  const k = Math.max(0, Math.min(c, w / 2, h / 2));
+  return [
+    new Phaser.Math.Vector2(x + k, y),
+    new Phaser.Math.Vector2(x + w - k, y),
+    new Phaser.Math.Vector2(x + w, y + k),
+    new Phaser.Math.Vector2(x + w, y + h - k),
+    new Phaser.Math.Vector2(x + w - k, y + h),
+    new Phaser.Math.Vector2(x + k, y + h),
+    new Phaser.Math.Vector2(x, y + h - k),
+    new Phaser.Math.Vector2(x, y + k),
+  ];
+}
 
 export class ComicBox {
   readonly container: Phaser.GameObjects.Container;
@@ -95,68 +108,67 @@ export class ComicBox {
   private draw(): void {
     const g = this.graphics;
     const { style } = this;
-    const w = this.width;
-    const h = this.height;
+    const w = Math.round(this.width);
+    const h = Math.round(this.height);
     const dy = this.pressed ? Math.min(3, style.shadow) : 0;
-    const x = -w / 2;
-    const y = -h / 2 + dy;
-    const r = Math.min(style.radius, w / 2, h / 2);
+    const x = Math.round(-w / 2);
+    const y = Math.round(-h / 2 + dy);
+    const c = style.corner;
 
     g.clear();
     if (style.shadow > 0 && !this.pressed) {
-      g.fillStyle(INK, 0.35).fillRoundedRect(x, y + style.shadow, w, h, r);
+      g.fillStyle(C.outline, 0.45).fillPoints(chamfer(x, y + style.shadow, w, h, c), true);
     }
-    // Aeussere Kontur
-    g.fillStyle(INK, 1).fillRoundedRect(x, y, w, h, r);
+    // Aeusserer Umriss
+    g.fillStyle(C.outline, 1).fillPoints(chamfer(x, y, w, h, c), true);
 
     switch (style.kind) {
       case "panel": {
-        const b = 3;
-        const frame = Math.min(9, Math.max(5, Math.min(w, h) * 0.06));
-        g.fillStyle(WOOD, 1).fillRoundedRect(x + b, y + b, w - 2 * b, h - 2 * b, Math.max(2, r - b));
-        // Holzmaserung: ein paar dunklere Linien im Rahmen
-        g.lineStyle(1.2, WOOD_DARK, 0.6);
-        g.lineBetween(x + r, y + b + 2, x + w - r, y + b + 2);
-        g.lineBetween(x + r, y + h - b - 3, x + w - r, y + h - b - 3);
-        const ix = x + b + frame;
-        const iy = y + b + frame;
-        const iw = w - 2 * (b + frame);
-        const ih = h - 2 * (b + frame);
-        g.fillStyle(INK, 1).fillRoundedRect(ix - 2, iy - 2, iw + 4, ih + 4, Math.max(2, r - frame));
-        g.fillStyle(PAPER, 1).fillRoundedRect(ix, iy, iw, ih, Math.max(2, r - frame - 2));
-        // innerer Schatten oben
-        g.fillStyle(WOOD_DARK, 0.12).fillRect(ix + 4, iy + 1, iw - 8, 4);
-        // goldene Nieten in den Ecken
-        if (w > 60 && h > 60) {
-          for (const [cx, cy] of [
-            [x + b + frame / 2, y + b + frame / 2],
-            [x + w - b - frame / 2, y + b + frame / 2],
-            [x + b + frame / 2, y + h - b - frame / 2],
-            [x + w - b - frame / 2, y + h - b - frame / 2],
+        // Bronzerahmen: oben/links hell, unten/rechts dunkel
+        g.fillStyle(C.bronzeDark, 1).fillPoints(chamfer(x + 2, y + 2, w - 4, h - 4, c - 1), true);
+        g.fillStyle(C.bronze, 1).fillPoints(chamfer(x + 2, y + 2, w - 6, h - 6, c - 1), true);
+        g.fillStyle(C.bronzeLight, 1).fillRect(x + c + 1, y + 2, w - 2 * c - 2, 2);
+        // Stein innen
+        const f = 6;
+        g.fillStyle(C.outline, 1).fillPoints(chamfer(x + f - 1, y + f - 1, w - 2 * f + 2, h - 2 * f + 2, c - 2), true);
+        g.fillStyle(C.stone, 1).fillPoints(chamfer(x + f, y + f, w - 2 * f, h - 2 * f, c - 2), true);
+        g.fillStyle(C.stoneMid, 1).fillRect(x + f + 2, y + f, w - 2 * f - 4, 2);
+        // Violette Leuchtlinie innen
+        g.lineStyle(1, C.violet, 0.55).strokePoints(chamfer(x + f + 3, y + f + 3, w - 2 * f - 6, h - 2 * f - 6, Math.max(1, c - 3)), true, true);
+        // Nieten in den Ecken
+        if (w > 60 && h > 50) {
+          for (const [nx, ny] of [
+            [x + 3, y + 3],
+            [x + w - 7, y + 3],
+            [x + 3, y + h - 7],
+            [x + w - 7, y + h - 7],
           ] as const) {
-            g.fillStyle(INK, 1).fillCircle(cx, cy, frame / 2 + 1.5);
-            g.fillStyle(GOLD, 1).fillCircle(cx, cy, frame / 2);
-            g.fillStyle(0xffffff, 0.5).fillCircle(cx - 1, cy - 1, frame / 5);
+            g.fillStyle(C.outline, 1).fillRect(nx, ny, 4, 4);
+            g.fillStyle(C.goldLight, 1).fillRect(nx + 1, ny + 1, 2, 2);
           }
         }
         break;
       }
       case "inset": {
-        const b = 2;
-        g.fillStyle(PAPER_DARK, 1).fillRoundedRect(x + b, y + b, w - 2 * b, h - 2 * b, Math.max(2, r - b));
-        g.fillStyle(WOOD_DARK, 0.18).fillRoundedRect(x + b, y + b, w - 2 * b, 5, { tl: r - b, tr: r - b, bl: 0, br: 0 });
+        g.fillStyle(C.stoneLight, 1).fillPoints(chamfer(x + 1, y + 1, w - 2, h - 2, c - 1), true);
+        g.fillStyle(C.inset, 1).fillPoints(chamfer(x + 2, y + 2, w - 4, h - 4, c - 1), true);
+        g.fillStyle(C.outline, 0.5).fillRect(x + c, y + 2, w - 2 * c, 2);
         break;
       }
-      case "primary":
+      case "primary": {
+        g.fillStyle(C.goldDark, 1).fillPoints(chamfer(x + 2, y + 2, w - 4, h - 4, c - 1), true);
+        g.fillStyle(C.gold, 1).fillPoints(chamfer(x + 2, y + 2, w - 4, h - 7, c - 1), true);
+        g.fillStyle(C.goldLight, 1).fillRect(x + c + 1, y + 3, w - 2 * c - 2, 3);
+        g.fillStyle(C.goldDark, 0.35).fillRect(x + c, y + h - 9, w - 2 * c, 2);
+        break;
+      }
       case "secondary": {
-        const [top, mid, bottom] = BUTTON_COLORS[style.kind];
-        const b = 3;
-        const iw = w - 2 * b;
-        const ih = h - 2 * b;
-        const ir = Math.max(2, r - b);
-        g.fillStyle(bottom, 1).fillRoundedRect(x + b, y + b, iw, ih, ir);
-        g.fillStyle(mid, 1).fillRoundedRect(x + b, y + b, iw, ih * 0.78, ir);
-        g.fillStyle(top, 1).fillRoundedRect(x + b + 3, y + b + 2, iw - 6, Math.max(3, ih * 0.22), Math.min(ir, ih * 0.11));
+        g.fillStyle(C.techDark, 1).fillPoints(chamfer(x + 2, y + 2, w - 4, h - 4, c - 1), true);
+        g.fillStyle(C.tech, 1).fillPoints(chamfer(x + 2, y + 2, w - 4, h - 7, c - 1), true);
+        g.fillStyle(C.techLight, 1).fillRect(x + c + 1, y + 3, w - 2 * c - 2, 2);
+        // Cyan-Lichtkante
+        g.fillStyle(C.cyan, 0.85).fillRect(x + c + 3, y + h - 7, Math.max(4, w * 0.18), 2);
+        g.fillStyle(C.cyan, 0.85).fillRect(x + w - c - 3 - 6, y + h - 7, 6, 2);
         break;
       }
     }

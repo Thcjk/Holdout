@@ -1,16 +1,11 @@
 /**
- * Grundlagen des Looks: Schriften, Farben, Linien.
- *
- * Stil: Chibi-Fantasy wie in einem Bilderbuch-Rollenspiel - dicke dunkle
- * Konturen, flache Farben mit einer Schattenstufe, Pergament mit Holzrahmen
- * und goldene Knoepfe auf schieferblauem Grund.
- * (Der Dateiname stammt aus der Papier-Fassung davor.)
+ * Aeltere Grundlagen des Looks (Farben, Linien, Zufall). Der aktuelle Look
+ * "Zeitriss" steht in `theme.ts`; Schriften werden von dort weitergereicht.
+ * (Der Dateiname stammt aus der Papier-Fassung.)
  */
 
-/** Ueberschriften, Zahlen, Knoepfe: runde, dicke Buchstaben (Lilita One, OFL-Lizenz). */
-export const FONT_TITLE = '"Lilita One", "Arial Black", system-ui, sans-serif';
-/** Fliesstext: freundliche runde Schrift (Fredoka, OFL-Lizenz). */
-export const FONT_HAND = '"Fredoka", "Trebuchet MS", system-ui, sans-serif';
+/** Schriften kommen jetzt aus `theme.ts` (Pixelschriften); hier nur weitergereicht. */
+export { FONT_BODY as FONT_HAND, FONT_TITLE, waitForFonts } from "./theme";
 
 /** Die Kontur: sehr dunkles Braun statt Schwarz - wirkt weicher, wie gezeichnet. */
 export const INK = 0x2b2320;
@@ -24,19 +19,6 @@ export const WOOD = 0x8a5a33;
 export const WOOD_DARK = 0x5e3b22;
 export const SLATE = 0x4d5b6b;
 
-/** Wartet, bis beide Schriften geladen sind (hoechstens drei Sekunden). */
-export async function waitForFonts(): Promise<void> {
-  if (!("fonts" in document)) {
-    return;
-  }
-  const load = Promise.all([
-    document.fonts.load(`48px "Lilita One"`),
-    document.fonts.load(`500 20px "Fredoka"`),
-    document.fonts.load(`700 20px "Fredoka"`),
-  ]);
-  const timeout = new Promise((resolve) => window.setTimeout(resolve, 3000));
-  await Promise.race([load.catch(() => undefined), timeout]);
-}
 
 /** Zufallsstrom mit festem Startwert - dieselbe Linie wackelt bei jedem Zeichnen gleich. */
 export function seeded(seed: number): () => number {

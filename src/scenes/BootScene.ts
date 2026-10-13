@@ -6,9 +6,8 @@ import Phaser from "phaser";
 import { SHEET_KEY, SHEET_PATH, SPACING, TILE } from "../config/assets";
 import { UI_ATLAS, UI_ATLAS_IMAGE, UI_ATLAS_XML } from "../config/ui";
 import { VIEWPORT } from "../config/constants";
-import { createComicTextures } from "../ui/comic";
-import { createIcons } from "../ui/icons";
-import { FONT_HAND, waitForFonts } from "../ui/paper";
+import { createPixelTextures } from "../ui/pixel/textures";
+import { FONT_BODY, T, waitForFonts } from "../ui/theme";
 import { padAtlas } from "../ui/padAtlas";
 
 export class BootScene extends Phaser.Scene {
@@ -19,9 +18,9 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     const text = this.add
       .text(VIEWPORT.width / 2, VIEWPORT.height / 2, "Lädt …", {
-        fontFamily: FONT_HAND,
+        fontFamily: FONT_BODY,
         fontSize: "26px",
-        color: "#1d1c19",
+        color: T.light,
       })
       .setOrigin(0.5);
     this.load.on("progress", (value: number) => text.setText(`Lädt … ${Math.round(value * 100)} %`));
@@ -36,10 +35,9 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     padAtlas(this.textures, UI_ATLAS);
-    // Erst wenn die Handschriften da sind, wird gemalt - das Logo braucht sie.
+    // Erst wenn die Pixelschriften da sind, wird gemalt - das Logo braucht sie.
     void waitForFonts().then(() => {
-      createIcons(this);
-      createComicTextures(this);
+      createPixelTextures(this);
       this.scene.start("Title");
     });
   }

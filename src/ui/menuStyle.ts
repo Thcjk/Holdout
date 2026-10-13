@@ -1,46 +1,28 @@
 /**
  * Der gemeinsame Look aller Bildschirme ausserhalb des Gefechts.
  *
- * Abenddaemmerung im Grauland (gemalt in `landscape.ts`): schieferblauer Himmel
- * mit Sternen und Mond, Berge in Schichten und rechts die Feste Holdout auf ihrem
- * Huegel. Darauf liegen Pergament-Tafeln mit Holzrahmen.
+ * Hintergrund: die Pixel-Welt bei Nacht (`pixel/world.ts`) - Tempelruine,
+ * Kolosseum und darueber der violette Zeitriss. Darauf liegen Tafeln aus Bronze
+ * und dunklem Stein mit Leuchtlinien (`ComicBox`).
  */
 
 import type Phaser from "phaser";
 import { VIEWPORT } from "../config/constants";
 import { UI } from "../config/ui";
+import { FONT_TITLE, T } from "./theme";
 import { BOX, ComicBox } from "./ComicBox";
-import { landscapeGrain, paintLandscape } from "./landscape";
+import { MENU_BACKGROUND_KEY } from "./pixel/textures";
+import { MENU_H, MENU_W } from "./pixel/world";
 
-const BACKGROUND_KEY = "menu-background";
-/** Breiter als jede Entwurfsflaeche (max. 1600) - dann reicht EINE Textur. */
-const BACKGROUND_WIDTH = 1600;
-const BACKGROUND_HEIGHT = 540;
-/** Etwas feiner gemalt, als es angezeigt wird - dann bleiben die Konturen scharf. */
-const BACKGROUND_SCALE = 1.5;
+/** Ein Bildpixel des Menuebilds = 3 Entwurfspixel (540 / 180). */
+const MENU_SCALE = 3;
 
-/**
- * Der Hintergrund: die Landschaft mit der Feste (`landscape.ts`). Einmal gemalt,
- * dann als Textur wiederverwendet.
- */
+/** Der Hintergrund (beim Start in `pixel/textures.ts` gemalt), mittig ausgerichtet. */
 export function menuBackground(scene: Phaser.Scene): Phaser.GameObjects.Image {
-  if (!scene.textures.exists(BACKGROUND_KEY)) {
-    const canvas = document.createElement("canvas");
-    canvas.width = BACKGROUND_WIDTH * BACKGROUND_SCALE;
-    canvas.height = BACKGROUND_HEIGHT * BACKGROUND_SCALE;
-    const context = canvas.getContext("2d");
-    if (context) {
-      context.scale(BACKGROUND_SCALE, BACKGROUND_SCALE);
-      paintLandscape(context, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
-      landscapeGrain(context, canvas.width, canvas.height);
-    }
-    scene.textures.addCanvas(BACKGROUND_KEY, canvas)?.setFilter(1);
-  }
-  // Mittig: Burg und Mond sitzen um die Mitte der Textur, egal wie breit der Bildschirm ist.
   return scene.add
-    .image(VIEWPORT.width / 2, 0, BACKGROUND_KEY)
+    .image(VIEWPORT.width / 2, 0, MENU_BACKGROUND_KEY)
     .setOrigin(0.5, 0)
-    .setDisplaySize(BACKGROUND_WIDTH, BACKGROUND_HEIGHT)
+    .setDisplaySize(MENU_W * MENU_SCALE, MENU_H * MENU_SCALE)
     .setDepth(-100)
     .setScrollFactor(0);
 }
@@ -65,16 +47,18 @@ export function menuText(
   color: string = UI.text.body,
   bold = false,
 ): Phaser.GameObjects.Text {
+  // Grosse Ueberschriften in der hohen Titelschrift, alles andere in der Textschrift.
+  const title = bold && size >= 24;
   const label = scene.add
     .text(x, y, text, {
-      fontFamily: UI.font,
-      fontSize: `${size}px`,
+      fontFamily: title ? FONT_TITLE : UI.font,
+      fontSize: `${title ? Math.round(size * 1.35) : size}px`,
       color,
-      fontStyle: bold ? "bold" : "normal",
+      fontStyle: bold && !title ? "bold" : "normal",
       align: "center",
     })
     .setOrigin(0.5)
-    // Heller Rand: lesbar auf Pergament und auf dem schieferblauen Hintergrund.
-    .setStroke("#f4e4c1", Math.max(3, Math.round(size / 6)));
+    // Dunkler Rand: lesbar auf Stein und auf dem Nachthimmel.
+    .setStroke(T.outline, Math.max(3, Math.round(size / 6)));
   return label;
 }

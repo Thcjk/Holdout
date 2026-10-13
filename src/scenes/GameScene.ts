@@ -10,7 +10,7 @@
  */
 
 import Phaser from "phaser";
-import { figureScale } from "../ui/comicFigures";
+import { enemyFigureScale, figureScale } from "../ui/comicFigures";
 import { applyRun } from "../meta/goals";
 import { loadProfile, saveProfile } from "../meta/profile";
 import { audio } from "../audio/AudioEngine";
@@ -26,7 +26,7 @@ import { setReloadSafe } from "../platform/update";
 import { Button } from "../ui/Button";
 import { FloatingStick } from "../ui/FloatingStick";
 import { Hud } from "../ui/Hud";
-import { ARENA_WALL } from "../ui/comic";
+import { ARENA_WALL } from "../ui/pixel/world";
 import { menuText, woodPanel } from "../ui/menuStyle";
 import { ShopPanel } from "../ui/ShopPanel";
 import { AbilityButton } from "../ui/AbilityButton";
@@ -49,6 +49,9 @@ interface EnemyView extends Destroyable {
   x: number;
   y: number;
 }
+
+/** Pixel-Geschosse werden so viel groesser gezeigt, als sie gemalt sind. */
+const SHOT_SCALE = 2;
 
 /** So lange dauert ein Waffenschwung im Bild (Millisekunden). */
 const SWING_MS = 190;
@@ -505,7 +508,7 @@ export class GameScene extends Phaser.Scene {
   private makeEnemy(enemy: Enemy): EnemyView {
     const def = ENEMIES[enemy.type];
     // Die Bilder sind etwas groesser als der Trefferkreis - so wirken die Figuren kraeftiger.
-    const base = figureScale(def.radius / 15);
+    const base = enemyFigureScale(def.radius);
     const sprite = this.add.sprite(0, 0, enemyKey(enemy.type)).setScale(0);
     const view: EnemyView = {
       sprite,
@@ -634,7 +637,7 @@ export class GameScene extends Phaser.Scene {
       for (const image of view.weapons) {
         image.destroy();
       }
-      view.weapons = player.weapons.map((weapon) => this.add.image(0, 0, weaponIconKey(weapon.id)).setDisplaySize(30, 30));
+      view.weapons = player.weapons.map((weapon) => this.add.image(0, 0, weaponIconKey(weapon.id)).setDisplaySize(34, 34));
     }
     // Die Waffen schweben links und rechts neben der Figur (nicht ueber dem Kopf)
     // und zeigen dorthin, wohin geschossen wird.
@@ -661,8 +664,8 @@ export class GameScene extends Phaser.Scene {
       }
       image
         .setPosition(view.x + Math.cos(around) * distance, view.y + 6 + Math.sin(around) * distance * 0.7)
-        // Das Symbol ist um ~22 Grad nach oben gekippt gezeichnet - das gleicht die Drehung aus.
-        .setRotation(left ? point - Math.PI - 0.38 : point + 0.38)
+        // Die Waffe ist waagerecht nach rechts gemalt; nach links wird sie gespiegelt.
+        .setRotation(left ? point - Math.PI : point)
         .setFlipX(left)
         .setDepth(Math.sin(around) < 0 ? depth - 1 : depth + 1)
         .setVisible(player.alive);
@@ -678,9 +681,10 @@ export class GameScene extends Phaser.Scene {
   private makeShot(shot: Projectile): ShotView {
     let image: Phaser.GameObjects.Image;
     if (shot.look > 0 && shot.friendly) {
-      image = this.add.image(0, 0, `shot-${shot.look}`).setDepth(5000).setRotation(Math.atan2(shot.vy, shot.vx));
+      // Die Pixel-Geschosse sind winzig gemalt - doppelt gross gezeigt, Pixel bleiben hart.
+      image = this.add.image(0, 0, `shot-${shot.look}`).setDepth(5000).setRotation(Math.atan2(shot.vy, shot.vx)).setScale(SHOT_SCALE);
       if (shot.look === 3) {
-        image.setScale(0.9 + Math.random() * 0.5).setAlpha(0.9);
+        image.setScale(SHOT_SCALE * (0.9 + Math.random() * 0.5)).setAlpha(0.9);
       }
     } else {
       const size = Math.max(11, shot.radius * 2.8);

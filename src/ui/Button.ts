@@ -1,5 +1,5 @@
 /**
- * Ein Knopf im Fantasy-Stil: goldenes Schild (Haupt) oder schieferblaues (Neben).
+ * Ein Knopf im Zeitriss-Look: Goldplatte (Haupt) oder dunkle Mech-Technik (Neben).
  *
  * Phaser bringt keine fertigen Bedienelemente mit - das ist Absicht, denn ein
  * Spiel braucht selten Standardknoepfe. Fuer die Menues reicht diese kleine
@@ -17,7 +17,7 @@
 
 import Phaser from "phaser";
 import { BOX, ComicBox } from "./ComicBox";
-import { FONT_TITLE } from "./paper";
+import { FONT_TITLE, T } from "./theme";
 
 export interface ButtonOptions {
   width?: number;
@@ -51,13 +51,14 @@ export class Button {
     this.image = new ComicBox(scene, BOX[options.variant ?? "primary"], x, y, width, height);
 
     const variant = options.variant ?? "primary";
+    // Die Pixelschrift ist schmal und niedrig - deshalb etwas groesser als bestellt.
     this.label = scene.add.text(x, y, text, {
       fontFamily: FONT_TITLE,
-      fontSize: `${(options.fontSize ?? 22) + 1}px`,
-      color: variant === "primary" ? "#3a2410" : "#f4e4c1",
+      fontSize: `${Math.round((options.fontSize ?? 22) * 1.3)}px`,
+      color: variant === "primary" ? T.dark : T.light,
     });
     if (variant === "secondary") {
-      this.label.setShadow(0, 2, "#2b2320", 0, false, true);
+      this.label.setShadow(0, 2, T.outline, 0, false, true);
     }
     this.label.setOrigin(0.5, 0.52);
 
