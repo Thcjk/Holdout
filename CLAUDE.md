@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout** (v3.9.0): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
+**Holdout** (v3.9.1): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
 Online-Koop (1–4). Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android-APK über
 Capacitor. Der frühere Koop-Arena-Shooter (v2.5.0, Brawl-Stars-artig, mit 3D) wurde auf dem
 Branch `brotato-umbau` komplett ersetzt; sein Stand liegt auf `main` bis zum Merge, seine
@@ -86,6 +86,10 @@ Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
 
 - Phaser, `pixelArt`, Skalierung FIT mit Entwurfshöhe 540 und geräteabhängiger Breite
   (`config/constants.ts`), Sicherheitsränder `SAFE`. Die Arena (900×440) sitzt mittig ab y=64.
+- **Bildschirmgröße immer über `platform/screenArea.ts`** (`fitPageToScreen`), nie direkt `innerWidth/innerHeight`:
+  Als iOS-App vom Home-Bildschirm meldet das Fenster quer ~47 px zu wenig Höhe (Statusleiste des Hochformats) –
+  es blieb ein leerer Streifen unten (Nutzer-Screenshot 2026-10-13). Dort gelten die `screen`-Maße, Seite und
+  `#game-root` bekommen feste Pixelmaße.
 - Eine Szene pro Bildschirm: Boot, Title, Select, Lobby, Game, Result. Der Shop ist keine Szene,
   sondern `ui/ShopPanel` als undurchsichtige Ebene in `GameScene` (baut nur bei geändertem Zustand neu).
 - Steuerung: nur `ui/FloatingStick` (linke ~60 % des Bildschirms). Berührungen, die auf einem

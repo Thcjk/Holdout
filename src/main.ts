@@ -23,6 +23,7 @@ import { startUpdateWatch } from "./platform/update";
 import { lockLandscape } from "./platform/orientation";
 import { waitForLandscape, watchOrientation } from "./platform/rotateGate";
 import { readSafeArea } from "./platform/safeArea";
+import { fitPageToScreen } from "./platform/screenArea";
 import { installNetLogOverlay } from "./platform/netLogOverlay";
 import {
   COLORS,
@@ -115,13 +116,15 @@ async function startWhenLandscape(): Promise<void> {
 
   await waitForLandscape();
 
-  fitViewportToScreen(window.innerWidth, window.innerHeight);
+  // Die echte Bildschirmflaeche (iOS-App: Fenster meldet im Querformat zu wenig Hoehe).
+  const area = fitPageToScreen();
+  fitViewportToScreen(area.width, area.height);
 
   // Das Geraet nach seinen verdeckten Raendern fragen (Notch, Home-Indikator,
   // runde Ecken) und in Entwurfseinheiten umrechnen. Reihenfolge zaehlt: Der
   // Umrechnungsfaktor haengt an der Breite, die eine Zeile darueber festgelegt
   // wird.
-  setSafeAreaFromScreen(readSafeArea(), window.innerWidth);
+  setSafeAreaFromScreen(readSafeArea(), area.width);
 
   const game = new Phaser.Game(buildConfig());
 
@@ -151,12 +154,13 @@ async function startWhenLandscape(): Promise<void> {
    * dafuer feuert Phaser `RESIZE`, und die HUD-Szene setzt sich darauf neu.
    */
   const refit = (): void => {
-    const width = designWidthFor(window.innerWidth, window.innerHeight);
+    const measured = fitPageToScreen();
+    const width = designWidthFor(measured.width, measured.height);
     if (width !== null && width !== VIEWPORT.width) {
       VIEWPORT.width = width;
       // Sicherheitsabstaende haengen am Umrechnungsfaktor, der sich mit der
       // Breite aendert.
-      setSafeAreaFromScreen(readSafeArea(), window.innerWidth);
+      setSafeAreaFromScreen(readSafeArea(), measured.width);
       game.scale.resize(width, VIEWPORT.height);
 
       /*
@@ -187,7 +191,7 @@ async function startWhenLandscape(): Promise<void> {
      *
      * `refresh` meldet danach `RESIZE`; das HUD setzt sich darauf neu.
      */
-    setSafeAreaFromScreen(readSafeArea(), window.innerWidth);
+    setSafeAreaFromScreen(readSafeArea(), measured.width);
     game.scale.refresh();
   };
 
