@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout** (v3.9.1): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
+**Holdout** (v3.9.2): Brotato-artiger Wellen-Shooter fürs Handy, 2D top-down, solo oder
 Online-Koop (1–4). Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android-APK über
 Capacitor. Der frühere Koop-Arena-Shooter (v2.5.0, Brawl-Stars-artig, mit 3D) wurde auf dem
 Branch `brotato-umbau` komplett ersetzt; sein Stand liegt auf `main` bis zum Merge, seine
@@ -60,7 +60,12 @@ Umbau fertig und per Pull Request #6 auf `main` gemergt (2026-10-12).
   Bombenkobold (bleibt stehen und explodiert), `splitter` Mumie (zerfällt in 3 Wuselchen). Waffen: `pistol`
   Kurzbogen, `smg` Wurfdolche, `shotgun` Funkenfächer, `sniper` Langbogen, `fist` Axt, `knife` Dolch, `spear`
   Langschwert, `crossbow` Armbrust, `rocket` Feuerkugel, `flamer` Flammenstab, `wand` Blitzstab, `hammer`
-  Kriegshammer, `frost` Froststab. Elite schießt zusätzlich Fächer, Boss wechselt Ring/Fächer und ruft Bombenkobolde.
+  Kriegshammer, `frost` Froststab, `twin` Doppelschwert. Elite schießt zusätzlich Fächer, Boss wechselt Ring/Fächer
+  und ruft Bombenkobolde.
+- **Waffenwerte passen zur Waffe** (Nutzer 2026-10-13: „Schwert hat nicht so eine Reichweite“): Nahkampf-Reichweite
+  ab Figurmitte Dolch 55, Doppelschwert 75, Axt 80, Hammer 85 (rundum), Langschwert 95; Wurfdolche 240, Funken 220,
+  Kurzbogen 360, Armbrust 450 (durchschlägt 1–4), Langbogen 700. Der Schlagbogen im Bild (`GameScene.swing`) liegt
+  genau auf der echten Reichweite, die Waffe selbst schwingt mit (`startWeaponSwing`, `SWING_MS`).
 
 ## Fortschritt über Läufe (`src/meta/`)
 

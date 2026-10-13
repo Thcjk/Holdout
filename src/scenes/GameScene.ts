@@ -31,7 +31,7 @@ import { menuText, woodPanel } from "../ui/menuStyle";
 import { ShopPanel } from "../ui/ShopPanel";
 import { AbilityButton } from "../ui/AbilityButton";
 import { abilityCooldown } from "../game/data/abilities";
-import { WEAPONS } from "../game/data/weapons";
+import { WEAPONS, weaponReach } from "../game/data/weapons";
 import { FONT_HAND, FONT_TITLE } from "../ui/paper";
 import type { PlayMode } from "../app";
 
@@ -50,12 +50,17 @@ interface EnemyView extends Destroyable {
   y: number;
 }
 
+/** So lange dauert ein Waffenschwung im Bild (Millisekunden). */
+const SWING_MS = 190;
+
 interface PlayerView extends Destroyable {
   sprite: Phaser.GameObjects.Sprite;
   shadow: Phaser.GameObjects.Image;
   name: Phaser.GameObjects.Text;
   weapons: Phaser.GameObjects.Image[];
   weaponSignature: string;
+  /** Zeitpunkt des letzten Schlags je Waffe (Nahkampf) - dann schwingt das Bild. */
+  swings: number[];
   x: number;
   y: number;
   lastX: number;
@@ -578,6 +583,7 @@ export class GameScene extends Phaser.Scene {
       name,
       weapons: [],
       weaponSignature: "",
+      swings: [],
       x: this.originX + player.x,
       y: this.originY + player.y,
       lastX: this.originX + player.x,
@@ -637,11 +643,26 @@ export class GameScene extends Phaser.Scene {
     const left = Math.cos(aim) < 0;
     view.weapons.forEach((image, index) => {
       const spread = count > 1 ? (index / (count - 1) - 0.5) * Math.min(2.6, 0.75 * (count - 1)) : 0;
-      const around = aim + spread;
+      let around = aim + spread;
+      let point = aim;
+      let distance = 28;
+      // Nahkampfwaffe schlaegt gerade zu: Sie fegt durch den Schlagwinkel und
+      // reicht dabei bis zur Haelfte ihrer Reichweite hinaus.
+      const weapon = player.weapons[index];
+      const since = time - (view.swings[index] ?? -1e9);
+      if (weapon && since >= 0 && since < SWING_MS) {
+        const def = WEAPONS[weapon.id];
+        const t = since / SWING_MS;
+        const half = Math.min(1.5, ((def.spread / 2) * Math.PI) / 180 + 0.25);
+        const sweep = left ? 1 : -1;
+        around = aim + sweep * half * (1 - 2 * Phaser.Math.Easing.Cubic.Out(t));
+        point = around;
+        distance = 28 + Math.max(0, weaponReach(weapon.id, player.stats) * 0.5 - 28) * Math.sin(Math.PI * t);
+      }
       image
-        .setPosition(view.x + Math.cos(around) * 28, view.y + 6 + Math.sin(around) * 18)
+        .setPosition(view.x + Math.cos(around) * distance, view.y + 6 + Math.sin(around) * distance * 0.7)
         // Das Symbol ist um ~22 Grad nach oben gekippt gezeichnet - das gleicht die Drehung aus.
-        .setRotation(left ? aim - Math.PI - 0.38 : aim + 0.38)
+        .setRotation(left ? point - Math.PI - 0.38 : point + 0.38)
         .setFlipX(left)
         .setDepth(Math.sin(around) < 0 ? depth - 1 : depth + 1)
         .setVisible(player.alive);
@@ -747,7 +768,11 @@ export class GameScene extends Phaser.Scene {
       case "shot":
         if (event.kind === "melee") {
           const def = WEAPONS[event.w];
-          this.swing(event.x, event.y, event.angle, def?.spread ?? 80, Math.min(140, def?.range ?? 70));
+          const owner = this.session.view.state.players.find((player) => player.id === event.pid);
+          // Der Bogen zeigt genau, wie weit der Schlag reicht - wie weit die Waffe also trifft.
+          const reach = owner ? weaponReach(event.w, owner.stats) : (def?.range ?? 70);
+          this.swing(event.x, event.y, event.angle, def?.spread ?? 80, reach);
+          this.startWeaponSwing(event.pid, event.w);
           this.playSound("swing", 70);
         } else {
           this.playSound("shoot", 70);
@@ -892,19 +917,45 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Der Schlag als heller Halbmond: aussen genau bei der Reichweite der Waffe,
+   * so breit wie ihr Schlagwinkel. Der Hammer (360 Grad) gibt einen Ring.
+   */
   private swing(x: number, y: number, angle: number, spread: number, reach: number): void {
     const arc = this.add.graphics().setDepth(8600);
-    const half = Math.min(Math.PI, ((spread / 2) * Math.PI) / 180 + 0.3);
-    const radius = Math.max(30, reach * 0.55);
-    arc.lineStyle(6, 0x1d1c19, 0.5);
+    const cx = this.originX + x;
+    const cy = this.originY + y;
+    const half = Math.min(Math.PI, ((spread / 2) * Math.PI) / 180);
+    const outer = Math.max(30, reach);
+    const inner = outer * 0.62;
+    arc.fillStyle(0xf8f0dc, 0.5);
+    arc.lineStyle(2.5, 0x2a201b, 0.55);
     arc.beginPath();
-    arc.arc(this.originX + x, this.originY + y, radius, angle - half, angle + half);
+    arc.arc(cx, cy, outer, angle - half, angle + half, false);
+    arc.arc(cx, cy, inner, angle + half, angle - half, true);
+    arc.closePath();
+    arc.fillPath();
     arc.strokePath();
-    arc.lineStyle(3.5, 0xf1e5c9, 0.95);
-    arc.beginPath();
-    arc.arc(this.originX + x, this.originY + y, radius, angle - half, angle + half);
-    arc.strokePath();
-    this.tweens.add({ targets: arc, alpha: 0, duration: 170, onComplete: () => arc.destroy() });
+    this.tweens.add({ targets: arc, alpha: 0, duration: 200, ease: "Quad.In", onComplete: () => arc.destroy() });
+  }
+
+  /** Merkt sich, dass eine Nahkampfwaffe dieses Spielers gerade zuschlaegt (fuer `applyPlayer`). */
+  private startWeaponSwing(pid: string, weaponId: string): void {
+    const view = this.players.get(pid);
+    const state = this.session.view.state.players.find((player) => player.id === pid);
+    if (!view || !state) {
+      return;
+    }
+    // Die Waffe dieser Art, die am laengsten nicht geschlagen hat.
+    let best = -1;
+    state.weapons.forEach((weapon, index) => {
+      if (weapon.id === weaponId && (best < 0 || (view.swings[index] ?? 0) < (view.swings[best] ?? 0))) {
+        best = index;
+      }
+    });
+    if (best >= 0) {
+      view.swings[best] = this.time.now;
+    }
   }
 
   /** Explosion: dunkler Ring, der aufgeht, darunter ein heller Fleck und Splitter. */

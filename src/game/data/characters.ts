@@ -48,10 +48,10 @@ export const CHARACTERS: Record<CharacterId, CharacterDef> = {
     id: "schurke",
     name: "Schurke",
     description: "Trifft kritisch und weicht aus, hält aber wenig aus.",
-    mods: { crit: 15, dodge: 10, speed: 10, maxHp: -15 },
+    mods: { crit: 18, dodge: 10, speed: 10, maxHp: -8 },
     slots: 6,
     allowed: ALL_WEAPONS,
-    starts: ["knife", "smg", "crossbow"],
+    starts: ["smg", "knife", "crossbow"],
     color: 0x4a4f5a,
   },
   elfe: {
