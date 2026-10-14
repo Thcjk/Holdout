@@ -17,7 +17,7 @@ Wellen-Shooter liegt auf dem Zweig `alt-3.9.2`).
 | 1        | Laufende Festung, Deck und Boden, Strickleiter, Seilwinde, Sandläufer, Schrott, Rast                                                                | fertig |
 | 2        | Module aufs Deck bauen, aufrüsten, Nachbar-Boni, zufälliges Angebot; Angriffe von allen Seiten                                                      | fertig |
 | 3        | Gegner mit Aufgaben (Enterer, Phalanx, Skarabäus, Sandpriester, Streitwagen, Ballista, Belagerungsturm, Goldener Koloss); Module können kaputtgehen | fertig |
-| 4        | Routenkarte mit Stationen, nachrückende Armee, Akt 1 komplett                                                                                       | offen  |
+| 4        | Routenkarte mit Abzweigungen (Ruine, Oase, Händler, Schrottfeld, Sturm, Ereignis, Endgegner), Vorsprung vor der Armee, Heerschar, Akt 1 komplett    | fertig |
 | 5        | Crew (6 Mechs), Teile, Werft, Altgold, Erfolge                                                                                                      | offen  |
 | 6        | Koop, Akte 2 und 3, Ton, Feinschliff                                                                                                                | offen  |
 
@@ -36,13 +36,13 @@ npm run dev
 
 Nützliche Adress-Zusätze:
 
-| Zusatz         | Wirkung                                                       |
-| -------------- | ------------------------------------------------------------- |
-| `?desktop`     | Spiel auch am Desktop starten (Maus ersetzt den Daumen)       |
-| `?debug=kurz`  | Märsche nur ein Zehntel so lang (Rast und Ziel schnell sehen) |
-| `?debug=reich` | 999 Schrott zum Start (alle Module ausprobieren)              |
-| `?debug=werte` | Bildrate und Gegnerzahl einblenden                            |
-| `?seed=123`    | Feste Zufallszahl                                             |
+| Zusatz         | Wirkung                                                   |
+| -------------- | --------------------------------------------------------- |
+| `?desktop`     | Spiel auch am Desktop starten (Maus ersetzt den Daumen)   |
+| `?debug=kurz`  | Märsche nur ein Zehntel so lang (Stationen schnell sehen) |
+| `?debug=reich` | 999 Schrott zum Start (alle Module ausprobieren)          |
+| `?debug=werte` | Bildrate und Gegnerzahl einblenden                        |
+| `?seed=123`    | Feste Zufallszahl                                         |
 
 ## Befehle
 
@@ -62,7 +62,7 @@ src/
   game/       Spielkern ohne Phaser und ohne Netz: Simulation (Dirigent), systems/ (Mechs,
               Module, Gegner, Kampf), Festung, Daten
   net/        Sitzungen (solo) und die Verbindungsschicht für den späteren Koop
-  scenes/     Boot, Titel, Spiel, Bau-Ansicht, Ergebnis
+  scenes/     Boot, Titel, Spiel, Bau-Ansicht, Routenkarte, Ergebnis
   ui/         HUD, Knöpfe, Stick, Rast-Tafel; pixel/ malt alle Bilder per Code; world/ zeichnet Boden, Festung, Module, Gegner, Warnungen
   platform/   Geräte-Erkennung, Sicherheitsränder, Updates
 tests/        Spielkern ohne Browser, Bot für die Balance

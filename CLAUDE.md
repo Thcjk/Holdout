@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout – Die Wanderfestung** (v4.2.0): Eine Mech-Crew flieht auf einer sechsbeinigen
+**Holdout – Die Wanderfestung** (v4.3.0): Eine Mech-Crew flieht auf einer sechsbeinigen
 Lauf-Festung durch die Wüste, die goldene Armee eines toten Reichs jagt sie (sie will ihr
 Sonnenherz zurück). Kämpfen auf dem Deck oder am Boden, Festung ausbauen, Route wählen.
 Fürs Handy, quer, Pixel-Art. Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android über
@@ -31,7 +31,7 @@ Grinding/Freischalten.
 | 1        | Laufende Festung, Deck/Boden, Strickleiter, Seilwinde, Sandläufer, Schrott, Rast                                                                                                                                  | **fertig (v4.0.0)** |
 | 2        | Module bauen (Raster 7×4, 10 Module, 3 Stufen, Generator-Nachbarbonus, Abbauen = halbe Kosten), zufälliges Angebot je Rast, Trupps von allen Seiten mit Warnpfeil                                                 | **fertig (v4.1.0)** |
 | 3        | Gegner mit Aufgaben: Enterer (Leitern aufs Deck), Phalanx (Schild vorn), Skarabäus (fliegt aufs Deck), Sandpriester, Streitwagen, Ballista (schießt Module), Belagerungsturm, Goldener Koloss; Module haben Leben | **fertig (v4.2.0)** |
-| 4        | Routenkarte mit Abzweigungen (Ruine, Oase, Händler, Schrottfeld, Sturm, Ereignis, Boss), Armee rückt nach                                                                                                         | offen               |
+| 4        | Routenkarte mit Abzweigungen (Ruine, Oase, Händler, Schrottfeld, Sturm, Ereignis, Boss), Vorsprung/Heerschar, Akt 1                                                                                               | **fertig (v4.3.0)** |
 | 5        | Crew: Schrauber (Start), Kanonier, Brecher, Bergungsläuferin, Funkerin, Sturmspringer; Teile Arm/Rücken; Werft mit Altgold, Baupläne, neue Festungen, Hitze-Stufen, Erfolge                                       | offen               |
 | 6        | Koop (gemeinsame Festung, Schrott gehört allen), Akte 2/3 (Salzebene, Glasschlucht), Ton, Feinschliff                                                                                                             | offen               |
 
@@ -44,9 +44,20 @@ Jede Baustufe wird einzeln auf `main` hochgeladen. Entwicklungszweig: `wanderfes
 - `Simulation.ts` ist nur der **Dirigent** (fester 60-Hz-Takt `advance(deltaMs, inputs)`, Phasen
   `march → rest → … → won | lost`, Befehle der Rast über `command()`, Ereignisse aus Befehlen gehen mit
   dem nächsten `advance` raus). Die Regeln stehen in `systems/` als Funktionen, die eine `World`
-  (`world.ts`: state, rng, emit, march(), refreshFortress()) bekommen: `players.ts` (Mechs),
+  (`world.ts`: state, rng, emit, march(), specFor(), modulePool(), refreshFortress()) bekommen: `players.ts` (Mechs),
   `modules.ts` (Bauen, Angebot, was Module tun, Reparatur), `enemies.ts` (Trupps, Endgegner, Verhalten
-  je Art), `combat.ts` (Schaden, Zielwahl, Geschosse, Granaten, Ballista-Bolzen).
+  je Art), `combat.ts` (Schaden, Zielwahl, Geschosse, Granaten, Ballista-Bolzen), `journey.ts` (Karte: losziehen, ankommen, Stationen, Ruine plündern, Ereignisse, Vorsprung).
+- **Routenkarte (Baustufe 4)**: `map.ts` würfelt pro Lauf eine Karte (`generateMap`): Spalte 0 Start („Grab von
+  Aurum“), 1–5 je 2–3 Stationen, 6 Endgegner („Goldenes Tor“); Wege ohne Kreuzung, vor dem Boss immer eine Oase,
+  unterwegs ein Händler. `state.map`, `state.at` (Standort), `state.path`. Rast → „Weiterziehen“ öffnet `MapScene` →
+  `depart {node}`. Stationen (`data/acts.ts: NODES`): Ruine (Phase `loot`: Festung steht 20 s, 5 Truhen am Boden,
+  1 s daneben stehen = auf, Inhalt als Schrott; Armee kommt mit 40 % Rate), Oase (+150 Rumpf), Händler (6 Angebote,
+  Würfeln 2+n), Schrottfeld (26 Haufen am Weg, Rate ×1,25), Sturm (`march.storm`: Nebel, keine Warnpfeile, Rate ×0,7,
+  +25 Schrott), Ereignis (`data/events.ts`, 7 Stück, je 2 Wahlen; `state.event` blockiert das Losziehen; Befehl
+  `choose`), Boss. **Vorsprung** `state.lead` (Start 3, max 5): Ruine/Händler/Schrottfeld −1, Sturm +2, Ereignisse ±.
+  Fällt er beim Losziehen auf 0: Marsch wird **Heerschar** (`march.horde`: Rate ×1,5, Leben ×1,2), danach Vorsprung 2.
+  Stärke je Spalte d (`marchFor`): Rate 0,45+0,11·d → 1,1+0,26·d, Leben 1+0,25(d−1)+0,06(d−1)², Mischung
+  `MIX_BY_DEPTH`. Tests können eine feste Route geben (`SimulationOptions.route` → `linearMap`); `lengthFactor` kürzt.
 - Zustand ist reines JSON (später Koop-Schnappschuss). `GameSession` ist die einzige
   Schnittstelle der Szene; bisher nur `SoloSession`. Die Verbindungsschicht (PeerJS, TURN,
   Raumcode, `net/*Transport`) ist erhalten, `net/protocol.ts` ist nur ein Platzhalter.
@@ -95,10 +106,10 @@ Jede Baustufe wird einzeln auf `main` hochgeladen. Entwicklungszweig: `wanderfes
 - **Module haben Leben** (`hp`, `hpMax`, `broken`): kaputt bei 0, arbeitet erst ab der Hälfte wieder;
   Schrauber flickt Module im Umkreis 60 (8/s), Werkstatt alle (2 × Stufe/s), Aufrüsten und jede Station machen
   heil. Kaputte Platten/Motoren zählen nicht (`refreshFortress`).
-- Werte: `data/crew.ts` (Schrauber: Nietkanone, Notreparatur, `moduleRepair`), `data/enemies.ts`,
-  `data/route.ts` (Probelauf Oase → Ruine → Küste mit Koloss), feste Zahlen in `constants.ts`.
-- Balance (Bot baut mit, `npm run balance -- 8 klug|deck`): klug 6–7/8 geschafft (Rumpf am Ziel 40–920),
-  nur oben bleiben 0/4. Wer wie viel Rumpf kostet: `npx tsx tools/analyse.ts 4 klug`.
+- Werte: `data/crew.ts` (Schrauber: Nietkanone, Notreparatur, `moduleRepair`), `data/enemies.ts`, `data/acts.ts`,
+  `data/events.ts`, `data/route.ts` (Typ `MarchSpec`), feste Zahlen in `constants.ts`.
+- Balance (Bot spielt den ganzen Akt, wählt Stationen und Ereignisse, plündert; `npm run balance -- 10 klug|deck`):
+  klug 6/10 geschafft (~7,5 min pro Akt), nur oben bleiben 0/4. Wer wie viel Rumpf kostet: `npx tsx tools/analyse.ts 4 klug`.
 
 ## Darstellung
 
@@ -116,7 +127,8 @@ Jede Baustufe wird einzeln auf `main` hochgeladen. Entwicklungszweig: `wanderfes
   Boden = y, Beine = y ihres Fußes, Rumpf = 127,7, Deck = 128 + Zeile), `FortressView`
   (Beine im Gang, Herz-Leuchten, Rauch), `GroundView` (kachelnder Boden, Fußabdrücke).
 - Verdeckte Figuren unter/hinter dem Deck scheinen als Umriss durch (Mech cyan, Gegner rot).
-- Szenen: Boot, Title (Festung läuft, Losziehen, Koop „bald“, Ton), Game, **Build** (Bau-Ansicht über dem
+- Szenen: Boot, Title (Festung läuft, Losziehen, Koop „bald“, Ton), Game, **Map** (Routenkarte über dem Spiel:
+  Spalten, Wege, Armee-Streifen links je nach Vorsprung, Infotafel mit Vorsprung-Änderung, LOSZIEHEN), **Build** (Bau-Ansicht über dem
   Spiel: Deck 2×, Raster, Angebot unten, Infotafel rechts; schickt nur Befehle, zeichnet bei Änderung neu;
   solange offen, ruhen Stick, Pause und Rast-Tafel im Spiel), Result.
   `setReloadSafe(true)` nur in Title und Result (PWA-Update nur dort).
@@ -126,6 +138,9 @@ Jede Baustufe wird einzeln auf `main` hochgeladen. Entwicklungszweig: `wanderfes
   über großen Gegnern). Mörser-Granaten, Blitze, Explosionen in `GameScene`. HUD zeigt den Koloss-Balken.
 - Jede Gegnerart stellt sich beim ersten Auftauchen mit einem Hinweis vor (`ENEMY_INTRO`); Hinweise laufen
   nacheinander (Warteschlange).
+- `ui/world/LootView` (Truhen mit Füll-Ring, Sandsturm-Nebel `TEX.fog` + Schlieren), `ui/EventPanel` (Ereignis mit
+  zwei Knöpfen), HUD: Vorsprung-Punkte unter dem Schrott, Titel zeigt PLÜNDERN/HEERSCHAR/STURM. `pixel/karte.ts`:
+  Symbole der Stationen, Festungs-Marke, Truhen. Mit `?debug=werte` auch `window.__holdout.send(befehl)`.
 - UI: `Hud`, `AbilityButton`, `RestPanel` (unten, Deck bleibt frei; Ausbauen/Reparieren/Weiterziehen), `FloatingStick` (linke 62 %),
   `Button`/`ComicBox` (Bronze + Stein + cyan Linie). Schriften Jersey 10 / Pixelify Sans.
 - Hinweise für Neulinge erscheinen einmal pro Lauf (Abspringen, Bauch, Schrott, Seilwinde, Tod).
