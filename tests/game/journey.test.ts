@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { STATION_BONUS, TICK } from "../../src/game/constants";
 import { ACTS, LEAD_AFTER_HORDE, LEAD_START } from "../../src/game/data/acts";
+import { damageEnemy } from "../../src/game/systems/combat";
 import { EVENTS } from "../../src/game/data/events";
 import { MODULES } from "../../src/game/data/modules";
 import { generateMap } from "../../src/game/map";
@@ -166,9 +167,8 @@ describe("Stationen", () => {
     expect(horde.spawnEnd).toBeGreaterThan(normal.spawnEnd * 1.4);
   });
 
-  it("der Endgegner-Marsch beendet den Akt, wenn der Koloss faellt", () => {
-    const s = sim();
-    // Direkt vor den Endgegner springen.
+  /** Direkt vor den Endgegner des Akts springen und ihn besiegen. */
+  function beatBoss(s: Simulation): void {
     const boss = s.state.map.nodes.find((n) => n.type === "boss")!;
     const before = s.state.map.nodes.find((n) => n.next.includes(boss.id))!;
     s.state.at = before.id;
@@ -176,26 +176,30 @@ describe("Stationen", () => {
     expect(s.state.march.boss).toBe("waiting");
     run(s, 3);
     expect(s.state.phase).toBe("march");
-    const koloss = s.state.enemies.find((e) => e.type === "koloss")!;
-    koloss.hp = 1;
-    s.state.shots.push({
-      id: 9999,
-      owner: ME,
-      look: "rivet",
-      pull: 0,
-      x: koloss.x,
-      y: koloss.y,
-      z: 10,
-      vx: 0,
-      vy: 0,
-      vz: 0,
-      damage: 50,
-      life: 1,
-      splash: 0,
-      pierce: 0,
-      hit: [],
-    });
+    const enemy = s.state.enemies.find((e) => e.type === ACTS[s.state.map.act]!.boss)!;
+    expect(enemy).toBeDefined();
+    damageEnemy(s, enemy, 999999, enemy.x, enemy.y, null, { pierce: true });
     run(s, 0.5);
+  }
+
+  it("nach dem Endgegner beginnt der naechste Akt, nach dem dritten ist der Lauf geschafft", () => {
+    const s = sim();
+    beatBoss(s);
+    expect(s.state.phase).toBe("rest");
+    expect(s.state.map.act).toBe(1);
+    expect(s.state.at).toBe(0);
+    expect(s.state.restAt).toBe(ACTS[0]!.goal);
+    s.command(ME, { kind: "depart" });
+    run(s, 2.5);
+    expect(s.state.path.length).toBe(2);
+    if (s.state.phase !== "rest") {
+      run(s, 25);
+    }
+    s.state.event = null;
+    beatBoss(s);
+    expect(s.state.map.act).toBe(2);
+    s.state.event = null;
+    beatBoss(s);
     expect(s.state.phase).toBe("won");
   });
 

@@ -26,8 +26,8 @@ function pickType(rng: Rng, avoid: ReadonlySet<NodeType>): NodeType {
   return pool[0]!;
 }
 
-/** Neue Karte fuer einen Akt. */
-export function generateMap(rng: Rng, act: number): ActMap {
+/** Neue Karte fuer einen Akt. `start`: Name der Startstation (Ziel des vorigen Akts). */
+export function generateMap(rng: Rng, act: number, start = START_STATION): ActMap {
   const spec = ACTS[act] ?? ACTS[0]!;
   const nodes: MapNode[] = [];
   const columns: MapNode[][] = [];
@@ -42,7 +42,7 @@ export function generateMap(rng: Rng, act: number): ActMap {
     return node;
   };
 
-  add(0, 0.5, "start", START_STATION);
+  add(0, 0.5, "start", start);
   const last = spec.layers - 1;
   for (let layer = 1; layer < last; layer += 1) {
     const count = layer === 1 ? 2 : rng() < 0.55 ? 3 : 2;
@@ -125,7 +125,7 @@ export function linearMap(route: readonly MarchSpec[]): ActMap {
       route: i,
     });
   });
-  return { act: 0, name: "Probelauf", layers: route.length + 1, nodes };
+  return { act: 0, name: "Probelauf", layers: route.length + 1, nodes, fixed: true };
 }
 
 /** Wohin es von hier aus weitergeht. */

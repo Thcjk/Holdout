@@ -287,19 +287,31 @@ export class MapScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setStroke(T.outline, 3),
     );
-    this.keep(
+    const go = this.keep(
       new Button(
         this,
         w - SAFE.right - 120,
         top + INFO_H - 34,
-        "LOSZIEHEN ▶",
+        this.session.isHost ? "LOSZIEHEN ▶" : "HOST WÄHLT",
         () => this.depart(node.id),
         { width: 190, height: 48, fontSize: 19 },
       ),
     );
+    // Im Koop waehlt der Host den Weg - die anderen sehen die Karte nur an.
+    go.setEnabled(this.session.isHost);
+  }
+
+  update(): void {
+    // Hat der Host inzwischen losgezogen, ist die Karte zu.
+    if (this.state.phase !== "rest") {
+      this.close();
+    }
   }
 
   private depart(node: number): void {
+    if (!this.session.isHost) {
+      return;
+    }
     this.session.send({ kind: "depart", node });
     this.close();
   }

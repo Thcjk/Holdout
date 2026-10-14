@@ -83,6 +83,7 @@ export function newPlayer(setup: PlayerSetup, index: number): PlayerState {
     parts: { arm: null, back: null },
     droneCd: 0.8,
     dash: null,
+    lastCmd: 0,
   };
 }
 

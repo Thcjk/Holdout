@@ -17,6 +17,10 @@ import type { GameSession } from "./GameSession";
 export class SoloSession implements GameSession {
   readonly selfId: string;
   readonly canPause = true;
+  readonly isHost = true;
+  readonly isMultiplayer = false;
+  readonly isReady = true;
+  readonly connectionLost = null;
   private readonly simulation: Simulation;
 
   constructor(setup: PlayerSetup, seed: number, options: SimulationOptions = {}) {

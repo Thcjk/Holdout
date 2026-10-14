@@ -13,7 +13,9 @@ export type EnemyType =
   | "streitwagen"
   | "ballista"
   | "turm"
-  | "koloss";
+  | "koloss"
+  | "barke"
+  | "glaskoloss";
 /** Wo ein Gegner gerade ist: am Boden, an der Rumpfwand (klettert), auf dem Deck, in der Luft. */
 export type EnemyLayer = "ground" | "climb" | "deck" | "air";
 /** Was ein Gegner gerade tut (jede Art benutzt nur einen Teil davon). */
@@ -132,6 +134,8 @@ export interface PlayerState {
   parts: { arm: PartSlot | null; back: PartSlot | null };
   /** Drohnen der Funkerin: Sekunden bis zum naechsten Schuss. */
   droneCd: number;
+  /** Koop: Nummer des letzten ausgefuehrten Befehls dieses Spielers. */
+  lastCmd: number;
   /** Rammstoss des Brechers: Restzeit, Richtung, schon getroffene Gegner. */
   dash: { t: number; dx: number; dy: number; hit: number[] } | null;
 }
@@ -329,6 +333,8 @@ export interface MapNode {
 
 export interface ActMap {
   act: number;
+  /** Fester Probelauf (Tests): nach dem Ziel ist Schluss, kein weiterer Akt. */
+  fixed?: boolean;
   name: string;
   layers: number;
   nodes: MapNode[];
@@ -364,6 +370,8 @@ export interface GameState {
   path: number[];
   /** Vorsprung vor der Armee (0 = eingeholt, dann kommt eine Heerschar). */
   lead: number;
+  /** Vorsprung zu Beginn jedes Akts. */
+  leadStart: number;
   /** Ereignis, das auf eine Wahl wartet. */
   event: EventState | null;
   /** Schon gesehene Ereignisse (keins doppelt pro Lauf). */
@@ -429,6 +437,7 @@ export type GameEvent =
   | { kind: "boss" | "bossDown"; type: EnemyType }
   | { kind: "chest"; x: number; y: number; value: number }
   | { kind: "horde" }
+  | { kind: "act"; act: number }
   | { kind: "lead"; amount: number }
   | { kind: "loot" }
   | { kind: "bonus"; text: string }

@@ -10,8 +10,9 @@
  */
 
 import type Phaser from "phaser";
-import { DECK_H, ELEVATION, TILE_H, TILE_W } from "../../game/constants";
+import { DECK_H, ELEVATION } from "../../game/constants";
 import { ENEMIES } from "../../game/data/enemies";
+import { slamRect } from "../../game/systems/enemies";
 import { insideRect } from "../../game/fortress";
 import type { EnemyState, EnemyType, GameState } from "../../game/types";
 import { ARMY_SIZE } from "../pixel/armee";
@@ -29,7 +30,14 @@ interface Body {
 /** Bodenbereich, den Rumpf und Deck von vorn verdecken (relativ zur Festung). */
 const HIDDEN = { x0: -6, y0: -ELEVATION - 4, x1: 286, y1: DECK_H - 2 };
 /** Grosse Gegner, die kein Wackeln beim Zuschlagen haben und einen Lebensbalken bekommen. */
-const HEAVY: ReadonlySet<EnemyType> = new Set(["streitwagen", "ballista", "turm", "koloss"]);
+const HEAVY: ReadonlySet<EnemyType> = new Set([
+  "streitwagen",
+  "ballista",
+  "turm",
+  "koloss",
+  "barke",
+  "glaskoloss",
+]);
 /** Wie gross der Schatten im Verhaeltnis zum Bild ist. */
 const SHADOW_SCALE: Record<EnemyType, number> = {
   laeufer: 0.8,
@@ -41,6 +49,8 @@ const SHADOW_SCALE: Record<EnemyType, number> = {
   ballista: 2,
   turm: 2,
   koloss: 3.4,
+  barke: 3,
+  glaskoloss: 3.4,
 };
 
 export class EnemyView {
@@ -196,17 +206,19 @@ export class EnemyView {
       const cy = e.y - e.z - (e.layer === "deck" ? ELEVATION : 0) - h * 0.45;
       this.marks.lineStyle(2, 0xffd040, pulse).strokeEllipse(e.x, cy, w * 0.75, h * 0.85);
     }
-    if (e.type === "koloss" && e.mode === "slam") {
+    if (ENEMIES[e.type].boss && e.mode === "slam") {
       // Das Feld leuchtet immer heller rot, bis der Schlag kommt.
-      const x = f.x + e.tx - TILE_W;
-      const y = f.y + e.ty - TILE_H - ELEVATION;
+      const r = slamRect(e);
+      const x = f.x + r.x0;
+      const y = f.y + r.y0 - ELEVATION;
+      const width = r.x1 - r.x0;
+      const height = r.y1 - r.y0;
+      const color = e.type === "barke" ? 0xffb43c : 0xff3a2a;
       const blink = 0.25 + 0.35 * Math.abs(Math.sin(this.time * (8 + (1.4 - e.timer) * 10)));
-      this.deckMarks.fillStyle(0xff3a2a, blink).fillRect(x, y, TILE_W * 2, TILE_H * 2);
-      this.deckMarks
-        .lineStyle(2, 0xffb0a0, 0.9)
-        .strokeRect(x + 1, y + 1, TILE_W * 2 - 2, TILE_H * 2 - 2);
+      this.deckMarks.fillStyle(color, blink).fillRect(x, y, width, height);
+      this.deckMarks.lineStyle(2, 0xffe0c0, 0.9).strokeRect(x + 1, y + 1, width - 2, height - 2);
     }
-    if (HEAVY.has(e.type) && e.type !== "koloss" && e.hp < e.hpMax) {
+    if (HEAVY.has(e.type) && !ENEMIES[e.type].boss && e.hp < e.hpMax) {
       const top = e.y - e.z - h + 4;
       const bw = Math.min(56, w * 0.6);
       const fill = Math.max(0, e.hp / e.hpMax);

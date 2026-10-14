@@ -37,6 +37,8 @@ export type BotStyle = "deck" | "klug";
 
 export interface BotResult {
   won: boolean;
+  /** In welchem Akt der Lauf endete (0 bis 2). */
+  act: number;
   modules: number;
   marches: number;
   hull: number;
@@ -261,7 +263,7 @@ function spend(sim: Simulation, style: BotStyle): number {
 export function playBot(
   seed: number,
   style: BotStyle,
-  maxSeconds = 1500,
+  maxSeconds = 2400,
   onEvent?: (event: GameEvent) => void,
   onTick?: (state: GameState) => void,
   options: SimulationOptions = {},
@@ -311,6 +313,7 @@ export function playBot(
   const s = sim.state;
   return {
     won: s.phase === "won",
+    act: s.map.act,
     modules: s.modules.length,
     marches: s.path.length - 1,
     hull: Math.round(s.fort.hull),

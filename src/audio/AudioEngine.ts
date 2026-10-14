@@ -41,7 +41,32 @@ export type SoundName =
   | "blast"
   | "healed"
   | "zoneReached"
-  | "gameOver";
+  | "gameOver"
+  // Wanderfestung
+  | "stomp"
+  | "warn"
+  | "horn"
+  | "build"
+  | "chest"
+  | "crash"
+  | "zap"
+  | "beam";
+
+/**
+ * Mindestabstand je Klang in Sekunden. Bei vier Mechs, zehn Modulen und
+ * siebzig Gegnern kaemen sonst Dutzende gleiche Toene auf einmal - das ist kein
+ * Klang mehr, sondern Rauschen.
+ */
+const MIN_GAP: Partial<Record<SoundName, number>> = {
+  shoot: 0.09,
+  hit: 0.05,
+  enemyDied: 0.06,
+  pickup: 0.05,
+  stomp: 0.2,
+  zap: 0.12,
+  blast: 0.08,
+  warn: 0.4,
+};
 
 export class AudioEngine {
   private context: AudioContext | null = null;
@@ -56,6 +81,8 @@ export class AudioEngine {
   /** Zeitgeber des Ersatzklangs, falls kein Ogg moeglich ist. */
   private fallbackTimer: number | null = null;
   private muted = false;
+  /** Wann jeder Klang zuletzt lief (fuer MIN_GAP). */
+  private readonly lastPlayed = new Map<SoundName, number>();
   /** Rauschpuffer wird einmal erzeugt und immer wieder verwendet. */
   private noiseBuffer: AudioBuffer | null = null;
 
@@ -127,6 +154,12 @@ export class AudioEngine {
     if (!this.context || !this.master || this.muted) {
       return;
     }
+    const now = this.context.currentTime;
+    const gap = MIN_GAP[name] ?? 0;
+    if (gap > 0 && now - (this.lastPlayed.get(name) ?? -1) < gap) {
+      return;
+    }
+    this.lastPlayed.set(name, now);
 
     switch (name) {
       case "shoot":
@@ -208,6 +241,47 @@ export class AudioEngine {
       case "gameOver":
         this.tone(440, 0.3, "triangle", 0.2, 220);
         this.tone(330, 0.5, "triangle", 0.18, 150, 0.22);
+        break;
+      case "stomp":
+        // Ein Fuss der Festung setzt auf: tiefer, dumpfer Schlag.
+        this.tone(70, 0.22, "sine", 0.22, 40);
+        this.noise(0.12, 0.08, 400);
+        break;
+      case "warn":
+        // Ein Trupp kommt: zwei kurze, hohe Pieptoene.
+        this.tone(1180, 0.06, "square", 0.06);
+        this.tone(1180, 0.06, "square", 0.06, 1180, 0.1);
+        break;
+      case "horn":
+        // Endgegner oder Heerschar: tiefes Horn, das anschwillt.
+        this.tone(110, 0.9, "sawtooth", 0.16, 98);
+        this.tone(165, 0.9, "sawtooth", 0.1, 147, 0.05);
+        break;
+      case "build":
+        // Modul gebaut: metallisches Klacken.
+        this.tone(520, 0.05, "square", 0.12, 260);
+        this.tone(780, 0.08, "triangle", 0.1, 390, 0.06);
+        this.noise(0.05, 0.06, 4000);
+        break;
+      case "chest":
+        // Truhe auf: kleine Fanfare nach oben.
+        this.tone(523, 0.1, "square", 0.08);
+        this.tone(659, 0.1, "square", 0.08, 659, 0.08);
+        this.tone(784, 0.18, "square", 0.08, 784, 0.16);
+        break;
+      case "crash":
+        // Streitwagen rammt ein Bein.
+        this.noise(0.3, 0.22, 1400);
+        this.tone(90, 0.3, "sawtooth", 0.18, 45);
+        break;
+      case "zap":
+        this.tone(1600, 0.08, "sawtooth", 0.06, 400);
+        this.noise(0.06, 0.05, 6000);
+        break;
+      case "beam":
+        // Die Sonnenbarke brennt eine Reihe weg.
+        this.tone(880, 0.5, "sine", 0.12, 220);
+        this.noise(0.4, 0.1, 2400);
         break;
     }
   }

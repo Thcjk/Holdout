@@ -8,7 +8,8 @@
  */
 
 import { DECK_W, GROUND_BOTTOM, GROUND_TOP, OFFER_SIZE, STATION_BONUS, TICK } from "../constants";
-import { LEAD_AFTER_HORDE, LEAD_MAX, NODES } from "../data/acts";
+import { ACTS, LEAD_AFTER_HORDE, LEAD_MAX, NODES } from "../data/acts";
+import { generateMap } from "../map";
 import { EVENTS, affordable } from "../data/events";
 import { moduleHp } from "../data/modules";
 import { BLIND_SPOT, insideRect } from "../fortress";
@@ -143,6 +144,12 @@ export function arrive(w: World): void {
   }
   if (node.type === "boss" || node.next.length === 0) {
     clearField(w);
+    // Naechster Akt? Dann beginnt eine neue Karte an diesem Ziel.
+    const next = s.map.act + 1;
+    if (node.type === "boss" && next < ACTS.length && !s.map.fixed) {
+      startAct(w, next);
+      return;
+    }
     s.phase = "won";
     w.emit({ kind: "won" });
     return;
@@ -155,6 +162,19 @@ export function arrive(w: World): void {
     w.emit({ kind: "loot" });
     return;
   }
+  toRest(w);
+}
+
+/** Neuer Akt: neue Karte, Vorsprung wie am Anfang, Rast am Start (dem Ziel des alten Akts). */
+function startAct(w: World, act: number): void {
+  const s = w.state;
+  const goal = s.map.nodes[s.at]?.name ?? "";
+  s.map = generateMap(w.rng, act, goal);
+  s.at = 0;
+  s.path = [0];
+  s.lead = Math.max(s.lead, s.leadStart);
+  s.restAt = s.map.nodes[0]!.name;
+  w.emit({ kind: "act", act });
   toRest(w);
 }
 

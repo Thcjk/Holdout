@@ -2,15 +2,17 @@
 
 Eure Basis läuft: Eine Mech-Crew flieht auf einer sechsbeinigen Festung durch die
 Wüste, die goldene Armee dicht dahinter. Ihr kämpft auf dem Deck oder springt ab,
-um Schrott zu holen – aber die Festung wartet nicht. Fürs Handy, Pixel-Art.
+um Schrott zu holen – aber die Festung wartet nicht. Drei Akte, je eine Routenkarte
+mit Abzweigungen und ein Endgegner; ein Lauf dauert etwa eine halbe Stunde. Allein
+oder im Koop mit bis zu vier Mechs. Fürs Handy, Pixel-Art.
 
 > **Das Spiel läuft nur auf Handys und Tablets** (Querformat). Am Desktop zeigt es
 > einen QR-Code. Zum Entwickeln gibt es `?desktop` (siehe unten).
 
 ## Stand
 
-Das Spiel wird in sechs Baustufen neu gebaut (der frühere Brotato-artige
-Wellen-Shooter liegt auf dem Zweig `alt-3.9.2`).
+Das Spiel wurde in sechs Baustufen neu gebaut (der frühere Brotato-artige
+Wellen-Shooter liegt auf dem Zweig `alt-3.9.2`). Alle sechs sind fertig (v5.0.0).
 
 | Baustufe | Inhalt                                                                                                                                              | Stand  |
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -19,7 +21,7 @@ Wellen-Shooter liegt auf dem Zweig `alt-3.9.2`).
 | 3        | Gegner mit Aufgaben (Enterer, Phalanx, Skarabäus, Sandpriester, Streitwagen, Ballista, Belagerungsturm, Goldener Koloss); Module können kaputtgehen | fertig |
 | 4        | Routenkarte mit Abzweigungen (Ruine, Oase, Händler, Schrottfeld, Sturm, Ereignis, Endgegner), Vorsprung vor der Armee, Heerschar, Akt 1 komplett    | fertig |
 | 5        | Crew (6 Mechs mit Waffe, Fähigkeit, Eigenheit), Teile (Arm/Rücken), Werft mit Altgold, Baupläne, Hitze 1–10, 16 Erfolge                             | fertig |
-| 6        | Koop, Akte 2 und 3, Ton, Feinschliff                                                                                                                | offen  |
+| 6        | Koop bis 4 (Raumcode, Host rechnet), Akt 2 Salzebene (Sonnenbarke), Akt 3 Glasschlucht (Gläserner Koloss), Klänge, Feinschliff                      | fertig |
 
 ## Installieren
 
@@ -43,6 +45,7 @@ Nützliche Adress-Zusätze:
 | `?debug=reich` | 999 Schrott zum Start (alle Module ausprobieren)          |
 | `?debug=werte` | Bildrate und Gegnerzahl einblenden                        |
 | `?seed=123`    | Feste Zufallszahl                                         |
+| `?debug=lokal` | Koop zwischen zwei Tabs desselben Browsers (ohne Server)  |
 
 ## Befehle
 
@@ -61,8 +64,8 @@ Nützliche Adress-Zusätze:
 src/
   game/       Spielkern ohne Phaser und ohne Netz: Simulation (Dirigent), systems/ (Mechs,
               Module, Gegner, Kampf), Festung, Daten
-  net/        Sitzungen (solo) und die Verbindungsschicht für den späteren Koop
-  scenes/     Boot, Titel, Crew-Wahl, Werft, Erfolge, Spiel, Bau-Ansicht, Routenkarte, Ergebnis
+  net/        Sitzungen (solo, Host, Client), Lobby, Protokoll, Verbindungsschicht (PeerJS, TURN)
+  scenes/     Boot, Titel, Crew-Wahl, Werft, Erfolge, Koop-Raum, Spiel, Bau-Ansicht, Routenkarte, Ergebnis
   ui/         HUD, Knöpfe, Stick, Rast-Tafel; pixel/ malt alle Bilder per Code; world/ zeichnet Boden, Festung, Module, Gegner, Warnungen
   platform/   Geräte-Erkennung, Sicherheitsränder, Updates
 tests/        Spielkern ohne Browser, Bot für die Balance

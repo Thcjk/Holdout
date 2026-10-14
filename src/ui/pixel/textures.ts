@@ -59,6 +59,30 @@ export const legKey = (side: "l" | "r", frame: number): string => `leg-${side}-$
 export const scrapKey = (kind: number): string => `scrap-${kind}`;
 export const nodeKey = (type: string): string => `node-${type}`;
 
+/** Boden je Akt: Rostduenen, Salzebene, Glasschlucht. */
+const GROUND_TONES: readonly (readonly string[] | undefined)[] = [
+  undefined,
+  ["#7e7488", "#867c90", "#8e8498", "#968ca0", "#9e94a8"],
+  ["#1e2a38", "#223040", "#263646", "#2b3c4e", "#304256"],
+];
+
+/** Textur des Bodens fuer einen Akt - wird erst gemalt, wenn sie gebraucht wird. */
+export function ensureGround(scene: Phaser.Scene, act: number): string {
+  if (act <= 0) {
+    return TEX.ground;
+  }
+  const key = `ground-${act}`;
+  if (!scene.textures.exists(key)) {
+    const tones = GROUND_TONES[Math.min(act, GROUND_TONES.length - 1)];
+    add(
+      scene,
+      key,
+      paintDesert(GROUND_TILE_W, GROUND_TILE_H, { seed: 11 + act * 7, seamless: true, tones }),
+    );
+  }
+  return key;
+}
+
 function add(scene: Phaser.Scene, key: string, pix: Pix): void {
   if (scene.textures.exists(key)) {
     scene.textures.remove(key);

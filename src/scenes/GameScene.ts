@@ -29,7 +29,9 @@ import type {
 } from "../game/types";
 import type { GameSession } from "../net/GameSession";
 import { SoloSession } from "../net/SoloSession";
+import { ACTS } from "../game/data/acts";
 import { CREW } from "../game/data/crew";
+import { ENEMIES } from "../game/data/enemies";
 import { PARTS } from "../game/data/parts";
 import { applyRun, runOptions, summarize } from "../game/meta";
 import { FORCED_SEED, RICH_START, SHORT_ROUTE, SHOW_VALUES } from "../platform/debugFlags";
@@ -81,7 +83,11 @@ const ENEMY_INTRO: Partial<Record<EnemyType, string>> = {
 };
 
 export interface GameResult {
+  /** Koop: Nochmal geht nicht im selben Raum - dann nur zurueck ins Menue. */
+  multiplayer: boolean;
   won: boolean;
+  /** In welchem Akt der Lauf endete (0 bis 2). */
+  act: number;
   crew: CrewId;
   heat: number;
   /** Altgold dieses Laufs (inklusive Erfolge). */
@@ -137,6 +143,10 @@ export class GameScene extends Phaser.Scene {
   /** Die Bau-Ansicht oder die Karte liegt gerade darueber. */
   private building = false;
   private loot!: LootView;
+  /** Koop: "Warte auf den Host" oder "Verbindung weg". */
+  private netNote!: Phaser.GameObjects.Text;
+  private nameTags = new Map<string, Phaser.GameObjects.Text>();
+  private lostShown = false;
   private crew: CrewId = "schrauber";
   private eventPanel!: EventPanel;
 
@@ -144,7 +154,7 @@ export class GameScene extends Phaser.Scene {
     super("Game");
   }
 
-  create(): void {
+  create(data: { session?: GameSession } = {}): void {
     this.players = new Map();
     this.drones = new Map();
     this.shots = new Map();
@@ -156,15 +166,33 @@ export class GameScene extends Phaser.Scene {
     this.ending = false;
     this.building = false;
 
-    const seed = FORCED_SEED ?? Math.floor(Math.random() * 1e9);
-    const profile = loadProfile();
-    this.crew = profile.selected;
-    const options = runOptions(profile);
-    this.session = new SoloSession({ id: SELF, name: playerName(), crew: this.crew }, seed, {
-      ...options,
-      lengthFactor: SHORT_ROUTE ? 0.1 : 1,
-      startScrap: RICH_START ? 999 : options.startScrap,
-    });
+    if (data.session) {
+      // Koop: Die Lobby hat die Sitzung schon aufgebaut.
+      this.session = data.session;
+    } else {
+      const seed = FORCED_SEED ?? Math.floor(Math.random() * 1e9);
+      const profile = loadProfile();
+      const options = runOptions(profile);
+      this.session = new SoloSession(
+        { id: SELF, name: playerName(), crew: profile.selected },
+        seed,
+        {
+          ...options,
+          lengthFactor: SHORT_ROUTE ? 0.1 : 1,
+          startScrap: RICH_START ? 999 : options.startScrap,
+        },
+      );
+    }
+    this.crew =
+      this.session.state.players.find((p) => p.id === this.session.selfId)?.crew ??
+      loadProfile().selected;
+    this.netNote = this.add
+      .text(0, 0, "", { fontFamily: FONT_BODY, fontSize: "18px", color: T.light, align: "center" })
+      .setOrigin(0.5)
+      .setStroke(T.outline, 4)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud + 30);
+    this.nameTags = new Map();
 
     this.ground = new GroundView(this);
     this.fortress = new FortressView(this);
@@ -173,7 +201,7 @@ export class GameScene extends Phaser.Scene {
     this.modules = new ModuleView(this);
     this.enemies = new EnemyView(this);
     this.loot = new LootView(this);
-    this.eventPanel = new EventPanel(this, (option) => {
+    this.eventPanel = new EventPanel(this, this.session.isHost, (option) => {
       this.session.send({ kind: "choose", option });
     });
     this.hintQueue = [];
@@ -322,10 +350,11 @@ export class GameScene extends Phaser.Scene {
     const frameDelta = this.paused ? 0 : delta;
 
     followFort(this.cameras.main, state.fort.x);
-    this.ground.update(this.cameras.main);
+    this.ground.update(this.cameras.main, state.map.act);
     this.fortress.update(state.fort, frameDelta);
     this.syncPlayers(state, frameDelta);
     this.enemies.sync(state, frameDelta);
+    this.syncNameTags(state);
     this.syncShots(state);
     this.syncScrap(state);
     this.syncShells(state);
@@ -348,7 +377,8 @@ export class GameScene extends Phaser.Scene {
     this.hud.update(state, self, frameDelta);
     this.ability.update(self, frameDelta);
     this.rest.update(state, this.building || state.event !== null);
-    this.pauseButton.setVisible(!this.ending && !this.building);
+    this.pauseButton.setVisible(!this.ending && !this.building && this.session.canPause);
+    this.watchConnection();
     this.values?.setText(
       `${Math.round(this.game.loop.actualFps)} fps · ${state.enemies.length} Gegner · ${state.shots.length} Schüsse`,
     );
@@ -631,6 +661,7 @@ export class GameScene extends Phaser.Scene {
       case "stomp":
         this.ground.addPrint(event.x, event.y);
         this.dust(event.x, event.y, 3);
+        audio.play("stomp");
         break;
       case "pickup":
         this.floatText(`+${event.value}`, event.x, event.y - 20, "#e6eaf2", 14);
@@ -809,7 +840,7 @@ export class GameScene extends Phaser.Scene {
       }
       case "built":
       case "upgraded":
-        audio.play("superReady");
+        audio.play("build");
         break;
       case "sold":
         audio.play("swing");
@@ -830,7 +861,7 @@ export class GameScene extends Phaser.Scene {
         this.dust(event.x, event.y, 5);
         this.cameras.main.shake(160, 0.006);
         this.floatText("RAMMSTOSS!", event.x, event.y - 40, "#ff8a6a", 16);
-        audio.play("blast");
+        audio.play("crash");
         break;
       case "bridge":
         this.floatText("BRÜCKE!", event.x, event.y - ELEVATION - 30, "#ff8a6a", 16);
@@ -848,11 +879,13 @@ export class GameScene extends Phaser.Scene {
           "Rotes Feld auf dem Deck: Dort schlägt der Koloss gleich zu – weg da!",
         );
         break;
-      case "slam":
+      case "slam": {
         this.explosion(event.x, event.y - ELEVATION, 50);
         this.cameras.main.shake(260, 0.012);
-        audio.play("blast");
+        const barge = state.enemies.some((e) => e.type === "barke");
+        audio.play(barge ? "beam" : "blast");
         break;
+      }
       case "moduleHit": {
         const m = state.modules.find((x) => x.uid === event.uid);
         if (m) {
@@ -886,20 +919,26 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case "boss":
-        this.showBanner("DER GOLDENE KOLOSS", T.bad);
+        this.showBanner(ENEMIES[event.type].name.toUpperCase(), T.bad);
+        audio.play("horn");
         this.queueHint(
           "boss",
-          "Der Endgegner läuft vor der Festung mit. Erst wenn er fällt, erreicht ihr das Ziel.",
+          "Der Endgegner begleitet die Festung. Erst wenn er fällt, erreicht ihr das Ziel. Rote Felder: weg da!",
         );
         audio.play("gameOver");
         break;
       case "bossDown":
-        this.showBanner("KOLOSS GESTÜRZT!", T.gold);
+        this.showBanner("ENDGEGNER BESIEGT!", T.gold);
         this.cameras.main.shake(400, 0.01);
+        audio.play("zoneReached");
+        break;
+      case "act":
+        this.showBanner(`AKT ${event.act + 1} · ${ACTS[event.act]!.name.toUpperCase()}`, T.gold);
         audio.play("zoneReached");
         break;
       case "horde":
         this.showBanner("HEERSCHAR!", T.bad);
+        audio.play("horn");
         this.queueHint(
           "horde",
           "Die Armee hat euch eingeholt: Dieser Marsch wird hart. Danach habt ihr wieder etwas Vorsprung.",
@@ -925,7 +964,7 @@ export class GameScene extends Phaser.Scene {
       case "chest":
         this.floatText(`Truhe: ${event.value}`, event.x, event.y - 34, T.gold, 16);
         this.dust(event.x, event.y, 3);
-        audio.play("zoneReached");
+        audio.play("chest");
         break;
       case "bonus":
       case "choice":
@@ -965,7 +1004,7 @@ export class GameScene extends Phaser.Scene {
       g.strokePath();
     }
     this.zapTime = 110;
-    audio.play("hit");
+    audio.play("zap");
   }
 
   private explosion(x: number, y: number, radius: number): void {
@@ -1171,6 +1210,70 @@ export class GameScene extends Phaser.Scene {
     ];
   }
 
+  /** Koop: Warten auf den ersten Zustand, abgerissene Verbindung melden. */
+  private watchConnection(): void {
+    const s = this.session;
+    if (!s.isMultiplayer) {
+      return;
+    }
+    this.netNote.setPosition(VIEWPORT.width / 2, VIEWPORT.height * 0.3);
+    if (s.connectionLost && !this.lostShown && !this.ending) {
+      this.lostShown = true;
+      this.ending = true;
+      this.stick.release();
+      this.stick.enabled = false;
+      this.netNote.setText(`${s.connectionLost}\nDer Lauf ist vorbei.`);
+      const back = new Button(
+        this,
+        VIEWPORT.width / 2,
+        VIEWPORT.height * 0.3 + 70,
+        "MENÜ",
+        () => this.scene.start("Title"),
+        {
+          width: 180,
+          height: 50,
+          fontSize: 20,
+        },
+      );
+      back.setScrollFactor(0);
+      back.setDepth(DEPTH.hud + 31);
+      return;
+    }
+    if (!this.lostShown) {
+      this.netNote.setText(s.isReady ? "" : "Warte auf den Host …");
+    }
+  }
+
+  /** Koop: Namen ueber den Mitspielern. */
+  private syncNameTags(state: GameState): void {
+    if (!this.session.isMultiplayer) {
+      return;
+    }
+    const seen = new Set<string>();
+    for (const p of state.players) {
+      if (p.id === this.session.selfId) {
+        continue;
+      }
+      seen.add(p.id);
+      let tag = this.nameTags.get(p.id);
+      if (!tag) {
+        tag = this.add
+          .text(0, 0, p.name, { fontFamily: FONT_BODY, fontSize: "11px", color: T.cyan })
+          .setOrigin(0.5, 1)
+          .setStroke(T.outline, 3)
+          .setDepth(DEPTH.effects + 2);
+        this.nameTags.set(p.id, tag);
+      }
+      tag.setVisible(p.alive).setPosition(p.x, p.y - p.z - 64);
+    }
+    for (const [id, tag] of this.nameTags) {
+      if (!seen.has(id)) {
+        tag.destroy();
+        this.nameTags.delete(id);
+      }
+    }
+  }
+
   /** Aufgeben: Der Lauf zaehlt wie verloren (Altgold fuer den Weg bis hier gibt es trotzdem). */
   private giveUp(): void {
     this.setPaused(false);
@@ -1187,7 +1290,9 @@ export class GameScene extends Phaser.Scene {
     const reward = applyRun(profile, summarize(state, this.crew));
     saveProfile(profile);
     const result: GameResult = {
+      multiplayer: this.session.isMultiplayer,
       won: state.phase === "won",
+      act: state.map.act,
       crew: this.crew,
       heat: state.heat,
       altgold: reward.altgold,

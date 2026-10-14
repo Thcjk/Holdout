@@ -20,6 +20,7 @@ import {
   BONE,
   BRONZE,
   CREST,
+  CLOTH_RED,
   CREST_RED,
   FIRE,
   GOLD,
@@ -39,7 +40,9 @@ export type ArmyId =
   | "streitwagen"
   | "ballista"
   | "turm"
-  | "koloss";
+  | "koloss"
+  | "barke"
+  | "glaskoloss";
 
 export const ARMY: readonly { id: ArmyId; name: string }[] = [
   { id: "laeufer", name: "Sandläufer" },
@@ -51,6 +54,8 @@ export const ARMY: readonly { id: ArmyId; name: string }[] = [
   { id: "ballista", name: "Ballista" },
   { id: "turm", name: "Belagerungsturm" },
   { id: "koloss", name: "Goldener Koloss" },
+  { id: "barke", name: "Sonnenbarke" },
+  { id: "glaskoloss", name: "Gläserner Koloss" },
 ];
 
 /** Groesse der Leinwand je Figur. */
@@ -64,6 +69,8 @@ export const ARMY_SIZE: Record<ArmyId, readonly [number, number]> = {
   ballista: [80, 56],
   turm: [76, 124],
   koloss: [132, 168],
+  barke: [132, 84],
+  glaskoloss: [132, 168],
 };
 
 const LINEN: Ramp = ["#3a3428", "#a89c84", "#e4dccb", "#fbf7ee"];
@@ -551,7 +558,82 @@ export function paintArmy(id: ArmyId): Pix {
     case "koloss":
       koloss(p);
       break;
+    case "barke":
+      barke(p);
+      break;
+    case "glaskoloss":
+      koloss(p);
+      glass(p);
+      break;
   }
   p.outline(OUTLINE);
   return p;
+}
+
+/**
+ * Der Glaeserne Koloss ist derselbe Riese, nur aus Sonnenglas: Alles wird
+ * tuerkis-violett, je nach Helligkeit; die gluehenden Augen werden magenta.
+ */
+function glass(p: Pix): void {
+  p.recolor((r, g, b) => {
+    const light = (r * 0.3 + g * 0.55 + b * 0.15) / 255;
+    if (r > 200 && g < 140 && b < 90) {
+      // Gluehen (Augen, Kern)
+      return [255, 80, 220];
+    }
+    if (light < 0.12) {
+      return [r, g, b];
+    }
+    const t = Math.min(1, light * 1.15);
+    return [Math.round(30 + 150 * t * t), Math.round(70 + 170 * t), Math.round(110 + 140 * t)];
+  });
+}
+
+/**
+ * Sonnenbarke: das goldene Totenschiff der Sonnenkoenige. Ein Boot mit
+ * Falkenkoepfen an Bug und Heck, in der Mitte die gluehende Sonnenscheibe,
+ * darunter Skelett-Ruderer. Schwebt.
+ */
+function barke(p: Pix): void {
+  // Sonnenscheibe mit Strahlen hinten
+  for (let i = 0; i < 12; i += 1) {
+    const a = (i / 12) * Math.PI * 2;
+    p.shape(thick(66, 26, 66 + Math.cos(a) * 26, 26 + Math.sin(a) * 22, 3), GOLD, { shade: 0 });
+  }
+  p.shape(ellipse(66, 26, 17, 17), FIRE, { shade: 2, edge: false });
+  p.shape(ellipse(66, 26, 9, 9), ["#ffe070", "#fff2a0", "#fffbe0", "#ffffff"], { shade: 0 });
+  // Ruder unten
+  for (let i = 0; i < 5; i += 1) {
+    const x = 34 + i * 16;
+    p.shape(thick(x, 58, x - 8, 80, 2), WOOD, { shade: 0 });
+  }
+  // Rumpf: goldene Mondsichel
+  p.shape(poly(6, 40, 20, 50, 112, 50, 126, 40, 122, 56, 106, 66, 26, 66, 10, 56), GOLD, {
+    shade: 3,
+    noise: 0.04,
+  });
+  p.shape(rect(20, 50, 92, 4), BRONZE, { shade: 0 });
+  stripes(p, rect(22, 56, 88, 8), BRONZE[1], 6);
+  // Falkenkoepfe an Bug (rechts) und Heck (links)
+  for (const [x, dir] of [
+    [120, 1],
+    [12, -1],
+  ] as const) {
+    p.shape(thick(x, 44, x + dir * 4, 18, 6), GOLD, { shade: 2 });
+    p.shape(ellipse(x + dir * 5, 16, 7, 6), GOLD, { shade: 2 });
+    p.shape(poly(x + dir * 10, 14, x + dir * 16, 18, x + dir * 9, 20), BRONZE, { shade: 0 });
+    p.px(x + dir * 6, 14, "#2a1004");
+  }
+  // Kajuete mit Vorhang
+  p.shape(rect(44, 36, 30, 14), CLOTH_RED, { shade: 1 });
+  p.shape(rect(42, 33, 34, 4), GOLD, { shade: 1 });
+  // Skelett-Ruderer
+  for (let i = 0; i < 4; i += 1) {
+    const x = 32 + i * 22;
+    if (x > 40 && x < 78) {
+      continue;
+    }
+    skull(p, x, 44, undefined, 4.5, 4);
+    bone(p, x, 47, x + 6, 52);
+  }
 }

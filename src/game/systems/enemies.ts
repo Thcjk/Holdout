@@ -65,6 +65,9 @@ const DOCKS = [
 ] as const;
 /** Der Koloss laeuft hier vor der Festung mit. */
 const KOLOSS_LANE = { x: DECK_W / 2, y: DECK_H + 132 } as const;
+/** Die Sonnenbarke schwebt vor dem Bug der Festung her, so hoch ueber dem Boden. */
+const BARKE_LANE = { x: DECK_W + 110, y: 40 } as const;
+const BARKE_HEIGHT = 64;
 
 // --- Planen und Auftauchen -----------------------------------------------------------------------
 
@@ -234,7 +237,8 @@ function spawnBoss(w: World, type: EnemyType, hpFactor: number): void {
   const s = w.state;
   s.march.boss = "alive";
   // Der Endgegner kommt immer von hinten - er hat die Festung eingeholt.
-  addEnemy(w, type, s.fort.x - BEHIND - 80, s.fort.y + KOLOSS_LANE.y, 0.5 + hpFactor * 0.5);
+  const y = type === "barke" ? BARKE_LANE.y : KOLOSS_LANE.y;
+  addEnemy(w, type, s.fort.x - BEHIND - 80, s.fort.y + y, 0.5 + hpFactor * 0.5);
   w.emit({ kind: "boss", type });
 }
 
@@ -313,10 +317,21 @@ export function addEnemy(
       break;
     }
     case "koloss":
+    case "glaskoloss":
       e.mode = "walk";
       e.slotX = KOLOSS_LANE.x;
       e.slotY = KOLOSS_LANE.y;
       e.attackCd = 5;
+      break;
+    case "barke":
+      // Schwebt vor dem Bug her - das Totenschiff weist der Festung den Weg.
+      e.layer = "air";
+      e.mode = "walk";
+      e.z = BARKE_HEIGHT;
+      e.slotX = BARKE_LANE.x;
+      e.slotY = BARKE_LANE.y;
+      e.attackCd = 4;
+      e.cd2 = 6;
       break;
   }
   w.state.enemies.push(e);
@@ -422,7 +437,9 @@ export function updateEnemies(w: World, fortDx: number): void {
         updateTower(w, e);
         break;
       case "koloss":
-        updateKoloss(w, e);
+      case "glaskoloss":
+      case "barke":
+        updateBoss(w, e);
         break;
     }
   }
@@ -430,7 +447,7 @@ export function updateEnemies(w: World, fortDx: number): void {
   // Wer weit hinter der Festung haengen bleibt, gibt auf.
   const giveUp = f.x - BEHIND - 700;
   s.enemies = s.enemies.filter((e) => e.hp > 0 && e.x > giveUp);
-  if (s.march.boss === "alive" && !s.enemies.some((e) => e.type === "koloss")) {
+  if (s.march.boss === "alive" && !s.enemies.some((e) => ENEMIES[e.type].boss)) {
     s.march.boss = "down";
   }
 }
@@ -763,13 +780,43 @@ function updateTower(w: World, e: EnemyState): void {
   }
 }
 
-/** Goldener Koloss: laeuft vor der Festung mit, zertritt Mechs am Boden, schlaegt aufs Deck. */
-function updateKoloss(w: World, e: EnemyState): void {
+/**
+ * Feld, auf das ein Endgegner gleich schlaegt (relativ zur Festung):
+ * Koloss 2 x 2 Felder, Glaeserner Koloss 3 x 2, Sonnenbarke eine ganze Reihe.
+ */
+export function slamRect(e: EnemyState): { x0: number; y0: number; x1: number; y1: number } {
+  if (e.type === "barke") {
+    return { x0: 0, y0: e.ty - TILE_H / 2, x1: DECK_W, y1: e.ty + TILE_H / 2 };
+  }
+  const half = e.type === "glaskoloss" ? TILE_W * 1.5 : TILE_W;
+  return { x0: e.tx - half, y0: e.ty - TILE_H, x1: e.tx + half, y1: e.ty + TILE_H };
+}
+
+/**
+ * Endgegner: laufen (oder schweben) mit der Festung, zertreten Mechs am Boden
+ * und schlagen aufs Deck - das Feld leuchtet vorher rot.
+ *   Goldener Koloss: 2 x 2 Felder.
+ *   Glaeserner Koloss: 3 x 2 Felder, ruft dabei zwei Phalanx-Wachen.
+ *   Sonnenbarke: schwebt hinter der Festung, brennt eine ganze Reihe weg und
+ *   wirft zwischendurch Skarabaeen ab.
+ */
+function updateBoss(w: World, e: EnemyState): void {
   const s = w.state;
   const f = s.fort;
   const spec = ENEMIES[e.type];
+  const flying = e.type === "barke";
   const distance = moveToward(e, f.x + e.slotX, f.y + e.slotY, e.speed * TICK);
-  if (e.cd2 <= 0) {
+  if (flying) {
+    e.z = BARKE_HEIGHT + Math.sin(s.time * 1.6) * 6;
+    if (e.cd2 <= 0 && distance < 120) {
+      // Skarabaeen abwerfen.
+      e.cd2 = 10;
+      for (let i = 0; i < 4 && s.enemies.length < MAX_ENEMIES; i += 1) {
+        const bug = addEnemy(w, "skarabaeus", e.x + (i - 1.5) * 16, e.y, e.hpMax / spec.hp / 2);
+        bug.z = e.z;
+      }
+    }
+  } else if (e.cd2 <= 0) {
     const victim = nearestPlayer(w, e.x, e.y, 70, "ground");
     if (victim) {
       e.cd2 = 1.6;
@@ -789,24 +836,34 @@ function updateKoloss(w: World, e: EnemyState): void {
     e.attackCd = spec.attackCooldown;
     return;
   }
-  if (e.attackCd <= 0 && distance < 80) {
-    // Ein Block aus 2 x 2 Feldern; vorher leuchtet er rot.
-    const col = Math.floor(w.rng() * (DECK_COLS - 1));
-    const row = Math.floor(w.rng() * (DECK_ROWS - 1));
-    e.tx = (col + 1) * TILE_W;
-    e.ty = (row + 1) * TILE_H;
+  if (e.attackCd <= 0 && distance < 120) {
+    if (flying) {
+      const row = Math.floor(w.rng() * DECK_ROWS);
+      e.tx = DECK_W / 2;
+      e.ty = (row + 0.5) * TILE_H;
+    } else if (e.type === "glaskoloss") {
+      const col = Math.floor(w.rng() * (DECK_COLS - 2));
+      const row = Math.floor(w.rng() * (DECK_ROWS - 1));
+      e.tx = (col + 1.5) * TILE_W;
+      e.ty = (row + 1) * TILE_H;
+    } else {
+      const col = Math.floor(w.rng() * (DECK_COLS - 1));
+      const row = Math.floor(w.rng() * (DECK_ROWS - 1));
+      e.tx = (col + 1) * TILE_W;
+      e.ty = (row + 1) * TILE_H;
+    }
     e.mode = "slam";
-    e.timer = SLAM_WARNING;
+    e.timer = SLAM_WARNING + (flying ? 0.3 : 0);
     w.emit({ kind: "slamWarn", x: f.x + e.tx, y: f.y + e.ty });
   }
 }
 
-/** Der Schlag trifft Module, Mechs und Gegner auf 2 x 2 Feldern und den Rumpf. */
+/** Der Schlag trifft Module, Mechs und Gegner im Feld und den Rumpf. */
 function slam(w: World, e: EnemyState): void {
   const s = w.state;
   const f = s.fort;
   const spec = ENEMIES[e.type];
-  const area = { x0: e.tx - TILE_W, y0: e.ty - TILE_H, x1: e.tx + TILE_W, y1: e.ty + TILE_H };
+  const area = slamRect(e);
   for (const m of s.modules) {
     const r = moduleRect(m);
     if (r.x0 < area.x1 && r.x1 > area.x0 && r.y0 < area.y1 && r.y1 > area.y0) {
@@ -822,6 +879,12 @@ function slam(w: World, e: EnemyState): void {
   }
   damageHull(w, spec.hullDamage, f.x + e.tx, f.y + e.ty, e.type);
   w.emit({ kind: "slam", x: f.x + e.tx, y: f.y + e.ty });
+  if (e.type === "glaskoloss") {
+    // Zwei Wachen aus Glas springen ihm zur Seite.
+    for (let i = 0; i < 2 && s.enemies.length < MAX_ENEMIES; i += 1) {
+      addEnemy(w, "phalanx", e.x + (i === 0 ? -40 : 40), e.y - 20, e.hpMax / spec.hp / 3);
+    }
+  }
 }
 
 /** Nicht alle auf einem Haufen: Gegner derselben Ebene sanft auseinanderschieben. */
@@ -845,8 +908,8 @@ function separate(w: World): void {
         const d = Math.sqrt(d2);
         const push = (minimum - d) * 0.25;
         // Schwere Brocken weichen nicht.
-        const aFixed = a.type === "turm" || a.type === "koloss" || a.mode === "dock";
-        const bFixed = b.type === "turm" || b.type === "koloss" || b.mode === "dock";
+        const aFixed = a.type === "turm" || ENEMIES[a.type].boss === true || a.mode === "dock";
+        const bFixed = b.type === "turm" || ENEMIES[b.type].boss === true || b.mode === "dock";
         if (!aFixed) {
           a.x -= (dx / d) * push * (bFixed ? 2 : 1);
           a.y -= (dy / d) * push * (bFixed ? 2 : 1);

@@ -10,6 +10,7 @@ import { Button } from "../ui/Button";
 import { BOX, ComicBox } from "../ui/ComicBox";
 import { TEX } from "../ui/pixel/textures";
 import { FONT_BODY, FONT_TITLE, T } from "../ui/theme";
+import { ACTS } from "../game/data/acts";
 import { CREW } from "../game/data/crew";
 import type { GameResult } from "./GameScene";
 
@@ -39,8 +40,8 @@ export class ResultScene extends Phaser.Scene {
     const seconds = String(result.seconds % 60).padStart(2, "0");
     const lines = [
       result.won
-        ? "Die Festung hat das Goldene Tor durchschritten."
-        : `Gekommen bis Station ${result.marches} von ${result.count}.`,
+        ? "Die Festung hat den Sonnenthron erreicht."
+        : `Akt ${result.act + 1} (${ACTS[result.act]?.name ?? ""}), Station ${result.marches} von ${result.count}.`,
       `${CREW[result.crew].name}${result.heat > 0 ? ` · Hitze ${result.heat}` : ""}`,
       `Gegner besiegt: ${result.kills} · Schrott gesammelt: ${result.scrap}`,
       result.won
@@ -82,16 +83,25 @@ export class ResultScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setStroke(T.outline, 3);
     }
-    new Button(this, w / 2 - 92, h / 2 + 172, "NOCHMAL", () => this.scene.start("Game"), {
-      width: 168,
-      height: 52,
-      fontSize: 22,
-    });
-    new Button(this, w / 2 + 92, h / 2 + 172, "MENÜ", () => this.scene.start("Title"), {
-      width: 168,
-      height: 52,
-      fontSize: 22,
-      variant: "secondary",
-    });
+    if (!result.multiplayer) {
+      new Button(this, w / 2 - 92, h / 2 + 172, "NOCHMAL", () => this.scene.start("Game"), {
+        width: 168,
+        height: 52,
+        fontSize: 22,
+      });
+    }
+    new Button(
+      this,
+      result.multiplayer ? w / 2 : w / 2 + 92,
+      h / 2 + 172,
+      "MENÜ",
+      () => this.scene.start("Title"),
+      {
+        width: 168,
+        height: 52,
+        fontSize: 22,
+        variant: "secondary",
+      },
+    );
   }
 }

@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout – Die Wanderfestung** (v4.4.0): Eine Mech-Crew flieht auf einer sechsbeinigen
+**Holdout – Die Wanderfestung** (v5.0.0): Eine Mech-Crew flieht auf einer sechsbeinigen
 Lauf-Festung durch die Wüste, die goldene Armee eines toten Reichs jagt sie (sie will ihr
 Sonnenherz zurück). Kämpfen auf dem Deck oder am Boden, Festung ausbauen, Route wählen.
 Fürs Handy, quer, Pixel-Art. Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android über
@@ -33,9 +33,10 @@ Grinding/Freischalten.
 | 3        | Gegner mit Aufgaben: Enterer (Leitern aufs Deck), Phalanx (Schild vorn), Skarabäus (fliegt aufs Deck), Sandpriester, Streitwagen, Ballista (schießt Module), Belagerungsturm, Goldener Koloss; Module haben Leben | **fertig (v4.2.0)** |
 | 4        | Routenkarte mit Abzweigungen (Ruine, Oase, Händler, Schrottfeld, Sturm, Ereignis, Boss), Vorsprung/Heerschar, Akt 1                                                                                               | **fertig (v4.3.0)** |
 | 5        | Crew: 6 Mechs (Waffe, Fähigkeit, Eigenheit), Teile Arm/Rücken, Werft mit Altgold, Baupläne, Hitze 1–10, 16 Erfolge                                                                                                | **fertig (v4.4.0)** |
-| 6        | Koop (gemeinsame Festung, Schrott gehört allen), Akte 2/3 (Salzebene, Glasschlucht), Ton, Feinschliff                                                                                                             | offen               |
+| 6        | Koop bis 4 (Host rechnet, Raumcode), Akt 2 Salzebene / Akt 3 Glasschlucht mit Bossen, Klänge, Feinschliff                                                                                                         | **fertig (v5.0.0)** |
 
-Jede Baustufe wird einzeln auf `main` hochgeladen. Entwicklungszweig: `wanderfestung`.
+Jede Baustufe wurde einzeln auf `main` hochgeladen (alle sechs fertig). Entwicklungszweig: `wanderfestung`.
+Nutzer 2026-10-13: „alles bauen“ (Stufen 3–6 am Stück).
 
 ## Architektur-Grundregel
 
@@ -47,20 +48,31 @@ Jede Baustufe wird einzeln auf `main` hochgeladen. Entwicklungszweig: `wanderfes
   (`world.ts`: state, rng, emit, march(), specFor(), modulePool(), refreshFortress()) bekommen: `players.ts` (Mechs),
   `modules.ts` (Bauen, Angebot, was Module tun, Reparatur), `enemies.ts` (Trupps, Endgegner, Verhalten
   je Art), `combat.ts` (Schaden, Zielwahl, Geschosse, Granaten, Ballista-Bolzen), `journey.ts` (Karte: losziehen, ankommen, Stationen, Ruine plündern, Ereignisse, Vorsprung).
-- **Routenkarte (Baustufe 4)**: `map.ts` würfelt pro Lauf eine Karte (`generateMap`): Spalte 0 Start („Grab von
-  Aurum“), 1–5 je 2–3 Stationen, 6 Endgegner („Goldenes Tor“); Wege ohne Kreuzung, vor dem Boss immer eine Oase,
-  unterwegs ein Händler. `state.map`, `state.at` (Standort), `state.path`. Rast → „Weiterziehen“ öffnet `MapScene` →
-  `depart {node}`. Stationen (`data/acts.ts: NODES`): Ruine (Phase `loot`: Festung steht 20 s, 5 Truhen am Boden,
-  1 s daneben stehen = auf, Inhalt als Schrott; Armee kommt mit 40 % Rate), Oase (+150 Rumpf), Händler (6 Angebote,
-  Würfeln 2+n), Schrottfeld (26 Haufen am Weg, Rate ×1,25), Sturm (`march.storm`: Nebel, keine Warnpfeile, Rate ×0,7,
-  +25 Schrott), Ereignis (`data/events.ts`, 7 Stück, je 2 Wahlen; `state.event` blockiert das Losziehen; Befehl
-  `choose`), Boss. **Vorsprung** `state.lead` (Start 3, max 5): Ruine/Händler/Schrottfeld −1, Sturm +2, Ereignisse ±.
-  Fällt er beim Losziehen auf 0: Marsch wird **Heerschar** (`march.horde`: Rate ×1,5, Leben ×1,2), danach Vorsprung 2.
-  Stärke je Spalte d (`marchFor`): Rate 0,45+0,11·d → 1,1+0,26·d, Leben 1+0,25(d−1)+0,06(d−1)², Mischung
-  `MIX_BY_DEPTH`. Tests können eine feste Route geben (`SimulationOptions.route` → `linearMap`); `lengthFactor` kürzt.
-- Zustand ist reines JSON (später Koop-Schnappschuss). `GameSession` ist die einzige
-  Schnittstelle der Szene; bisher nur `SoloSession`. Die Verbindungsschicht (PeerJS, TURN,
-  Raumcode, `net/*Transport`) ist erhalten, `net/protocol.ts` ist nur ein Platzhalter.
+- **Routenkarte (Baustufe 4)**: `map.ts` würfelt pro Akt eine Karte (`generateMap(rng, act, start)`): Spalte 0 Start
+  (Akt 1 „Grab von Aurum“, danach das Ziel des vorigen Akts), 1–5 je 2–3 Stationen, 6 Endgegner; Wege ohne
+  Kreuzung, vor dem Boss immer eine Oase, unterwegs ein Händler. `state.map`, `state.at` (Standort), `state.path`.
+  Rast → „Weiterziehen“ öffnet `MapScene` → `depart {node}`. Stationen (`data/acts.ts: NODES`): Ruine (Phase `loot`:
+  Festung steht 20 s, 5 Truhen am Boden, 1 s daneben stehen = auf, Inhalt als Schrott; Armee kommt mit 40 % Rate),
+  Oase (+150 Rumpf), Händler (6 Angebote, Würfeln 2+n, 2 Teile), Schrottfeld (26 Haufen am Weg, Rate ×1,25), Sturm
+  (`march.storm`: Nebel, keine Warnpfeile, Rate ×0,7, +25 Schrott), Ereignis (`data/events.ts`, 7 Stück, je 2 Wahlen;
+  `state.event` blockiert das Losziehen; Befehl `choose`), Boss. **Vorsprung** `state.lead` (Start `leadStart`, max 5):
+  Ruine/Händler/Schrottfeld −1, Sturm +2, Ereignisse ±. Fällt er beim Losziehen auf 0: **Heerschar** (`march.horde`:
+  Rate ×1,5, Leben ×1,2), danach Vorsprung 2. Stärke je Spalte d (`marchFor`): Rate 0,45+0,11·d → 1,1+0,26·d,
+  Leben 1+0,25(d−1)+0,05(d−1)², Mischung `MIX_BY_DEPTH[d + depthOffset]`. Tests: feste Route (`linearMap`, `fixed`).
+- **Drei Akte (Baustufe 6)**, `ACTS`: Rostdünen (Goldener Koloss), Salzebene (hpBonus 0,9, Rate +15 %, Sonnenbarke),
+  Glasschlucht (hpBonus 2, Rate +30 %, Gläserner Koloss). Nach dem Boss eines Akts (`journey.startAct`): neue Karte,
+  Vorsprung ≥ Start, Rast; nach Akt 3 `won`. Bosse in `enemies.ts: updateBoss` mit `slamRect`: Koloss 2×2, Glaskoloss
+  3×2 + 2 Phalanx-Wachen, Barke (Luft, vor dem Bug bei DECK_W+110/40, z 64) brennt eine ganze Reihe und wirft alle
+  10 s 4 Skarabäen ab. `ENEMIES[t].boss` markiert Endgegner (HUD-Balken, Ziel gesperrt, Schrott ×8).
+- Zustand ist reines JSON. `GameSession` ist die einzige Schnittstelle der Szene (`isHost`, `isMultiplayer`,
+  `isReady`, `connectionLost`): `SoloSession`, `HostSession` (rechnet für alle, schickt 12×/s den Zustand),
+  `ClientSession` (schickt 30×/s Eingabe + nummerierte Befehle, die bis zur Bestätigung `PlayerState.lastCmd`
+  wiederholt werden; zeigt eine Mischung der zwei letzten Zustände (Glätten) und rechnet die eigene Figur voraus –
+  auf dem Deck relativ zur Festung). `net/protocol.ts`: `encodeState/decodeState` (Gegner/Geschosse als Reihen,
+  Zahlen gerundet, Karte nur 1×/s), Nachrichten hello/lobby/start/ready/input/state/events/bye. `net/Lobby.ts`
+  (Spielerliste, Start mit Wiederholung; Host bringt `runOptions` aus seinem Profil mit). Nur der Host darf
+  `depart`/`choose` (Simulation prüft `players[0]`), bauen dürfen alle. `Simulation.removePlayer` bei Abgang.
+  Szene `Lobby` (Menü → Raum eröffnen/Beitreten, Raumcode-Feld per DOM, `?debug=lokal` = BroadcastChannel).
 - **Koordinaten:** Bodenebene x→rechts, y→unten. Festung: `fort.x` = linke Deckkante, `fort.y = 0`,
   Deck-Fußabdruck 280×128 (`DECK_W/H`), Deck liegt `ELEVATION = 72` über dem Boden. Jedes Ding hat
   (x, y, z); gezeichnet bei (x, y − z). Mechs auf dem Deck haben `z = ELEVATION` und wandern mit
@@ -156,9 +168,16 @@ Jede Baustufe wird einzeln auf `main` hochgeladen. Entwicklungszweig: `wanderfes
   über großen Gegnern). Mörser-Granaten, Blitze, Explosionen in `GameScene`. HUD zeigt den Koloss-Balken.
 - Jede Gegnerart stellt sich beim ersten Auftauchen mit einem Hinweis vor (`ENEMY_INTRO`); Hinweise laufen
   nacheinander (Warteschlange).
+- Boden je Akt: `textures.ensureGround(scene, act)` malt Salz (grau-violett) und Glas (dunkles Blaugrün) erst bei
+  Bedarf; `GroundView.update(camera, act)` wechselt. `pixel/armee.ts`: `barke()` (Totenschiff mit Sonnenscheibe),
+  Glaskoloss = Koloss + `glass()` (`Pix.recolor`).
+- Ton (`audio/AudioEngine.ts`, alles synthetisiert): Klänge stomp, warn (neuer Trupp), horn (Boss, Heerschar),
+  build, chest, crash (Rammstoß), zap, beam; `MIN_GAP` je Klang gegen Klangbrei.
 - `ui/world/LootView` (Truhen mit Füll-Ring, Sandsturm-Nebel `TEX.fog` + Schlieren), `ui/EventPanel` (Ereignis mit
-  zwei Knöpfen), HUD: Vorsprung-Punkte unter dem Schrott, Titel zeigt PLÜNDERN/HEERSCHAR/STURM. `pixel/karte.ts`:
-  Symbole der Stationen, Festungs-Marke, Truhen. Mit `?debug=werte` auch `window.__holdout.send(befehl)`.
+  zwei Knöpfen; im Koop nur für den Host aktiv), HUD: Vorsprung-Punkte unter dem Schrott, Titel zeigt
+  PLÜNDERN/HEERSCHAR/STURM bzw. ab Akt 2 „AKT n · i/6“. `pixel/karte.ts`: Symbole der Stationen, Festungs-Marke,
+  Truhen. Mit `?debug=werte` auch `window.__holdout.send(befehl)`. Koop: Namen über Mitspielern, Pause ausgeblendet,
+  „Warte auf den Host“ / Verbindung-weg-Hinweis.
 - UI: `Hud`, `AbilityButton`, `RestPanel` (unten, Deck bleibt frei; Ausbauen/Reparieren/Weiterziehen), `FloatingStick` (linke 62 %),
   `Button`/`ComicBox` (Bronze + Stein + cyan Linie). Schriften Jersey 10 / Pixelify Sans.
 - Hinweise für Neulinge erscheinen einmal pro Lauf (Abspringen, Bauch, Schrott, Seilwinde, Tod).
@@ -174,8 +193,10 @@ App-Icon/Splash: `node tools/generate-brand.mjs` (Schrauber vor Sonnenglanz; Fes
 
 ## Offene Punkte
 
-- Nicht geprüft: Gefühl auf echtem Handy, Leistung auf echtem Gerät, Ton (Klangnamen nur zugeordnet).
-- `@fontsource/fredoka` und `lilita-one` sind noch Abhängigkeiten, werden aber nicht mehr benutzt.
+- Nicht geprüft: Gefühl auf echtem Handy, Leistung auf echtem Gerät (Headless ~20 fps), Koop zwischen zwei echten
+  Geräten (geprüft: Tests mit MemoryTransport, zwei Tabs mit `?debug=lokal`), Klang auf dem Gerät.
+- Balance der Akte 2/3 nur per Bot (voll ausgebaut ~50 % ganze Läufe, neues Profil ~40 % Akt 1).
+- Koop: Jeder Client bekommt Altgold/Erfolge für sein eigenes Profil; Nochmal geht nur über einen neuen Raum.
 - `palette.ts` hat noch Aliase aus älteren Fassungen.
 
 ## Deployment

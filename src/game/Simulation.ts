@@ -148,6 +148,7 @@ export class Simulation implements World {
       at: 0,
       path: [0],
       lead: Math.max(1, LEAD_START + (options.leadBonus ?? 0) + effects.lead),
+      leadStart: Math.max(1, LEAD_START + (options.leadBonus ?? 0) + effects.lead),
       event: null,
       seenEvents: [],
       loot: null,
@@ -250,6 +251,10 @@ export class Simulation implements World {
     if (s.phase !== "rest") {
       return;
     }
+    // Im Koop entscheidet der Host ueber den Weg und die Ereignisse.
+    if ((command.kind === "depart" || command.kind === "choose") && playerId !== s.players[0]?.id) {
+      return;
+    }
     switch (command.kind) {
       case "repair":
         if (s.bank >= REPAIR_COST && s.fort.hull < s.fort.hullMax) {
@@ -296,6 +301,11 @@ export class Simulation implements World {
         return;
       }
     }
+  }
+
+  /** Koop: Ein Mitspieler ist gegangen - seine Figur verschwindet. */
+  removePlayer(id: string): void {
+    this.state.players = this.state.players.filter((p) => p.id !== id);
   }
 
   // --- Ein Rechenschritt ---------------------------------------------------------------------

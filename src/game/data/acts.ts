@@ -3,7 +3,7 @@
  * Station bringt und wie stark die Armee auf jedem Abschnitt angreift.
  */
 
-import type { NodeType, TruppKind } from "../types";
+import type { EnemyType, NodeType, TruppKind } from "../types";
 import type { MarchSpec } from "./route";
 
 export interface ActSpec {
@@ -15,10 +15,41 @@ export interface ActSpec {
   /** Leben der Gegner zusaetzlich (spaetere Akte sind haerter). */
   hpBonus: number;
   rateBonus: number;
+  /** Endgegner am Ziel des Akts. */
+  boss: EnemyType;
+  /** Spaetere Akte beginnen mit staerkeren Trupp-Mischungen. */
+  depthOffset: number;
 }
 
+/** Drei Akte: ein Lauf dauert etwa eine halbe Stunde. */
 export const ACTS: readonly ActSpec[] = [
-  { name: "Die Rostdünen", layers: 7, goal: "Goldenes Tor", hpBonus: 0, rateBonus: 0 },
+  {
+    name: "Die Rostdünen",
+    layers: 7,
+    goal: "Goldenes Tor",
+    hpBonus: 0,
+    rateBonus: 0,
+    boss: "koloss",
+    depthOffset: 0,
+  },
+  {
+    name: "Die Salzebene",
+    layers: 7,
+    goal: "Salzkathedrale",
+    hpBonus: 0.9,
+    rateBonus: 0.15,
+    boss: "barke",
+    depthOffset: 2,
+  },
+  {
+    name: "Die Glasschlucht",
+    layers: 7,
+    goal: "Sonnenthron",
+    hpBonus: 2,
+    rateBonus: 0.3,
+    boss: "glaskoloss",
+    depthOffset: 3,
+  },
 ];
 
 export interface NodeSpec {
@@ -122,7 +153,7 @@ export function marchFor(
 ): MarchSpec {
   const spec = ACTS[act] ?? ACTS[0]!;
   const depth = Math.max(1, layer);
-  const mix = MIX_BY_DEPTH[Math.min(MIX_BY_DEPTH.length, depth) - 1]!;
+  const mix = MIX_BY_DEPTH[Math.min(MIX_BY_DEPTH.length, depth + spec.depthOffset) - 1]!;
   let rate = 1 + spec.rateBonus;
   if (type === "schrott") {
     rate *= 1.25;
@@ -144,7 +175,7 @@ export function marchFor(
     mix,
   };
   if (type === "boss") {
-    march.boss = "koloss";
+    march.boss = spec.boss;
   }
   return march;
 }

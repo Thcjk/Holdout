@@ -5,6 +5,7 @@
  */
 
 import type Phaser from "phaser";
+import { audio } from "../../audio/AudioEngine";
 import { SAFE, VIEWPORT } from "../../config/constants";
 import type { EnemyType, GameState } from "../../game/types";
 import { ARMY_SIZE } from "../pixel/armee";
@@ -66,6 +67,8 @@ export class WarningView {
         // Etwa 26 Pixel hoch, egal wie gross die Figur ist.
         marker.icon.setScale(Math.min(0.6, 26 / ARMY_SIZE[type][1])).setDepth(DEPTH.hud - 1);
         this.markers.set(warning.id, marker);
+        // Neuer Trupp angekuendigt: kurzer Warnton.
+        audio.play("warn");
       }
       let x = 0;
       let y = 0;

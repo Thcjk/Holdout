@@ -37,6 +37,7 @@ import { BuildScene } from "./scenes/BuildScene";
 import { GameScene } from "./scenes/GameScene";
 import { MapScene } from "./scenes/MapScene";
 import { CrewScene } from "./scenes/CrewScene";
+import { LobbyScene } from "./scenes/LobbyScene";
 import { ErfolgeScene } from "./scenes/ErfolgeScene";
 import { WerftScene } from "./scenes/WerftScene";
 import { ResultScene } from "./scenes/ResultScene";
@@ -89,6 +90,7 @@ function buildConfig(): Phaser.Types.Core.GameConfig {
       CrewScene,
       WerftScene,
       ErfolgeScene,
+      LobbyScene,
       GameScene,
       BuildScene,
       MapScene,

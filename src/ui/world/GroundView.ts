@@ -5,22 +5,28 @@
 
 import type Phaser from "phaser";
 import { VIEWPORT } from "../../config/constants";
-import { TEX } from "../pixel/textures";
+import { TEX, ensureGround } from "../pixel/textures";
 import { DEPTH } from "./view";
 
 export class GroundView {
   private readonly tile: Phaser.GameObjects.TileSprite;
   private readonly prints: Phaser.GameObjects.Image[] = [];
+  private act = 0;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.tile = scene.add
-      .tileSprite(0, 0, VIEWPORT.width, VIEWPORT.height, TEX.ground)
+      .tileSprite(0, 0, VIEWPORT.width, VIEWPORT.height, ensureGround(scene, 0))
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(DEPTH.ground);
   }
 
-  update(camera: Phaser.Cameras.Scene2D.Camera): void {
+  update(camera: Phaser.Cameras.Scene2D.Camera, act = 0): void {
+    if (act !== this.act) {
+      // Neuer Akt, neuer Boden (wird beim ersten Mal gemalt).
+      this.act = act;
+      this.tile.setTexture(ensureGround(this.scene, act));
+    }
     this.tile.setSize(VIEWPORT.width, VIEWPORT.height);
     this.tile.tilePositionX = camera.scrollX;
     // Abdruecke weit hinter dem Bild wegraeumen

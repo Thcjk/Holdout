@@ -21,6 +21,8 @@ export class EventPanel {
 
   constructor(
     private readonly scene: Phaser.Scene,
+    /** Im Koop entscheidet nur der Host. */
+    private readonly canChoose: boolean,
     private readonly onChoose: (option: number) => void,
   ) {}
 
@@ -78,6 +80,20 @@ export class EventPanel {
         .setDepth(DEPTH.hud + 16),
     );
     this.objects.push(shade, panel, title, text);
+    if (!this.canChoose) {
+      const note = fixed(
+        this.scene.add
+          .text(cx, cy + H / 2 - 112, "Der Host entscheidet.", {
+            fontFamily: FONT_BODY,
+            fontSize: "14px",
+            color: T.muted,
+          })
+          .setOrigin(0.5)
+          .setStroke(T.outline, 3)
+          .setDepth(DEPTH.hud + 16),
+      );
+      this.objects.push(note);
+    }
     event.choices.forEach((choice, i) => {
       const x = cx + (i === 0 ? -132 : 132);
       const y = cy + H / 2 - 66;
@@ -96,7 +112,7 @@ export class EventPanel {
       );
       button.setScrollFactor(0);
       button.setDepth(DEPTH.hud + 16);
-      button.setEnabled(affordable(choice, state.bank));
+      button.setEnabled(this.canChoose && affordable(choice, state.bank));
       const result = fixed(
         this.scene.add
           .text(x, y + 36, choice.result, {

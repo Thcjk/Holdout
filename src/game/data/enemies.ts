@@ -10,7 +10,9 @@
  *   Streitwagen  - rammt die Beine, die Festung wird kurz langsamer
  *   Ballista     - schiesst aus der Ferne Module kaputt
  *   Belagerungsturm - dockt seitlich an und laesst Enterer aufs Deck
- *   Goldener Koloss - Endgegner: laeuft mit und schlaegt aufs Deck
+ *   Goldener Koloss - Endgegner Akt 1: laeuft mit und schlaegt aufs Deck
+ *   Sonnenbarke     - Endgegner Akt 2: schwebt ueber dem Bug, brennt Reihen weg, wirft Skarabaeen ab
+ *   Glaeserner Koloss - Endgegner Akt 3: schlaegt breiter und ruft Phalanx-Wachen
  */
 
 import type { EnemyType, TruppKind } from "../types";
@@ -35,6 +37,8 @@ export interface EnemySpec {
   scrap: number;
   /** Wie viel er beim Planen der Angriffe zaehlt (ein Sandlaeufer = 1). */
   threat: number;
+  /** Endgegner eines Akts. */
+  boss?: boolean;
 }
 
 export const ENEMIES: Record<EnemyType, EnemySpec> = {
@@ -163,6 +167,37 @@ export const ENEMIES: Record<EnemyType, EnemySpec> = {
     aggro: 0,
     scrap: 60,
     threat: 0,
+    boss: true,
+  },
+  barke: {
+    type: "barke",
+    name: "Sonnenbarke",
+    hp: 2600,
+    speed: 60,
+    radius: 40,
+    hullDamage: 20,
+    touchDamage: 0,
+    moduleDamage: 45,
+    attackCooldown: 7,
+    aggro: 0,
+    scrap: 70,
+    threat: 0,
+    boss: true,
+  },
+  glaskoloss: {
+    type: "glaskoloss",
+    name: "Gläserner Koloss",
+    hp: 3000,
+    speed: 64,
+    radius: 40,
+    hullDamage: 30,
+    touchDamage: 24,
+    moduleDamage: 70,
+    attackCooldown: 7,
+    aggro: 0,
+    scrap: 90,
+    threat: 0,
+    boss: true,
   },
 };
 

@@ -189,6 +189,8 @@ export function buyUpgrade(profile: Profile, id: UpgradeId): boolean {
 
 export interface RunSummary {
   won: boolean;
+  /** Geschaffte Akte (0 bis 3). */
+  acts: number;
   /** Erreichte Spalte der Karte (1 = erste Station). */
   layer: number;
   layers: number;
@@ -212,8 +214,10 @@ export interface RunSummary {
 
 export function summarize(state: GameState, crew: CrewId): RunSummary {
   const parts = state.players.flatMap((p) => [p.parts.arm, p.parts.back]);
+  const won = state.phase === "won";
   return {
-    won: state.phase === "won",
+    won,
+    acts: state.map.fixed ? (won ? 1 : 0) : state.map.act + (won ? 1 : 0),
     layer: state.path.length - 1,
     layers: state.map.layers - 1,
     kills: state.kills,
@@ -236,11 +240,12 @@ export function summarize(state: GameState, crew: CrewId): RunSummary {
 /** Altgold fuer einen Lauf: Weg, Gegner, Endgegner, Sieg - mehr auf hoeherer Hitze. */
 export function altgoldFor(run: RunSummary): number {
   const base =
+    run.acts * 60 +
     run.layer * 12 +
     Math.floor(run.kills / 8) +
     run.bossKills * 40 +
     run.chests * 2 +
-    (run.won ? 80 : 0);
+    (run.won ? 120 : 0);
   return Math.round(base * (1 + 0.15 * run.heat));
 }
 
@@ -272,7 +277,21 @@ export const ACHIEVEMENTS: readonly AchievementSpec[] = [
     id: "sieg",
     name: "Durch die Rostdünen",
     text: "Akt 1 schaffen.",
-    reward: 100,
+    reward: 80,
+    check: (r) => r.acts >= 1,
+  },
+  {
+    id: "salz",
+    name: "Über die Salzebene",
+    text: "Akt 2 schaffen.",
+    reward: 120,
+    check: (r) => r.acts >= 2,
+  },
+  {
+    id: "thron",
+    name: "Zum Sonnenthron",
+    text: "Alle drei Akte schaffen.",
+    reward: 200,
     check: (r) => r.won,
   },
   {
@@ -320,16 +339,16 @@ export const ACHIEVEMENTS: readonly AchievementSpec[] = [
   {
     id: "ohne-winde",
     name: "Nie zurückgefallen",
-    text: "Akt 1 schaffen, ohne dass die Seilwinde einen Mech holt.",
+    text: "Einen Akt schaffen, ohne dass die Seilwinde einen Mech holt.",
     reward: 50,
-    check: (r) => r.won && r.winches === 0,
+    check: (r) => r.acts >= 1 && r.winches === 0,
   },
   {
     id: "vorsprung",
     name: "Uneinholbar",
-    text: "Akt 1 mit vollem Vorsprung schaffen.",
+    text: "Einen Akt mit vollem Vorsprung schaffen.",
     reward: 50,
-    check: (r) => r.won && r.lead >= 5,
+    check: (r) => r.acts >= 1 && r.lead >= 5,
   },
   {
     id: "teil",
@@ -341,21 +360,21 @@ export const ACHIEVEMENTS: readonly AchievementSpec[] = [
   {
     id: "hitze3",
     name: "Heißer Sand",
-    text: "Akt 1 auf Hitze 3 schaffen.",
+    text: "Den ganzen Lauf auf Hitze 3 schaffen.",
     reward: 80,
     check: (r) => r.won && r.heat >= 3,
   },
   {
     id: "hitze6",
     name: "Glühender Sand",
-    text: "Akt 1 auf Hitze 6 schaffen.",
+    text: "Den ganzen Lauf auf Hitze 6 schaffen.",
     reward: 120,
     check: (r) => r.won && r.heat >= 6,
   },
   {
     id: "hitze10",
     name: "Sonnenfeuer",
-    text: "Akt 1 auf Hitze 10 schaffen.",
+    text: "Den ganzen Lauf auf Hitze 10 schaffen.",
     reward: 200,
     check: (r) => r.won && r.heat >= 10,
   },
@@ -406,6 +425,7 @@ export function applyRun(profile: Profile, run: RunSummary): RunReward {
 export function checkProfileAchievements(profile: Profile): AchievementSpec[] {
   const dummy: RunSummary = {
     won: false,
+    acts: 0,
     layer: 0,
     layers: 0,
     kills: 0,

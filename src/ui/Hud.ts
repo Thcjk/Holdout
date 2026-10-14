@@ -130,7 +130,12 @@ export class Hud {
 
     // Etappe, Rumpf, Fortschritt
     const m = state.march;
-    let where = `ETAPPE ${m.index + 1} / ${m.count} · ${m.station.toUpperCase()}`;
+    // Ab Akt 2 steht der Akt davor, die Etappe wird kuerzer geschrieben.
+    const stage =
+      state.map.act > 0
+        ? `AKT ${state.map.act + 1} · ${m.index + 1}/${m.count}`
+        : `ETAPPE ${m.index + 1} / ${m.count}`;
+    let where = `${stage} · ${m.station.toUpperCase()}`;
     if (state.phase === "rest") {
       where = `RAST · ${state.restAt.toUpperCase()}`;
     } else if (state.phase === "loot" && state.loot) {
@@ -162,10 +167,10 @@ export class Hud {
     g.fillStyle(0x120f1e, 1).fillRect(mx - 1, top + 57, 4, 6);
 
     // Endgegner: eigener Balken unter der Mitte
-    const boss = state.enemies.find((e) => e.type === "koloss");
+    const boss = state.enemies.find((e) => ENEMIES[e.type].boss);
     this.bossName.setVisible(!!boss);
     if (boss) {
-      this.bossName.setText(ENEMIES.koloss.name.toUpperCase());
+      this.bossName.setText(ENEMIES[boss.type].name.toUpperCase());
       this.bar(g, w / 2 - 150, top + 100, 300, 12, boss.hp / boss.hpMax, 0xd8a020, 0xfff2a0);
     }
 

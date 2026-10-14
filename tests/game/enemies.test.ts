@@ -264,3 +264,42 @@ describe("Mischung der Trupps", () => {
     expect(types.has("skarabaeus")).toBe(true);
   });
 });
+
+describe("Endgegner der spaeteren Akte", () => {
+  it("die Sonnenbarke schwebt, wirft Skarabaeen ab und brennt eine ganze Reihe", () => {
+    const s = sim();
+    build(s, "geschuetz", 0, 2);
+    build(s, "magnet", 6, 2);
+    const safe = build(s, "platte", 3, 0);
+    s.command(ME, { kind: "depart" });
+    parkPlayer(s);
+    const barke = addEnemy(s, "barke", s.state.fort.x + DECK_W + 110, 40, 10);
+    expect(barke.layer).toBe("air");
+    barke.cd2 = 0;
+    run(s, 0.2);
+    expect(s.state.enemies.filter((e) => e.type === "skarabaeus").length).toBeGreaterThanOrEqual(4);
+    barke.mode = "slam";
+    barke.tx = DECK_W / 2;
+    barke.ty = 2.5 * 32;
+    barke.timer = 0.1;
+    barke.attackCd = 99;
+    run(s, 0.3);
+    const row = s.state.modules.filter((m) => m.row === 2);
+    expect(row.every((m) => m.hp < m.hpMax)).toBe(true);
+    expect(s.state.modules.find((m) => m.uid === safe)!.hp).toBe(MODULES.platte.hp);
+  });
+
+  it("der Glaeserne Koloss ruft beim Schlag Phalanx-Wachen", () => {
+    const s = sim();
+    s.command(ME, { kind: "depart" });
+    parkPlayer(s);
+    const boss = addEnemy(s, "glaskoloss", s.state.fort.x + DECK_W / 2, DECK_H + 132, 10);
+    boss.mode = "slam";
+    boss.tx = 100;
+    boss.ty = 64;
+    boss.timer = 0.05;
+    boss.attackCd = 99;
+    run(s, 0.2);
+    expect(s.state.enemies.filter((e) => e.type === "phalanx").length).toBe(2);
+  });
+});

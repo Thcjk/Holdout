@@ -375,6 +375,19 @@ export class Pix {
     }
   }
 
+  /** Jede gemalte Farbe umfaerben (z. B. Gold zu Glas). Durchsichtiges bleibt. */
+  recolor(fn: (r: number, g: number, b: number) => [number, number, number]): void {
+    for (let i = 0; i < this.data.length; i += 4) {
+      if ((this.data[i + 3] ?? 0) === 0) {
+        continue;
+      }
+      const [r, g, b] = fn(this.data[i] ?? 0, this.data[i + 1] ?? 0, this.data[i + 2] ?? 0);
+      this.data[i] = r;
+      this.data[i + 1] = g;
+      this.data[i + 2] = b;
+    }
+  }
+
   /** Spiegelt das ganze Bild waagerecht. */
   mirror(): void {
     for (let y = 0; y < this.h; y += 1) {

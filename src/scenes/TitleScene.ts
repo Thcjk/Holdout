@@ -111,8 +111,14 @@ export class TitleScene extends Phaser.Scene {
       () => this.scene.start("Erfolge"),
       small,
     );
-    const koop = new Button(this, w / 2 + 222, bottom - 34, "KOOP · BALD", () => undefined, small);
-    koop.setEnabled(false);
+    const koop = new Button(
+      this,
+      w / 2 + 222,
+      bottom - 34,
+      "KOOP",
+      () => this.scene.start("Lobby", { mode: "menu" }),
+      small,
+    );
     const mute = new Button(
       this,
       w / 2 + 74,
@@ -136,7 +142,7 @@ export class TitleScene extends Phaser.Scene {
       .text(
         w - SAFE.right - 10,
         VIEWPORT.height - SAFE.bottom - 6,
-        `v${__APP_VERSION__} · Akt 1 (Baustufe 5 von 6)`,
+        `v${__APP_VERSION__} · drei Akte, Koop bis 4`,
         {
           fontFamily: FONT_BODY,
           fontSize: "13px",

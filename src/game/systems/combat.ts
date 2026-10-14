@@ -113,7 +113,7 @@ export function damageEnemy(
   }
   e.hp -= damage;
   // Grosse Gegner lassen sich kaum schubsen.
-  const heavy = e.type === "turm" || e.type === "koloss" || e.type === "ballista";
+  const heavy = e.type === "turm" || e.type === "ballista" || ENEMIES[e.type].boss === true;
   if (!options.quiet && !heavy && e.layer !== "climb") {
     const dx = e.x - fromX;
     const dy = e.y - fromY;
@@ -139,7 +139,7 @@ export function killEnemy(w: World, e: EnemyState, owner: string | null): void {
   }
   const spec = ENEMIES[e.type];
   // Schrott faellt zu Boden - auch von Deck und Rumpfwand.
-  const pieces = e.type === "koloss" ? 8 : e.type === "turm" ? 4 : 1;
+  const pieces = spec.boss ? 8 : e.type === "turm" ? 4 : 1;
   for (let i = 0; i < pieces; i += 1) {
     const spread = pieces > 1 ? 30 : 0;
     s.scrap.push({
@@ -152,7 +152,7 @@ export function killEnemy(w: World, e: EnemyState, owner: string | null): void {
     });
   }
   w.emit({ kind: "kill", x: e.x, y: e.y - e.z, type: e.type });
-  if (e.type === "koloss") {
+  if (spec.boss) {
     s.stats.bossKills += 1;
     w.emit({ kind: "bossDown", type: e.type });
   }
