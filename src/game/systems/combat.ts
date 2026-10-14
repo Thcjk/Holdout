@@ -10,6 +10,7 @@
  */
 
 import { DECK_H, ELEVATION, RESPAWN_TIME, TICK } from "../constants";
+import { CREW } from "../data/crew";
 import { ENEMIES } from "../data/enemies";
 import { BLIND_SPOT, LEGS, STRIDE, insideRect } from "../fortress";
 import type { EnemyState, EnemyType, ModuleState, PlayerState, ShotState } from "../types";
@@ -49,7 +50,8 @@ export function hurtPlayer(w: World, p: PlayerState, amount: number): void {
   if (!p.alive || p.transition) {
     return;
   }
-  p.hp -= amount;
+  // Der Brecher steckt weniger ein.
+  p.hp -= amount * (1 - (CREW[p.crew].armor ?? 0));
   w.emit({ kind: "playerHit", id: p.id });
   if (p.hp <= 0) {
     p.hp = 0;
@@ -151,6 +153,7 @@ export function killEnemy(w: World, e: EnemyState, owner: string | null): void {
   }
   w.emit({ kind: "kill", x: e.x, y: e.y - e.z, type: e.type });
   if (e.type === "koloss") {
+    s.stats.bossKills += 1;
     w.emit({ kind: "bossDown", type: e.type });
   }
 }
@@ -191,6 +194,7 @@ export function fire(
   damage: number,
   look: ShotState["look"],
   pull = 0,
+  extra: { splash?: number; pierce?: number } = {},
 ): void {
   const dx = target.x - x;
   const dy = target.y - y;
@@ -212,6 +216,9 @@ export function fire(
     vz: (targetZ - z) / flight,
     damage,
     life: flight + 0.3,
+    splash: extra.splash ?? 0,
+    pierce: extra.pierce ?? 0,
+    hit: [],
   });
   w.emit({ kind: "shot", owner, x: x + ux * 12, y, z, look });
 }
@@ -245,23 +252,37 @@ export function updateShots(w: World): void {
     shot.life -= TICK;
     const fromDeck = shot.z > 40;
     for (const e of s.enemies) {
-      if (e.hp <= 0 || !canReach(w, fromDeck, e)) {
+      if (e.hp <= 0 || shot.hit.includes(e.id) || !canReach(w, fromDeck, e)) {
         continue;
       }
       if (Math.hypot(e.x - shot.x, e.y - shot.y) < ENEMIES[e.type].radius + 5) {
-        damageEnemy(
-          w,
-          e,
-          shot.damage,
-          shot.x - shot.vx * 0.05,
-          shot.y - shot.vy * 0.05,
-          shot.owner,
-        );
+        const fromX = shot.x - shot.vx * 0.05;
+        const fromY = shot.y - shot.vy * 0.05;
+        damageEnemy(w, e, shot.damage, fromX, fromY, shot.owner);
         if (shot.pull > 0 && e.hp > 0 && e.layer === "ground") {
           pullToFoot(w, e, shot.pull);
         }
-        shot.life = 0;
-        break;
+        if (shot.splash > 0) {
+          // Splitter: Nachbarn auf derselben Ebene bekommen die Haelfte ab.
+          for (const other of s.enemies) {
+            if (
+              other !== e &&
+              other.hp > 0 &&
+              other.layer === e.layer &&
+              Math.hypot(other.x - e.x, other.y - e.y) < shot.splash
+            ) {
+              damageEnemy(w, other, shot.damage / 2, e.x, e.y, shot.owner, { pierce: true });
+            }
+          }
+          w.emit({ kind: "boom", x: e.x, y: e.y - e.z, radius: shot.splash });
+        }
+        shot.hit.push(e.id);
+        if (shot.pierce > 0) {
+          shot.pierce -= 1;
+        } else {
+          shot.life = 0;
+          break;
+        }
       }
     }
   }

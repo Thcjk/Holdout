@@ -21,6 +21,7 @@ import {
   TILE_W,
 } from "../game/constants";
 import { MODULES, sellValue, upgradeCost } from "../game/data/modules";
+import { PARTS } from "../game/data/parts";
 import { rerollCost as rerollPrice } from "../game/systems/modules";
 import { canPlace, moduleAt, moduleCenter, tileFree } from "../game/deck";
 import { FIXED_MODULES } from "../game/fortress";
@@ -137,6 +138,8 @@ export class BuildScene extends Phaser.Scene {
       s.offer,
       s.rerolls,
       s.modules.map((m) => [m.uid, m.level]),
+      s.partOffer,
+      s.players.map((p) => p.parts),
       this.selectedOffer,
       this.selectedModule,
     ]);
@@ -379,6 +382,15 @@ export class BuildScene extends Phaser.Scene {
       this.drawModuleInfo(s, module, line, x, y + height);
       return;
     }
+    if (s.partOffer.length > 0) {
+      this.drawParts(s, line, x, {
+        at: () => cursor,
+        skip: (dy) => {
+          cursor += dy;
+        },
+      });
+      return;
+    }
     line("FESTUNG AUSBAUEN", 28, T.gold, FONT_TITLE, 6);
     line("Wähle unten ein Modul und tippe dann auf ein freies Feld.", 14, T.body, FONT_BODY, 8);
     line("Gebaute Module antippen: aufrüsten oder abbauen.", 14, T.body, FONT_BODY, 8);
@@ -400,6 +412,49 @@ export class BuildScene extends Phaser.Scene {
       ),
     );
     repair.setEnabled(s.bank >= REPAIR_COST && s.fort.hull < s.fort.hullMax);
+  }
+
+  /** Beim Haendler: Teile fuer den eigenen Mech. */
+  private drawParts(
+    s: GameState,
+    line: (text: string, size: number, color: string, font?: string, gap?: number) => void,
+    x: number,
+    cursor: { at: () => number; skip: (dy: number) => void },
+  ): void {
+    const self = s.players.find((p) => p.id === this.session.selfId) ?? s.players[0];
+    line("TEILE", 28, T.gold, FONT_TITLE, 2);
+    const worn = self
+      ? [self.parts.arm, self.parts.back]
+          .filter((p): p is NonNullable<typeof p> => p !== null)
+          .map((p) => `${PARTS[p.id].name} ${levelName(p.level)}`)
+          .join(", ")
+      : "";
+    line(
+      worn ? `Dein Mech: ${worn}` : "Dein Mech hat noch keine Teile.",
+      12,
+      T.muted,
+      FONT_BODY,
+      10,
+    );
+    s.partOffer.forEach((offer, i) => {
+      const spec = PARTS[offer.id];
+      const same = self?.parts[spec.slot]?.id === offer.id;
+      line(`${spec.name} (${spec.slot === "arm" ? "Arm" : "Rücken"})`, 15, T.light, FONT_BODY, 2);
+      line(same ? `${spec.text} Gleiches Teil: wird eine Stufe besser.` : spec.text, 12, T.body);
+      const button = this.keep(
+        new Button(
+          this,
+          x + PANEL_W / 2,
+          0,
+          `KAUFEN · ${offer.cost}`,
+          () => this.session.send({ kind: "buyPart", index: i }),
+          { width: PANEL_W - 28, height: 38, fontSize: 15, variant: "secondary" },
+        ),
+      );
+      button.setPosition(x + PANEL_W / 2, cursor.at() + 18);
+      button.setEnabled(s.bank >= offer.cost);
+      cursor.skip(46);
+    });
   }
 
   private drawModuleInfo(

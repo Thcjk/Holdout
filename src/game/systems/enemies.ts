@@ -31,6 +31,7 @@ import {
   TILE_W,
   WARNING_TIME,
 } from "../constants";
+import { CREW } from "../data/crew";
 import { ENEMIES, TRUPPS } from "../data/enemies";
 import { CLIMB_POINTS, climbOpen, moduleCenter, moduleRect } from "../deck";
 import { ATTACK_SLOTS, DECK_WALK, LEGS, STRIDE } from "../fortress";
@@ -119,11 +120,22 @@ export function spawn(w: World): void {
     id: s.nextId++,
     side,
     at,
-    eta: WARNING_TIME,
+    eta: WARNING_TIME + earlyWarning(w),
     count: members.length,
     trupp,
     members,
   });
+}
+
+/** Die Funkerin hoert Trupps frueher kommen. */
+function earlyWarning(w: World): number {
+  let bonus = 0;
+  for (const p of w.state.players) {
+    if (p.alive) {
+      bonus = Math.max(bonus, CREW[p.crew].earlyWarning ?? 0);
+    }
+  }
+  return bonus;
 }
 
 function pickTrupp(w: World, mix: Partial<Record<TruppKind, number>>): TruppKind {

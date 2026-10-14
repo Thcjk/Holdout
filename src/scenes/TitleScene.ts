@@ -7,6 +7,7 @@ import Phaser from "phaser";
 import { audio } from "../audio/AudioEngine";
 import { SAFE, VIEWPORT } from "../config/constants";
 import { ELEVATION, FORT_SPEED, RESPAWN_SPOT } from "../game/constants";
+import { loadProfile } from "../platform/profileStore";
 import { setReloadSafe } from "../platform/update";
 import { Button } from "../ui/Button";
 import { crewKey, armyKey } from "../ui/pixel/textures";
@@ -89,16 +90,28 @@ export class TitleScene extends Phaser.Scene {
       "LOSZIEHEN",
       () => {
         audio.unlock();
-        this.scene.start("Game");
+        this.scene.start("Crew");
       },
       { width: 280, height: 60, fontSize: 28 },
     );
-    const koop = new Button(this, w / 2 - 74, bottom - 34, "KOOP · BALD", () => undefined, {
-      width: 140,
-      height: 42,
-      fontSize: 16,
-      variant: "secondary",
-    });
+    const small = { width: 140, height: 42, fontSize: 16, variant: "secondary" as const };
+    const werft = new Button(
+      this,
+      w / 2 - 222,
+      bottom - 34,
+      "WERFT",
+      () => this.scene.start("Werft"),
+      small,
+    );
+    const erfolge = new Button(
+      this,
+      w / 2 - 74,
+      bottom - 34,
+      "ERFOLGE",
+      () => this.scene.start("Erfolge"),
+      small,
+    );
+    const koop = new Button(this, w / 2 + 222, bottom - 34, "KOOP · BALD", () => undefined, small);
     koop.setEnabled(false);
     const mute = new Button(
       this,
@@ -115,7 +128,7 @@ export class TitleScene extends Phaser.Scene {
       },
       { width: 140, height: 42, fontSize: 16, variant: "secondary" },
     );
-    for (const button of [start, koop, mute]) {
+    for (const button of [start, werft, erfolge, koop, mute]) {
       button.setScrollFactor(0);
       button.setDepth(9000);
     }
@@ -123,7 +136,7 @@ export class TitleScene extends Phaser.Scene {
       .text(
         w - SAFE.right - 10,
         VIEWPORT.height - SAFE.bottom - 6,
-        `v${__APP_VERSION__} · Akt 1 (Baustufe 4 von 6)`,
+        `v${__APP_VERSION__} · Akt 1 (Baustufe 5 von 6)`,
         {
           fontFamily: FONT_BODY,
           fontSize: "13px",
@@ -134,6 +147,21 @@ export class TitleScene extends Phaser.Scene {
       .setStroke(T.outline, 3)
       .setScrollFactor(0)
       .setDepth(9000);
+    // Altgold aus den bisherigen Laeufen
+    const profile = loadProfile();
+    if (profile.stats.runs > 0) {
+      this.add
+        .text(SAFE.left + 12, VIEWPORT.height - SAFE.bottom - 6, `Altgold ${profile.altgold}`, {
+          fontFamily: FONT_BODY,
+          fontSize: "15px",
+          color: T.gold,
+        })
+        .setOrigin(0, 1)
+        .setStroke(T.outline, 3)
+        .setScrollFactor(0)
+        .setDepth(9000);
+    }
+    this.mech.setTexture(crewKey(profile.selected));
   }
 
   update(time: number, delta: number): void {

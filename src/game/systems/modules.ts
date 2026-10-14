@@ -12,7 +12,8 @@ import { MODULE_IDS, MODULES, moduleHp, sellValue, stat, upgradeCost } from "../
 import { canPlace, generatorBonus, moduleCenter, oilZone } from "../deck";
 import { insideRect } from "../fortress";
 import type { EnemyState, GameState, ModuleId, ModuleState } from "../types";
-import { clamp, type World } from "../world";
+import { CREW } from "../data/crew";
+import { clamp, earn, type World } from "../world";
 import { canReach, damageEnemy, fire, findTarget, underDeck } from "./combat";
 
 /** Was Neu-Wuerfeln gerade kostet (beim Haendler weniger). */
@@ -155,7 +156,8 @@ export function updateModules(w: World): void {
       }
       const fired = fireModule(w, m, x, y, z);
       // Ohne Ziel gleich wieder bereit; mit Ziel: Generatoren auf Nachbarfeldern machen schneller.
-      m.cooldown = fired ? stat(spec.cooldown, m.level) / (1 + generatorBonus(s.modules, m)) : 0;
+      const boost = generatorBonus(s.modules, m) + gunnerBoost(w, x, y);
+      m.cooldown = fired ? stat(spec.cooldown, m.level) / (1 + boost) : 0;
       continue;
     }
     if (m.type === "oel") {
@@ -172,6 +174,18 @@ export function updateModules(w: World): void {
       }
     }
   }
+}
+
+/** Der Kanonier auf dem Deck in der Naehe: Waffenmodule feuern schneller. */
+function gunnerBoost(w: World, x: number, y: number): number {
+  let boost = 0;
+  for (const p of w.state.players) {
+    const value = CREW[p.crew].moduleBoost ?? 0;
+    if (value > 0 && p.alive && p.layer === "deck" && Math.hypot(p.x - x, p.y - y) < 80) {
+      boost = Math.max(boost, value);
+    }
+  }
+  return boost;
 }
 
 /** Waffenmodul feuert. `true`, wenn es ein Ziel hatte. */
@@ -361,7 +375,7 @@ function pullScrap(w: World, x: number, y: number, radius: number): void {
     piece.z = Math.max(piece.z, ELEVATION * (1 - Math.min(1, distance / radius)));
     if (distance < 14) {
       taken.add(piece.id);
-      s.bank += piece.value;
+      earn(s, piece.value);
       w.emit({
         kind: "pickup",
         player: "magnet",

@@ -43,6 +43,17 @@ export type ModuleId =
   | "magnet"
   | "motor"
   | "werkstatt";
+/** Teile fuer die Mechs (Arm und Ruecken). */
+export type PartId =
+  | "schnellfeuer"
+  | "schwerer_lauf"
+  | "weitschuss"
+  | "durchschlag"
+  | "panzerung"
+  | "turbine"
+  | "sammler"
+  | "kuehler"
+  | "werkzeug";
 /** Aus welcher Richtung ein Trupp kommt (hinten = links, vorn = rechts in Laufrichtung). */
 export type Side = "hinten" | "vorn" | "oben" | "unten";
 export type Layer = "deck" | "ground";
@@ -76,14 +87,19 @@ export interface Anchor {
   onFort: boolean;
 }
 
-/** Abspringen, Hochklettern oder von der Seilwinde geholt werden. */
+/**
+ * Abspringen, Hochklettern, von der Seilwinde geholt werden, Enterhaken
+ * (Bergungslaeuferin) oder Sprung (Sturmspringer, mit Einschlag am Ende).
+ */
 export interface Transition {
-  kind: "jump" | "climb" | "winch";
+  kind: "jump" | "climb" | "winch" | "hook" | "leap";
   t: number;
   duration: number;
   from: Anchor;
   to: Anchor;
   toLayer: Layer;
+  /** Sturzflug: so viel Schaden beim Aufkommen (im Umkreis von 50). */
+  impact?: number;
 }
 
 export interface PlayerState {
@@ -112,6 +128,28 @@ export interface PlayerState {
   abilityAck: number;
   kills: number;
   scrap: number;
+  /** Teile am Arm und auf dem Ruecken. */
+  parts: { arm: PartSlot | null; back: PartSlot | null };
+  /** Drohnen der Funkerin: Sekunden bis zum naechsten Schuss. */
+  droneCd: number;
+  /** Rammstoss des Brechers: Restzeit, Richtung, schon getroffene Gegner. */
+  dash: { t: number; dx: number; dy: number; hit: number[] } | null;
+}
+
+export interface PartSlot {
+  id: PartId;
+  level: number;
+}
+
+/** Zahlen eines Laufs fuer Altgold und Erfolge. */
+export interface RunStats {
+  chests: number;
+  hordes: number;
+  /** Schrott, der insgesamt in die Kasse kam. */
+  scrapEarned: number;
+  winches: number;
+  bossKills: number;
+  events: number;
 }
 
 export interface EnemyState {
@@ -177,6 +215,12 @@ export interface ShotState {
   vz: number;
   damage: number;
   life: number;
+  /** Splitter: trifft im Umkreis mit halbem Schaden mit. */
+  splash: number;
+  /** So viele Gegner kann es noch durchschlagen. */
+  pierce: number;
+  /** Schon getroffene Gegner (fuer Durchschlag). */
+  hit: number[];
 }
 
 export interface ScrapState {
@@ -327,6 +371,11 @@ export interface GameState {
   /** Pluendern in der Ruine: Restzeit. */
   loot: { timer: number; duration: number } | null;
   chests: ChestState[];
+  /** Teile beim Haendler (jedes einmal kaufbar). */
+  partOffer: { id: PartId; cost: number }[];
+  stats: RunStats;
+  /** Hitze-Stufe dieses Laufs (0 = normal). */
+  heat: number;
   fort: FortState;
   players: PlayerState[];
   enemies: EnemyState[];
@@ -356,7 +405,10 @@ export type GameEvent =
   | { kind: "playerHit"; id: string }
   | { kind: "playerDown"; id: string }
   | { kind: "respawn"; id: string }
-  | { kind: "jump" | "climb" | "winch"; id: string }
+  | { kind: "jump" | "climb" | "winch" | "hook" | "leap"; id: string }
+  | { kind: "part"; player: string; part: PartId; level: number }
+  | { kind: "impact"; x: number; y: number; radius: number }
+  | { kind: "melee"; id: string; x: number; y: number }
   | { kind: "ability"; id: string }
   | { kind: "arrived"; index: number }
   | { kind: "depart"; index: number }
@@ -391,4 +443,5 @@ export type Command =
   | { kind: "build"; module: ModuleId; col: number; row: number }
   | { kind: "upgrade"; uid: number }
   | { kind: "sell"; uid: number }
-  | { kind: "reroll" };
+  | { kind: "reroll" }
+  | { kind: "buyPart"; index: number };

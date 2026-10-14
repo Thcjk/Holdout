@@ -18,7 +18,7 @@ Wellen-Shooter liegt auf dem Zweig `alt-3.9.2`).
 | 2        | Module aufs Deck bauen, aufrüsten, Nachbar-Boni, zufälliges Angebot; Angriffe von allen Seiten                                                      | fertig |
 | 3        | Gegner mit Aufgaben (Enterer, Phalanx, Skarabäus, Sandpriester, Streitwagen, Ballista, Belagerungsturm, Goldener Koloss); Module können kaputtgehen | fertig |
 | 4        | Routenkarte mit Abzweigungen (Ruine, Oase, Händler, Schrottfeld, Sturm, Ereignis, Endgegner), Vorsprung vor der Armee, Heerschar, Akt 1 komplett    | fertig |
-| 5        | Crew (6 Mechs), Teile, Werft, Altgold, Erfolge                                                                                                      | offen  |
+| 5        | Crew (6 Mechs mit Waffe, Fähigkeit, Eigenheit), Teile (Arm/Rücken), Werft mit Altgold, Baupläne, Hitze 1–10, 16 Erfolge                             | fertig |
 | 6        | Koop, Akte 2 und 3, Ton, Feinschliff                                                                                                                | offen  |
 
 ## Installieren
@@ -62,7 +62,7 @@ src/
   game/       Spielkern ohne Phaser und ohne Netz: Simulation (Dirigent), systems/ (Mechs,
               Module, Gegner, Kampf), Festung, Daten
   net/        Sitzungen (solo) und die Verbindungsschicht für den späteren Koop
-  scenes/     Boot, Titel, Spiel, Bau-Ansicht, Routenkarte, Ergebnis
+  scenes/     Boot, Titel, Crew-Wahl, Werft, Erfolge, Spiel, Bau-Ansicht, Routenkarte, Ergebnis
   ui/         HUD, Knöpfe, Stick, Rast-Tafel; pixel/ malt alle Bilder per Code; world/ zeichnet Boden, Festung, Module, Gegner, Warnungen
   platform/   Geräte-Erkennung, Sicherheitsränder, Updates
 tests/        Spielkern ohne Browser, Bot für die Balance

@@ -21,10 +21,17 @@ import {
 import { MODULES, upgradeCost } from "../src/game/data/modules";
 import { canPlace, generatorBonus, moduleCenter } from "../src/game/deck";
 import { BLIND_SPOT, insideRect } from "../src/game/fortress";
-import { Simulation } from "../src/game/Simulation";
+import { Simulation, type SimulationOptions } from "../src/game/Simulation";
 import { NODES } from "../src/game/data/acts";
 import { EVENTS } from "../src/game/data/events";
-import type { GameEvent, GameState, ModuleId, NodeType, PlayerInput } from "../src/game/types";
+import type {
+  CrewId,
+  GameEvent,
+  GameState,
+  ModuleId,
+  NodeType,
+  PlayerInput,
+} from "../src/game/types";
 
 export type BotStyle = "deck" | "klug";
 
@@ -257,8 +264,10 @@ export function playBot(
   maxSeconds = 1500,
   onEvent?: (event: GameEvent) => void,
   onTick?: (state: GameState) => void,
+  options: SimulationOptions = {},
+  crew: CrewId = "schrauber",
 ): BotResult {
-  const sim = new Simulation([{ id: "bot", name: "Bot", crew: "schrauber" }], seed);
+  const sim = new Simulation([{ id: "bot", name: "Bot", crew }], seed, options);
   const memory = { downSince: 0 };
   let ability = 0;
   let repairs = 0;

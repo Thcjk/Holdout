@@ -4,7 +4,7 @@ Wird bei jedem Start gelesen. Am Ende jeder Sitzung aktualisieren.
 
 ## Was das hier ist
 
-**Holdout – Die Wanderfestung** (v4.3.0): Eine Mech-Crew flieht auf einer sechsbeinigen
+**Holdout – Die Wanderfestung** (v4.4.0): Eine Mech-Crew flieht auf einer sechsbeinigen
 Lauf-Festung durch die Wüste, die goldene Armee eines toten Reichs jagt sie (sie will ihr
 Sonnenherz zurück). Kämpfen auf dem Deck oder am Boden, Festung ausbauen, Route wählen.
 Fürs Handy, quer, Pixel-Art. Phaser 3 + TypeScript + Vite, PWA auf GitHub Pages, Android über
@@ -32,7 +32,7 @@ Grinding/Freischalten.
 | 2        | Module bauen (Raster 7×4, 10 Module, 3 Stufen, Generator-Nachbarbonus, Abbauen = halbe Kosten), zufälliges Angebot je Rast, Trupps von allen Seiten mit Warnpfeil                                                 | **fertig (v4.1.0)** |
 | 3        | Gegner mit Aufgaben: Enterer (Leitern aufs Deck), Phalanx (Schild vorn), Skarabäus (fliegt aufs Deck), Sandpriester, Streitwagen, Ballista (schießt Module), Belagerungsturm, Goldener Koloss; Module haben Leben | **fertig (v4.2.0)** |
 | 4        | Routenkarte mit Abzweigungen (Ruine, Oase, Händler, Schrottfeld, Sturm, Ereignis, Boss), Vorsprung/Heerschar, Akt 1                                                                                               | **fertig (v4.3.0)** |
-| 5        | Crew: Schrauber (Start), Kanonier, Brecher, Bergungsläuferin, Funkerin, Sturmspringer; Teile Arm/Rücken; Werft mit Altgold, Baupläne, neue Festungen, Hitze-Stufen, Erfolge                                       | offen               |
+| 5        | Crew: 6 Mechs (Waffe, Fähigkeit, Eigenheit), Teile Arm/Rücken, Werft mit Altgold, Baupläne, Hitze 1–10, 16 Erfolge                                                                                                | **fertig (v4.4.0)** |
 | 6        | Koop (gemeinsame Festung, Schrott gehört allen), Akte 2/3 (Salzebene, Glasschlucht), Ton, Feinschliff                                                                                                             | offen               |
 
 Jede Baustufe wird einzeln auf `main` hochgeladen. Entwicklungszweig: `wanderfestung`.
@@ -106,10 +106,27 @@ Jede Baustufe wird einzeln auf `main` hochgeladen. Entwicklungszweig: `wanderfes
 - **Module haben Leben** (`hp`, `hpMax`, `broken`): kaputt bei 0, arbeitet erst ab der Hälfte wieder;
   Schrauber flickt Module im Umkreis 60 (8/s), Werkstatt alle (2 × Stufe/s), Aufrüsten und jede Station machen
   heil. Kaputte Platten/Motoren zählen nicht (`refreshFortress`).
-- Werte: `data/crew.ts` (Schrauber: Nietkanone, Notreparatur, `moduleRepair`), `data/enemies.ts`, `data/acts.ts`,
-  `data/events.ts`, `data/route.ts` (Typ `MarchSpec`), feste Zahlen in `constants.ts`.
-- Balance (Bot spielt den ganzen Akt, wählt Stationen und Ereignisse, plündert; `npm run balance -- 10 klug|deck`):
-  klug 6/10 geschafft (~7,5 min pro Akt), nur oben bleiben 0/4. Wer wie viel Rumpf kostet: `npx tsx tools/analyse.ts 4 klug`.
+- **Crew (Baustufe 5)**, `data/crew.ts`: Schrauber (Nietkanone; Notreparatur +45 Rumpf/heilt Module; flickt Module 8/s),
+  Kanonier (Schulterkanone mit Splitter; Breitseite = 8 Granaten; Waffenmodule im Umkreis 80 +25 % Tempo), Brecher
+  (Hammer, Nahkampf-Halbkreis; Rammstoß `p.dash` wirft Deck-/Wandgegner vom Deck; −30 % Schaden), Bergungsläuferin
+  (Salven; Enterhaken: Boden → Deck bzw. oben allen Schrott im Umkreis 300; Sammelradius 150, Seilwinde gratis),
+  Funkerin (2 Drohnen `droneCd`; Luftschlag = 5 fallende Granaten; Warnungen +1,5 s), Sturmspringer (Lanze mit
+  Durchschlag; Sturzflug = Übergang `leap` mit `impact` 55 im Umkreis 52; springt überall aufs Deck: Streifen vor der
+  Vorderkante/an den Seiten). Fähigkeiten in `players.ts: ABILITIES`, Werte mit Teilen über `statsOf(p)`.
+- **Teile** (`data/parts.ts`): 4 Arm (Schnellfeuer, Schwerer Lauf, Weitschuss, Durchschlag), 5 Rücken (Panzerung,
+  Turbine, Sammelmagnet, Kühler, Werkzeugkiste). Gleiches Teil = Stufe +1 (max 3), anderes ersetzt (+10 Schrott).
+  Quellen: Ruinen-Truhe (35 %, `equipPart` beim Öffner), Händler (`state.partOffer`, Befehl `buyPart`).
+- **Meta** (`game/meta.ts`, rein; gespeichert in `platform/profileStore.ts` unter `holdout.wf.profile`, alles in
+  try/catch, `sanitizeProfile` repariert): Altgold (`altgoldFor`: Station×12 + Kills/8 + Boss×40 + Truhen×2 + Sieg 80,
+  ×(1+0,15·Hitze)), Mechs freischalten (`CREW.unlock`), Baupläne (Start: Geschütz, Platte, Öl, Generator, Magnet,
+  Werkstatt; kaufbar: Motor, Harpune, Spule, Mörser), Verbesserungen (Rumpf +60, Vorräte +15 Schrott, Kesseldruck +1
+  Vorsprung), Hitze (ein Sieg schaltet die nächste frei; `heatEffects`: Leben +8 %/Stufe, Rate +5 %, ab 3 −1 Vorsprung,
+  ab 6 −2 Truhen, ab 9 −20 Startschrott), 16 Erfolge (`ACHIEVEMENTS`, Altgold beim ersten Mal). `runOptions(profile)`
+  → `SimulationOptions`; `summarize(state)` + `applyRun` am Laufende (auch beim Aufgeben). Lauf-Zahlen in `state.stats`.
+- Werte: `data/enemies.ts`, `data/acts.ts`, `data/events.ts`, `data/route.ts` (Typ `MarchSpec`), feste Zahlen in
+  `constants.ts`.
+- Balance (Bot spielt den ganzen Akt; `npm run balance -- 10 klug neu|voll [mech] [hitze]`): neues Profil ~40 %,
+  alle Module ~60 %, nur oben bleiben 0 %. Wer wie viel Rumpf kostet: `npx tsx tools/analyse.ts 4 klug`.
 
 ## Darstellung
 
@@ -127,7 +144,8 @@ Jede Baustufe wird einzeln auf `main` hochgeladen. Entwicklungszweig: `wanderfes
   Boden = y, Beine = y ihres Fußes, Rumpf = 127,7, Deck = 128 + Zeile), `FortressView`
   (Beine im Gang, Herz-Leuchten, Rauch), `GroundView` (kachelnder Boden, Fußabdrücke).
 - Verdeckte Figuren unter/hinter dem Deck scheinen als Umriss durch (Mech cyan, Gegner rot).
-- Szenen: Boot, Title (Festung läuft, Losziehen, Koop „bald“, Ton), Game, **Map** (Routenkarte über dem Spiel:
+- Szenen: Boot, Title (Festung läuft, Losziehen → Crew, Werft, Erfolge, Koop „bald“, Ton), **Crew** (Mech wählen,
+  Hitze −/+), **Werft** (3 Spalten kaufen), **Erfolge**, Game, **Map** (Routenkarte über dem Spiel:
   Spalten, Wege, Armee-Streifen links je nach Vorsprung, Infotafel mit Vorsprung-Änderung, LOSZIEHEN), **Build** (Bau-Ansicht über dem
   Spiel: Deck 2×, Raster, Angebot unten, Infotafel rechts; schickt nur Befehle, zeichnet bei Änderung neu;
   solange offen, ruhen Stick, Pause und Rast-Tafel im Spiel), Result.

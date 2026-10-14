@@ -191,6 +191,9 @@ describe("Stationen", () => {
       vz: 0,
       damage: 50,
       life: 1,
+      splash: 0,
+      pierce: 0,
+      hit: [],
     });
     run(s, 0.5);
     expect(s.state.phase).toBe("won");

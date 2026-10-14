@@ -49,6 +49,7 @@ export const TEX = {
   chest: "chest",
   chestOpen: "chest-open",
   fog: "fog",
+  drone: "drone",
 } as const;
 
 export const crewKey = (id: string): string => `crew-${id}`;
@@ -267,6 +268,15 @@ export function createPixelTextures(scene: Phaser.Scene): void {
     add(scene, nodeKey(type), paintNodeIcon(type));
   }
   add(scene, TEX.fortIcon, paintFortIcon());
+  // Drohne der Funkerin: kleiner Rumpf mit zwei Rotoren und Leuchtauge
+  const drone = new Pix(14, 8, 2);
+  drone.fill(rect(0, 1, 5, 1), "#a8aec0");
+  drone.fill(rect(9, 1, 5, 1), "#a8aec0");
+  drone.shape(rect(3, 2, 8, 5), STEEL, { shade: 1 });
+  drone.px(7, 4, "#5ff2e0");
+  drone.px(6, 4, "#d0fff8");
+  drone.outline(OUTLINE);
+  add(scene, TEX.drone, drone);
   add(scene, TEX.chest, paintChest(false));
   add(scene, TEX.chestOpen, paintChest(true));
   addFog(scene);

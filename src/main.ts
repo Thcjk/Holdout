@@ -36,6 +36,9 @@ import { BootScene } from "./scenes/BootScene";
 import { BuildScene } from "./scenes/BuildScene";
 import { GameScene } from "./scenes/GameScene";
 import { MapScene } from "./scenes/MapScene";
+import { CrewScene } from "./scenes/CrewScene";
+import { ErfolgeScene } from "./scenes/ErfolgeScene";
+import { WerftScene } from "./scenes/WerftScene";
 import { ResultScene } from "./scenes/ResultScene";
 import { TitleScene } from "./scenes/TitleScene";
 
@@ -80,7 +83,17 @@ function buildConfig(): Phaser.Types.Core.GameConfig {
     },
     // Die Simulation rechnet selbst mit festem Takt, deshalb braucht Phaser
     // keine eigene Physik-Engine.
-    scene: [BootScene, TitleScene, GameScene, BuildScene, MapScene, ResultScene],
+    scene: [
+      BootScene,
+      TitleScene,
+      CrewScene,
+      WerftScene,
+      ErfolgeScene,
+      GameScene,
+      BuildScene,
+      MapScene,
+      ResultScene,
+    ],
   };
 }
 

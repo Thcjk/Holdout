@@ -19,6 +19,7 @@ import { DECK_H, ELEVATION, LADDER, STATION_BONUS, WINCH_LANDING } from "../game
 import { BLIND_SPOT, insideRect } from "../game/fortress";
 import type {
   Command,
+  CrewId,
   EnemyType,
   GameEvent,
   GameState,
@@ -28,7 +29,11 @@ import type {
 } from "../game/types";
 import type { GameSession } from "../net/GameSession";
 import { SoloSession } from "../net/SoloSession";
+import { CREW } from "../game/data/crew";
+import { PARTS } from "../game/data/parts";
+import { applyRun, runOptions, summarize } from "../game/meta";
 import { FORCED_SEED, RICH_START, SHORT_ROUTE, SHOW_VALUES } from "../platform/debugFlags";
+import { loadProfile, saveProfile } from "../platform/profileStore";
 import { AbilityButton } from "../ui/AbilityButton";
 import { Button } from "../ui/Button";
 import { EventPanel } from "../ui/EventPanel";
@@ -77,6 +82,14 @@ const ENEMY_INTRO: Partial<Record<EnemyType, string>> = {
 
 export interface GameResult {
   won: boolean;
+  crew: CrewId;
+  heat: number;
+  /** Altgold dieses Laufs (inklusive Erfolge). */
+  altgold: number;
+  /** Neue Erfolge (Namen). */
+  achievements: string[];
+  /** Neu freigeschaltete Hitze-Stufe. */
+  heatUnlocked: number | null;
   marches: number;
   count: number;
   kills: number;
@@ -99,6 +112,7 @@ export class GameScene extends Phaser.Scene {
   private pauseCleanup: (() => void)[] = [];
   private paused = false;
   private players = new Map<string, Body>();
+  private drones = new Map<string, Phaser.GameObjects.Image[]>();
   private enemies!: EnemyView;
   private shots = new Map<number, Phaser.GameObjects.Image>();
   private scrap = new Map<number, Phaser.GameObjects.Image>();
@@ -123,6 +137,7 @@ export class GameScene extends Phaser.Scene {
   /** Die Bau-Ansicht oder die Karte liegt gerade darueber. */
   private building = false;
   private loot!: LootView;
+  private crew: CrewId = "schrauber";
   private eventPanel!: EventPanel;
 
   constructor() {
@@ -131,6 +146,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.players = new Map();
+    this.drones = new Map();
     this.shots = new Map();
     this.scrap = new Map();
     this.pauseCleanup = [];
@@ -141,9 +157,13 @@ export class GameScene extends Phaser.Scene {
     this.building = false;
 
     const seed = FORCED_SEED ?? Math.floor(Math.random() * 1e9);
-    this.session = new SoloSession({ id: SELF, name: playerName(), crew: "schrauber" }, seed, {
+    const profile = loadProfile();
+    this.crew = profile.selected;
+    const options = runOptions(profile);
+    this.session = new SoloSession({ id: SELF, name: playerName(), crew: this.crew }, seed, {
+      ...options,
       lengthFactor: SHORT_ROUTE ? 0.1 : 1,
-      startScrap: RICH_START ? 999 : undefined,
+      startScrap: RICH_START ? 999 : options.startScrap,
     });
 
     this.ground = new GroundView(this);
@@ -161,8 +181,8 @@ export class GameScene extends Phaser.Scene {
     this.warnings = new WarningView(this);
     this.ladderArrow = this.add.image(0, 0, TEX.arrow).setDepth(DEPTH.effects).setVisible(false);
 
-    this.hud = new Hud(this, "schrauber");
-    this.ability = new AbilityButton(this, "schrauber");
+    this.hud = new Hud(this, this.crew);
+    this.ability = new AbilityButton(this, this.crew);
     this.rest = new RestPanel(
       this,
       () => this.openBuild(),
@@ -367,6 +387,25 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Die zwei Drohnen der Funkerin kreisen ueber ihr. */
+  private placeDrones(p: PlayerState, time: number): void {
+    if (!CREW[p.crew].drones) {
+      return;
+    }
+    let pair = this.drones.get(p.id);
+    if (!pair) {
+      pair = [0, 1].map(() => this.add.image(0, 0, TEX.drone));
+      this.drones.set(p.id, pair);
+    }
+    pair.forEach((drone, i) => {
+      const a = time * 2.4 + i * Math.PI;
+      drone
+        .setVisible(p.alive)
+        .setPosition(p.x + Math.cos(a) * 20, p.y - p.z - 50 + Math.sin(a * 2) * 3)
+        .setDepth(depthFor(p.y + Math.sin(a) * 4, p.z, 0) + 0.001);
+    });
+  }
+
   private destroyBody(b: Body): void {
     b.sprite.destroy();
     b.shadow.destroy();
@@ -384,6 +423,7 @@ export class GameScene extends Phaser.Scene {
       }
       b.sprite.setVisible(p.alive);
       b.shadow.setVisible(p.alive);
+      this.placeDrones(p, state.time);
       if (!p.alive) {
         b.ghost.setVisible(false);
         continue;
@@ -509,7 +549,10 @@ export class GameScene extends Phaser.Scene {
         };
         this.shells.set(shell.id, view);
       }
-      const u = Math.min(1, shell.t / shell.duration);
+      // Verzoegerte Granaten (Breitseite, Luftschlag) sind noch nicht unterwegs.
+      view.shell.setVisible(shell.t >= 0);
+      view.shadow.setVisible(shell.t >= 0);
+      const u = Math.max(0, Math.min(1, shell.t / shell.duration));
       const x = shell.x0 + (shell.x1 - shell.x0) * u;
       const y = shell.y0 + (shell.y1 - shell.y0) * u;
       const z = shell.z0 * (1 - u) + Math.sin(u * Math.PI) * 110;
@@ -539,6 +582,13 @@ export class GameScene extends Phaser.Scene {
     }
     this.rope.clear();
     for (const p of state.players) {
+      if (p.transition?.kind === "hook") {
+        // Enterhaken: Seil von der Deckkante zum Mech.
+        const hx = f.x + p.transition.to.x;
+        const hy = f.y + p.transition.to.y - ELEVATION;
+        this.rope.lineStyle(3, 0x120f1e, 1).lineBetween(hx, hy, p.x, p.y - p.z - 30);
+        this.rope.lineStyle(1, 0x5ef2e6, 1).lineBetween(hx, hy, p.x, p.y - p.z - 30);
+      }
       if (p.transition?.kind === "winch") {
         const ax = f.x + WINCH_LANDING.x;
         const ay = f.y + WINCH_LANDING.y - ELEVATION - 18;
@@ -626,8 +676,49 @@ export class GameScene extends Phaser.Scene {
         break;
       case "jump":
       case "climb":
+      case "hook":
+      case "leap":
         audio.play("swing");
         break;
+      case "impact":
+        this.explosion(event.x, event.y, event.radius);
+        this.cameras.main.shake(120, 0.005);
+        break;
+      case "melee": {
+        // Hammerschlag: kurzer heller Bogen vor dem Mech.
+        const arc = this.add
+          .arc(event.x, event.y, 22, -70, 70, false)
+          .setStrokeStyle(3, 0xd0fff8, 0.9)
+          .setDepth(DEPTH.effects);
+        const p = state.players.find((x) => x.id === event.id);
+        if (p && p.facing < 0) {
+          arc.setAngle(180);
+        }
+        this.tweens.add({
+          targets: arc,
+          alpha: 0,
+          scale: 1.4,
+          duration: 160,
+          onComplete: () => arc.destroy(),
+        });
+        audio.play("hit");
+        break;
+      }
+      case "part": {
+        const p = state.players.find((x) => x.id === event.player);
+        if (p) {
+          const name = PARTS[event.part].name;
+          this.floatText(
+            event.level > 1 ? `${name} Stufe ${event.level}` : `Neues Teil: ${name}`,
+            p.x,
+            p.y - p.z - 70,
+            T.cyan,
+            16,
+          );
+        }
+        audio.play("superReady");
+        break;
+      }
       case "winch":
         audio.play("swing");
         if (event.id === this.session.selfId) {
@@ -1061,7 +1152,7 @@ export class GameScene extends Phaser.Scene {
       height: 52,
       fontSize: 22,
     });
-    const quit = new Button(this, w / 2, h / 2 + 68, "AUFGEBEN", () => this.scene.start("Title"), {
+    const quit = new Button(this, w / 2, h / 2 + 68, "AUFGEBEN", () => this.giveUp(), {
       width: 220,
       height: 44,
       fontSize: 18,
@@ -1080,13 +1171,28 @@ export class GameScene extends Phaser.Scene {
     ];
   }
 
-  private finish(state: GameState): void {
+  /** Aufgeben: Der Lauf zaehlt wie verloren (Altgold fuer den Weg bis hier gibt es trotzdem). */
+  private giveUp(): void {
+    this.setPaused(false);
+    this.finish(this.session.state, 0);
+  }
+
+  private finish(state: GameState, delay = 2600): void {
     this.ending = true;
     this.stick.release();
     this.stick.enabled = false;
     const self = state.players.find((p) => p.id === this.session.selfId);
+    // Fortschritt eintragen: Altgold, Erfolge, Hitze.
+    const profile = loadProfile();
+    const reward = applyRun(profile, summarize(state, this.crew));
+    saveProfile(profile);
     const result: GameResult = {
       won: state.phase === "won",
+      crew: this.crew,
+      heat: state.heat,
+      altgold: reward.altgold,
+      achievements: reward.achievements.map((a) => a.name),
+      heatUnlocked: reward.heatUnlocked,
       marches: state.path.length - 1,
       count: state.map.layers - 1,
       kills: state.kills,
@@ -1094,6 +1200,6 @@ export class GameScene extends Phaser.Scene {
       seconds: Math.round(state.time),
       hull: Math.round(state.fort.hull),
     };
-    this.time.delayedCall(2600, () => this.scene.start("Result", result));
+    this.time.delayedCall(delay, () => this.scene.start("Result", result));
   }
 }

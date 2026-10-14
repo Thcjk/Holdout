@@ -130,7 +130,7 @@ export function marchFor(
     rate *= 0.7;
   }
   // Spaeter im Akt deutlich zaeher: Die Festung ist dann ja auch voll ausgebaut.
-  let hp = 1 + 0.25 * (depth - 1) + 0.06 * (depth - 1) ** 2 + spec.hpBonus;
+  let hp = 1 + 0.25 * (depth - 1) + 0.05 * (depth - 1) ** 2 + spec.hpBonus;
   if (horde) {
     rate *= 1.5;
     hp *= 1.2;

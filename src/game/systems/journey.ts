@@ -12,9 +12,11 @@ import { LEAD_AFTER_HORDE, LEAD_MAX, NODES } from "../data/acts";
 import { EVENTS, affordable } from "../data/events";
 import { moduleHp } from "../data/modules";
 import { BLIND_SPOT, insideRect } from "../fortress";
-import type { ChestState, MapNode, MarchState } from "../types";
-import { clamp, type World } from "../world";
+import { PART_IDS, PARTS } from "../data/parts";
+import type { ChestState, MapNode, MarchState, PartId, PlayerState } from "../types";
+import { clamp, earn, type World } from "../world";
 import { repairAllModules, rollOffer } from "./modules";
+import { equipPart } from "./players";
 
 /** So lange dauert das Pluendern einer Ruine. */
 export const LOOT_TIME = 20;
@@ -26,6 +28,31 @@ export const OASIS_REPAIR = 150;
 export const STORM_BONUS = 25;
 /** Haendler: so viele Module im Angebot. */
 export const TRADER_OFFER = 6;
+/** So viele Truhen stehen in einer Ruine, und so oft liegt ein Teil darin. */
+export const CHEST_COUNT = 5;
+export const PART_CHANCE = 0.35;
+
+/** Hitze: ab Stufe 6 weniger Truhen. */
+function chestBonus(heat: number): number {
+  return heat >= 6 ? -2 : 0;
+}
+
+/** Zufaellige verschiedene Teile; fuer einen Mech bevorzugt solche, die er schon hat (werden besser). */
+function pickParts(w: World, count: number, owner?: PlayerState): PartId[] {
+  const pool = [...PART_IDS];
+  const result: PartId[] = [];
+  while (result.length < count && pool.length > 0) {
+    const index = Math.floor(w.rng() * pool.length);
+    result.push(pool.splice(index, 1)[0]!);
+  }
+  if (owner && w.rng() < 0.3) {
+    const own = owner.parts.arm?.id ?? owner.parts.back?.id;
+    if (own && (owner.parts[PARTS[own].slot]?.level ?? 3) < 3) {
+      result[0] = own;
+    }
+  }
+  return result;
+}
 
 /** Marsch-Zustand fuer den Weg zu dieser Station. */
 export function marchTo(w: World, node: MapNode, horde: boolean): MarchState {
@@ -111,6 +138,9 @@ export function arrive(w: World): void {
   s.path.push(node.id);
   s.fort.slow = 0;
   s.restAt = node.name;
+  if (s.march.horde) {
+    s.stats.hordes += 1;
+  }
   if (node.type === "boss" || node.next.length === 0) {
     clearField(w);
     s.phase = "won";
@@ -146,7 +176,8 @@ function toRest(w: World): void {
   s.loot = null;
   s.chests = [];
   // Fundstuecke an der Station, alles wird heil, und ein neues Angebot.
-  s.bank += STATION_BONUS;
+  earn(s, STATION_BONUS);
+  s.partOffer = [];
   repairAllModules(w);
   s.rerolls = 0;
   s.offer = rollOffer(w, w.modulePool(), node.type === "haendler" ? TRADER_OFFER : OFFER_SIZE);
@@ -162,8 +193,12 @@ function toRest(w: World): void {
       w.emit({ kind: "repair", amount: s.fort.hull - before });
       break;
     }
+    case "haendler":
+      // Dazu zwei Teile fuer die Mechs.
+      s.partOffer = pickParts(w, 2).map((id) => ({ id, cost: PARTS[id].cost }));
+      break;
     case "sturm":
-      s.bank += STORM_BONUS;
+      earn(s, STORM_BONUS);
       w.emit({ kind: "bonus", text: `+${STORM_BONUS} Schrott aus dem Sturm` });
       break;
     case "ereignis": {
@@ -185,7 +220,7 @@ function makeChests(w: World, depth: number): ChestState[] {
   const s = w.state;
   const f = s.fort;
   const chests: ChestState[] = [];
-  const count = 5;
+  const count = Math.max(2, CHEST_COUNT + chestBonus(s.heat));
   for (let i = 0; i < count; i += 1) {
     // Rund um die Festung verteilt, nie unter dem Deck.
     let x = 0;
@@ -221,17 +256,17 @@ export function updateLoot(w: World): void {
     if (chest.opened) {
       continue;
     }
-    const near = s.players.some(
+    const opener = s.players.find(
       (p) =>
         p.alive &&
         p.layer === "ground" &&
         !p.transition &&
         Math.hypot(p.x - chest.x, p.y - chest.y) < CHEST_REACH,
     );
-    if (near) {
+    if (opener) {
       chest.progress = Math.min(1, chest.progress + TICK / CHEST_TIME);
       if (chest.progress >= 1) {
-        openChest(w, chest);
+        openChest(w, chest, opener);
       }
     }
   }
@@ -241,9 +276,19 @@ export function updateLoot(w: World): void {
   }
 }
 
-function openChest(w: World, chest: ChestState): void {
+function openChest(w: World, chest: ChestState, opener: PlayerState | undefined): void {
   const s = w.state;
   chest.opened = true;
+  s.stats.chests += 1;
+  // Manchmal liegt ein Teil fuer den Mech darin (dann weniger Schrott).
+  let value = chest.value;
+  if (opener && w.rng() < PART_CHANCE) {
+    const part = pickParts(w, 1, opener)[0];
+    if (part) {
+      equipPart(w, opener, part);
+      value = Math.round(value / 2);
+    }
+  }
   // Der Inhalt springt heraus und muss noch aufgesammelt werden.
   const pieces = 3;
   for (let i = 0; i < pieces; i += 1) {
@@ -253,10 +298,10 @@ function openChest(w: World, chest: ChestState): void {
       x: chest.x + Math.cos(angle) * 16,
       y: chest.y + Math.sin(angle) * 10 + 6,
       z: 0,
-      value: Math.ceil(chest.value / pieces),
+      value: Math.ceil(value / pieces),
     });
   }
-  w.emit({ kind: "chest", x: chest.x, y: chest.y, value: chest.value });
+  w.emit({ kind: "chest", x: chest.x, y: chest.y, value });
 }
 
 // --- Ereignisse --------------------------------------------------------------------------------------
@@ -270,7 +315,10 @@ export function choose(w: World, option: number): void {
   }
   const effect = choice.effect;
   s.event = null;
-  if (effect.scrap) {
+  s.stats.events += 1;
+  if (effect.scrap && effect.scrap > 0) {
+    earn(s, effect.scrap);
+  } else if (effect.scrap) {
     s.bank = Math.max(0, s.bank + effect.scrap);
   }
   if (effect.hullMax) {

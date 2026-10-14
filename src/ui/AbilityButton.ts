@@ -11,6 +11,7 @@
 import Phaser from "phaser";
 import { SAFE, VIEWPORT } from "../config/constants";
 import { CREW } from "../game/data/crew";
+import { statsOf } from "../game/systems/players";
 import type { PlayerState } from "../game/types";
 import { crewKey } from "./pixel/textures";
 import { C, FONT_BODY, FONT_TITLE, T } from "./theme";
@@ -80,7 +81,7 @@ export class AbilityButton {
     const y = this.hit.y;
     const g = this.ring;
     g.clear();
-    const cooldown = CREW[this.crew].ability.cooldown;
+    const cooldown = self ? statsOf(self).abilityCooldown : CREW[this.crew].ability.cooldown;
     const left = self ? self.abilityCd : cooldown;
     const ready = !!self && self.alive && left <= 0;
     const pulse = ready ? 2 + Math.sin(this.time * 6) * 2 : 0;

@@ -24,6 +24,12 @@ export interface World {
   modulePool(): readonly ModuleId[];
 }
 
+/** Schrott in die gemeinsame Kasse (und fuer die Lauf-Statistik zaehlen). */
+export function earn(state: GameState, amount: number): void {
+  state.bank += amount;
+  state.stats.scrapEarned += amount;
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }

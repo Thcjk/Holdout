@@ -51,7 +51,7 @@ import {
   updateModules,
   upgrade,
 } from "./systems/modules";
-import { newPlayer, updatePlayer } from "./systems/players";
+import { equipPart, newPlayer, updatePlayer } from "./systems/players";
 import type {
   Command,
   GameEvent,
@@ -74,6 +74,30 @@ export interface SimulationOptions {
   startScrap?: number;
   /** Maersche kuerzer machen (`?debug=kurz`: 0,1). */
   lengthFactor?: number;
+  /** Module, die im Angebot auftauchen koennen (Bauplaene aus der Werft). */
+  modulePool?: readonly ModuleId[];
+  /** Werft-Verbesserungen: mehr Rumpf, mehr Vorsprung zum Start. */
+  hullBonus?: number;
+  leadBonus?: number;
+  /** Hitze-Stufe 0 bis 10: zaehere und mehr Gegner, weniger Vorsprung. */
+  heat?: number;
+}
+
+/** Was die Hitze-Stufe aendert (alles waechst mit der Stufe). */
+export function heatEffects(heat: number): {
+  hp: number;
+  rate: number;
+  lead: number;
+  chests: number;
+  startScrap: number;
+} {
+  return {
+    hp: 1 + 0.08 * heat,
+    rate: 1 + 0.05 * heat,
+    lead: heat >= 3 ? -1 : 0,
+    chests: heat >= 6 ? -2 : 0,
+    startScrap: heat >= 9 ? -20 : 0,
+  };
 }
 
 export class Simulation implements World {
@@ -88,11 +112,17 @@ export class Simulation implements World {
   private ticking = false;
   private readonly route: readonly MarchSpec[] | null;
   private readonly lengthFactor: number;
+  private readonly pool: readonly ModuleId[];
 
   constructor(setups: readonly PlayerSetup[], seed: number, options: SimulationOptions = {}) {
     this.rng = createRng(seed);
     this.route = options.route ?? null;
     this.lengthFactor = options.lengthFactor ?? 1;
+    this.pool =
+      options.modulePool && options.modulePool.length >= 4 ? options.modulePool : MODULE_IDS;
+    const heat = options.heat ?? 0;
+    const effects = heatEffects(heat);
+    const hull = HULL_MAX + (options.hullBonus ?? 0);
     if (this.route && this.route.length === 0) {
       throw new Error("Die Route braucht mindestens einen Marsch.");
     }
@@ -117,7 +147,7 @@ export class Simulation implements World {
       map,
       at: 0,
       path: [0],
-      lead: LEAD_START,
+      lead: Math.max(1, LEAD_START + (options.leadBonus ?? 0) + effects.lead),
       event: null,
       seenEvents: [],
       loot: null,
@@ -125,14 +155,17 @@ export class Simulation implements World {
       fort: {
         x: 0,
         y: 0,
-        hull: HULL_MAX,
-        hullMax: HULL_MAX,
+        hull,
+        hullMax: hull,
         gait: 0,
         moving: false,
         speed: 1,
         slow: 0,
-        baseHull: HULL_MAX,
+        baseHull: hull,
       },
+      partOffer: [],
+      stats: { chests: 0, hordes: 0, scrapEarned: 0, winches: 0, bossKills: 0, events: 0 },
+      heat,
       players: setups.map((setup, index) => newPlayer(setup, index)),
       enemies: [],
       shots: [],
@@ -143,7 +176,7 @@ export class Simulation implements World {
       warnings: [],
       offer: [],
       rerolls: 0,
-      bank: options.startScrap ?? START_SCRAP,
+      bank: Math.max(0, (options.startScrap ?? START_SCRAP) + effects.startScrap),
       kills: 0,
       nextId: 1,
     };
@@ -171,11 +204,18 @@ export class Simulation implements World {
       node.route !== undefined && this.route
         ? this.route[node.route]!
         : marchFor(this.state.map.act, node.type, node.layer, node.name, horde);
-    return { ...spec, length: Math.max(1, Math.round(spec.length * this.lengthFactor)) };
+    const heat = heatEffects(this.state.heat);
+    return {
+      ...spec,
+      length: Math.max(1, Math.round(spec.length * this.lengthFactor)),
+      hp: spec.hp * heat.hp,
+      spawnStart: spec.spawnStart * heat.rate,
+      spawnEnd: spec.spawnEnd * heat.rate,
+    };
   }
 
   modulePool(): readonly ModuleId[] {
-    return MODULE_IDS;
+    return this.pool;
   }
 
   refreshFortress(): void {
@@ -205,7 +245,7 @@ export class Simulation implements World {
 
   // --- Befehle aus der Rast --------------------------------------------------------------------
 
-  command(_playerId: string, command: Command): void {
+  command(playerId: string, command: Command): void {
     const s = this.state;
     if (s.phase !== "rest") {
       return;
@@ -234,6 +274,16 @@ export class Simulation implements World {
       case "sell":
         sell(this, command.uid);
         return;
+      case "buyPart": {
+        const offer = s.partOffer[command.index];
+        const buyer = s.players.find((p) => p.id === playerId) ?? s.players[0];
+        if (offer && buyer && s.bank >= offer.cost) {
+          s.bank -= offer.cost;
+          s.partOffer.splice(command.index, 1);
+          equipPart(this, buyer, offer.id);
+        }
+        return;
+      }
       case "reroll": {
         const cost = rerollCost(s);
         if (s.bank >= cost) {
