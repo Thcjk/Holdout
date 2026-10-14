@@ -8,7 +8,7 @@
 
 import type { MarchSpec } from "./data/route";
 import type { Rng } from "./rng";
-import type { GameEvent, GameState } from "./types";
+import type { GameEvent, GameState, MapNode, ModuleId } from "./types";
 
 export interface World {
   readonly state: GameState;
@@ -18,6 +18,10 @@ export interface World {
   march(): MarchSpec | undefined;
   /** Tempo und Rumpf-Hoechstwert neu aus den (heilen) Modulen berechnen. */
   refreshFortress(): void;
+  /** Werte des Marschs zu dieser Station (`horde`: die Armee hat aufgeholt). */
+  specFor(node: MapNode, horde: boolean): MarchSpec;
+  /** Welche Module im Angebot auftauchen koennen. */
+  modulePool(): readonly ModuleId[];
 }
 
 export function clamp(value: number, min: number, max: number): number {

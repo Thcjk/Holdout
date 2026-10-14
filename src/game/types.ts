@@ -46,8 +46,11 @@ export type ModuleId =
 /** Aus welcher Richtung ein Trupp kommt (hinten = links, vorn = rechts in Laufrichtung). */
 export type Side = "hinten" | "vorn" | "oben" | "unten";
 export type Layer = "deck" | "ground";
-/** Marsch = die Welle, Rast = Pause an einer Station. */
-export type Phase = "march" | "rest" | "won" | "lost";
+/** Marsch = unterwegs, Pluendern = in einer Ruine (die Festung steht), Rast = Pause an einer Station. */
+export type Phase = "march" | "loot" | "rest" | "won" | "lost";
+/** Arten von Stationen auf der Routenkarte. `station` = fester Probelauf ohne Besonderheit. */
+export type NodeType =
+  "start" | "ruine" | "oase" | "haendler" | "schrott" | "sturm" | "ereignis" | "boss" | "station";
 
 /** Was ein Spieler pro Bild schickt. */
 export interface PlayerInput {
@@ -242,6 +245,8 @@ export interface FortState {
   speed: number;
   /** Sekunden, die sie noch gebremst ist (Streitwagen hat ein Bein gerammt). */
   slow: number;
+  /** Rumpf ohne Panzerplatten (Ereignisse und Werft machen ihn groesser). */
+  baseHull: number;
 }
 
 export interface MarchState {
@@ -255,6 +260,50 @@ export interface MarchState {
   spawnTimer: number;
   /** Endgegner: keiner, kommt noch, ist da, besiegt. */
   boss: "none" | "waiting" | "alive" | "down";
+  /** Zielstation auf der Karte. */
+  node: number;
+  /** Die Armee hat aufgeholt: viel mehr Gegner. */
+  horde: boolean;
+  /** Sandsturm: man sieht wenig, es kommen weniger. */
+  storm: boolean;
+}
+
+/** Eine Station auf der Routenkarte eines Akts. */
+export interface MapNode {
+  id: number;
+  /** Spalte: 0 = Start, die letzte = Endgegner. */
+  layer: number;
+  /** Lage in der Spalte, 0 (oben) bis 1 (unten). */
+  y: number;
+  type: NodeType;
+  name: string;
+  /** Wohin es von hier weitergeht. */
+  next: number[];
+  /** Fester Probelauf: Nummer des Marschs in der Route. */
+  route?: number;
+}
+
+export interface ActMap {
+  act: number;
+  name: string;
+  layers: number;
+  nodes: MapNode[];
+}
+
+/** Truhe in einer Ruine: daneben stehen oeffnet sie. */
+export interface ChestState {
+  id: number;
+  x: number;
+  y: number;
+  /** 0 bis 1 - bei 1 springt sie auf. */
+  progress: number;
+  value: number;
+  opened: boolean;
+}
+
+/** Ein Ereignis an der Station wartet auf eine Entscheidung. */
+export interface EventState {
+  id: string;
 }
 
 export interface GameState {
@@ -264,6 +313,20 @@ export interface GameState {
   restAt: string;
   /** Die naechste bzw. laufende Etappe. */
   march: MarchState;
+  /** Routenkarte des Akts und wo die Festung steht. */
+  map: ActMap;
+  at: number;
+  /** Besuchte Stationen der Reihe nach. */
+  path: number[];
+  /** Vorsprung vor der Armee (0 = eingeholt, dann kommt eine Heerschar). */
+  lead: number;
+  /** Ereignis, das auf eine Wahl wartet. */
+  event: EventState | null;
+  /** Schon gesehene Ereignisse (keins doppelt pro Lauf). */
+  seenEvents: string[];
+  /** Pluendern in der Ruine: Restzeit. */
+  loot: { timer: number; duration: number } | null;
+  chests: ChestState[];
   fort: FortState;
   players: PlayerState[];
   enemies: EnemyState[];
@@ -312,12 +375,19 @@ export type GameEvent =
   | { kind: "ballista"; x: number; y: number }
   | { kind: "moduleHit" | "moduleBroken"; uid: number }
   | { kind: "boss" | "bossDown"; type: EnemyType }
+  | { kind: "chest"; x: number; y: number; value: number }
+  | { kind: "horde" }
+  | { kind: "lead"; amount: number }
+  | { kind: "loot" }
+  | { kind: "bonus"; text: string }
+  | { kind: "choice"; text: string }
   | { kind: "won" | "lost" };
 
 /** Befehle aus der Rast. */
 export type Command =
   | { kind: "repair" }
-  | { kind: "depart" }
+  | { kind: "depart"; node?: number }
+  | { kind: "choose"; option: number }
   | { kind: "build"; module: ModuleId; col: number; row: number }
   | { kind: "upgrade"; uid: number }
   | { kind: "sell"; uid: number }

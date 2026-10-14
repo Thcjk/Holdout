@@ -94,7 +94,10 @@ export function spawn(w: World): void {
   }
   // Solange der Endgegner da ist, schickt die Armee weniger Trupps hinterher.
   const bossFactor = s.march.boss === "alive" ? 0.5 : 1;
-  const rate = (spec.spawnStart + (spec.spawnEnd - spec.spawnStart) * progress) * bossFactor;
+  // Beim Pluendern steht die Festung - die Armee kommt etwas gemaechlicher.
+  const lootFactor = s.phase === "loot" ? 0.4 : 1;
+  const rate =
+    (spec.spawnStart + (spec.spawnEnd - spec.spawnStart) * progress) * bossFactor * lootFactor;
   if (rate <= 0) {
     s.march.spawnTimer = 1;
     return;

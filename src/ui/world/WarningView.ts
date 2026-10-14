@@ -42,7 +42,9 @@ export class WarningView {
     const seen = new Set<number>();
     const w = VIEWPORT.width;
     const h = VIEWPORT.height;
-    for (const warning of state.warnings) {
+    // Im Sandsturm sieht man nicht, woher sie kommen.
+    const warnings = state.march.storm ? [] : state.warnings;
+    for (const warning of warnings) {
       seen.add(warning.id);
       let marker = this.markers.get(warning.id);
       if (!marker) {

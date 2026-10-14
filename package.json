@@ -1,6 +1,6 @@
 {
   "name": "holdout",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "private": true,
   "description": "Holdout – Die Wanderfestung: Mechs verteidigen eine laufende Festung (Phaser 3 + TypeScript + Vite)",
   "type": "module",

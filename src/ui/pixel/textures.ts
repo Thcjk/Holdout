@@ -11,6 +11,7 @@ import { CREW_IDS } from "../../game/data/crew";
 import { MODULE_IDS } from "../../game/data/modules";
 import { FIXED_MODULES, legPose } from "../../game/fortress";
 import { ARMY, paintArmy } from "./armee";
+import { paintChest, paintFortIcon, paintNodeIcon } from "./karte";
 import { paintCrew } from "./crew";
 import { paintFortressBody, paintLeg, paintModule } from "./festung";
 import { GOLD, OUTLINE, STEEL } from "./palette";
@@ -44,6 +45,10 @@ export const TEX = {
   pip: "level-pip",
   warning: "warning",
   ballistaBolt: "ballista-bolt",
+  fortIcon: "fort-icon",
+  chest: "chest",
+  chestOpen: "chest-open",
+  fog: "fog",
 } as const;
 
 export const crewKey = (id: string): string => `crew-${id}`;
@@ -51,6 +56,7 @@ export const armyKey = (id: string): string => `army-${id}`;
 export const moduleKey = (id: string): string => `module-${id}`;
 export const legKey = (side: "l" | "r", frame: number): string => `leg-${side}-${frame}`;
 export const scrapKey = (kind: number): string => `scrap-${kind}`;
+export const nodeKey = (type: string): string => `node-${type}`;
 
 function add(scene: Phaser.Scene, key: string, pix: Pix): void {
   if (scene.textures.exists(key)) {
@@ -103,6 +109,32 @@ function blob(size: number, color: string, alpha: number): Pix {
     .padStart(2, "0");
   p.fill(ellipse(c, c, c - 0.5, c - 0.5), color + hex);
   return p;
+}
+
+/**
+ * Sandsturm: Bild mit klarem Fleck in der Mitte und dichtem Sand am Rand.
+ * Wird ueber den Bildschirm gelegt und auf die Festung ausgerichtet.
+ */
+function addFog(scene: Phaser.Scene): void {
+  if (scene.textures.exists(TEX.fog)) {
+    scene.textures.remove(TEX.fog);
+  }
+  const w = 480;
+  const h = 270;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const g = canvas.getContext("2d");
+  if (!g) {
+    return;
+  }
+  const gradient = g.createRadialGradient(w / 2, h / 2, 30, w / 2, h / 2, 170);
+  gradient.addColorStop(0, "rgba(120, 88, 66, 0)");
+  gradient.addColorStop(0.35, "rgba(120, 88, 66, 0.5)");
+  gradient.addColorStop(1, "rgba(104, 74, 56, 0.97)");
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, w, h);
+  scene.textures.addCanvas(TEX.fog, canvas);
 }
 
 export function createPixelTextures(scene: Phaser.Scene): void {
@@ -219,6 +251,25 @@ export function createPixelTextures(scene: Phaser.Scene): void {
   });
   warning.outline(OUTLINE);
   add(scene, TEX.warning, warning);
+
+  // Routenkarte und Ruinen
+  for (const type of [
+    "start",
+    "ruine",
+    "oase",
+    "haendler",
+    "schrott",
+    "sturm",
+    "ereignis",
+    "boss",
+    "station",
+  ] as const) {
+    add(scene, nodeKey(type), paintNodeIcon(type));
+  }
+  add(scene, TEX.fortIcon, paintFortIcon());
+  add(scene, TEX.chest, paintChest(false));
+  add(scene, TEX.chestOpen, paintChest(true));
+  addFog(scene);
 
   const arrow = new Pix(15, 12, 1);
   arrow.shape(

@@ -9,6 +9,7 @@
 import Phaser from "phaser";
 import { SAFE, VIEWPORT } from "../config/constants";
 import { CREW } from "../game/data/crew";
+import { LEAD_MAX } from "../game/data/acts";
 import { ENEMIES } from "../game/data/enemies";
 import type { GameState, PlayerState } from "../game/types";
 import { BOX, ComicBox } from "./ComicBox";
@@ -35,6 +36,7 @@ export class Hud {
   private readonly bars: Phaser.GameObjects.Graphics;
   /** Name des Endgegners ueber seinem Lebensbalken. */
   private readonly bossName: Phaser.GameObjects.Text;
+  private readonly leadLabel: Phaser.GameObjects.Text;
   private hullFlash = 0;
   private lastHull = -1;
 
@@ -53,7 +55,7 @@ export class Hud {
     };
     this.leftPanel = new ComicBox(scene, BOX.panel, 0, 0, LEFT_W, 60);
     this.centerPanel = new ComicBox(scene, BOX.panel, 0, 0, CENTER_W, 78);
-    this.scrapPanel = new ComicBox(scene, BOX.panel, 0, 0, SCRAP_W, 48);
+    this.scrapPanel = new ComicBox(scene, BOX.panel, 0, 0, SCRAP_W, 74);
     for (const panel of [this.leftPanel, this.centerPanel, this.scrapPanel]) {
       panel.container.setScrollFactor(0);
       panel.setDepth(DEPTH.hud);
@@ -78,6 +80,7 @@ export class Hud {
     this.scrapText = text(30, "#e6eaf2", FONT_TITLE).setOrigin(1, 0.5);
     this.bars = fixed(scene.add.graphics(), DEPTH.hud + 0.5);
     this.bossName = text(16, "#ff8a6a", FONT_TITLE).setOrigin(0.5, 0.5).setVisible(false);
+    this.leadLabel = text(11, T.muted).setText("VORSPRUNG").setOrigin(0, 0.5);
     this.layout();
   }
 
@@ -95,7 +98,7 @@ export class Hud {
     this.hullText.setPosition(w / 2, top + 41);
     this.bossName.setPosition(w / 2, top + 90);
     const right = w - SAFE.right - 10 - 54;
-    this.scrapPanel.setPosition(right - SCRAP_W / 2, top + 24);
+    this.scrapPanel.setPosition(right - SCRAP_W / 2, top + 37);
     this.scrapIcon.setPosition(right - SCRAP_W + 24, top + 24);
     this.scrapText.setPosition(right - 14, top + 23);
   }
@@ -127,11 +130,17 @@ export class Hud {
 
     // Etappe, Rumpf, Fortschritt
     const m = state.march;
-    const where =
-      state.phase === "rest"
-        ? `RAST · ${state.restAt.toUpperCase()}`
-        : `ETAPPE ${m.index + 1} / ${m.count} · ZUR ${m.station.toUpperCase()}`;
-    this.title.setText(where);
+    let where = `ETAPPE ${m.index + 1} / ${m.count} · ${m.station.toUpperCase()}`;
+    if (state.phase === "rest") {
+      where = `RAST · ${state.restAt.toUpperCase()}`;
+    } else if (state.phase === "loot" && state.loot) {
+      where = `PLÜNDERN · ${Math.ceil(state.loot.timer)} s`;
+    } else if (m.horde) {
+      where = `HEERSCHAR! · ${m.station.toUpperCase()}`;
+    } else if (m.storm) {
+      where = `STURM · ${m.station.toUpperCase()}`;
+    }
+    this.title.setText(where).setColor(m.horde && state.phase === "march" ? T.bad : T.gold);
     const hull = state.fort.hull;
     if (this.lastHull >= 0 && hull < this.lastHull) {
       this.hullFlash = 0.25;
@@ -141,7 +150,10 @@ export class Hud {
     const hullColor = this.hullFlash > 0 ? 0xffffff : 0xe8822e;
     this.bar(g, w / 2 - 170, top + 32, 340, 18, hull / state.fort.hullMax, hullColor, 0xffc070);
     this.hullText.setText(`RUMPF ${Math.ceil(hull)} / ${state.fort.hullMax}`);
-    const progress = Math.min(1, m.done / m.length);
+    const progress =
+      state.phase === "loot" && state.loot
+        ? 1 - state.loot.timer / state.loot.duration
+        : Math.min(1, m.done / m.length);
     g.fillStyle(0x120f1e, 1).fillRect(w / 2 - 170, top + 56, 340, 8);
     g.fillStyle(0x3a3f6e, 1).fillRect(w / 2 - 168, top + 58, 336, 4);
     g.fillStyle(0x5ef2e6, 1).fillRect(w / 2 - 168, top + 58, Math.round(336 * progress), 4);
@@ -155,6 +167,15 @@ export class Hud {
     if (boss) {
       this.bossName.setText(ENEMIES.koloss.name.toUpperCase());
       this.bar(g, w / 2 - 150, top + 100, 300, 12, boss.hp / boss.hpMax, 0xd8a020, 0xfff2a0);
+    }
+
+    // Vorsprung vor der Armee: Punkte unter dem Schrott
+    const right = w - SAFE.right - 10 - 54;
+    this.leadLabel.setPosition(right - SCRAP_W + 6, top + 60);
+    for (let i = 0; i < LEAD_MAX; i += 1) {
+      const x = right - SCRAP_W + 84 + i * 13;
+      g.fillStyle(0x120f1e, 1).fillRect(x - 1, top + 54, 11, 11);
+      g.fillStyle(i < state.lead ? 0x5ef2e6 : 0x2a2636, 1).fillRect(x, top + 55, 9, 9);
     }
 
     // Schrott

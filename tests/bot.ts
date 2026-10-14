@@ -22,7 +22,9 @@ import { MODULES, upgradeCost } from "../src/game/data/modules";
 import { canPlace, generatorBonus, moduleCenter } from "../src/game/deck";
 import { BLIND_SPOT, insideRect } from "../src/game/fortress";
 import { Simulation } from "../src/game/Simulation";
-import type { GameEvent, GameState, ModuleId, PlayerInput } from "../src/game/types";
+import { NODES } from "../src/game/data/acts";
+import { EVENTS } from "../src/game/data/events";
+import type { GameEvent, GameState, ModuleId, NodeType, PlayerInput } from "../src/game/types";
 
 export type BotStyle = "deck" | "klug";
 
@@ -50,6 +52,9 @@ function decide(state: GameState, style: BotStyle, memory: { downSince: number }
   const f = state.fort;
   if (!p.alive || p.transition || style === "deck") {
     return { mx: 0, my: 0 };
+  }
+  if (state.phase === "loot") {
+    return plunder(state, memory);
   }
   const belly = state.enemies.filter(
     (e) => e.layer === "ground" && insideRect(BLIND_SPOT, e.x - f.x, e.y - f.y),
@@ -93,6 +98,69 @@ function decide(state: GameState, style: BotStyle, memory: { downSince: number }
     return toward(p.x, p.y, piece.x, piece.y);
   }
   return toward(p.x, p.y, f.x + 140, f.y + DECK_H + 60);
+}
+
+/** In der Ruine: runter, zu den Truhen, Schrott einsammeln. */
+function plunder(state: GameState, memory: { downSince: number }): PlayerInput {
+  const p = state.players[0]!;
+  const f = state.fort;
+  if (p.layer === "deck") {
+    memory.downSince = state.time;
+    return toward(p.x, p.y, f.x + 150, f.y + DECK_H + 20);
+  }
+  const chest = state.chests
+    .filter((c) => !c.opened)
+    .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+  if (chest && p.hp > p.hpMax * 0.35) {
+    return toward(p.x, p.y, chest.x, chest.y);
+  }
+  const piece = state.scrap
+    .filter((s) => s.z <= 0)
+    .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+  if (piece && p.hp > p.hpMax * 0.35) {
+    return toward(p.x, p.y, piece.x, piece.y);
+  }
+  return toward(p.x, p.y, f.x + (LADDER.x0 + LADDER.x1) / 2, f.y + LADDER_TOP.y - 4);
+}
+
+/** Naechste Station: bei wenig Rumpf zur Oase, mit Vorsprung gern pluendern. */
+function chooseNode(state: GameState): number | undefined {
+  const here = state.map.nodes[state.at]!;
+  const options = here.next.map((id) => state.map.nodes[id]!);
+  const hull = state.fort.hull / state.fort.hullMax;
+  const score = (type: NodeType): number => {
+    const lead = NODES[type].lead;
+    let value = 0;
+    if (type === "oase") value += hull < 0.6 ? 6 : 1;
+    if (type === "ruine" || type === "schrott") value += 3;
+    if (type === "haendler") value += 2.5;
+    if (type === "ereignis") value += 2;
+    if (type === "sturm") value += 1.5;
+    // Vorsprung nicht verspielen.
+    if (state.lead + lead <= 0) value -= 5;
+    return value;
+  };
+  return options.sort((a, b) => score(b.type) - score(a.type))[0]?.id;
+}
+
+/** Ereignis: die erste Wahl, ausser sie kostet zu viel Rumpf oder Vorsprung. */
+function chooseEvent(state: GameState): number {
+  const event = EVENTS.find((e) => e.id === state.event?.id);
+  if (!event) {
+    return 0;
+  }
+  const value = (option: number): number => {
+    const effect = event.choices[option]!.effect;
+    const hullLow = state.fort.hull < state.fort.hullMax * 0.5;
+    return (
+      (effect.scrap ?? 0) * 0.5 +
+      (effect.hull ?? 0) * (hullLow ? 0.6 : 0.2) +
+      (effect.hullMax ?? 0) * 0.4 +
+      (effect.lead ?? 0) * (state.lead <= 1 ? 30 : 8) +
+      (effect.upgrade ?? 0) * 30
+    );
+  };
+  return value(0) >= value(1) ? 0 : 1;
 }
 
 /** Wie gern der Bot ein Modul baut (hoeher = lieber). */
@@ -186,7 +254,7 @@ function spend(sim: Simulation, style: BotStyle): number {
 export function playBot(
   seed: number,
   style: BotStyle,
-  maxSeconds = 900,
+  maxSeconds = 1500,
   onEvent?: (event: GameEvent) => void,
   onTick?: (state: GameState) => void,
 ): BotResult {
@@ -212,8 +280,11 @@ export function playBot(
         (nearScrap.length === 0 && p.layer === "deck" && !p.transition);
       if (done) {
         restTime = 0;
+        if (s.event) {
+          sim.command("bot", { kind: "choose", option: chooseEvent(s) });
+        }
         repairs += spend(sim, style);
-        sim.command("bot", { kind: "depart" });
+        sim.command("bot", { kind: "depart", node: chooseNode(s) });
       }
     }
     const input = decide(s, style, memory);
@@ -232,7 +303,7 @@ export function playBot(
   return {
     won: s.phase === "won",
     modules: s.modules.length,
-    marches: s.march.index + (s.phase === "won" ? 1 : 0),
+    marches: s.path.length - 1,
     hull: Math.round(s.fort.hull),
     kills: s.kills,
     scrap: s.players[0]!.scrap,

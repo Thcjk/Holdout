@@ -123,7 +123,7 @@ export class TitleScene extends Phaser.Scene {
       .text(
         w - SAFE.right - 10,
         VIEWPORT.height - SAFE.bottom - 6,
-        `v${__APP_VERSION__} · Probelauf (Baustufe 3 von 6)`,
+        `v${__APP_VERSION__} · Akt 1 (Baustufe 4 von 6)`,
         {
           fontFamily: FONT_BODY,
           fontSize: "13px",

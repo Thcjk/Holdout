@@ -90,7 +90,7 @@ export class RestPanel {
     const f = state.fort;
     const missing = f.hullMax - f.hull;
     this.text.setText(
-      `Rast: ${state.restAt}. Die Armee ist zurückgefallen – holt den Schrott, der noch am Boden liegt.\nRumpf ${Math.ceil(f.hull)} / ${f.hullMax} · Schrott ${state.bank} · nächstes Ziel: ${state.march.station}`,
+      `Rast: ${state.restAt}. Die Armee ist zurückgefallen – sammelt den Schrott am Boden.\nRumpf ${Math.ceil(f.hull)} / ${f.hullMax} · Schrott ${state.bank} · Vorsprung ${state.lead}`,
     );
     this.repair.setText(`REPARIEREN +${REPAIR_AMOUNT} · ${REPAIR_COST}`);
     this.repair.setEnabled(missing > 0 && state.bank >= REPAIR_COST);

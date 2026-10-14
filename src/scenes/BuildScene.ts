@@ -17,12 +17,11 @@ import {
   DECK_ROWS,
   REPAIR_AMOUNT,
   REPAIR_COST,
-  REROLL_COST,
-  REROLL_STEP,
   TILE_H,
   TILE_W,
 } from "../game/constants";
 import { MODULES, sellValue, upgradeCost } from "../game/data/modules";
+import { rerollCost as rerollPrice } from "../game/systems/modules";
 import { canPlace, moduleAt, moduleCenter, tileFree } from "../game/deck";
 import { FIXED_MODULES } from "../game/fortress";
 import type { GameState, ModuleId, ModuleState } from "../game/types";
@@ -47,11 +46,14 @@ const PANEL_W = 236;
 export interface BuildData {
   session: GameSession;
   onClose: () => void;
+  /** Weiterziehen: Bau-Ansicht schliessen und die Karte zeigen. */
+  onDepart: () => void;
 }
 
 export class BuildScene extends Phaser.Scene {
   private session!: GameSession;
   private onClose: () => void = () => undefined;
+  private onDepart: () => void = () => undefined;
   private selectedOffer: ModuleId | null = null;
   private selectedModule: number | null = null;
   /** Alles, was bei einer Aenderung neu gezeichnet wird. */
@@ -67,6 +69,7 @@ export class BuildScene extends Phaser.Scene {
   create(data: BuildData): void {
     this.session = data.session;
     this.onClose = data.onClose;
+    this.onDepart = data.onDepart;
     this.selectedOffer = null;
     this.selectedModule = null;
     this.dynamic = [];
@@ -456,7 +459,9 @@ export class BuildScene extends Phaser.Scene {
   private drawOffer(s: GameState): void {
     const w = VIEWPORT.width;
     const top = VIEWPORT.height - SAFE.bottom - 98;
-    const cardW = 128;
+    // Beim Haendler gibt es mehr Karten - dann werden sie schmaler.
+    const room = w - SAFE.left - SAFE.right - 20 - 140 - 200;
+    const cardW = Math.min(128, Math.floor(room / Math.max(1, s.offer.length)) - 8);
     const cardH = 90;
     let x = SAFE.left + 10;
     for (const type of s.offer) {
@@ -477,7 +482,7 @@ export class BuildScene extends Phaser.Scene {
         this.add
           .image(x + cardW / 2, top + 58, moduleKey(type))
           .setOrigin(0.5, 1)
-          .setScale(spec.width === 2 ? 0.85 : 1),
+          .setScale((spec.width === 2 ? 0.85 : 1) * Math.min(1, cardW / 128)),
       );
       icon.setAlpha(affordable ? 1 : 0.5);
       this.keep(
@@ -510,7 +515,7 @@ export class BuildScene extends Phaser.Scene {
       );
       x += 200;
     }
-    const rerollCost = REROLL_COST + REROLL_STEP * s.rerolls;
+    const rerollCost = rerollPrice(s);
     const reroll = this.keep(
       new Button(
         this,
@@ -541,7 +546,8 @@ export class BuildScene extends Phaser.Scene {
         top + 72,
         "WEITERZIEHEN ▶",
         () => {
-          this.session.send({ kind: "depart" });
+          this.close();
+          this.onDepart();
         },
         { width: 180, height: 46, fontSize: 18 },
       ),

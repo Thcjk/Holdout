@@ -18,6 +18,7 @@ import { playerName } from "../app";
 import { DECK_H, ELEVATION, LADDER, STATION_BONUS, WINCH_LANDING } from "../game/constants";
 import { BLIND_SPOT, insideRect } from "../game/fortress";
 import type {
+  Command,
   EnemyType,
   GameEvent,
   GameState,
@@ -28,9 +29,9 @@ import type {
 import type { GameSession } from "../net/GameSession";
 import { SoloSession } from "../net/SoloSession";
 import { FORCED_SEED, RICH_START, SHORT_ROUTE, SHOW_VALUES } from "../platform/debugFlags";
-import { PROBE_ROUTE } from "../game/data/route";
 import { AbilityButton } from "../ui/AbilityButton";
 import { Button } from "../ui/Button";
+import { EventPanel } from "../ui/EventPanel";
 import { BOX, ComicBox } from "../ui/ComicBox";
 import { FloatingStick } from "../ui/FloatingStick";
 import { Hud } from "../ui/Hud";
@@ -40,6 +41,7 @@ import { FONT_BODY, FONT_TITLE, T } from "../ui/theme";
 import { EnemyView } from "../ui/world/EnemyView";
 import { FortressView } from "../ui/world/FortressView";
 import { GroundView } from "../ui/world/GroundView";
+import { LootView } from "../ui/world/LootView";
 import { ModuleView } from "../ui/world/ModuleView";
 import { WarningView } from "../ui/world/WarningView";
 import { DEPTH, deckDepth, depthFor, followFort } from "../ui/world/view";
@@ -118,8 +120,10 @@ export class GameScene extends Phaser.Scene {
   >();
   private zaps!: Phaser.GameObjects.Graphics;
   private zapTime = 0;
-  /** Die Bau-Ansicht liegt gerade darueber. */
+  /** Die Bau-Ansicht oder die Karte liegt gerade darueber. */
   private building = false;
+  private loot!: LootView;
+  private eventPanel!: EventPanel;
 
   constructor() {
     super("Game");
@@ -137,11 +141,8 @@ export class GameScene extends Phaser.Scene {
     this.building = false;
 
     const seed = FORCED_SEED ?? Math.floor(Math.random() * 1e9);
-    const route = SHORT_ROUTE
-      ? PROBE_ROUTE.map((m) => ({ ...m, length: m.length / 10 }))
-      : PROBE_ROUTE;
     this.session = new SoloSession({ id: SELF, name: playerName(), crew: "schrauber" }, seed, {
-      route,
+      lengthFactor: SHORT_ROUTE ? 0.1 : 1,
       startScrap: RICH_START ? 999 : undefined,
     });
 
@@ -151,6 +152,10 @@ export class GameScene extends Phaser.Scene {
     this.zaps = this.add.graphics().setDepth(DEPTH.effects + 1);
     this.modules = new ModuleView(this);
     this.enemies = new EnemyView(this);
+    this.loot = new LootView(this);
+    this.eventPanel = new EventPanel(this, (option) => {
+      this.session.send({ kind: "choose", option });
+    });
     this.hintQueue = [];
     this.hintUntil = 0;
     this.warnings = new WarningView(this);
@@ -164,9 +169,7 @@ export class GameScene extends Phaser.Scene {
       () => {
         this.session.send({ kind: "repair" });
       },
-      () => {
-        this.session.send({ kind: "depart" });
-      },
+      () => this.openMap(),
     );
     this.stickRegion = new Phaser.Geom.Rectangle(
       0,
@@ -210,6 +213,7 @@ export class GameScene extends Phaser.Scene {
       // Fuer automatische Tests im Browser: Zustand von aussen lesbar.
       (window as unknown as { __holdout?: unknown }).__holdout = {
         state: () => this.session.state,
+        send: (command: Command) => this.session.send(command),
         spawn: (type: EnemyType, x: number, y: number) => {
           if (this.session instanceof SoloSession) {
             this.session.spawnForTest(type, x, y);
@@ -256,6 +260,24 @@ export class GameScene extends Phaser.Scene {
         this.building = false;
         this.stick.enabled = !this.paused;
       },
+      onDepart: () => this.time.delayedCall(10, () => this.openMap()),
+    });
+  }
+
+  /** Routenkarte ueber das Spiel legen: naechste Station waehlen und losziehen. */
+  private openMap(): void {
+    if (this.building || this.session.state.phase !== "rest" || this.session.state.event) {
+      return;
+    }
+    this.building = true;
+    this.stick.release();
+    this.stick.enabled = false;
+    this.scene.launch("Map", {
+      session: this.session,
+      onClose: () => {
+        this.building = false;
+        this.stick.enabled = !this.paused;
+      },
     });
   }
 
@@ -288,7 +310,9 @@ export class GameScene extends Phaser.Scene {
     this.syncScrap(state);
     this.syncShells(state);
     this.modules.sync(state, frameDelta);
+    this.loot.sync(state, this.cameras.main, frameDelta);
     this.warnings.sync(state, this.cameras.main, frameDelta);
+    this.eventPanel.update(state, this.building || this.ending);
     this.drawHelpers(state, self);
     this.zapTime -= frameDelta;
     if (this.zapTime <= 0) {
@@ -303,7 +327,7 @@ export class GameScene extends Phaser.Scene {
     this.nextHint();
     this.hud.update(state, self, frameDelta);
     this.ability.update(self, frameDelta);
-    this.rest.update(state, this.building);
+    this.rest.update(state, this.building || state.event !== null);
     this.pauseButton.setVisible(!this.ending && !this.building);
     this.values?.setText(
       `${Math.round(this.game.loop.actualFps)} fps · ${state.enemies.length} Gegner · ${state.shots.length} Schüsse`,
@@ -658,7 +682,15 @@ export class GameScene extends Phaser.Scene {
         }
         break;
       case "depart":
-        this.showBanner(`WEITER ZUR ${state.march.station.toUpperCase()}`, T.light);
+        if (!state.march.horde) {
+          this.showBanner(`WEITER: ${state.march.station.toUpperCase()}`, T.light);
+        }
+        if (state.march.storm) {
+          this.queueHint(
+            "storm",
+            "Sandsturm: Ihr seht nur, was nah an der Festung ist – und die Warnpfeile fehlen.",
+          );
+        }
         audio.setMusic("wave");
         if (event.index === 0) {
           this.time.delayedCall(2200, () =>
@@ -774,6 +806,40 @@ export class GameScene extends Phaser.Scene {
         this.showBanner("KOLOSS GESTÜRZT!", T.gold);
         this.cameras.main.shake(400, 0.01);
         audio.play("zoneReached");
+        break;
+      case "horde":
+        this.showBanner("HEERSCHAR!", T.bad);
+        this.queueHint(
+          "horde",
+          "Die Armee hat euch eingeholt: Dieser Marsch wird hart. Danach habt ihr wieder etwas Vorsprung.",
+        );
+        audio.play("gameOver");
+        break;
+      case "lead":
+        this.floatText(
+          `Vorsprung ${event.amount > 0 ? "+" : ""}${event.amount}`,
+          state.fort.x + 140,
+          state.fort.y - ELEVATION - 50,
+          event.amount > 0 ? T.good : T.gold,
+          16,
+        );
+        break;
+      case "loot":
+        this.showBanner("PLÜNDERN!", T.gold);
+        this.queueHint(
+          "loot",
+          "Ruine: Truhen am Boden – daneben stehen öffnet sie. Die Festung wartet, bis die Zeit um ist.",
+        );
+        break;
+      case "chest":
+        this.floatText(`Truhe: ${event.value}`, event.x, event.y - 34, T.gold, 16);
+        this.dust(event.x, event.y, 3);
+        audio.play("zoneReached");
+        break;
+      case "bonus":
+      case "choice":
+        this.floatText(event.text, state.fort.x + 140, state.fort.y - ELEVATION - 40, T.cyan, 16);
+        audio.play("healed");
         break;
       case "won":
         this.showBanner("GESCHAFFT!", T.gold);
@@ -1021,8 +1087,8 @@ export class GameScene extends Phaser.Scene {
     const self = state.players.find((p) => p.id === this.session.selfId);
     const result: GameResult = {
       won: state.phase === "won",
-      marches: state.march.index + (state.phase === "won" ? 1 : 0),
-      count: state.march.count,
+      marches: state.path.length - 1,
+      count: state.map.layers - 1,
       kills: state.kills,
       scrap: self?.scrap ?? 0,
       seconds: Math.round(state.time),

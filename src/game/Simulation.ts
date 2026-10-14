@@ -2,13 +2,15 @@
  * Der Spielkern der Wanderfestung: rechnet mit festem Takt (60 Hz), kennt weder
  * Phaser noch Netz. Eingaben rein (`advance`), Zustand und Ereignisse raus.
  *
- * Ein Lauf: Rast am Start (bauen) → Marsch → Rast an der Station → Marsch … → Ziel.
+ * Ein Lauf: Rast am Start (bauen) → Karte: naechste Station waehlen → Marsch → Station
+ * (Ruine: pluendern) → Rast → Karte → … → Endgegner.
  *
  * Diese Klasse ist nur der Dirigent. Die eigentlichen Regeln stehen in `systems/`:
  *   players.ts  - die Mechs (laufen, springen, klettern, schiessen, sammeln)
  *   modules.ts  - Module bauen und was sie im Marsch tun
  *   enemies.ts  - die goldene Armee (Trupps, Endgegner, jede Art mit ihrer Aufgabe)
  *   combat.ts   - Schaden, Zielwahl, Geschosse
+ *   journey.ts  - Routenkarte: losziehen, ankommen, Stationen, Vorsprung, Ereignisse
  *
  * Ablauf eines Rechenschritts im Marsch:
  *   1. Die Festung laeuft, die Beine setzen auf und stampfen.
@@ -22,24 +24,27 @@
 import {
   FORT_SPEED,
   HULL_MAX,
+  OFFER_SIZE,
   REPAIR_AMOUNT,
   REPAIR_COST,
   SCRAP_LOST_BEHIND,
   START_SCRAP,
-  STATION_BONUS,
   STOMP_DAMAGE,
   STOMP_RADIUS,
   TICK,
 } from "./constants";
-import { PROBE_ROUTE, START_STATION, type MarchSpec } from "./data/route";
+import { LEAD_START, marchFor } from "./data/acts";
+import { MODULE_IDS } from "./data/modules";
+import { START_STATION, type MarchSpec } from "./data/route";
 import { LEGS, STRIDE, legPhase } from "./fortress";
+import { generateMap, linearMap } from "./map";
 import { createRng, type Rng } from "./rng";
 import { damageEnemy, updateEnemyShots, updateShells, updateShots } from "./systems/combat";
 import { spawn, updateEnemies } from "./systems/enemies";
+import { TRADER_OFFER, arrive, choose, depart, marchTo, updateLoot } from "./systems/journey";
 import {
   build,
   refreshFortress,
-  repairAllModules,
   rerollCost,
   rollOffer,
   sell,
@@ -47,7 +52,15 @@ import {
   upgrade,
 } from "./systems/modules";
 import { newPlayer, updatePlayer } from "./systems/players";
-import type { Command, GameEvent, GameState, MarchState, PlayerInput, PlayerSetup } from "./types";
+import type {
+  Command,
+  GameEvent,
+  GameState,
+  MapNode,
+  ModuleId,
+  PlayerInput,
+  PlayerSetup,
+} from "./types";
 import type { World } from "./world";
 
 const IDLE: PlayerInput = { mx: 0, my: 0 };
@@ -55,9 +68,12 @@ const IDLE: PlayerInput = { mx: 0, my: 0 };
 const SLOW_FACTOR = 0.6;
 
 export interface SimulationOptions {
+  /** Fester Probelauf statt einer zufaelligen Karte (Tests). */
   route?: readonly MarchSpec[];
   /** Schrott zum Start (Standard: START_SCRAP). */
   startScrap?: number;
+  /** Maersche kuerzer machen (`?debug=kurz`: 0,1). */
+  lengthFactor?: number;
 }
 
 export class Simulation implements World {
@@ -70,20 +86,42 @@ export class Simulation implements World {
   /** Ereignisse aus Befehlen zwischen zwei Bildern - gehen mit dem naechsten `advance` raus. */
   private pending: GameEvent[] = [];
   private ticking = false;
-  private readonly route: readonly MarchSpec[];
+  private readonly route: readonly MarchSpec[] | null;
+  private readonly lengthFactor: number;
 
   constructor(setups: readonly PlayerSetup[], seed: number, options: SimulationOptions = {}) {
     this.rng = createRng(seed);
-    this.route = options.route ?? PROBE_ROUTE;
-    if (this.route.length === 0) {
+    this.route = options.route ?? null;
+    this.lengthFactor = options.lengthFactor ?? 1;
+    if (this.route && this.route.length === 0) {
       throw new Error("Die Route braucht mindestens einen Marsch.");
     }
+    const map = this.route ? linearMap(this.route) : generateMap(this.rng, 0);
     this.state = {
       // Der Lauf beginnt mit einer Rast am Grab: erst ausbauen, dann losziehen.
       phase: "rest",
       time: 0,
       restAt: START_STATION,
-      march: this.marchFor(0),
+      march: {
+        index: 0,
+        count: map.layers - 1,
+        station: "",
+        length: 1,
+        done: 0,
+        spawnTimer: 2.5,
+        boss: "none",
+        node: 0,
+        horde: false,
+        storm: false,
+      },
+      map,
+      at: 0,
+      path: [0],
+      lead: LEAD_START,
+      event: null,
+      seenEvents: [],
+      loot: null,
+      chests: [],
       fort: {
         x: 0,
         y: 0,
@@ -93,6 +131,7 @@ export class Simulation implements World {
         moving: false,
         speed: 1,
         slow: 0,
+        baseHull: HULL_MAX,
       },
       players: setups.map((setup, index) => newPlayer(setup, index)),
       enemies: [],
@@ -108,7 +147,12 @@ export class Simulation implements World {
       kills: 0,
       nextId: 1,
     };
-    this.state.offer = rollOffer(this);
+    this.state.offer = rollOffer(this, this.modulePool());
+    // Vorschau auf die erste Station, bis man auf der Karte waehlt.
+    const first = map.nodes[map.nodes[0]!.next[0]!];
+    if (first) {
+      this.state.march = marchTo(this, first, false);
+    }
   }
 
   // --- World: was die Teile in systems/ brauchen ----------------------------------------------
@@ -118,7 +162,20 @@ export class Simulation implements World {
   }
 
   march(): MarchSpec | undefined {
-    return this.route[this.state.march.index];
+    const node = this.state.map.nodes[this.state.march.node];
+    return node ? this.specFor(node, this.state.march.horde) : undefined;
+  }
+
+  specFor(node: MapNode, horde: boolean): MarchSpec {
+    const spec =
+      node.route !== undefined && this.route
+        ? this.route[node.route]!
+        : marchFor(this.state.map.act, node.type, node.layer, node.name, horde);
+    return { ...spec, length: Math.max(1, Math.round(spec.length * this.lengthFactor)) };
+  }
+
+  modulePool(): readonly ModuleId[] {
+    return MODULE_IDS;
   }
 
   refreshFortress(): void {
@@ -163,9 +220,10 @@ export class Simulation implements World {
         }
         return;
       case "depart":
-        s.phase = "march";
-        s.warnings = [];
-        this.emit({ kind: "depart", index: s.march.index });
+        depart(this, command.node);
+        return;
+      case "choose":
+        choose(this, command.option);
         return;
       case "build":
         build(this, command.module, command.col, command.row);
@@ -181,25 +239,13 @@ export class Simulation implements World {
         if (s.bank >= cost) {
           s.bank -= cost;
           s.rerolls += 1;
-          s.offer = rollOffer(this);
+          const trader = s.map.nodes[s.at]?.type === "haendler";
+          s.offer = rollOffer(this, this.modulePool(), trader ? TRADER_OFFER : OFFER_SIZE);
           this.emit({ kind: "reroll" });
         }
         return;
       }
     }
-  }
-
-  private marchFor(index: number): MarchState {
-    const spec = this.route[index] ?? this.route[this.route.length - 1]!;
-    return {
-      index,
-      count: this.route.length,
-      station: spec.station,
-      length: spec.length,
-      done: 0,
-      spawnTimer: 2.5,
-      boss: spec.boss ? "waiting" : "none",
-    };
   }
 
   // --- Ein Rechenschritt ---------------------------------------------------------------------
@@ -211,6 +257,8 @@ export class Simulation implements World {
     }
     s.time += TICK;
     const marching = s.phase === "march";
+    // Gekaempft wird im Marsch und beim Pluendern (dann steht die Festung).
+    const fighting = marching || s.phase === "loot";
     const f = s.fort;
     const slowed = f.slow > 0 ? SLOW_FACTOR : 1;
     f.slow = Math.max(0, f.slow - TICK);
@@ -228,7 +276,7 @@ export class Simulation implements World {
     for (const player of s.players) {
       updatePlayer(this, player, inputs.get(player.id) ?? IDLE, fortDx);
     }
-    if (marching) {
+    if (fighting) {
       updateModules(this);
       spawn(this);
     }
@@ -236,6 +284,9 @@ export class Simulation implements World {
     updateShots(this);
     updateShells(this);
     updateEnemyShots(this);
+    if (s.phase === "loot") {
+      updateLoot(this);
+    }
     if (marching) {
       const lostAt = f.x - SCRAP_LOST_BEHIND;
       s.scrap = s.scrap.filter((piece) => piece.x > lostAt || piece.z > 0);
@@ -280,29 +331,8 @@ export class Simulation implements World {
     if (s.march.boss === "waiting" || s.march.boss === "alive") {
       s.march.done = Math.min(s.march.done, s.march.length - 1);
     }
-    if (s.march.done < s.march.length) {
-      return;
+    if (s.march.done >= s.march.length) {
+      arrive(this);
     }
-    this.emit({ kind: "arrived", index: s.march.index });
-    // Die Armee bleibt zurueck: An der Station ist Ruhe.
-    s.enemies = [];
-    s.shots = [];
-    s.shells = [];
-    s.enemyShots = [];
-    s.warnings = [];
-    s.fort.slow = 0;
-    if (s.march.index + 1 >= s.march.count) {
-      s.phase = "won";
-      this.emit({ kind: "won" });
-      return;
-    }
-    s.phase = "rest";
-    s.restAt = s.march.station;
-    s.march = this.marchFor(s.march.index + 1);
-    // Fundstuecke an der Station, alles wird heil, und ein neues Angebot.
-    s.bank += STATION_BONUS;
-    repairAllModules(this);
-    s.rerolls = 0;
-    s.offer = rollOffer(this);
   }
 }

@@ -7,7 +7,7 @@
  * repariert ist (Schrauber in der Naehe, Werkstatt, oder an der naechsten Station).
  */
 
-import { ELEVATION, HULL_MAX, OFFER_SIZE, REROLL_COST, REROLL_STEP, TICK } from "../constants";
+import { ELEVATION, OFFER_SIZE, REROLL_COST, REROLL_STEP, TICK } from "../constants";
 import { MODULE_IDS, MODULES, moduleHp, sellValue, stat, upgradeCost } from "../data/modules";
 import { canPlace, generatorBonus, moduleCenter, oilZone } from "../deck";
 import { insideRect } from "../fortress";
@@ -15,9 +15,10 @@ import type { EnemyState, GameState, ModuleId, ModuleState } from "../types";
 import { clamp, type World } from "../world";
 import { canReach, damageEnemy, fire, findTarget, underDeck } from "./combat";
 
-/** Was Neu-Wuerfeln gerade kostet. */
+/** Was Neu-Wuerfeln gerade kostet (beim Haendler weniger). */
 export function rerollCost(state: GameState): number {
-  return REROLL_COST + REROLL_STEP * state.rerolls;
+  const trader = state.map.nodes[state.at]?.type === "haendler";
+  return trader ? 2 + state.rerolls : REROLL_COST + REROLL_STEP * state.rerolls;
 }
 
 /** Zufaelliges Angebot: verschiedene Module aus dem Vorrat. */
@@ -91,13 +92,10 @@ export function sell(w: World, uid: number): void {
   w.emit({ kind: "sold", uid, type: module.type });
 }
 
-/**
- * Tempo und Rumpf-Hoechstwert aus den heilen Modulen. `baseHull` ist der Rumpf
- * ohne Platten (spaeter: Werft-Verbesserungen).
- */
-export function refreshFortress(state: GameState, baseHull = HULL_MAX): void {
+/** Tempo und Rumpf-Hoechstwert aus den heilen Modulen (Grundrumpf: `fort.baseHull`). */
+export function refreshFortress(state: GameState): void {
   let speed = 1;
-  let hullMax = baseHull;
+  let hullMax = state.fort.baseHull;
   for (const m of state.modules) {
     if (m.broken) {
       continue;
