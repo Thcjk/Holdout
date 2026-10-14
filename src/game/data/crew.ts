@@ -30,6 +30,8 @@ export interface CrewSpec {
   speed: number;
   weapon: WeaponSpec;
   ability: AbilitySpec;
+  /** Flickt Module in der Naehe (Leben pro Sekunde), solange er auf dem Deck steht. */
+  moduleRepair?: number;
   playable: boolean;
 }
 
@@ -53,6 +55,7 @@ export const CREW: Record<CrewId, CrewSpec> = {
     speed: 125,
     weapon: RIVET,
     ability: { name: "Notreparatur", cooldown: 30, hull: 45, heal: 40 },
+    moduleRepair: 8,
     playable: true,
   },
   kanonier: {

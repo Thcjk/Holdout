@@ -314,7 +314,11 @@ export class Pix {
             color = mix(ramp[1], ramp[2], 0.5);
           } else if (inLight) {
             color = ramp[3];
-          } else if (options.dither && (x + y) % 2 === 0 && (!m(x + shade + 1, y) || !m(x, y + shade + 1))) {
+          } else if (
+            options.dither &&
+            (x + y) % 2 === 0 &&
+            (!m(x + shade + 1, y) || !m(x, y + shade + 1))
+          ) {
             color = mix(ramp[1], ramp[2], 0.5);
           }
           if (options.noise && color === ramp[2]) {
@@ -355,7 +359,13 @@ export class Pix {
     const out: [number, number][] = [];
     for (let y = 0; y < this.h; y += 1) {
       for (let x = 0; x < this.w; x += 1) {
-        if (!this.painted(x, y) && (this.painted(x - 1, y) || this.painted(x + 1, y) || this.painted(x, y - 1) || this.painted(x, y + 1))) {
+        if (
+          !this.painted(x, y) &&
+          (this.painted(x - 1, y) ||
+            this.painted(x + 1, y) ||
+            this.painted(x, y - 1) ||
+            this.painted(x, y + 1))
+        ) {
           out.push([x, y]);
         }
       }

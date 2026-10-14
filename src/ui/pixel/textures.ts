@@ -10,7 +10,7 @@ import type Phaser from "phaser";
 import { CREW_IDS } from "../../game/data/crew";
 import { MODULE_IDS } from "../../game/data/modules";
 import { FIXED_MODULES, legPose } from "../../game/fortress";
-import { paintArmy } from "./armee";
+import { ARMY, paintArmy } from "./armee";
 import { paintCrew } from "./crew";
 import { paintFortressBody, paintLeg, paintModule } from "./festung";
 import { GOLD, OUTLINE, STEEL } from "./palette";
@@ -43,6 +43,7 @@ export const TEX = {
   drop: "oil-drop",
   pip: "level-pip",
   warning: "warning",
+  ballistaBolt: "ballista-bolt",
 } as const;
 
 export const crewKey = (id: string): string => `crew-${id}`;
@@ -127,7 +128,9 @@ export function createPixelTextures(scene: Phaser.Scene): void {
   for (const id of CREW_IDS) {
     add(scene, crewKey(id), paintCrew(id));
   }
-  add(scene, armyKey("laeufer"), paintArmy("laeufer"));
+  for (const { id } of ARMY) {
+    add(scene, armyKey(id), paintArmy(id));
+  }
 
   // Kleinkram
   const rivet = new Pix(7, 4, 1);
@@ -171,6 +174,14 @@ export function createPixelTextures(scene: Phaser.Scene): void {
   harpoon.shape(poly(12, 0, 18, 2.5, 12, 5), STEEL, { shade: 0 });
   harpoon.outline(OUTLINE);
   add(scene, TEX.harpoon, harpoon);
+  // Bolzen der Ballista: dicker Holzschaft mit goldener Spitze
+  const ballistaBolt = new Pix(22, 5, 1);
+  ballistaBolt.fill(rect(0, 1, 16, 3), OUTLINE);
+  ballistaBolt.fill(rect(1, 2, 15, 1), "#a8743c");
+  ballistaBolt.fill(rect(0, 0, 3, 5), "#6e1e22");
+  ballistaBolt.shape(poly(15, 0, 22, 2.5, 15, 5), GOLD, { shade: 0 });
+  ballistaBolt.outline(OUTLINE);
+  add(scene, TEX.ballistaBolt, ballistaBolt);
   const shell = new Pix(7, 7, 1);
   shell.shape(ellipse(3.5, 3.5, 3, 3), ["#14141e", "#2c2d3c", "#45475c", "#8a8da8"], {
     shade: 1,

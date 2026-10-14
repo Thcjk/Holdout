@@ -6,15 +6,30 @@
 
 import type Phaser from "phaser";
 import { SAFE, VIEWPORT } from "../../config/constants";
-import type { GameState } from "../../game/types";
-import { TEX } from "../pixel/textures";
+import type { EnemyType, GameState } from "../../game/types";
+import { ARMY_SIZE } from "../pixel/armee";
+import { TEX, armyKey } from "../pixel/textures";
 import { FONT_TITLE, T } from "../theme";
 import { DEPTH } from "./view";
 
 interface Marker {
   arrow: Phaser.GameObjects.Image;
   count: Phaser.GameObjects.Text;
+  /** Kleines Bild der wichtigsten Gegnerart im Trupp. */
+  icon: Phaser.GameObjects.Image;
 }
+
+/** Welche Art zeigt das Bild am Pfeil (die gefaehrlichste im Trupp)? */
+const ICON_ORDER: readonly EnemyType[] = [
+  "turm",
+  "ballista",
+  "streitwagen",
+  "priester",
+  "phalanx",
+  "enterer",
+  "skarabaeus",
+  "laeufer",
+];
 
 export class WarningView {
   private readonly markers = new Map<number, Marker>();
@@ -43,7 +58,11 @@ export class WarningView {
             .setStroke(T.outline, 5)
             .setScrollFactor(0)
             .setDepth(DEPTH.hud - 1),
+          icon: this.scene.add.image(0, 0, armyKey(pickIcon(warning.members))).setScrollFactor(0),
         };
+        const type = pickIcon(warning.members);
+        // Etwa 26 Pixel hoch, egal wie gross die Figur ist.
+        marker.icon.setScale(Math.min(0.6, 26 / ARMY_SIZE[type][1])).setDepth(DEPTH.hud - 1);
         this.markers.set(warning.id, marker);
       }
       let x = 0;
@@ -80,19 +99,26 @@ export class WarningView {
       // Der Pfeil zeigt vom Rand nach innen - so laeuft der Trupp gleich ins Bild.
       marker.arrow.setPosition(x, y).setRotation(rotation);
       marker.count.setPosition(x + tx, y + ty).setText(`${warning.count}`);
+      marker.icon.setPosition(x + tx * 1.9, y + ty * 1.9);
       const speed = 6 + (2.2 - warning.eta) * 6;
       const visible = Math.sin(this.time * speed) > -0.3;
       marker.arrow.setVisible(visible);
       marker.count.setVisible(visible);
+      marker.icon.setVisible(visible);
     }
     for (const [id, marker] of this.markers) {
       if (!seen.has(id)) {
         marker.arrow.destroy();
         marker.count.destroy();
+        marker.icon.destroy();
         this.markers.delete(id);
       }
     }
   }
+}
+
+function pickIcon(members: readonly EnemyType[]): EnemyType {
+  return ICON_ORDER.find((type) => members.includes(type)) ?? "laeufer";
 }
 
 function clamp(value: number, min: number, max: number): number {

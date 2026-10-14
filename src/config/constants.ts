@@ -102,7 +102,6 @@ export function fitViewportToScreen(screenWidth: number, screenHeight: number): 
   }
 }
 
-
 /** Farben ausserhalb der Pixel-Bilder. */
 export const COLORS = {
   /** Hinter dem Spiel (sieht man nur ganz kurz beim Start). */

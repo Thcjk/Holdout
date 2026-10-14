@@ -9,6 +9,7 @@
 import Phaser from "phaser";
 import { SAFE, VIEWPORT } from "../config/constants";
 import { CREW } from "../game/data/crew";
+import { ENEMIES } from "../game/data/enemies";
 import type { GameState, PlayerState } from "../game/types";
 import { BOX, ComicBox } from "./ComicBox";
 import { TEX, crewKey } from "./pixel/textures";
@@ -32,6 +33,8 @@ export class Hud {
   private readonly scrapIcon: Phaser.GameObjects.Image;
   private readonly scrapText: Phaser.GameObjects.Text;
   private readonly bars: Phaser.GameObjects.Graphics;
+  /** Name des Endgegners ueber seinem Lebensbalken. */
+  private readonly bossName: Phaser.GameObjects.Text;
   private hullFlash = 0;
   private lastHull = -1;
 
@@ -74,6 +77,7 @@ export class Hud {
     this.scrapIcon = fixed(scene.add.image(0, 0, TEX.gear));
     this.scrapText = text(30, "#e6eaf2", FONT_TITLE).setOrigin(1, 0.5);
     this.bars = fixed(scene.add.graphics(), DEPTH.hud + 0.5);
+    this.bossName = text(16, "#ff8a6a", FONT_TITLE).setOrigin(0.5, 0.5).setVisible(false);
     this.layout();
   }
 
@@ -89,6 +93,7 @@ export class Hud {
     this.centerPanel.setPosition(w / 2, top + 39);
     this.title.setPosition(w / 2, top + 18);
     this.hullText.setPosition(w / 2, top + 41);
+    this.bossName.setPosition(w / 2, top + 90);
     const right = w - SAFE.right - 10 - 54;
     this.scrapPanel.setPosition(right - SCRAP_W / 2, top + 24);
     this.scrapIcon.setPosition(right - SCRAP_W + 24, top + 24);
@@ -143,6 +148,14 @@ export class Hud {
     const mx = w / 2 - 170 + Math.round(336 * progress);
     g.fillStyle(0xf0b23e, 1).fillRect(mx - 3, top + 54, 8, 12);
     g.fillStyle(0x120f1e, 1).fillRect(mx - 1, top + 57, 4, 6);
+
+    // Endgegner: eigener Balken unter der Mitte
+    const boss = state.enemies.find((e) => e.type === "koloss");
+    this.bossName.setVisible(!!boss);
+    if (boss) {
+      this.bossName.setText(ENEMIES.koloss.name.toUpperCase());
+      this.bar(g, w / 2 - 150, top + 100, 300, 12, boss.hp / boss.hpMax, 0xd8a020, 0xfff2a0);
+    }
 
     // Schrott
     this.scrapText.setText(`${state.bank}`);

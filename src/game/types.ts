@@ -4,7 +4,33 @@
  */
 
 export type CrewId = "schrauber" | "kanonier" | "brecher" | "bergung" | "funkerin" | "springer";
-export type EnemyType = "laeufer";
+export type EnemyType =
+  | "laeufer"
+  | "enterer"
+  | "phalanx"
+  | "skarabaeus"
+  | "priester"
+  | "streitwagen"
+  | "ballista"
+  | "turm"
+  | "koloss";
+/** Wo ein Gegner gerade ist: am Boden, an der Rumpfwand (klettert), auf dem Deck, in der Luft. */
+export type EnemyLayer = "ground" | "climb" | "deck" | "air";
+/** Was ein Gegner gerade tut (jede Art benutzt nur einen Teil davon). */
+export type EnemyMode =
+  | "approach"
+  | "climb"
+  | "deck"
+  | "fly"
+  | "charge"
+  | "retreat"
+  | "standoff"
+  | "dock"
+  | "walk"
+  | "slam";
+/** Zusammensetzung eines Trupps. */
+export type TruppKind =
+  "laeufer" | "enterer" | "phalanx" | "schwarm" | "wagen" | "ballista" | "turm";
 /** Module, die man aufs Deck bauen kann. */
 export type ModuleId =
   | "geschuetz"
@@ -88,21 +114,49 @@ export interface PlayerState {
 export interface EnemyState {
   id: number;
   type: EnemyType;
+  /** Auf dem Deck und an der Rumpfwand: der Punkt darunter auf der Bodenebene. */
   x: number;
   y: number;
+  z: number;
+  layer: EnemyLayer;
+  mode: EnemyMode;
+  /** Zeitgeber der aktuellen Taetigkeit (Klettern, Nachladen, Ausholen ...). */
+  timer: number;
   hp: number;
   hpMax: number;
   speed: number;
   facing: 1 | -1;
-  /** Angriffspunkt an der Festung (relativ zur Festung). */
+  /** Ziel relativ zur Festung: Angriffs-, Kletter-, Halte- oder Andockpunkt. */
   slotX: number;
   slotY: number;
-  /** `true`, solange er an der Festung haengt und hackt. */
+  /** Zweites Ziel relativ zur Festung (z. B. wohin der Koloss schlaegt). */
+  tx: number;
+  ty: number;
+  /** `true`, solange er zuschlaegt (fuer die Hack-Bewegung im Bild). */
   attacking: boolean;
   attackCd: number;
+  /** Zweiter Zeitgeber (Stampfen des Koloss, Ausladen am Turm). */
+  cd2: number;
+  /** Schutzschild des Sandpriesters: faengt so viel Schaden ab. */
+  shield: number;
   /** Rueckstoss, klingt ab. */
   pushX: number;
   pushY: number;
+}
+
+/** Bolzen der Ballista im Flug - trifft ein Modul (uid) oder den Rumpf (0). */
+export interface EnemyShotState {
+  id: number;
+  x0: number;
+  y0: number;
+  z0: number;
+  /** Ziel relativ zur Festung (sie laeuft weiter, der Bolzen folgt). */
+  x1: number;
+  y1: number;
+  t: number;
+  duration: number;
+  damage: number;
+  target: number;
 }
 
 export interface ShotState {
@@ -141,6 +195,10 @@ export interface ModuleState {
   level: number;
   cooldown: number;
   facing: 1 | -1;
+  hp: number;
+  hpMax: number;
+  /** Kaputt: tut nichts, bis es wieder zur Haelfte repariert ist. */
+  broken: boolean;
 }
 
 /** Granate des Moersers im Flug. */
@@ -166,6 +224,9 @@ export interface WarningState {
   /** Sekunden bis der Trupp auftaucht. */
   eta: number;
   count: number;
+  trupp: TruppKind;
+  /** Wer im Trupp mitlaeuft (steht schon bei der Warnung fest). */
+  members: EnemyType[];
 }
 
 export interface FortState {
@@ -179,6 +240,8 @@ export interface FortState {
   moving: boolean;
   /** Tempo als Vielfaches (Dampfmotoren machen sie schneller). */
   speed: number;
+  /** Sekunden, die sie noch gebremst ist (Streitwagen hat ein Bein gerammt). */
+  slow: number;
 }
 
 export interface MarchState {
@@ -190,6 +253,8 @@ export interface MarchState {
   length: number;
   done: number;
   spawnTimer: number;
+  /** Endgegner: keiner, kommt noch, ist da, besiegt. */
+  boss: "none" | "waiting" | "alive" | "down";
 }
 
 export interface GameState {
@@ -203,6 +268,7 @@ export interface GameState {
   players: PlayerState[];
   enemies: EnemyState[];
   shots: ShotState[];
+  enemyShots: EnemyShotState[];
   scrap: ScrapState[];
   modules: ModuleState[];
   shells: ShellState[];
@@ -223,7 +289,7 @@ export type GameEvent =
   | { kind: "kill"; x: number; y: number; type: EnemyType }
   | { kind: "stomp"; x: number; y: number }
   | { kind: "pickup"; player: string; x: number; y: number; value: number }
-  | { kind: "hullHit"; x: number; y: number; amount: number }
+  | { kind: "hullHit"; x: number; y: number; amount: number; source?: EnemyType }
   | { kind: "playerHit"; id: string }
   | { kind: "playerDown"; id: string }
   | { kind: "respawn"; id: string }
@@ -237,7 +303,15 @@ export type GameEvent =
   | { kind: "zap"; points: [number, number, number][] }
   | { kind: "boom"; x: number; y: number; radius: number }
   | { kind: "mortar"; uid: number }
-  | { kind: "trupp"; side: Side; count: number }
+  | { kind: "trupp"; side: Side; count: number; trupp: TruppKind }
+  | {
+      kind: "enemyClimb" | "land" | "ram" | "bridge" | "slamWarn" | "slam" | "shield";
+      x: number;
+      y: number;
+    }
+  | { kind: "ballista"; x: number; y: number }
+  | { kind: "moduleHit" | "moduleBroken"; uid: number }
+  | { kind: "boss" | "bossDown"; type: EnemyType }
   | { kind: "won" | "lost" };
 
 /** Befehle aus der Rast. */

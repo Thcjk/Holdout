@@ -131,11 +131,21 @@ export class ComicBox {
         g.fillStyle(C.bronzeLight, 1).fillRect(x + c + 1, y + 2, w - 2 * c - 2, 2);
         // Stein innen
         const f = 6;
-        g.fillStyle(C.outline, 1).fillPoints(chamfer(x + f - 1, y + f - 1, w - 2 * f + 2, h - 2 * f + 2, c - 2), true);
-        g.fillStyle(C.stone, 1).fillPoints(chamfer(x + f, y + f, w - 2 * f, h - 2 * f, c - 2), true);
+        g.fillStyle(C.outline, 1).fillPoints(
+          chamfer(x + f - 1, y + f - 1, w - 2 * f + 2, h - 2 * f + 2, c - 2),
+          true,
+        );
+        g.fillStyle(C.stone, 1).fillPoints(
+          chamfer(x + f, y + f, w - 2 * f, h - 2 * f, c - 2),
+          true,
+        );
         g.fillStyle(C.stoneMid, 1).fillRect(x + f + 2, y + f, w - 2 * f - 4, 2);
         // Feine Leuchtlinie innen (Technik der Crew)
-        g.lineStyle(1, C.cyan, 0.4).strokePoints(chamfer(x + f + 3, y + f + 3, w - 2 * f - 6, h - 2 * f - 6, Math.max(1, c - 3)), true, true);
+        g.lineStyle(1, C.cyan, 0.4).strokePoints(
+          chamfer(x + f + 3, y + f + 3, w - 2 * f - 6, h - 2 * f - 6, Math.max(1, c - 3)),
+          true,
+          true,
+        );
         // Nieten in den Ecken
         if (w > 60 && h > 50) {
           for (const [nx, ny] of [

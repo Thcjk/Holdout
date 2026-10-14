@@ -6,7 +6,7 @@
  * Reihe 0..3 (0 = hinten am Gelaender, 3 = vorn an der Kante zur Kamera).
  */
 
-import { DECK_COLS, DECK_ROWS, TILE_H, TILE_W } from "./constants";
+import { DECK_COLS, DECK_H, DECK_ROWS, DECK_W, TILE_H, TILE_W } from "./constants";
 import { MODULES } from "./data/modules";
 import { FIXED_MODULES } from "./fortress";
 import type { ModuleId, ModuleState } from "./types";
@@ -98,4 +98,92 @@ export function generatorBonus(modules: readonly ModuleState[], m: ModuleState):
     }
   }
   return bonus;
+}
+
+/** Bereich am Boden unter einem Oelkessel (relativ zur Festung). Trifft auch Kletterer. */
+export function oilZone(m: Pick<ModuleState, "col" | "row">): {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+} {
+  const x = m.col * TILE_W;
+  const y = m.row * TILE_H;
+  if (m.row === DECK_ROWS - 1) {
+    return { x0: x - 8, y0: DECK_H - 50, x1: x + TILE_W + 8, y1: DECK_H + 24 };
+  }
+  if (m.row === 0) {
+    return { x0: x - 8, y0: -34, x1: x + TILE_W + 8, y1: 22 };
+  }
+  if (m.col === 0) {
+    return { x0: -62, y0: y - 8, x1: 20, y1: y + TILE_H + 8 };
+  }
+  if (m.col === DECK_COLS - 1) {
+    return { x0: DECK_W - 20, y0: y - 8, x1: DECK_W + 62, y1: y + TILE_H + 8 };
+  }
+  return { x0: 0, y0: 0, x1: 0, y1: 0 };
+}
+
+/**
+ * Wo Enterer an der Rumpfwand hochklettern koennen (relativ zur Festung):
+ * an der Vorderkante (zur Kamera), links (Heck) und rechts (Bug).
+ * Hinten ist das Gelaender. Felder mit einer Panzerplatte sind zu glatt.
+ */
+export interface ClimbPoint {
+  /** Am Boden vor der Wand. */
+  x: number;
+  y: number;
+  /** Wo er oben auf dem Deck ankommt. */
+  deckX: number;
+  deckY: number;
+  col: number;
+  row: number;
+}
+
+export const CLIMB_POINTS: readonly ClimbPoint[] = [
+  ...Array.from({ length: DECK_COLS }, (_, col) => ({
+    x: col * TILE_W + TILE_W / 2,
+    y: DECK_H + 6,
+    deckX: col * TILE_W + TILE_W / 2,
+    deckY: DECK_H - 10,
+    col,
+    row: DECK_ROWS - 1,
+  })),
+  ...Array.from({ length: DECK_ROWS - 1 }, (_, i) => ({
+    x: -10,
+    y: (i + 1) * TILE_H + TILE_H / 2,
+    deckX: 10,
+    deckY: (i + 1) * TILE_H + TILE_H / 2,
+    col: 0,
+    row: i + 1,
+  })),
+  ...Array.from({ length: DECK_ROWS - 1 }, (_, i) => ({
+    x: DECK_W + 10,
+    y: (i + 1) * TILE_H + TILE_H / 2,
+    deckX: DECK_W - 10,
+    deckY: (i + 1) * TILE_H + TILE_H / 2,
+    col: DECK_COLS - 1,
+    row: i + 1,
+  })),
+];
+
+/** Kann man hier hochklettern (keine Panzerplatte auf dem Randfeld)? */
+export function climbOpen(modules: readonly ModuleState[], point: ClimbPoint): boolean {
+  const m = moduleAt(modules, point.col, point.row);
+  return !m || m.type !== "platte" || m.broken;
+}
+
+/** Feld-Rechteck eines Moduls (relativ zur Festung). */
+export function moduleRect(m: Pick<ModuleState, "type" | "col" | "row">): {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+} {
+  return {
+    x0: m.col * TILE_W,
+    y0: m.row * TILE_H,
+    x1: (m.col + MODULES[m.type].width) * TILE_W,
+    y1: (m.row + 1) * TILE_H,
+  };
 }

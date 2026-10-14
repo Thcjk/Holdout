@@ -32,8 +32,15 @@ export class FloatingStick {
     private readonly scene: Phaser.Scene,
     private readonly region: Phaser.Geom.Rectangle,
   ) {
-    this.base = scene.add.circle(0, 0, RADIUS, 0xefe8f6, 0.12).setStrokeStyle(3, 0xefe8f6, 0.5).setDepth(DEPTH).setScrollFactor(0);
-    this.knob = scene.add.circle(0, 0, 26, 0xefe8f6, 0.38).setDepth(DEPTH + 1).setScrollFactor(0);
+    this.base = scene.add
+      .circle(0, 0, RADIUS, 0xefe8f6, 0.12)
+      .setStrokeStyle(3, 0xefe8f6, 0.5)
+      .setDepth(DEPTH)
+      .setScrollFactor(0);
+    this.knob = scene.add
+      .circle(0, 0, 26, 0xefe8f6, 0.38)
+      .setDepth(DEPTH + 1)
+      .setScrollFactor(0);
     this.base.setVisible(false);
     this.knob.setVisible(false);
 

@@ -28,10 +28,9 @@
 export function lockLandscape(): void {
   try {
     const orientation = window.screen?.orientation as
-      | (ScreenOrientation & { lock?: (o: string) => Promise<void> })
-      | undefined;
+      (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
     // `lock` gibt es nicht ueberall, und wo es existiert, lehnt es oft ab
-      // (nicht im Vollbild, nicht installiert, iOS grundsaetzlich).
+    // (nicht im Vollbild, nicht installiert, iOS grundsaetzlich).
     void orientation?.lock?.("landscape").catch(() => {
       /* Nein ist eine gueltige Antwort. Der Hinweisstreifen uebernimmt. */
     });

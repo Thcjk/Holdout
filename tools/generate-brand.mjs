@@ -46,15 +46,33 @@ save("public/icons/icon-maskable-512.png", await icon(512, 0.7, false));
 
 // Android
 const RES = "android/app/src/main/res";
-for (const [folder, size] of [["mdpi", 48], ["hdpi", 72], ["xhdpi", 96], ["xxhdpi", 144], ["xxxhdpi", 192]]) {
+for (const [folder, size] of [
+  ["mdpi", 48],
+  ["hdpi", 72],
+  ["xhdpi", 96],
+  ["xxhdpi", 144],
+  ["xxxhdpi", 192],
+]) {
   const png = await icon(size, 1.0, false);
   save(`${RES}/mipmap-${folder}/ic_launcher.png`, png);
   save(`${RES}/mipmap-${folder}/ic_launcher_round.png`, png);
 }
-for (const [folder, size] of [["mdpi", 108], ["hdpi", 162], ["xhdpi", 216], ["xxhdpi", 324], ["xxxhdpi", 432]]) {
+for (const [folder, size] of [
+  ["mdpi", 108],
+  ["hdpi", 162],
+  ["xhdpi", 216],
+  ["xxhdpi", 324],
+  ["xxxhdpi", 432],
+]) {
   save(`${RES}/mipmap-${folder}/ic_launcher_foreground.png`, await icon(size, 0.6, true));
 }
-const sizes = { mdpi: [320, 480], hdpi: [480, 800], xhdpi: [720, 1280], xxhdpi: [960, 1600], xxxhdpi: [1280, 1920] };
+const sizes = {
+  mdpi: [320, 480],
+  hdpi: [480, 800],
+  xhdpi: [720, 1280],
+  xxhdpi: [960, 1600],
+  xxxhdpi: [1280, 1920],
+};
 for (const [density, [w, h]] of Object.entries(sizes)) {
   save(`${RES}/drawable-port-${density}/splash.png`, await splash(w, h));
   save(`${RES}/drawable-land-${density}/splash.png`, await splash(h, w));

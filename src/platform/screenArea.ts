@@ -54,7 +54,8 @@ export function fitPageToScreen(): Area {
   // Als iOS-App im Querformat immer feste Masse setzen: Auch wenn das Fenster
   // richtig meldet, kann die Seite selbst (100 %) zu kurz sein.
   const iosLandscape = isIosHomeScreenApp() && window.innerWidth > window.innerHeight;
-  const corrected = iosLandscape || area.width !== window.innerWidth || area.height !== window.innerHeight;
+  const corrected =
+    iosLandscape || area.width !== window.innerWidth || area.height !== window.innerHeight;
   const elements = [document.documentElement, document.body, document.getElementById("game-root")];
   for (const element of elements) {
     if (!element) {

@@ -18,6 +18,8 @@ export interface ModuleSpec {
   /** Felder breit (alle Module sind ein Feld hoch). */
   width: 1 | 2;
   cost: number;
+  /** Leben auf Stufe 1 (jede Stufe +40 %). Bei 0 ist es kaputt, bis es repariert ist. */
+  hp: number;
   /** Nur am Rand des Decks (Panzerplatte, Oelkessel). */
   edgeOnly?: boolean;
   /** Schiesst selbst - profitiert vom Generator. */
@@ -48,6 +50,7 @@ export const MODULE_IDS: readonly ModuleId[] = [
 export const MODULES: Record<ModuleId, ModuleSpec> = {
   geschuetz: {
     id: "geschuetz",
+    hp: 70,
     name: "Geschützturm",
     text: "Schießt auf den nächsten Gegner am Boden.",
     width: 1,
@@ -59,6 +62,7 @@ export const MODULES: Record<ModuleId, ModuleSpec> = {
   },
   harpune: {
     id: "harpune",
+    hp: 70,
     name: "Harpune",
     text: "Spießt den stärksten Gegner auf und reißt ihn unter einen Fuß der Festung.",
     width: 1,
@@ -70,6 +74,7 @@ export const MODULES: Record<ModuleId, ModuleSpec> = {
   },
   moerser: {
     id: "moerser",
+    hp: 80,
     name: "Mörser",
     text: "Feuert im hohen Bogen auf Gruppen. Trifft nichts direkt daneben.",
     width: 1,
@@ -82,6 +87,7 @@ export const MODULES: Record<ModuleId, ModuleSpec> = {
   },
   spule: {
     id: "spule",
+    hp: 60,
     name: "Funkenspule",
     text: "Blitz springt von Gegner zu Gegner – auch zu denen unter dem Deck.",
     width: 1,
@@ -94,6 +100,7 @@ export const MODULES: Record<ModuleId, ModuleSpec> = {
   },
   platte: {
     id: "platte",
+    hp: 160,
     name: "Panzerplatte",
     text: "Mehr Rumpf. Nur am Rand.",
     width: 1,
@@ -103,6 +110,7 @@ export const MODULES: Record<ModuleId, ModuleSpec> = {
   },
   oel: {
     id: "oel",
+    hp: 70,
     name: "Ölkessel",
     text: "Gießt brennendes Öl auf alles, was unter dieser Kante steht. Nur am Rand.",
     width: 1,
@@ -112,6 +120,7 @@ export const MODULES: Record<ModuleId, ModuleSpec> = {
   },
   generator: {
     id: "generator",
+    hp: 60,
     name: "Generator",
     text: "Waffen auf den Nachbarfeldern feuern schneller.",
     width: 1,
@@ -120,6 +129,7 @@ export const MODULES: Record<ModuleId, ModuleSpec> = {
   },
   magnet: {
     id: "magnet",
+    hp: 60,
     name: "Schrottmagnet",
     text: "Zieht Schrott vom Boden aufs Deck.",
     width: 1,
@@ -128,6 +138,7 @@ export const MODULES: Record<ModuleId, ModuleSpec> = {
   },
   motor: {
     id: "motor",
+    hp: 120,
     name: "Dampfmotor",
     text: "Die Festung läuft schneller, die Märsche werden kürzer.",
     width: 2,
@@ -136,6 +147,7 @@ export const MODULES: Record<ModuleId, ModuleSpec> = {
   },
   werkstatt: {
     id: "werkstatt",
+    hp: 100,
     name: "Werkstatt",
     text: "Repariert den Rumpf während des Marschs.",
     width: 2,
@@ -160,6 +172,11 @@ export function sellValue(id: ModuleId, level: number): number {
     invested += base * l;
   }
   return Math.floor(invested / 2);
+}
+
+/** Hoechstes Leben eines Moduls auf seiner Stufe. */
+export function moduleHp(id: ModuleId, level: number): number {
+  return Math.round(MODULES[id].hp * (1 + 0.4 * (level - 1)));
 }
 
 /** Wert eines Moduls auf seiner Stufe. */

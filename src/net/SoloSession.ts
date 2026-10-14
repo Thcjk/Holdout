@@ -3,7 +3,15 @@
  */
 
 import { Simulation, type SimulationOptions } from "../game/Simulation";
-import type { Command, GameEvent, GameState, PlayerInput, PlayerSetup } from "../game/types";
+import { addEnemy } from "../game/systems/enemies";
+import type {
+  Command,
+  EnemyType,
+  GameEvent,
+  GameState,
+  PlayerInput,
+  PlayerSetup,
+} from "../game/types";
 import type { GameSession } from "./GameSession";
 
 export class SoloSession implements GameSession {
@@ -30,6 +38,11 @@ export class SoloSession implements GameSession {
 
   send(command: Command): void {
     this.simulation.command(this.selfId, command);
+  }
+
+  /** Nur fuer Tests im Browser (`?debug=werte`): einen Gegner hinstellen. */
+  spawnForTest(type: EnemyType, x: number, y: number): void {
+    addEnemy(this.simulation, type, x, y, 1);
   }
 
   destroy(): void {}

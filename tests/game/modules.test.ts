@@ -12,9 +12,9 @@ import { MODULES, sellValue, upgradeCost } from "../../src/game/data/modules";
 import { canPlace, generatorBonus } from "../../src/game/deck";
 import { Simulation } from "../../src/game/Simulation";
 import type { EnemyState, ModuleId } from "../../src/game/types";
+import { QUIET, placeEnemy } from "./helpers";
 
 const ME = "p1";
-const QUIET = [{ station: "Test", length: 100000, spawnStart: 0, spawnEnd: 0, hp: 1 }];
 
 function fresh(route = QUIET): Simulation {
   return new Simulation([{ id: ME, name: "Test", crew: "schrauber" }], 3, { route });
@@ -34,24 +34,7 @@ function run(s: Simulation, seconds: number): void {
 }
 
 function enemy(s: Simulation, lx: number, y: number, hp = 24): EnemyState {
-  const e: EnemyState = {
-    id: s.state.nextId++,
-    type: "laeufer",
-    x: s.state.fort.x + lx,
-    y,
-    hp,
-    hpMax: hp,
-    speed: 0,
-    facing: 1,
-    slotX: lx,
-    slotY: y,
-    attacking: false,
-    attackCd: 99,
-    pushX: 0,
-    pushY: 0,
-  };
-  s.state.enemies.push(e);
-  return e;
+  return placeEnemy(s, s.state.fort.x + lx, y, { hp, hpMax: hp, attackCd: 99 });
 }
 
 describe("Ausbau in der Rast", () => {
@@ -177,16 +160,19 @@ describe("Module im Marsch", () => {
 
 describe("Angriffe von allen Seiten", () => {
   it("Trupps kuendigen sich an und kommen aus allen vier Richtungen", () => {
-    const s = new Simulation([{ id: ME, name: "Test", crew: "schrauber" }], 11);
-    s.command(ME, { kind: "depart" });
     const sides = new Set<string>();
     let warned = false;
-    for (let i = 0; i < Math.round(70 / TICK); i += 1) {
-      s.advance(TICK * 1000 + 0.01, new Map([[ME, { mx: 0, my: 0 }]]));
-      warned ||= s.state.warnings.length > 0;
-      for (const event of s.events) {
-        if (event.kind === "trupp") {
-          sides.add(event.side);
+    // Drei Laeufe mit anderem Zufall: zusammen kommen sie von ueberall.
+    for (const seed of [11, 12, 13]) {
+      const s = new Simulation([{ id: ME, name: "Test", crew: "schrauber" }], seed);
+      s.command(ME, { kind: "depart" });
+      for (let i = 0; i < Math.round(60 / TICK); i += 1) {
+        s.advance(TICK * 1000 + 0.01, new Map([[ME, { mx: 0, my: 0 }]]));
+        warned ||= s.state.warnings.length > 0;
+        for (const event of s.events) {
+          if (event.kind === "trupp") {
+            sides.add(event.side);
+          }
         }
       }
     }

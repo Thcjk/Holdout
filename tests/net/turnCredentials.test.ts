@@ -42,9 +42,7 @@ function fakeFetch(body: unknown, ok = true, status = 200): typeof fetch {
 describe("Abrufpfad", () => {
   it("setzt den Schluessel aus der Umgebungsvariablen ein", () => {
     const url = credentialsUrl("holdout-turn", "geheim123");
-    expect(url).toBe(
-      "https://holdout-turn.metered.live/api/v1/turn/credentials?apiKey=geheim123",
-    );
+    expect(url).toBe("https://holdout-turn.metered.live/api/v1/turn/credentials?apiKey=geheim123");
   });
 
   it("maskiert Sonderzeichen im Schluessel", () => {

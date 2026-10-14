@@ -19,10 +19,10 @@ import {
   TICK,
 } from "../src/game/constants";
 import { MODULES, upgradeCost } from "../src/game/data/modules";
-import { canPlace, generatorBonus } from "../src/game/deck";
+import { canPlace, generatorBonus, moduleCenter } from "../src/game/deck";
 import { BLIND_SPOT, insideRect } from "../src/game/fortress";
 import { Simulation } from "../src/game/Simulation";
-import type { GameState, ModuleId, PlayerInput } from "../src/game/types";
+import type { GameEvent, GameState, ModuleId, PlayerInput } from "../src/game/types";
 
 export type BotStyle = "deck" | "klug";
 
@@ -51,22 +51,36 @@ function decide(state: GameState, style: BotStyle, memory: { downSince: number }
   if (!p.alive || p.transition || style === "deck") {
     return { mx: 0, my: 0 };
   }
-  const belly = state.enemies.filter((e) => insideRect(BLIND_SPOT, e.x - f.x, e.y - f.y));
+  const belly = state.enemies.filter(
+    (e) => e.layer === "ground" && insideRect(BLIND_SPOT, e.x - f.x, e.y - f.y),
+  );
+  const onDeck = state.enemies.filter((e) => e.layer === "deck").length;
   const nearScrap = state.scrap.filter((s) => s.x > f.x - 120 && s.x < f.x + DECK_W + 120);
   if (p.layer === "deck") {
     memory.downSince = state.time;
     if (
-      belly.length >= 2 ||
-      nearScrap.length >= 4 ||
-      (state.phase === "rest" && nearScrap.length > 0)
+      onDeck === 0 &&
+      (belly.length >= 2 ||
+        nearScrap.length >= 4 ||
+        (state.phase === "rest" && nearScrap.length > 0))
     ) {
       // Vorne abspringen: zur Vorderkante neben der Strickleiter.
       return toward(p.x, p.y, f.x + 150, f.y + DECK_H + 20);
     }
+    // Oben: zum am schwersten beschaedigten Modul gehen und es flicken.
+    const hurt = state.modules
+      .filter((m) => m.hp < m.hpMax * 0.8)
+      .sort((a, b) => a.hp / a.hpMax - b.hp / b.hpMax)[0];
+    if (hurt) {
+      const c = moduleCenter(hurt);
+      const tx = f.x + c.x;
+      const ty = f.y + c.y + (hurt.row < DECK_ROWS - 1 ? 20 : -20);
+      return Math.hypot(tx - p.x, ty - p.y) < 30 ? { mx: 0, my: 0 } : toward(p.x, p.y, tx, ty);
+    }
     return { mx: 0, my: 0 };
   }
   const lowHp = p.hp < p.hpMax * 0.4;
-  const tooLong = state.time - memory.downSince > 18 && state.phase === "march";
+  const tooLong = (state.time - memory.downSince > 18 || onDeck >= 2) && state.phase === "march";
   if (lowHp || tooLong || (belly.length === 0 && nearScrap.length === 0)) {
     // Zur Strickleiter
     return toward(p.x, p.y, f.x + (LADDER.x0 + LADDER.x1) / 2, f.y + LADDER_TOP.y - 4);
@@ -113,6 +127,9 @@ function chooseTile(state: GameState, type: ModuleId): { col: number; row: numbe
           level: 1,
           cooldown: 0,
           facing: 1 as const,
+          hp: 1,
+          hpMax: 1,
+          broken: false,
         };
         score =
           state.modules.filter(
@@ -166,7 +183,13 @@ function spend(sim: Simulation, style: BotStyle): number {
   return repairs;
 }
 
-export function playBot(seed: number, style: BotStyle, maxSeconds = 900): BotResult {
+export function playBot(
+  seed: number,
+  style: BotStyle,
+  maxSeconds = 900,
+  onEvent?: (event: GameEvent) => void,
+  onTick?: (state: GameState) => void,
+): BotResult {
   const sim = new Simulation([{ id: "bot", name: "Bot", crew: "schrauber" }], seed);
   const memory = { downSince: 0 };
   let ability = 0;
@@ -200,6 +223,10 @@ export function playBot(seed: number, style: BotStyle, maxSeconds = 900): BotRes
     }
     sim.advance(TICK * 1000 + 0.01, new Map([["bot", { ...input, ability }]]));
     winches += sim.events.filter((e) => e.kind === "winch").length;
+    onTick?.(sim.state);
+    if (onEvent) {
+      sim.events.forEach(onEvent);
+    }
   }
   const s = sim.state;
   return {

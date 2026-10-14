@@ -412,9 +412,7 @@ export class PeerTransport extends BaseTransport {
           window.clearTimeout(timeout);
           peer.off("error", onPeerError);
           netLog("CLIENT: keine Verbindung zwischen den Geraeten moeglich");
-          reject(
-            new ConnectError("no-direct-connection", describeFailure("no-direct-connection")),
-          );
+          reject(new ConnectError("no-direct-connection", describeFailure("no-direct-connection")));
         }
       });
 

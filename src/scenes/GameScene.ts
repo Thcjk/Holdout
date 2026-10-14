@@ -18,7 +18,7 @@ import { playerName } from "../app";
 import { DECK_H, ELEVATION, LADDER, STATION_BONUS, WINCH_LANDING } from "../game/constants";
 import { BLIND_SPOT, insideRect } from "../game/fortress";
 import type {
-  EnemyState,
+  EnemyType,
   GameEvent,
   GameState,
   PlayerState,
@@ -35,8 +35,9 @@ import { BOX, ComicBox } from "../ui/ComicBox";
 import { FloatingStick } from "../ui/FloatingStick";
 import { Hud } from "../ui/Hud";
 import { RestPanel } from "../ui/RestPanel";
-import { TEX, armyKey, crewKey, scrapKey } from "../ui/pixel/textures";
+import { TEX, crewKey, scrapKey } from "../ui/pixel/textures";
 import { FONT_BODY, FONT_TITLE, T } from "../ui/theme";
+import { EnemyView } from "../ui/world/EnemyView";
 import { FortressView } from "../ui/world/FortressView";
 import { GroundView } from "../ui/world/GroundView";
 import { ModuleView } from "../ui/world/ModuleView";
@@ -55,6 +56,22 @@ interface Body {
 
 /** Bodenbereich, den Rumpf und Deck von vorn verdecken (relativ zur Festung). */
 const HIDDEN = { x0: -6, y0: -ELEVATION - 4, x1: 286, y1: DECK_H - 2 };
+
+/** Kurze Vorstellung jeder Gegnerart, wenn sie zum ersten Mal auftaucht. */
+const ENEMY_INTRO: Partial<Record<EnemyType, string>> = {
+  enterer:
+    "Enterer klettern die Rumpfwand hoch und zerlegen oben Module. Panzerplatten am Rand halten sie ab, Öl verbrennt sie an der Wand.",
+  phalanx:
+    "Phalanx: Von vorn hält der Turmschild fast alles ab. Von hinten, mit Mörser, Blitz oder Fuß geht es.",
+  skarabaeus: "Skarabäen fliegen aufs Deck. Von oben erwischt ihr sie am besten.",
+  priester:
+    "Sandpriester geben anderen einen goldenen Schild. Er flieht vor Mechs – spring ab und jag ihn.",
+  streitwagen:
+    "Streitwagen rammen die Beine, dann läuft die Festung kurz langsamer. Danach steckt er fest – jetzt kann ihn ein Fuß zertreten.",
+  ballista:
+    "Die Ballista schießt Module kaputt und hält Abstand. Harpune, Mörser oder ein Mech am Boden holen sie.",
+  turm: "Ein Belagerungsturm dockt seitlich an und lässt Enterer über eine Brücke aufs Deck. Schnell zerstören!",
+};
 
 export interface GameResult {
   won: boolean;
@@ -80,7 +97,7 @@ export class GameScene extends Phaser.Scene {
   private pauseCleanup: (() => void)[] = [];
   private paused = false;
   private players = new Map<string, Body>();
-  private enemies = new Map<number, Body>();
+  private enemies!: EnemyView;
   private shots = new Map<number, Phaser.GameObjects.Image>();
   private scrap = new Map<number, Phaser.GameObjects.Image>();
   private ladderArrow!: Phaser.GameObjects.Image;
@@ -88,6 +105,8 @@ export class GameScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Text;
   private shown = new Set<string>();
+  private hintQueue: string[] = [];
+  private hintUntil = 0;
   private ending = false;
   private lastShotSound = 0;
   private values: Phaser.GameObjects.Text | null = null;
@@ -108,7 +127,6 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.players = new Map();
-    this.enemies = new Map();
     this.shots = new Map();
     this.scrap = new Map();
     this.pauseCleanup = [];
@@ -132,6 +150,9 @@ export class GameScene extends Phaser.Scene {
     this.rope = this.add.graphics().setDepth(DEPTH.effects);
     this.zaps = this.add.graphics().setDepth(DEPTH.effects + 1);
     this.modules = new ModuleView(this);
+    this.enemies = new EnemyView(this);
+    this.hintQueue = [];
+    this.hintUntil = 0;
     this.warnings = new WarningView(this);
     this.ladderArrow = this.add.image(0, 0, TEX.arrow).setDepth(DEPTH.effects).setVisible(false);
 
@@ -189,6 +210,11 @@ export class GameScene extends Phaser.Scene {
       // Fuer automatische Tests im Browser: Zustand von aussen lesbar.
       (window as unknown as { __holdout?: unknown }).__holdout = {
         state: () => this.session.state,
+        spawn: (type: EnemyType, x: number, y: number) => {
+          if (this.session instanceof SoloSession) {
+            this.session.spawnForTest(type, x, y);
+          }
+        },
       };
     }
     this.values = SHOW_VALUES
@@ -257,7 +283,7 @@ export class GameScene extends Phaser.Scene {
     this.ground.update(this.cameras.main);
     this.fortress.update(state.fort, frameDelta);
     this.syncPlayers(state, frameDelta);
-    this.syncEnemies(state, frameDelta);
+    this.enemies.sync(state, frameDelta);
     this.syncShots(state);
     this.syncScrap(state);
     this.syncShells(state);
@@ -274,6 +300,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.watchForHints(state, self);
+    this.nextHint();
     this.hud.update(state, self, frameDelta);
     this.ability.update(self, frameDelta);
     this.rest.update(state, this.building);
@@ -362,40 +389,6 @@ export class GameScene extends Phaser.Scene {
         this.players.delete(id);
       }
     }
-  }
-
-  private syncEnemies(state: GameState, delta: number): void {
-    const seen = new Set<number>();
-    for (const e of state.enemies) {
-      seen.add(e.id);
-      let b = this.enemies.get(e.id);
-      if (!b) {
-        b = this.body(armyKey(e.type), 46 / 48, 0xff5a3a);
-        this.enemies.set(e.id, b);
-        // Sanft einblenden - auf breiten Bildschirmen tauchen Trupps im Bild auf.
-        b.sprite.setAlpha(0);
-        this.tweens.add({ targets: b.sprite, alpha: 1, duration: 300 });
-      }
-      this.placeEnemy(b, e, state.time);
-      this.applyFlash(b, delta);
-      this.updateGhost(b, e.x, e.y, 0, state);
-    }
-    for (const [id, b] of this.enemies) {
-      if (!seen.has(id)) {
-        this.destroyBody(b);
-        this.enemies.delete(id);
-      }
-    }
-  }
-
-  private placeEnemy(b: Body, e: EnemyState, time: number): void {
-    const run = Math.abs(Math.sin(time * 13 + e.id)) * 2;
-    b.sprite.setPosition(e.x, e.y - (e.attacking ? 0 : run));
-    b.sprite.setFlipX(e.facing < 0);
-    // Beim Hacken wippt er vor und zurueck.
-    b.sprite.setRotation(e.attacking ? Math.sin(time * 9 + e.id) * 0.18 : 0);
-    b.sprite.setDepth(e.y);
-    b.shadow.setPosition(e.x, e.y).setScale(0.8);
   }
 
   private applyFlash(b: Body, delta: number): void {
@@ -553,14 +546,10 @@ export class GameScene extends Phaser.Scene {
         }
         break;
       }
-      case "hit": {
-        const b = this.enemies.get(event.id);
-        if (b) {
-          b.flash = 70;
-        }
+      case "hit":
+        this.enemies.flash(event.id);
         audio.play("hit");
         break;
-      }
       case "kill":
         this.bones(event.x, event.y);
         audio.play("enemyDied");
@@ -708,6 +697,84 @@ export class GameScene extends Phaser.Scene {
           "Die Armee greift von allen Seiten an – rote Pfeile am Rand zeigen, woher der nächste Trupp kommt.",
         );
         break;
+      case "enemyClimb":
+        audio.play("swing");
+        break;
+      case "land":
+        this.dust(event.x, event.y - ELEVATION, 2);
+        break;
+      case "ram":
+        this.dust(event.x, event.y, 5);
+        this.cameras.main.shake(160, 0.006);
+        this.floatText("RAMMSTOSS!", event.x, event.y - 40, "#ff8a6a", 16);
+        audio.play("blast");
+        break;
+      case "bridge":
+        this.floatText("BRÜCKE!", event.x, event.y - ELEVATION - 30, "#ff8a6a", 16);
+        audio.play("swing");
+        break;
+      case "shield":
+        audio.play("superReady");
+        break;
+      case "ballista":
+        audio.play("shoot");
+        break;
+      case "slamWarn":
+        this.queueHint(
+          "slam",
+          "Rotes Feld auf dem Deck: Dort schlägt der Koloss gleich zu – weg da!",
+        );
+        break;
+      case "slam":
+        this.explosion(event.x, event.y - ELEVATION, 50);
+        this.cameras.main.shake(260, 0.012);
+        audio.play("blast");
+        break;
+      case "moduleHit": {
+        const m = state.modules.find((x) => x.uid === event.uid);
+        if (m) {
+          const top = ModuleView.top(state, m);
+          const spark = this.add
+            .image(top.x + (Math.random() - 0.5) * 20, top.y + 14, TEX.spark)
+            .setDepth(DEPTH.effects)
+            .setTint(0xff8a2a);
+          this.tweens.add({
+            targets: spark,
+            y: spark.y - 10,
+            alpha: 0,
+            duration: 240,
+            onComplete: () => spark.destroy(),
+          });
+        }
+        break;
+      }
+      case "moduleBroken": {
+        const m = state.modules.find((x) => x.uid === event.uid);
+        if (m) {
+          const top = ModuleView.top(state, m);
+          this.floatText("KAPUTT", top.x, top.y, T.bad, 15);
+          this.dust(top.x, top.y + 20, 3);
+        }
+        this.queueHint(
+          "broken",
+          "Ein Modul ist kaputt. Der Schrauber flickt Module, neben denen er steht – an der Station wird alles wieder heil.",
+        );
+        audio.play("playerDown");
+        break;
+      }
+      case "boss":
+        this.showBanner("DER GOLDENE KOLOSS", T.bad);
+        this.queueHint(
+          "boss",
+          "Der Endgegner läuft vor der Festung mit. Erst wenn er fällt, erreicht ihr das Ziel.",
+        );
+        audio.play("gameOver");
+        break;
+      case "bossDown":
+        this.showBanner("KOLOSS GESTÜRZT!", T.gold);
+        this.cameras.main.shake(400, 0.01);
+        audio.play("zoneReached");
+        break;
       case "won":
         this.showBanner("GESCHAFFT!", T.gold);
         audio.play("zoneReached");
@@ -838,14 +905,28 @@ export class GameScene extends Phaser.Scene {
   // --- Hinweise fuer Neulinge (je einmal pro Lauf) --------------------------------------------------
 
   private showHint(key: string, text: string): void {
+    this.queueHint(key, text);
+  }
+
+  /** Hinweise der Reihe nach zeigen, jeden nur einmal pro Lauf. */
+  private queueHint(key: string, text: string): void {
     if (this.shown.has(key)) {
       return;
     }
     this.shown.add(key);
+    this.hintQueue.push(text);
+  }
+
+  private nextHint(): void {
+    if (this.hintQueue.length === 0 || this.time.now < this.hintUntil) {
+      return;
+    }
+    const text = this.hintQueue.shift()!;
+    this.hintUntil = this.time.now + 5200;
     this.tweens.killTweensOf(this.hint);
     this.hint.setText(text).setAlpha(0);
     this.tweens.add({ targets: this.hint, alpha: 1, duration: 250 });
-    this.tweens.add({ targets: this.hint, alpha: 0, delay: 6500, duration: 500 });
+    this.tweens.add({ targets: this.hint, alpha: 0, delay: 4600, duration: 500 });
   }
 
   private watchForHints(state: GameState, self: PlayerState | undefined): void {
@@ -853,6 +934,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const f = state.fort;
+    // Jede Gegnerart stellt sich beim ersten Auftauchen kurz vor.
+    for (const e of state.enemies) {
+      const intro = ENEMY_INTRO[e.type];
+      if (intro && !this.shown.has(`enemy-${e.type}`)) {
+        this.queueHint(`enemy-${e.type}`, intro);
+      }
+    }
     if (
       self.layer === "deck" &&
       state.enemies.some((e) => e.attacking && insideRect(BLIND_SPOT, e.x - f.x, e.y - f.y))

@@ -23,7 +23,11 @@ import { reportConnectionPath } from "../../src/net/connectionPath";
  * `RTCStatsReport` verhaelt sich wie eine Map - `get` und `forEach` sind genau
  * das, was der Code benutzt. Eine echte Map genuegt deshalb.
  */
-function fakeConnection(localType: string, remoteType: string, nominated = true): RTCPeerConnection {
+function fakeConnection(
+  localType: string,
+  remoteType: string,
+  nominated = true,
+): RTCPeerConnection {
   const stats = new Map<string, unknown>([
     [
       "pair1",

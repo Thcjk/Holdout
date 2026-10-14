@@ -17,9 +17,9 @@ import {
 import { LEGS, STRIDE, legPhase } from "../../src/game/fortress";
 import { Simulation } from "../../src/game/Simulation";
 import type { EnemyState, PlayerInput } from "../../src/game/types";
+import { QUIET, placeEnemy } from "./helpers";
 
 const ME = "p1";
-const QUIET = [{ station: "Test", length: 100000, spawnStart: 0, spawnEnd: 0, hp: 1 }];
 
 /** Neuer Lauf, gleich losgezogen (der Lauf beginnt mit einer Rast). */
 function sim(route = QUIET): Simulation {
@@ -37,25 +37,7 @@ function run(s: Simulation, seconds: number, input: PlayerInput = { mx: 0, my: 0
 }
 
 function enemy(s: Simulation, x: number, y: number, extra: Partial<EnemyState> = {}): EnemyState {
-  const e: EnemyState = {
-    id: s.state.nextId++,
-    type: "laeufer",
-    x,
-    y,
-    hp: 24,
-    hpMax: 24,
-    speed: 0,
-    facing: 1,
-    slotX: x - s.state.fort.x,
-    slotY: y - s.state.fort.y,
-    attacking: false,
-    attackCd: 5,
-    pushX: 0,
-    pushY: 0,
-    ...extra,
-  };
-  s.state.enemies.push(e);
-  return e;
+  return placeEnemy(s, x, y, extra);
 }
 
 const me = (s: Simulation) => s.state.players[0]!;
@@ -201,8 +183,8 @@ describe("Gegner, Schrott und Rumpf", () => {
 
 describe("Etappen und Rast", () => {
   const route = [
-    { station: "A", length: 60, spawnStart: 0, spawnEnd: 0, hp: 1 },
-    { station: "B", length: 60, spawnStart: 0, spawnEnd: 0, hp: 1 },
+    { station: "A", length: 60, spawnStart: 0, spawnEnd: 0, hp: 1, mix: {} },
+    { station: "B", length: 60, spawnStart: 0, spawnEnd: 0, hp: 1, mix: {} },
   ];
 
   it("am Ziel ist Rast: reparieren kostet Schrott, dann geht es weiter bis zum Sieg", () => {
